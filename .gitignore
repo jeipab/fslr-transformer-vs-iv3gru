@@ -1,0 +1,16 @@
+# Python
+__pycache__/
+*.pyc
+.venv/
+env/
+
+# Data
+data/
+*.npy
+*.csv
+*.mp4
+*.avi
+
+# Checkpoints
+*.pt
+*.pth

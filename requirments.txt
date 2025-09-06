@@ -1,0 +1,13 @@
+
+**requirements.txt (initial draft)**
+```txt
+torch
+torchvision
+mediapipe
+opencv-python
+numpy
+pandas
+scikit-learn
+matplotlib
+seaborn
+streamlit
