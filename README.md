@@ -14,7 +14,7 @@ This repository contains the implementation of our thesis project:
 ## Setup
 
 ```bash
-git clone https://github.com/your-username/fsl-recognition-tool.git
-cd fsl-recognition-tool
+git clone https://github.com/jeipab/fslr-transformer-vs-iv3gru.git
+cd fslr-transformer-vs-iv3gru
 pip install -r requirements.txt
 ```
