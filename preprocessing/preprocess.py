@@ -210,8 +210,8 @@ def process_video(video_path, out_dir, target_fps=30, out_size=256, conf_thresh=
      basename = os.path.splitext(os.path.basename(video_path))[0]
 
      # folder for .npz (+ .parquet) files
-     output_npz_folder = os.path.join(out_dir, '0') # assuming input vids are in '0' subfolder
-
+     output_npz_folder = os.path.join(out_dir, '0') # !! CHANGE: assuming input vids are in '0' subfolder
+     
      # Ensure the output directorie exist
      ensure_dir(output_npz_folder)
 
@@ -308,9 +308,9 @@ def process_video(video_path, out_dir, target_fps=30, out_size=256, conf_thresh=
 
 def main():
      ap = argparse.ArgumentParser()
-     # Default base directories for videos and output
-     ap.add_argument("--in_dir", default="sign-preproc/videos/mp4/", help="Folder of input clips (.mp4)")
-     ap.add_argument("--out_dir", default="sign-preproc/output", help="Where to write .npz and .parquet")
+     # Default (local) base directories for videos and output
+     ap.add_argument("--in_dir", default="sign-preproc/videos/mp4/", help="Folder of input clips (.mp4)") # !! CHANGE PATH to your input folder
+     ap.add_argument("--out_dir", default="sign-preproc/output", help="Where to write .npz and .parquet") # !! CHANGE PATH to your output folder
      ap.add_argument("--fps", type=int, default=30)
      ap.add_argument("--size", type=int, default=256, help="square resize (e.g., 256)")
      ap.add_argument("--conf", type=float, default=0.5, help="confidence/visibility threshold")
