@@ -13,6 +13,10 @@ This repository contains the implementation of our thesis project:
 
 ## Setup
 
+We recommend using Python **3.9–3.11**, as these versions have the most stable support for PyTorch.
+
+Clone the repository and install dependencies:
+
 ```bash
 git clone https://github.com/jeipab/fslr-transformer-vs-iv3gru.git
 cd fslr-transformer-vs-iv3gru
