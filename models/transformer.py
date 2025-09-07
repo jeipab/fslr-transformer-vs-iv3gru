@@ -39,6 +39,24 @@ class LayerNormalization(nn.Module):
         std = x.std(dim=-1, keepdim=True)
         return self.gamma * (x - mean) / (std + self.eps) + self.beta
 
+class FeedForwardBlock(nn.Module):
+    def __init__(self, emb_dim, ff_dim=512, dropout=0.1):
+        super(FeedForwardBlock, self).__init__()
+        self.linear1 = nn.Linear(emb_dim, ff_dim)
+        self.activation = nn.ReLU()
+        self.dropout = nn.Dropout(dropout)
+        self.linear2 = nn.Linear(ff_dim, emb_dim)
+
+    def forward(self, x):
+        """
+        x: [B, T, E]
+        """
+        x = self.linear1(x)
+        x = self.activation(x)
+        x = self.dropout(x)
+        x = self.linear2(x)
+        return x    
+
 class SignTransformer(nn.Module):
     def __init__(self,
                     input_dim=156,     # 78 keypoints × 2 coords
@@ -66,10 +84,13 @@ class SignTransformer(nn.Module):
         """
 
         # TODO: Project input into embedding space
+        x = self.embedding(x)  # [B, T, E]
 
         # TODO: Add positional encoding to embeddings
+        x = self.pos_encoder(x)
 
         # TODO: Rearrange dimensions for Transformer (expected [T, B, E])
+        x = self.input_norm(x)
 
         # TODO: Pass through Transformer Encoder
 
