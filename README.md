@@ -1,7 +1,7 @@
 # Filipino Sign Language Recognition Tool
 
 This repository contains the implementation of our thesis project:
-**Comparison of IV3-GRU and Transformer Models for Filipino Sign Language Recognition**.
+**Multi-Head Attention Transformer for Filipino Sign Language**.
 
 ## Repository Structure
 
