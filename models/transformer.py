@@ -120,6 +120,19 @@ class MultiHeadAttentionBlock(nn.Module):
 
         return out, attn
 
+class ResidualConnection(nn.Module):
+    def __init__(self, emb_dim, dropout=0.1):
+        super(ResidualConnection, self).__init__()
+        self.norm = nn.LayerNorm(emb_dim)      # built-in LayerNorm is more efficient
+        self.dropout = nn.Dropout(dropout)
+
+    def forward(self, x, sublayer):
+        """
+        x: [B, T, E]
+        sublayer: a function/layer applied to normalized x
+        """
+        return x + self.dropout(sublayer(self.norm(x)))
+
 class SignTransformer(nn.Module):
     def __init__(self,
                     input_dim=156,     # 78 keypoints × 2 coords
