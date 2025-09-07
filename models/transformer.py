@@ -222,14 +222,29 @@ class ResidualConnection(nn.Module):
     """
     
     def __init__(self, emb_dim, dropout=0.1):
+        """
+        Args:
+            emb_dim (int): embedding dimension (E).
+            dropout (float): dropout rate applied after the sublayer.
+        """
         super(ResidualConnection, self).__init__()
-        self.norm = LayerNormalization(emb_dim)      # built-in LayerNorm is more efficient
+        
+        # Custom layer normalization
+        self.norm = LayerNormalization(emb_dim)
+        
+        # Dropout for regularization
         self.dropout = nn.Dropout(dropout)
 
     def forward(self, x, sublayer):
         """
-        x: [B, T, E]
-        sublayer: a function/layer applied to normalized x
+        Forward pass for residual connection.
+
+        Args:
+            x (Tensor): input tensor of shape [B, T, E].
+            sublayer (callable): function or layer applied to normalized x.
+
+        Returns:
+            Tensor of shape [B, T, E] after residual connection.
         """
         return x + self.dropout(sublayer(self.norm(x)))
 
