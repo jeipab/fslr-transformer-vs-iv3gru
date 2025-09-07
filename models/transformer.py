@@ -317,16 +317,17 @@ class EncoderLayer(nn.Module):
             (Optional) Attention weights of shape [B, H, T, T].
         """
         # Multi-head attention with residual connection
-        normed = self.residual1.norm(x)                 # Pre-norm
-        attn_out, attn = self.attention(normed, mask)   # Self-attention
-        x = x + self.residual1.dropout(attn_out)        # Residual
+        def attention_sublayer(x):
+            return self.attention(x, mask)[0]  # Return only output, not attention weights
+        
+        x = self.residual1(x, attention_sublayer)
 
         # Feed-forward with residual connection
-        normed2 = self.residual2.norm(x)                # Pre-norm
-        ff_out = self.feed_forward(normed2)             # FFN
-        x = x + self.residual2.dropout(ff_out)          # Residual
+        x = self.residual2(x, self.feed_forward)
 
         if return_attn:
+            # Get attention weights from the last attention layer
+            _, attn = self.attention(self.residual1.norm(x), mask)
             return x, attn
         return x
 
@@ -372,9 +373,8 @@ class SignTransformer(nn.Module):
         # How to collapse sequence → single vector
         self.pooling_method = 'mean'  # options: 'mean', 'max', 'cls'
         
-        # CLS token if chosen pooling is "cls"
-        if self.pooling_method == 'cls':
-            self.cls_token = nn.Parameter(torch.randn(1, 1, emb_dim))
+        # CLS token (always create it, use it only when pooling_method == 'cls')
+        self.cls_token = nn.Parameter(torch.randn(1, 1, emb_dim))
 
         # ----- Output heads -----
         self.dropout_final = nn.Dropout(dropout)
