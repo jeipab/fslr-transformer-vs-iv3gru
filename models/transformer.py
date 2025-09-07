@@ -249,31 +249,58 @@ class ResidualConnection(nn.Module):
         return x + self.dropout(sublayer(self.norm(x)))
 
 class EncoderLayer(nn.Module):
+    """
+    A single Transformer encoder layer.
+
+    Consists of:
+        1. Multi-head self-attention with residual connection.
+        2. Position-wise feed-forward network with residual connection.
+    """
+    
     def __init__(self, emb_dim, num_heads, ff_dim=512, dropout=0.1):
+        
+        """
+        Args:
+            emb_dim (int): embedding dimension (E).
+            num_heads (int): number of attention heads (H).
+            ff_dim (int): hidden dimension in feed-forward network.
+            dropout (float): dropout rate applied to attention & FFN outputs.
+        """
         super(EncoderLayer, self).__init__()
+        
+        # Multi-head attention block
         self.attention = MultiHeadAttentionBlock(emb_dim, num_heads, dropout)
+        
+        # Position-wise feed-forward block
         self.feed_forward = FeedForwardBlock(emb_dim, ff_dim, dropout)
 
-        # Two residual connections: one for attention, one for feed-forward
+        # Residual connections (one after attention, one after feed-forward)
         self.residual1 = ResidualConnection(emb_dim, dropout)
         self.residual2 = ResidualConnection(emb_dim, dropout)
 
     def forward(self, x, mask=None, return_attn=False):
         """
-        x: [B, T, E]
-        mask: attention mask in shape [B, 1, 1, T] or None
-        return_attn: if True, also return attention weights of this layer
+        Forward pass of encoder layer.
+
+        Args:
+            x (Tensor): input of shape [B, T, E].
+            mask (Tensor or None): attention mask of shape [B, 1, 1, T].
+                                    1 = keep, 0 = mask out.
+            return_attn (bool): if True, also return attention weights.
+
+        Returns:
+            Tensor: encoded output of shape [B, T, E].
+            (Optional) Attention weights of shape [B, H, T, T].
         """
-        # ----- Attention sublayer (LayerNorm -> Attention -> Dropout -> Residual) -----
-        normed = self.residual1.norm(x)                  # normalized input
-        attn_out, attn = self.attention(normed, mask)    # attn_out: [B, T, E]
+        # Multi-head attention with residual connection
+        normed = self.residual1.norm(x)                 # Pre-norm
+        attn_out, attn = self.attention(normed, mask)   # Self-attention
+        x = x + self.residual1.dropout(attn_out)        # Residual
 
-        x = x + self.residual1.dropout(attn_out)         # residual connection
-
-        # ----- Feed-forward sublayer (LayerNorm -> FFN -> Dropout -> Residual) -----
-        normed2 = self.residual2.norm(x)
-        ff_out = self.feed_forward(normed2)              # [B, T, E]
-        x = x + self.residual2.dropout(ff_out)
+        # Feed-forward with residual connection
+        normed2 = self.residual2.norm(x)                # Pre-norm
+        ff_out = self.feed_forward(normed2)             # FFN
+        x = x + self.residual2.dropout(ff_out)          # Residual
 
         if return_attn:
             return x, attn
