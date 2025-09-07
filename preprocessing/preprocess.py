@@ -1,6 +1,6 @@
-# ----------------------------
+# --------------------------------------------------------
 # IMPORTS: libraries and modules
-# ----------------------------
+# --------------------------------------------------------
 
 import os, sys, glob, json, math, argparse, time
 from dataclasses import dataclass
@@ -10,9 +10,10 @@ import pandas as pd
 from tqdm import tqdm
 import mediapipe as mp
 
-# ----------------------------
+# --------------------------------------------------------
 # CONFIG: landmark index sets
-# ----------------------------
+# --------------------------------------------------------
+# Define the indices for different parts of the body, hands, and face for keypoint extraction.
 # Pose indices: we'll take 25 "upper-body" related indices from the 33 Pose landmarks.
 # This set includes head (0..10), shoulders/arms (11..16), hand anchors (17..22), hips (23,24) = 25 total.
 
@@ -27,19 +28,19 @@ N_HAND = 21
 # 61 & 291 (mouth corners), 105 & 334 (brow inner), 199 (chin).
 FACEMESH_11 = [1, 33, 263, 133, 362, 61, 291, 105, 334, 199, 4]  # last '4' is an extra nose base point for 11 total
 
-# ----------------------------
+# --------------------------------------------------------
 # UTILITIES: helper functions
-# ----------------------------
+# --------------------------------------------------------
 
-# Ensure directory exists
+# ensure that directories exist, and create them if necessary
 def ensure_dir(p):
      os.makedirs(p, exist_ok=True)
 
-# Linear interpolation
+# for linear interpolation between two values a and b based on t
 def lerp(a, b, t):
     return a + (b - a) * t
 
-# Interpolate gaps in keypoint sequences
+# interpolate gaps in the keypoints (for missing or occluded data)
 def interpolate_gaps(X, mask, max_gap=5):
      """
      X: [T, D] float array (D=156)
@@ -60,7 +61,7 @@ def interpolate_gaps(X, mask, max_gap=5):
           if len(valid_idxs) == 0:
                continue
 
-          # Walk through consecutive valid ranges
+          # walk through consecutive valid ranges
           prev = valid_idxs[0]
           for vi in valid_idxs[1:]:
                if vi == prev + 1:
@@ -82,7 +83,7 @@ def interpolate_gaps(X, mask, max_gap=5):
 
      return X_out, mask_out
 
-# Save to NPZ (and optionally Parquet for easy inspection)
+#  save processed data to npz and parquet files for quick inspection
 def to_npz(out_path, X, mask, timestamps_ms, meta, also_parquet=True):
      np.savez_compressed(out_path + ".npz", X=X, mask=mask, timestamps_ms=timestamps_ms, meta=json.dumps(meta))
      if also_parquet:
@@ -93,17 +94,18 @@ def to_npz(out_path, X, mask, timestamps_ms, meta, also_parquet=True):
           df["mask_bits"] = ["".join("1" if b else "0" for b in row) for row in mask]
           df.to_parquet(out_path + ".parquet")
 
-# Extract (x,y) from a MediaPipe landmark, clipped to [0,1]
+# convert MediaPipe landmark coordinates to [0,1] scale
 def xy_from_landmark(lm, w, h):
      # MediaPipe returns normalized x,y in [0,1]; keep in that scale but clip to [0,1].
      x = float(lm.x)
      y = float(lm.y)
      return max(0.0, min(1.0, x)), max(0.0, min(1.0, y))
 
-# ----------------------------
-# MEDIA PIPE Wrappers
-# ----------------------------
+# --------------------------------------------------------
+# MEDIAPIPE MODELS INITIALIZATION
+# --------------------------------------------------------
 
+# create and initialize MediaPipe models for segmentation (background removal) and holistic (pose, hands, face) keypoints
 mp_selfie = mp.solutions.selfie_segmentation
 mp_holistic = mp.solutions.holistic
 
@@ -129,9 +131,9 @@ def close_models(models: MPModels):
      models.seg.close()
      models.hol.close()
 
-# ----------------------------
-# CORE EXTRACTION per frame
-# ----------------------------
+# --------------------------------------------------------
+# CORE KEYPOINT EXTRACTION from frame
+# --------------------------------------------------------
 
 def extract_keypoints_from_frame(img_rgb, models: MPModels, conf_thresh=0.5):
      """
@@ -148,7 +150,7 @@ def extract_keypoints_from_frame(img_rgb, models: MPModels, conf_thresh=0.5):
      coords = []
      vis_mask = []
 
-     # ---- POSE (25) ----
+     # ---------------- POSE (25 keypoints) ----------------
      pose_present = res.pose_landmarks is not None
      pose_points = [ (0.0, 0.0) ] * len(POSE_UPPER_25)
      pose_mask = [False] * len(POSE_UPPER_25)
@@ -162,7 +164,7 @@ def extract_keypoints_from_frame(img_rgb, models: MPModels, conf_thresh=0.5):
                # Use visibility (only Pose has per-landmark visibility)
                pose_mask[i] = (getattr(lm, "visibility", 0.0) or 0.0) >= conf_thresh
 
-     # ---- HANDS (21 + 21) ----
+     # ---------------- HANDS (21 + 21 keypoints) ----------------
      # Holistic gives left_hand_landmarks and right_hand_landmarks distinctly
      def hand_block(hand_lms):
           pts = [ (0.0, 0.0) ] * N_HAND
@@ -178,7 +180,7 @@ def extract_keypoints_from_frame(img_rgb, models: MPModels, conf_thresh=0.5):
      left_pts, left_mask = hand_block(res.    left_hand_landmarks)
      right_pts, right_mask = hand_block(res.right_hand_landmarks)
 
-     # ---- FACE (11) ----
+     # ---------------- FACE (11 keypoints) ----------------
      face_points = [ (0.0, 0.0) ] * len(FACEMESH_11)
      face_mask = [False] * len(FACEMESH_11)
      if res.face_landmarks is not None:
@@ -189,7 +191,7 @@ def extract_keypoints_from_frame(img_rgb, models: MPModels, conf_thresh=0.5):
                face_points[i] = (x, y)
                face_mask[i] = (0.0 <= x <= 1.0) and (0.0 <= y <= 1.0)
 
-     # ---- CONCATENATE ALL ----
+     # ---------------- CONCATENATE ALL KEYPOINTS ----------------
      for block_pts, block_mask in [
           (pose_points, pose_mask),
           (left_pts, left_mask),
@@ -202,14 +204,14 @@ def extract_keypoints_from_frame(img_rgb, models: MPModels, conf_thresh=0.5):
 
      return np.array(coords, dtype=np.float32), np.array(vis_mask, dtype=bool)
 
-# ----------------------------
+# --------------------------------------------------------
 # VIDEO PROCESSING
-# ----------------------------
+# --------------------------------------------------------
 
 def process_video(video_path, out_dir, target_fps=30, out_size=256, conf_thresh=0.5, max_gap=5):
      basename = os.path.splitext(os.path.basename(video_path))[0]
 
-     # folder for .npz (+ .parquet) files
+     # OUTPUT folder for .npz (+ .parquet) files
      output_npz_folder = os.path.join(out_dir, '0') # !! CHANGE: assuming input vids are in '0' subfolder
      
      # Ensure the output directorie exist
@@ -302,9 +304,9 @@ def process_video(video_path, out_dir, target_fps=30, out_size=256, conf_thresh=
      to_npz(npz_out_path, X_filled, M_filled, T_ms, meta, also_parquet=True)
      print(f"[OK] {basename}: frames={len(X_frames)}  saved: {npz_out_path}.npz (+ .parquet)")
 
-# ----------------------------
+# --------------------------------------------------------
 # MAIN: argument parsing and batch processing
-# ----------------------------
+# --------------------------------------------------------
 
 def main():
      ap = argparse.ArgumentParser()
