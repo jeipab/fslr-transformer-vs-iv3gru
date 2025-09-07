@@ -79,16 +79,32 @@ class LayerNormalization(nn.Module):
         return self.gamma * (x - mean) / (std + self.eps) + self.beta
 
 class FeedForwardBlock(nn.Module):
+    """
+    Position-wise feed-forward network (FFN) used inside Transformer layers.
+
+    Applies two linear transformations with a ReLU activation in between,
+    and dropout for regularization.
+    """
+    
     def __init__(self, emb_dim, ff_dim=512, dropout=0.1):
+        """
+        Args:
+            emb_dim (int): embedding dimension (input/output size).
+            ff_dim (int): hidden dimension of the feed-forward layer (usually 2–4× emb_dim).
+            dropout (float): dropout rate applied after the activation.
+        """
         super(FeedForwardBlock, self).__init__()
-        self.linear1 = nn.Linear(emb_dim, ff_dim)
-        self.activation = nn.ReLU()
+        self.linear1 = nn.Linear(emb_dim, ff_dim)   # expand to higher dimension
+        self.activation = nn.ReLU()                 # non-linearity
         self.dropout = nn.Dropout(dropout)
-        self.linear2 = nn.Linear(ff_dim, emb_dim)
+        self.linear2 = nn.Linear(ff_dim, emb_dim)   # project back to embedding dimension
 
     def forward(self, x):
         """
-        x: [B, T, E]
+        Args:
+            x (Tensor): input tensor of shape [B, T, E].
+        Returns:
+            Tensor: output tensor of shape [B, T, E].
         """
         x = self.linear1(x)
         x = self.activation(x)
