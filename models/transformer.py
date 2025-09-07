@@ -20,7 +20,7 @@ class PositionalEncoding(nn.Module):
         """
         x: [B, T, E]
         """
-        x = x + (self.pe[:, :x.size(1), :]).requires_grad(False)
+        x = x + self.pe[:, :x.size(1), :]
         return self.dropout(x)
 
 class LayerNormalization(nn.Module):
@@ -123,7 +123,7 @@ class MultiHeadAttentionBlock(nn.Module):
 class ResidualConnection(nn.Module):
     def __init__(self, emb_dim, dropout=0.1):
         super(ResidualConnection, self).__init__()
-        self.norm = nn.LayerNorm(emb_dim)      # built-in LayerNorm is more efficient
+        self.norm = LayerNormalization(emb_dim)      # built-in LayerNorm is more efficient
         self.dropout = nn.Dropout(dropout)
 
     def forward(self, x, sublayer):
@@ -143,16 +143,26 @@ class EncoderLayer(nn.Module):
         self.residual1 = ResidualConnection(emb_dim, dropout)
         self.residual2 = ResidualConnection(emb_dim, dropout)
 
-    def forward(self, x, mask=None):
-        # 1. Attention block with residual
-        x = self.residual1(x, lambda x: self.attention(x, mask)[0])  # only take output, ignore attn weights
+    def forward(self, x, mask=None, return_attn=False):
+        """
+        x: [B, T, E]
+        mask: attention mask in shape [B, 1, 1, T] or None
+        return_attn: if True, also return attention weights of this layer
+        """
+        # ----- Attention sublayer (LayerNorm -> Attention -> Dropout -> Residual) -----
+        normed = self.residual1.norm(x)                  # normalized input
+        attn_out, attn = self.attention(normed, mask)    # attn_out: [B, T, E]
 
-        # 2. Feed-forward block with residual
-        x = self.residual2(x, self.feed_forward)
+        x = x + self.residual1.dropout(attn_out)         # residual connection
 
+        # ----- Feed-forward sublayer (LayerNorm -> FFN -> Dropout -> Residual) -----
+        normed2 = self.residual2.norm(x)
+        ff_out = self.feed_forward(normed2)              # [B, T, E]
+        x = x + self.residual2.dropout(ff_out)
+
+        if return_attn:
+            return x, attn
         return x
-
-# Complete SignTransformer class with all missing parts
 
 class SignTransformer(nn.Module):
     def __init__(self,
@@ -173,7 +183,7 @@ class SignTransformer(nn.Module):
         self.pos_encoder = PositionalEncoding(emb_dim, dropout, max_len)
 
         # Input normalization layer
-        self.input_norm = nn.LayerNorm(emb_dim)
+        self.input_norm = LayerNormalization(emb_dim)
 
         # Transformer Encoder (stack of encoder layers)
         self.encoder_layers = nn.ModuleList([
@@ -259,13 +269,15 @@ class SignTransformer(nn.Module):
                 pooled = x.mean(dim=1)  # [B, emb_dim]
         elif self.pooling_method == 'max':
             if mask is not None:
-                # Masked max pooling
-                mask_expanded = mask.unsqueeze(-1).expand_as(x)  # [B, T, emb_dim]
+                # Masked max pooling with safe fallback if no valid positions exist
+                mask_expanded = mask.unsqueeze(-1).expand_as(x)  # [B, T, E]
                 masked_x = x.masked_fill(~mask_expanded.bool(), float('-inf'))
-                pooled = masked_x.max(dim=1)[0]  # [B, emb_dim]
+                pooled = masked_x.max(dim=1)[0]  # [B, E]
+                # If a sample had zero valid frames, replace -inf row with zeros
+                valid = (mask.sum(dim=1) > 0).unsqueeze(-1)   # [B, 1]
+                pooled = torch.where(valid, pooled, torch.zeros_like(pooled))
             else:
-                # Simple max pooling
-                pooled = x.max(dim=1)[0]  # [B, emb_dim]
+                pooled = x.max(dim=1)[0]  # [B, E]
         else:
             raise ValueError(f"Unknown pooling method: {self.pooling_method}")
 
@@ -303,16 +315,11 @@ class SignTransformer(nn.Module):
         else:
             attention_mask = None
 
-        # Collect attention weights from each layer
+        # Collect attention weights from each layer (in the same order as forward)
         for encoder_layer in self.encoder_layers:
-            # Get attention weights from the attention block
-            attn_output, attn_weights = encoder_layer.attention(
-                encoder_layer.residual1.norm(x), attention_mask
-            )
-            attention_weights.append(attn_weights.detach())
-            
-            # Continue forward pass
-            x = encoder_layer.residual1(x, lambda x: attn_output)
-            x = encoder_layer.residual2(x, encoder_layer.feed_forward)
+            # call encoder_layer such that it performs its normal normalization/residuals
+            x, attn_weights = encoder_layer(x, attention_mask, return_attn=True)
+            # attn_weights shape: [B, H, T, T]
+            attention_weights.append(attn_weights.detach().cpu())
 
         return attention_weights
