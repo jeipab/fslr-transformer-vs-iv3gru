@@ -113,69 +113,114 @@ class FeedForwardBlock(nn.Module):
         return x    
 
 class MultiHeadAttentionBlock(nn.Module):
+    """
+    Multi-head self-attention mechanism.
+    
+    Splits the embedding into multiple heads, computes scaled dot-product
+    attention for each head, and concatenates the results.
+    """
+    
     def __init__(self, emb_dim, num_heads, dropout=0.1):
+        """
+        Args:
+            emb_dim (int): embedding dimension (E).
+            num_heads (int): number of attention heads (H).
+                            Must divide evenly into emb_dim.
+            dropout (float): dropout rate applied to attention weights.
+        """
         super(MultiHeadAttentionBlock, self).__init__()
         assert emb_dim % num_heads == 0, "Embedding dim must be divisible by num_heads"
 
         self.num_heads = num_heads
-        self.head_dim = emb_dim // num_heads
+        self.head_dim = emb_dim // num_heads       # dimension per head (D = E / H)
 
-        # Linear projections
+        # Learnable linear projections for queries, keys, and values
         self.W_q = nn.Linear(emb_dim, emb_dim)
         self.W_k = nn.Linear(emb_dim, emb_dim)
         self.W_v = nn.Linear(emb_dim, emb_dim)
         self.W_o = nn.Linear(emb_dim, emb_dim)
 
-        # Dropout (can still be skipped in SelfAttention)
+        # Final linear projection after concatenating all heads
         self.dropout = nn.Dropout(dropout)
 
     @staticmethod
     def SelfAttention(Q, K, V, mask=None, dropout=None):
+        """
+        Scaled dot-product attention (core operation of attention).
+
+        Args:
+            Q (Tensor): queries of shape [B, H, T, D].
+            K (Tensor): keys of shape [B, H, T, D].
+            V (Tensor): values of shape [B, H, T, D].
+            mask (Tensor or None): optional attention mask of shape [B, 1, 1, T].
+                                    1 = valid, 0 = masked.
+            dropout (nn.Dropout or None): optional dropout layer for attention weights.
+
+        Returns:
+            out (Tensor): attention output of shape [B, H, T, D].
+            attn (Tensor): attention weights of shape [B, H, T, T].
+        """
         d_k = Q.size(-1)
 
-        # 1. Compute attention scores
+        # Compute raw attention scores: [B, H, T, T]
         scores = torch.matmul(Q, K.transpose(-2, -1)) / (d_k ** 0.5)
 
-        # 2. Apply mask if provided
+        # Apply mask (set masked positions to -inf so softmax → 0)
         if mask is not None:
             scores = scores.masked_fill(mask == 0, float("-inf"))
 
-        # 3. Softmax to get attention weights
+        # Normalize scores into probabilities
         attn = torch.softmax(scores, dim=-1)
 
-        # 4. Apply dropout if provided
+        # Apply dropout to attention weights (regularization)
         if dropout is not None:
             attn = dropout(attn)
 
-        # 5. Weighted sum of values
+        # Weighted sum of values
         out = torch.matmul(attn, V)
         return out, attn
 
     def forward(self, x, mask=None):
+        """
+        Args:
+            x (Tensor): input embeddings of shape [B, T, E].
+            mask (Tensor or None): optional attention mask of shape [B, T].
+
+        Returns:
+            out (Tensor): output embeddings of shape [B, T, E].
+            attn (Tensor): attention weights of shape [B, H, T, T].
+        """
         B, T, E = x.size()
 
-        # Linear projections
+        # 1. Linear projections: [B, T, E] → [B, T, E]
         Q = self.W_q(x)
         K = self.W_k(x)
         V = self.W_v(x)
 
-        # Split into heads
+        # 2. Split into multiple heads: [B, T, E] → [B, H, T, D]
         Q = Q.view(B, T, self.num_heads, self.head_dim).transpose(1, 2)  # [B, H, T, D]
         K = K.view(B, T, self.num_heads, self.head_dim).transpose(1, 2)
         V = V.view(B, T, self.num_heads, self.head_dim).transpose(1, 2)
 
-        # Call static SelfAttention
+        # 3. Apply scaled dot-product attention
         out, attn = MultiHeadAttentionBlock.SelfAttention(Q, K, V, mask, self.dropout)
 
-        # Concatenate heads
+        # 4. Concatenate heads: [B, H, T, D] → [B, T, E]
         out = out.transpose(1, 2).contiguous().view(B, T, E)
 
-        # Final projection
+        # 5. Final linear projection
         out = self.W_o(out)
 
         return out, attn
 
 class ResidualConnection(nn.Module):
+    """
+    Implements a residual connection with pre-layer normalization.
+    
+    Each sublayer (e.g., attention or feed-forward) is wrapped with:
+        x + Dropout(Sublayer(LayerNorm(x)))
+    """
+    
     def __init__(self, emb_dim, dropout=0.1):
         super(ResidualConnection, self).__init__()
         self.norm = LayerNormalization(emb_dim)      # built-in LayerNorm is more efficient
