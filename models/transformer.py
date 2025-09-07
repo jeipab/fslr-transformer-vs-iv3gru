@@ -48,19 +48,34 @@ class PositionalEncoding(nn.Module):
         return self.dropout(x)
 
 class LayerNormalization(nn.Module):
+    """
+    Custom implementation of Layer Normalization.
+    
+    Normalizes inputs across the last dimension (features) and
+    applies learnable scale (gamma) and shift (beta) parameters.
+    """
+    
     def __init__(self, features, eps=1e-6):
+        """
+        Args:
+            features (int): number of features (E) to normalize.
+            eps (float): small constant to prevent division by zero.
+        """
         super(LayerNormalization, self).__init__()
-        self.gamma = nn.Parameter(torch.ones(features))  # scale
-        self.beta = nn.Parameter(torch.zeros(features))  # shift
+        self.gamma = nn.Parameter(torch.ones(features))  # learnable scale
+        self.beta = nn.Parameter(torch.zeros(features))  # learnable shift
         self.eps = eps
 
     def forward(self, x):
         """
-        x: [B, T, E] or [B, E]
-        Normalizes across the last dimension (E).
+        Args:
+            x (Tensor): input tensor of shape [B, T, E] or [B, E].
+                        Normalization is applied across the last dimension (E).
+        Returns:
+            Tensor: normalized tensor of the same shape as input.
         """
-        mean = x.mean(dim=-1, keepdim=True)
-        std = x.std(dim=-1, keepdim=True)
+        mean = x.mean(dim=-1, keepdim=True)     # per-sample mean
+        std = x.std(dim=-1, keepdim=True)       # per-sample std
         return self.gamma * (x - mean) / (std + self.eps) + self.beta
 
 class FeedForwardBlock(nn.Module):
