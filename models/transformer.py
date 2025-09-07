@@ -2,6 +2,21 @@
 import torch
 import torch.nn as nn
 
+class PositionalEncoding(nn.Module):
+    def __init__(self, emb_dim, max_len=5000):
+        super(PositionalEncoding, self).__init__()
+        pe = torch.zeros(max_len, emb_dim)
+        position = torch.arange(0, max_len).unsqueeze(1).float()
+        div_term = torch.exp(torch.arange(0, emb_dim, 2).float() * (-torch.log(torch.tensor(10000.0)) / emb_dim))
+        pe[:, 0::2] = torch.sin(position * div_term)
+        pe[:, 1::2] = torch.cos(position * div_term)
+        pe = pe.unsqueeze(0)  # Shape: [1, max_len, emb_dim]
+        self.register_buffer('pe', pe)
+
+    def forward(self, x):
+        x = x + self.pe[:, :x.size(1)]
+        return x
+
 class SignTransformer(nn.Module):
     def __init__(self,
                     input_dim=156,     # 78 keypoints × 2 coords
@@ -13,8 +28,10 @@ class SignTransformer(nn.Module):
         super(SignTransformer, self).__init__()
 
         # TODO: Define input projection (Linear layer 156 → emb_dim)
+        self.embedding = nn.Linear(input_dim, emb_dim)
 
         # TODO: Define positional encoding (sinusoidal or learnable)
+        self.pos_encoder = PositionalEncoding(emb_dim)
 
         # TODO: Define Transformer Encoder (stack of encoder layers)
 
