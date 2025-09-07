@@ -4,6 +4,7 @@ import torch.nn as nn
 
 class PositionalEncoding(nn.Module):
     def __init__(self, emb_dim, dropout=0.1, max_len=300):
+        
         super(PositionalEncoding, self).__init__()
         self.dropout = nn.Dropout(p=dropout)
 
@@ -19,8 +20,24 @@ class PositionalEncoding(nn.Module):
         """
         x: [B, T, E]
         """
-        x = x + self.pe[:, :x.size(1)]
+        x = x + (self.pe[:, :x.size(1), :]).requires_grad(False)
         return self.dropout(x)
+
+class LayerNormalization(nn.Module):
+    def __init__(self, features, eps=1e-6):
+        super(LayerNormalization, self).__init__()
+        self.gamma = nn.Parameter(torch.ones(features))  # scale
+        self.beta = nn.Parameter(torch.zeros(features))  # shift
+        self.eps = eps
+
+    def forward(self, x):
+        """
+        x: [B, T, E] or [B, E]
+        Normalizes across the last dimension (E).
+        """
+        mean = x.mean(dim=-1, keepdim=True)
+        std = x.std(dim=-1, keepdim=True)
+        return self.gamma * (x - mean) / (std + self.eps) + self.beta
 
 class SignTransformer(nn.Module):
     def __init__(self,
