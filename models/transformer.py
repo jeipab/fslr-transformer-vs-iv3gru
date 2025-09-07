@@ -21,6 +21,15 @@ Input: [B, T, 156] keypoint sequences
 → 4 Transformer Encoder Layers
 → Pooling (mean/max/CLS)
 → Dual Classification Heads (gloss: 105 classes, category: 10 classes)
+
+Usage:
+    from models.transformer import SignTransformer
+    
+    # Initialize model
+    model = SignTransformer()
+    
+    # Forward pass
+    gloss_pred, cat_pred = model(keypoint_sequences)
 """
 
 import torch
