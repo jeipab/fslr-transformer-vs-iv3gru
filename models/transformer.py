@@ -133,6 +133,25 @@ class ResidualConnection(nn.Module):
         """
         return x + self.dropout(sublayer(self.norm(x)))
 
+class EncoderLayer(nn.Module):
+    def __init__(self, emb_dim, num_heads, ff_dim=512, dropout=0.1):
+        super(EncoderLayer, self).__init__()
+        self.attention = MultiHeadAttentionBlock(emb_dim, num_heads, dropout)
+        self.feed_forward = FeedForwardBlock(emb_dim, ff_dim, dropout)
+
+        # Two residual connections: one for attention, one for feed-forward
+        self.residual1 = ResidualConnection(emb_dim, dropout)
+        self.residual2 = ResidualConnection(emb_dim, dropout)
+
+    def forward(self, x, mask=None):
+        # 1. Attention block with residual
+        x = self.residual1(x, lambda x: self.attention(x, mask)[0])  # only take output, ignore attn weights
+
+        # 2. Feed-forward block with residual
+        x = self.residual2(x, self.feed_forward)
+
+        return x
+
 class SignTransformer(nn.Module):
     def __init__(self,
                     input_dim=156,     # 78 keypoints × 2 coords
