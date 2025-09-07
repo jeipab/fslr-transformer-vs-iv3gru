@@ -1,6 +1,5 @@
-# transformer.py
 """
-Multi-Head Attention Transformer for Filipino Sign Language Recognition
+transformer.py
 
 This module implements a Transformer-based model for recognizing Filipino Sign Language
 from sequences of body keypoints. The model processes 156-dimensional keypoint vectors
@@ -22,8 +21,6 @@ Input: [B, T, 156] keypoint sequences
 → 4 Transformer Encoder Layers
 → Pooling (mean/max/CLS)
 → Dual Classification Heads (gloss: 105 classes, category: 10 classes)
-
-Author: Thesis Project - FSLR Transformer vs IV3-GRU
 """
 
 import torch
