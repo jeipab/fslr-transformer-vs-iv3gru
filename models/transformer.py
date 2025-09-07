@@ -307,6 +307,15 @@ class EncoderLayer(nn.Module):
         return x
 
 class SignTransformer(nn.Module):
+    """
+    Transformer-based model for Sign Language Recognition.
+
+    Processes sequences of body keypoints using a Transformer encoder
+    and predicts both:
+        - Gloss classification (word/sign ID)
+        - Category classification (semantic class/group)
+    """
+    
     def __init__(self,
                     input_dim=156,     # 78 keypoints × 2 coords
                     emb_dim=256,       # embedding dimension
@@ -318,32 +327,35 @@ class SignTransformer(nn.Module):
                     max_len=300):      # maximum sequence length
         super(SignTransformer, self).__init__()
 
-        # Input projection (Linear layer 156 → emb_dim)
+        # ----- Input embedding -----
+        # Linear projection from raw keypoints (156) → model embedding (E)
         self.embedding = nn.Linear(input_dim, emb_dim)
 
-        # Positional encoding
+        # Positional encoding (adds temporal order info)
         self.pos_encoder = PositionalEncoding(emb_dim, dropout, max_len)
 
-        # Input normalization layer
+        # Normalization on input embeddings
         self.input_norm = LayerNormalization(emb_dim)
 
-        # Transformer Encoder (stack of encoder layers)
+        # ----- Transformer Encoder -----
+        # Stack of N encoder layers
         self.encoder_layers = nn.ModuleList([
             EncoderLayer(emb_dim, n_heads, ff_dim=emb_dim*4, dropout=dropout)
             for _ in range(n_layers)
         ])
 
-        # Global pooling method (you can change this to 'cls' if you prefer CLS token)
+        # ----- Pooling strategy -----
+        # How to collapse sequence → single vector
         self.pooling_method = 'mean'  # options: 'mean', 'max', 'cls'
         
-        # If using CLS token, add it
+        # CLS token if chosen pooling is "cls"
         if self.pooling_method == 'cls':
             self.cls_token = nn.Parameter(torch.randn(1, 1, emb_dim))
 
-        # Output heads (two classifiers: gloss + category)
+        # ----- Output heads -----
         self.dropout_final = nn.Dropout(dropout)
         
-        # Gloss classifier
+        # Gloss classification head
         self.gloss_head = nn.Sequential(
             nn.Linear(emb_dim, emb_dim // 2),
             nn.ReLU(),
@@ -351,7 +363,7 @@ class SignTransformer(nn.Module):
             nn.Linear(emb_dim // 2, num_gloss)
         )
         
-        # Category classifier
+        # Category classification head
         self.category_head = nn.Sequential(
             nn.Linear(emb_dim, emb_dim // 2),
             nn.ReLU(),
@@ -361,87 +373,94 @@ class SignTransformer(nn.Module):
 
     def forward(self, x, mask=None):
         """
-        x shape: [B, T, 156]
-        mask shape: [B, T] (optional) - 1 for valid positions, 0 for padding
-        B = batch size, T = sequence length, 156 = keypoint features
+        Forward pass.
+
+        Args:
+            x (Tensor): input sequence [B, T, 156].
+            mask (Tensor or None): binary mask [B, T],
+                                    1 = valid frame, 0 = padding.
+
+        Returns:
+            gloss_out (Tensor): [B, num_gloss] logits for gloss prediction.
+            cat_out   (Tensor): [B, num_cat] logits for category prediction.
         """
         B, T, _ = x.size()
 
-        # Project input into embedding space
-        x = self.embedding(x)  # [B, T, emb_dim]
+        # ----- Embedding -----
+        x = self.embedding(x)  # [B, T, E]
 
-        # Add CLS token if using CLS pooling
+        # If using CLS token, prepend to sequence
         if self.pooling_method == 'cls':
-            cls_tokens = self.cls_token.expand(B, -1, -1)  # [B, 1, emb_dim]
-            x = torch.cat([cls_tokens, x], dim=1)  # [B, T+1, emb_dim]
+            cls_tokens = self.cls_token.expand(B, -1, -1)   # [B, 1, E]
+            x = torch.cat([cls_tokens, x], dim=1)           # [B, T+1, E]
             if mask is not None:
-                # Add mask for CLS token (always valid)
                 cls_mask = torch.ones(B, 1, device=mask.device, dtype=mask.dtype)
                 mask = torch.cat([cls_mask, mask], dim=1)  # [B, T+1]
 
-        # Add positional encoding to embeddings
-        x = self.pos_encoder(x)  # [B, T(+1), emb_dim]
+        # ----- Positional Encoding -----
+        x = self.pos_encoder(x)
 
         # Input normalization
         x = self.input_norm(x)
 
-        # Prepare attention mask if provided
+        # Prepare attention mask for broadcasting
         if mask is not None:
-            # Convert mask to attention mask format [B, 1, 1, T(+1)] for broadcasting
             attention_mask = mask.unsqueeze(1).unsqueeze(2)  # [B, 1, 1, T(+1)]
         else:
             attention_mask = None
 
-        # Pass through Transformer Encoder layers
+        # ----- Transformer Encoder -----
         for encoder_layer in self.encoder_layers:
             x = encoder_layer(x, attention_mask)
 
-        # Pool sequence into a single vector
+        # ----- Pooling -----
         if self.pooling_method == 'cls':
-            # Use CLS token (first token)
-            pooled = x[:, 0, :]  # [B, emb_dim]
+            pooled = x[:, 0, :]  # use CLS token
         elif self.pooling_method == 'mean':
             if mask is not None:
-                # Masked mean pooling
-                mask_expanded = mask.unsqueeze(-1).expand_as(x)  # [B, T, emb_dim]
+                mask_expanded = mask.unsqueeze(-1).expand_as(x)
                 masked_x = x * mask_expanded
                 pooled = masked_x.sum(dim=1) / mask.sum(dim=1, keepdim=True).clamp(min=1)
             else:
-                # Simple mean pooling
-                pooled = x.mean(dim=1)  # [B, emb_dim]
+                pooled = x.mean(dim=1)
         elif self.pooling_method == 'max':
             if mask is not None:
-                # Masked max pooling with safe fallback if no valid positions exist
-                mask_expanded = mask.unsqueeze(-1).expand_as(x)  # [B, T, E]
+                mask_expanded = mask.unsqueeze(-1).expand_as(x)
                 masked_x = x.masked_fill(~mask_expanded.bool(), float('-inf'))
-                pooled = masked_x.max(dim=1)[0]  # [B, E]
-                # If a sample had zero valid frames, replace -inf row with zeros
-                valid = (mask.sum(dim=1) > 0).unsqueeze(-1)   # [B, 1]
+                pooled = masked_x.max(dim=1)[0]
+                valid = (mask.sum(dim=1) > 0).unsqueeze(-1)
                 pooled = torch.where(valid, pooled, torch.zeros_like(pooled))
             else:
-                pooled = x.max(dim=1)[0]  # [B, E]
+                pooled = x.max(dim=1)[0]
         else:
             raise ValueError(f"Unknown pooling method: {self.pooling_method}")
 
-        # Apply final dropout
+        # Final dropout
         pooled = self.dropout_final(pooled)
 
-        # Compute outputs for gloss and category
-        gloss_out = self.gloss_head(pooled)      # [B, num_gloss]
-        cat_out = self.category_head(pooled)     # [B, num_cat]
+        # ----- Output predictions -----
+        gloss_out = self.gloss_head(pooled)     # [B, num_gloss]
+        cat_out = self.category_head(pooled)    # [B, num_cat]
 
         return gloss_out, cat_out
 
     def get_attention_weights(self, x, mask=None):
         """
-        Utility method to extract attention weights for visualization
+        Utility method: extracts attention weights for visualization.
+
+        Args:
+            x (Tensor): input sequence [B, T, 156].
+            mask (Tensor or None): binary mask [B, T].
+
+        Returns:
+            List of attention weight tensors, one per encoder layer.
+            Each element is [B, H, T, T].
         """
         B, T, _ = x.size()
         attention_weights = []
 
-        # Forward pass through embedding and positional encoding
+        # Embedding + optional CLS token
         x = self.embedding(x)
-        
         if self.pooling_method == 'cls':
             cls_tokens = self.cls_token.expand(B, -1, -1)
             x = torch.cat([cls_tokens, x], dim=1)
@@ -449,6 +468,7 @@ class SignTransformer(nn.Module):
                 cls_mask = torch.ones(B, 1, device=mask.device, dtype=mask.dtype)
                 mask = torch.cat([cls_mask, mask], dim=1)
 
+        # Positional encoding + normalization
         x = self.pos_encoder(x)
         x = self.input_norm(x)
 
@@ -457,11 +477,9 @@ class SignTransformer(nn.Module):
         else:
             attention_mask = None
 
-        # Collect attention weights from each layer (in the same order as forward)
+        # Collect attention maps per layer
         for encoder_layer in self.encoder_layers:
-            # call encoder_layer such that it performs its normal normalization/residuals
             x, attn_weights = encoder_layer(x, attention_mask, return_attn=True)
-            # attn_weights shape: [B, H, T, T]
             attention_weights.append(attn_weights.detach().cpu())
 
         return attention_weights
