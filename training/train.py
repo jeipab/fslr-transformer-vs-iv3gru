@@ -19,12 +19,12 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 from torch.utils.data import DataLoader
-from training.utils import FSLDataset, evaluate
+from training.utils import FSLDataset
 from models.iv3_gru import InceptionV3GRU
 from models.transformer import SignTransformer
 import argparse
 
-def train_model(model, train_loader, val_loader, device, epochs=20, alpha=0.5, beta=0.5):
+def train_model(model, train_loader, val_loader, device, forward_adapter, epochs=20, alpha=0.5, beta=0.5):
     """
     Train a sign language recognition model with multi-task learning.
     
@@ -57,10 +57,16 @@ def train_model(model, train_loader, val_loader, device, epochs=20, alpha=0.5, b
             X, gloss, cat = X.to(device), gloss.to(device), cat.to(device)
             optimizer.zero_grad()
             
-            gloss_pred, cat_pred = model(X)
-            loss_gloss = criterion(gloss_pred, gloss)
-            loss_cat = criterion(cat_pred, cat)
-            loss = alpha * loss_gloss + beta * loss_cat
+            outputs = forward_adapter(model, X)
+            if isinstance(outputs, tuple) and len(outputs) == 2:
+                gloss_pred, cat_pred = outputs
+                loss_gloss = criterion(gloss_pred, gloss)
+                loss_cat = criterion(cat_pred, cat)
+                loss = alpha * loss_gloss + beta * loss_cat
+            else:
+                gloss_pred = outputs
+                loss_gloss = criterion(gloss_pred, gloss)
+                loss = loss_gloss
 
             loss.backward()
             optimizer.step()
@@ -68,7 +74,7 @@ def train_model(model, train_loader, val_loader, device, epochs=20, alpha=0.5, b
             num_batches += 1
 
         # Validation
-        val_loss, val_gloss_acc, val_cat_acc = evaluate(model, val_loader, criterion, device)
+        val_loss, val_gloss_acc, val_cat_acc = evaluate_with_adapter(model, val_loader, criterion, device, forward_adapter)
         
         avg_train_loss = total_loss / num_batches
         print(f"Epoch {epoch+1:2d}/{epochs} | "
@@ -83,6 +89,41 @@ def train_model(model, train_loader, val_loader, device, epochs=20, alpha=0.5, b
     model_filename = f"{model.__class__.__name__}.pt"
     torch.save(model.state_dict(), model_filename)
     print(f"Model saved as: {model_filename}")
+
+def evaluate_with_adapter(model, dataloader, criterion, device, forward_adapter):
+    model.eval()
+    total_loss = 0.0
+    correct_gloss = 0
+    correct_cat = 0
+    total_samples = 0
+    num_batches = 0
+
+    with torch.no_grad():
+        for X, gloss, cat in dataloader:
+            X, gloss, cat = X.to(device), gloss.to(device), cat.to(device)
+            outputs = forward_adapter(model, X)
+
+            if isinstance(outputs, tuple) and len(outputs) == 2:
+                gloss_pred, cat_pred = outputs
+                loss_gloss = criterion(gloss_pred, gloss)
+                loss_cat = criterion(cat_pred, cat)
+                batch_loss = loss_gloss + loss_cat
+                cat_preds = cat_pred.argmax(dim=1)
+                correct_cat += (cat_preds == cat).sum().item()
+            else:
+                gloss_pred = outputs
+                batch_loss = criterion(gloss_pred, gloss)
+
+            gloss_preds = gloss_pred.argmax(dim=1)
+            correct_gloss += (gloss_preds == gloss).sum().item()
+            total_samples += gloss.size(0)
+            total_loss += batch_loss.item()
+            num_batches += 1
+
+    avg_loss = total_loss / num_batches if num_batches > 0 else 0.0
+    gloss_accuracy = correct_gloss / total_samples if total_samples > 0 else 0.0
+    cat_accuracy = correct_cat / total_samples if total_samples > 0 else 0.0
+    return avg_loss, gloss_accuracy, cat_accuracy
 
 def load_data(n_train_samples=100, n_val_samples=20, seq_length=50, input_dim=156, num_gloss=105, num_cat=10, seed=42):
     """
@@ -147,11 +188,13 @@ if __name__ == "__main__":
     print("="*60)
     
     try:
+        # Use 156-d keypoints for transformer; 2048-d features for iv3_gru (synthetic in smoke test)
+        input_dim = 2048 if args.model == "iv3_gru" else 156
         train_X, train_gloss, train_cat, val_X, val_gloss, val_cat = load_data(
             n_train_samples=args.train_samples,
             n_val_samples=args.val_samples,
             seq_length=args.seq_length,
-            input_dim=156,
+            input_dim=input_dim,
             num_gloss=105,
             num_cat=10,
             seed=args.seed,
@@ -219,9 +262,17 @@ if __name__ == "__main__":
     print(f"  - Trainable parameters: {trainable_params:,}")
     print(f"  - Model size: {total_params * 4 / 1024 / 1024:.1f} MB")
 
+    # Forward adapter per model (unifies calling convention)
+    if args.model == "transformer":
+        def forward_adapter(m, X):
+            return m(X)
+    else:
+        def forward_adapter(m, X):
+            return m(X, features_already=True)
+
     # Training execution
     print("\n" + "="*60)
     print("TRAINING START")
     print("="*60)
     
-    train_model(model, train_loader, val_loader, device, epochs=args.epochs, alpha=args.alpha, beta=args.beta)
+    train_model(model, train_loader, val_loader, device, forward_adapter, epochs=args.epochs, alpha=args.alpha, beta=args.beta)
