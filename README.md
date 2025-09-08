@@ -20,5 +20,30 @@ Clone the repository and install dependencies:
 ```bash
 git clone https://github.com/jeipab/fslr-transformer-vs-iv3gru.git
 cd fslr-transformer-vs-iv3gru
-pip install -r requirements.txt
+pip install -r requirments.txt
 ```
+
+## Run the Streamlit demo (UI)
+
+Use PowerShell from the repo root:
+
+```powershell
+# 1) (Optional) create & activate a virtual environment
+python -m venv .venv
+\.venv\Scripts\Activate.ps1
+
+# 2) Install dependencies
+pip install -r .\requirments.txt
+
+# 3) Run the app
+python -m streamlit run ui\app.py
+```
+
+- Open the Local URL shown (e.g., http://localhost:8501). Press Ctrl+C in the terminal to stop.
+- If the default port is busy, specify another port:
+
+```powershell
+python -m streamlit run ui\app.py --server.port 8502
+```
+
+- The placeholder UI accepts a preprocessed `.npz` with at least key `X` shaped `[T,156]` and will simulate predictions.
