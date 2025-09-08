@@ -2,6 +2,7 @@
 
 # Core training
 torch
+torchvision
 numpy
 
 # Optional: UI demo
