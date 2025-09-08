@@ -15,14 +15,86 @@ Usage:
     python training/train.py
 """
 
+import os
+import csv
 import torch
 import torch.nn as nn
 import torch.optim as optim
-from torch.utils.data import DataLoader
+from torch.utils.data import DataLoader, Dataset
 from training.utils import FSLDataset
 from models.iv3_gru import InceptionV3GRU
 from models.transformer import SignTransformer
 import argparse
+
+class FSLFeatureFileDataset(Dataset):
+    """
+    Dataset for precomputed visual features [T, 2048] stored in .npz files.
+    Expects a labels CSV mapping filename (column 'file', without extension also accepted) to 'gloss' and 'cat'.
+
+    .npz requirements:
+      - Feature array under key specified by feature_key (default: 'X2048').
+        If not present, falls back to 'X' and verifies last dim == 2048.
+    """
+    def __init__(self, features_dir, labels_csv, feature_key='X2048'):
+        self.features_dir = features_dir
+        self.feature_key = feature_key
+        self.index = []  # list of (stem, gloss, cat)
+
+        if labels_csv is None:
+            raise ValueError("labels_csv must be provided for feature dataset")
+
+        with open(labels_csv, newline='') as f:
+            reader = csv.DictReader(f)
+            required = {'file', 'gloss', 'cat'}
+            if not required.issubset(set(reader.fieldnames or [])):
+                raise ValueError(f"labels_csv must have columns: {required}")
+            for row in reader:
+                # accept values with or without extension
+                stem = os.path.splitext(row['file'])[0]
+                gloss = int(row['gloss'])
+                cat = int(row['cat'])
+                self.index.append((stem, gloss, cat))
+
+    def __len__(self):
+        return len(self.index)
+
+    def __getitem__(self, idx):
+        stem, gloss, cat = self.index[idx]
+        path = os.path.join(self.features_dir, stem + '.npz')
+        if not os.path.exists(path):
+            raise FileNotFoundError(f"Feature file not found: {path}")
+        data = torch.from_numpy(self._load_npz_features(path))  # [T, 2048]
+        length = data.shape[0]
+        return data.float(), torch.tensor(gloss, dtype=torch.long), torch.tensor(cat, dtype=torch.long), torch.tensor(length, dtype=torch.long)
+
+    def _load_npz_features(self, path):
+        import numpy as np
+        with np.load(path, allow_pickle=True) as npz:
+            if self.feature_key in npz:
+                X = np.array(npz[self.feature_key])
+            elif 'X' in npz:
+                X = np.array(npz['X'])
+            else:
+                raise KeyError(f"Neither '{self.feature_key}' nor 'X' found in {path}")
+        if X.ndim != 2 or X.shape[-1] != 2048:
+            raise ValueError(f"Expected [T,2048] features in {path}, got shape {X.shape}")
+        return X
+
+def collate_features_with_padding(batch):
+    """
+    Pad variable-length [T, 2048] sequences to max T in batch. Returns:
+      X_pad [B, Tmax, 2048], gloss [B], cat [B], lengths [B]
+    """
+    sequences, gloss, cat, lengths = zip(*batch)
+    lengths = torch.stack(lengths, dim=0)
+    B = len(sequences)
+    Tmax = int(max(l.item() for l in lengths))
+    D = sequences[0].shape[-1]
+    X_pad = torch.zeros((B, Tmax, D), dtype=sequences[0].dtype)
+    for i, seq in enumerate(sequences):
+        t = seq.shape[0]
+        X_pad[i, :t] = seq
+    return X_pad, torch.stack(gloss, dim=0), torch.stack(cat, dim=0), lengths
 
 def train_model(model, train_loader, val_loader, device, forward_adapter, epochs=20, alpha=0.5, beta=0.5):
     """
@@ -53,11 +125,17 @@ def train_model(model, train_loader, val_loader, device, forward_adapter, epochs
         num_batches = 0
 
         # Training phase
-        for X, gloss, cat in train_loader:
+        for batch in train_loader:
+            if len(batch) == 4:
+                X, gloss, cat, lengths = batch
+                lengths = lengths.to(device)
+            else:
+                X, gloss, cat = batch
+                lengths = None
             X, gloss, cat = X.to(device), gloss.to(device), cat.to(device)
             optimizer.zero_grad()
             
-            outputs = forward_adapter(model, X)
+            outputs = forward_adapter(model, X, lengths)
             if isinstance(outputs, tuple) and len(outputs) == 2:
                 gloss_pred, cat_pred = outputs
                 loss_gloss = criterion(gloss_pred, gloss)
@@ -99,9 +177,15 @@ def evaluate_with_adapter(model, dataloader, criterion, device, forward_adapter)
     num_batches = 0
 
     with torch.no_grad():
-        for X, gloss, cat in dataloader:
+        for batch in dataloader:
+            if len(batch) == 4:
+                X, gloss, cat, lengths = batch
+                lengths = lengths.to(device)
+            else:
+                X, gloss, cat = batch
+                lengths = None
             X, gloss, cat = X.to(device), gloss.to(device), cat.to(device)
-            outputs = forward_adapter(model, X)
+            outputs = forward_adapter(model, X, lengths)
 
             if isinstance(outputs, tuple) and len(outputs) == 2:
                 gloss_pred, cat_pred = outputs
@@ -166,6 +250,12 @@ def parse_args():
     parser.add_argument("--batch-size", type=int, default=32, help="Batch size")
     parser.add_argument("--alpha", type=float, default=0.5, help="Weight for gloss loss")
     parser.add_argument("--beta", type=float, default=0.5, help="Weight for category loss")
+    # IV3-GRU feature dataset options
+    parser.add_argument("--features-train", type=str, default=None, help="Directory of training .npz 2048-d features")
+    parser.add_argument("--features-val", type=str, default=None, help="Directory of validation .npz 2048-d features")
+    parser.add_argument("--labels-train-csv", type=str, default=None, help="CSV with columns: file,gloss,cat for training")
+    parser.add_argument("--labels-val-csv", type=str, default=None, help="CSV with columns: file,gloss,cat for validation")
+    parser.add_argument("--feature-key", type=str, default="X2048", help="Key in .npz containing [T,2048] features")
     # Synthetic data controls for smoke tests
     parser.add_argument("--train-samples", type=int, default=100, help="Number of synthetic training samples")
     parser.add_argument("--val-samples", type=int, default=20, help="Number of synthetic validation samples")
@@ -188,21 +278,26 @@ if __name__ == "__main__":
     print("="*60)
     
     try:
-        # Use 156-d keypoints for transformer; 2048-d features for iv3_gru (synthetic in smoke test)
-        input_dim = 2048 if args.model == "iv3_gru" else 156
-        train_X, train_gloss, train_cat, val_X, val_gloss, val_cat = load_data(
-            n_train_samples=args.train_samples,
-            n_val_samples=args.val_samples,
-            seq_length=args.seq_length,
-            input_dim=input_dim,
-            num_gloss=105,
-            num_cat=10,
-            seed=args.seed,
+        # If feature directories are provided for iv3_gru, use file-based dataset; otherwise synthetic
+        use_feature_files = (
+            args.model == "iv3_gru" and args.features_train is not None and args.features_val is not None
         )
+        if not use_feature_files:
+            input_dim = 2048 if args.model == "iv3_gru" else 156
+            train_X, train_gloss, train_cat, val_X, val_gloss, val_cat = load_data(
+                n_train_samples=args.train_samples,
+                n_val_samples=args.val_samples,
+                seq_length=args.seq_length,
+                input_dim=input_dim,
+                num_gloss=105,
+                num_cat=10,
+                seed=args.seed,
+            )
         print(f"✓ Loaded data successfully")
-        print(f"  - Training samples: {len(train_X)}")
-        print(f"  - Validation samples: {len(val_X)}")
-        print(f"  - Sequence shape: {train_X.shape[1:]} (T, features)")
+        if not use_feature_files:
+            print(f"  - Training samples: {len(train_X)}")
+            print(f"  - Validation samples: {len(val_X)}")
+            print(f"  - Sequence shape: {train_X.shape[1:]} (T, features)")
         print(f"  - Gloss classes: {len(set(train_gloss))}")
         print(f"  - Category classes: {len(set(train_cat))}")
     except Exception as e:
@@ -215,12 +310,29 @@ if __name__ == "__main__":
     print("DATASET PREPARATION")
     print("="*60)
     
-    train_dataset = FSLDataset(train_X, train_gloss, train_cat)
-    val_dataset = FSLDataset(val_X, val_gloss, val_cat)
-    
     batch_size = args.batch_size
-    train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, num_workers=0)
-    val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False, num_workers=0)
+    use_feature_files = (
+        args.model == "iv3_gru" and args.features_train is not None and args.features_val is not None
+    )
+
+    if use_feature_files:
+        train_dataset = FSLFeatureFileDataset(
+            features_dir=args.features_train,
+            labels_csv=args.labels_train_csv,
+            feature_key=args.feature_key,
+        )
+        val_dataset = FSLFeatureFileDataset(
+            features_dir=args.features_val,
+            labels_csv=args.labels_val_csv,
+            feature_key=args.feature_key,
+        )
+        train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, num_workers=0, collate_fn=collate_features_with_padding)
+        val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False, num_workers=0, collate_fn=collate_features_with_padding)
+    else:
+        train_dataset = FSLDataset(train_X, train_gloss, train_cat)
+        val_dataset = FSLDataset(val_X, val_gloss, val_cat)
+        train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, num_workers=0)
+        val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False, num_workers=0)
     
     print(f"✓ Created datasets and data loaders")
     print(f"  - Batch size: {batch_size}")
@@ -264,11 +376,11 @@ if __name__ == "__main__":
 
     # Forward adapter per model (unifies calling convention)
     if args.model == "transformer":
-        def forward_adapter(m, X):
+        def forward_adapter(m, X, lengths=None):
             return m(X)
     else:
-        def forward_adapter(m, X):
-            return m(X, features_already=True)
+        def forward_adapter(m, X, lengths=None):
+            return m(X, lengths=lengths, features_already=True)
 
     # Training execution
     print("\n" + "="*60)
