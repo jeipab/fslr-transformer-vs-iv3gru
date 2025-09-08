@@ -20,7 +20,7 @@ import torch.nn as nn
 import torch.optim as optim
 from torch.utils.data import DataLoader
 from training.utils import FSLDataset, evaluate
-from models.iv3_gru import IV3_GRU
+from models.iv3_gru import InceptionV3GRU
 from models.transformer import SignTransformer
 import argparse
 
@@ -29,7 +29,7 @@ def train_model(model, train_loader, val_loader, device, epochs=20, alpha=0.5, b
     Train a sign language recognition model with multi-task learning.
     
     Args:
-        model: Model to train (SignTransformer or IV3_GRU)
+        model: Model to train (SignTransformer or InceptionV3GRU)
         train_loader: Training data loader
         val_loader: Validation data loader
         device: Device to run on (CPU/CUDA)
@@ -198,7 +198,7 @@ if __name__ == "__main__":
         print("✓ Using SignTransformer model")
     elif args.model == "iv3_gru":
         try:
-            model = IV3_GRU().to(device)
+            model = InceptionV3GRU().to(device)
             print("✓ Using IV3_GRU model")
         except Exception:
             print("✗ IV3_GRU model not implemented, defaulting to SignTransformer")
