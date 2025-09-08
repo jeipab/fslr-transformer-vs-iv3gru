@@ -1,4 +1,4 @@
-Actual training with NPZ data
+Training with NPZ data
 =============================
 
 Prerequisites
@@ -53,3 +53,27 @@ Notes
 - Use module mode (python -m training.train) to avoid import errors.
 - GPU is used automatically if available; otherwise CPU.
 - The IV3-GRU warning about InceptionV3 init is harmless for smoke tests.
+
+Advanced training
+=================
+
+Options
+- Learning: --lr, --weight-decay
+- Precision: --amp (mixed precision)
+- Stability: --grad-clip N (max-norm)
+- Scheduling: --scheduler [plateau|cosine], --scheduler-patience K
+- Early stop: --early-stop K (epochs without improvement)
+- Checkpoints: --resume path\to\{ModelName}_last.pt
+- Logging: --log-csv logs\train.csv (writes epoch, losses, accs, lr)
+- DataLoader: --num-workers N, --pin-memory, --prefetch-factor K
+- Reproducibility: --seed S, --deterministic
+
+Notes
+- Best/last checkpoints saved to --output-dir as {ModelName}_best.pt and {ModelName}_last.pt.
+- Early stopping and scheduler use validation gloss accuracy as the metric.
+
+Example (Transformer + keypoints)
+  python -m training.train --model transformer --keypoints-train path\to\kp_train --keypoints-val path\to\kp_val --labels-train-csv path\to\train.csv --labels-val-csv path\to\val.csv --num-gloss 105 --num-cat 10 --epochs 50 --batch-size 64 --lr 3e-4 --weight-decay 1e-4 --amp --grad-clip 1.0 --scheduler cosine --early-stop 10 --log-csv logs\transformer_train.csv --num-workers 4 --pin-memory
+
+Example (IV3-GRU + features)
+  python -m training.train --model iv3_gru --features-train path\to\feat_train --features-val path\to\feat_val --labels-train-csv path\to\train.csv --labels-val-csv path\to\val.csv --feature-key X2048 --num-gloss 105 --num-cat 10 --epochs 40 --batch-size 32 --lr 1e-4 --scheduler plateau --scheduler-patience 3 --early-stop 8 --log-csv logs\iv3_gru_train.csv --num-workers 4 --pin-memory
