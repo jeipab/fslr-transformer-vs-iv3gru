@@ -67,7 +67,8 @@ class InceptionV3FeatureExtractor(nn.Module):
     def __init__(self, pretrained: bool = True, freeze: bool = True):
         super().__init__()
         weights = Inception_V3_Weights.IMAGENET1K_V1 if pretrained else None
-        self.backbone = inception_v3(weights=weights, aux_logits=False, transform_input=False)
+        self.backbone = inception_v3(weights=weights)
+        self.backbone.aux_logits = False
         self.backbone.fc = nn.Identity()  # output: (N, 2048)
         self.out_dim = 2048
 
