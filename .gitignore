@@ -5,7 +5,6 @@ __pycache__/
 env/
 
 # Data
-data/
 *.npy
 *.csv
 *.mp4
