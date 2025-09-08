@@ -80,10 +80,77 @@ class FSLFeatureFileDataset(Dataset):
             raise ValueError(f"Expected [T,2048] features in {path}, got shape {X.shape}")
         return X
 
+class FSLKeypointFileDataset(Dataset):
+    """
+    Dataset for precomputed keypoint sequences [T, 156] stored in .npz files.
+    Expects a labels CSV mapping filename (column 'file', without extension also accepted) to 'gloss' and 'cat'.
+
+    .npz requirements:
+      - Keypoint array under key specified by kp_key (default: 'X').
+        Validates last dimension == 156.
+    """
+    def __init__(self, keypoints_dir, labels_csv, kp_key='X'):
+        self.keypoints_dir = keypoints_dir
+        self.kp_key = kp_key
+        self.index = []  # list of (stem, gloss, cat)
+
+        if labels_csv is None:
+            raise ValueError("labels_csv must be provided for keypoint dataset")
+
+        with open(labels_csv, newline='') as f:
+            reader = csv.DictReader(f)
+            required = {'file', 'gloss', 'cat'}
+            if not required.issubset(set(reader.fieldnames or [])):
+                raise ValueError(f"labels_csv must have columns: {required}")
+            for row in reader:
+                stem = os.path.splitext(row['file'])[0]
+                gloss = int(row['gloss'])
+                cat = int(row['cat'])
+                self.index.append((stem, gloss, cat))
+
+    def __len__(self):
+        return len(self.index)
+
+    def __getitem__(self, idx):
+        stem, gloss, cat = self.index[idx]
+        path = os.path.join(self.keypoints_dir, stem + '.npz')
+        if not os.path.exists(path):
+            raise FileNotFoundError(f"Keypoint file not found: {path}")
+        data = torch.from_numpy(self._load_npz_keypoints(path))  # [T, 156]
+        length = data.shape[0]
+        return data.float(), torch.tensor(gloss, dtype=torch.long), torch.tensor(cat, dtype=torch.long), torch.tensor(length, dtype=torch.long)
+
+    def _load_npz_keypoints(self, path):
+        import numpy as np
+        with np.load(path, allow_pickle=True) as npz:
+            if self.kp_key in npz:
+                X = np.array(npz[self.kp_key])
+            else:
+                raise KeyError(f"Key '{self.kp_key}' not found in {path}")
+        if X.ndim != 2 or X.shape[-1] != 156:
+            raise ValueError(f"Expected [T,156] keypoints in {path}, got shape {X.shape}")
+        return X
+
 def collate_features_with_padding(batch):
     """
     Pad variable-length [T, 2048] sequences to max T in batch. Returns:
       X_pad [B, Tmax, 2048], gloss [B], cat [B], lengths [B]
+    """
+    sequences, gloss, cat, lengths = zip(*batch)
+    lengths = torch.stack(lengths, dim=0)
+    B = len(sequences)
+    Tmax = int(max(l.item() for l in lengths))
+    D = sequences[0].shape[-1]
+    X_pad = torch.zeros((B, Tmax, D), dtype=sequences[0].dtype)
+    for i, seq in enumerate(sequences):
+        t = seq.shape[0]
+        X_pad[i, :t] = seq
+    return X_pad, torch.stack(gloss, dim=0), torch.stack(cat, dim=0), lengths
+
+def collate_keypoints_with_padding(batch):
+    """
+    Pad variable-length [T, 156] sequences to max T in batch. Returns:
+      X_pad [B, Tmax, 156], gloss [B], cat [B], lengths [B]
     """
     sequences, gloss, cat, lengths = zip(*batch)
     lengths = torch.stack(lengths, dim=0)
@@ -248,6 +315,10 @@ def parse_args():
     parser.add_argument("--labels-train-csv", type=str, default=None, help="CSV with columns: file,gloss,cat for training")
     parser.add_argument("--labels-val-csv", type=str, default=None, help="CSV with columns: file,gloss,cat for validation")
     parser.add_argument("--feature-key", type=str, default="X2048", help="Key in .npz containing [T,2048] features")
+    # Transformer keypoint dataset options
+    parser.add_argument("--keypoints-train", type=str, default=None, help="Directory of training .npz keypoints [T,156]")
+    parser.add_argument("--keypoints-val", type=str, default=None, help="Directory of validation .npz keypoints [T,156]")
+    parser.add_argument("--kp-key", type=str, default="X", help="Key in .npz containing [T,156] keypoints")
     # IV3-GRU hyperparameters
     parser.add_argument("--hidden1", type=int, default=16, help="IV3-GRU first GRU hidden size")
     parser.add_argument("--hidden2", type=int, default=12, help="IV3-GRU second GRU hidden size")
@@ -337,11 +408,14 @@ if __name__ == "__main__":
     print("="*60)
     
     try:
-        # If feature directories are provided for iv3_gru, use file-based dataset; otherwise synthetic
+        # If dataset directories are provided, use file-based datasets; otherwise synthetic
         use_feature_files = (
             args.model == "iv3_gru" and args.features_train is not None and args.features_val is not None
         )
-        if not use_feature_files:
+        use_keypoint_files = (
+            args.model == "transformer" and args.keypoints_train is not None and args.keypoints_val is not None
+        )
+        if not (use_feature_files or use_keypoint_files):
             input_dim = 2048 if args.model == "iv3_gru" else 156
             train_X, train_gloss, train_cat, val_X, val_gloss, val_cat = load_data(
                 n_train_samples=args.train_samples,
@@ -353,7 +427,7 @@ if __name__ == "__main__":
                 seed=args.seed,
             )
         print(f"✓ Loaded data successfully")
-        if not use_feature_files:
+        if not (use_feature_files or use_keypoint_files):
             print(f"  - Training samples: {len(train_X)}")
             print(f"  - Validation samples: {len(val_X)}")
             print(f"  - Sequence shape: {train_X.shape[1:]} (T, features)")
@@ -373,6 +447,9 @@ if __name__ == "__main__":
     use_feature_files = (
         args.model == "iv3_gru" and args.features_train is not None and args.features_val is not None
     )
+    use_keypoint_files = (
+        args.model == "transformer" and args.keypoints_train is not None and args.keypoints_val is not None
+    )
 
     if use_feature_files:
         train_dataset = FSLFeatureFileDataset(
@@ -387,6 +464,19 @@ if __name__ == "__main__":
         )
         train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, num_workers=0, collate_fn=collate_features_with_padding)
         val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False, num_workers=0, collate_fn=collate_features_with_padding)
+    elif use_keypoint_files:
+        train_dataset = FSLKeypointFileDataset(
+            keypoints_dir=args.keypoints_train,
+            labels_csv=args.labels_train_csv,
+            kp_key=args.kp_key,
+        )
+        val_dataset = FSLKeypointFileDataset(
+            keypoints_dir=args.keypoints_val,
+            labels_csv=args.labels_val_csv,
+            kp_key=args.kp_key,
+        )
+        train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, num_workers=0, collate_fn=collate_keypoints_with_padding)
+        val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False, num_workers=0, collate_fn=collate_keypoints_with_padding)
     else:
         train_dataset = FSLDataset(train_X, train_gloss, train_cat)
         val_dataset = FSLDataset(val_X, val_gloss, val_cat)
@@ -440,7 +530,15 @@ if __name__ == "__main__":
     # Forward adapter per model (unifies calling convention)
     if args.model == "transformer":
         def forward_fn(m, X, lengths=None):
-            return m(X)
+            # Build attention mask from lengths if provided
+            if lengths is not None:
+                B, T, _ = X.shape
+                device = X.device
+                time_indices = torch.arange(T, device=device).unsqueeze(0)
+                mask = (time_indices < lengths.unsqueeze(1))
+            else:
+                mask = None
+            return m(X, mask=mask)
     else:
         def forward_fn(m, X, lengths=None):
             return m(X, lengths=lengths, features_already=True)
