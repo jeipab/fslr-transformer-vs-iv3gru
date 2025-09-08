@@ -96,7 +96,7 @@ def collate_features_with_padding(batch):
         X_pad[i, :t] = seq
     return X_pad, torch.stack(gloss, dim=0), torch.stack(cat, dim=0), lengths
 
-def train_model(model, train_loader, val_loader, device, forward_adapter, epochs=20, alpha=0.5, beta=0.5):
+def train_model(model, train_loader, val_loader, device, forward_fn, epochs=20, alpha=0.5, beta=0.5):
     """
     Train a sign language recognition model with multi-task learning.
     
@@ -135,16 +135,10 @@ def train_model(model, train_loader, val_loader, device, forward_adapter, epochs
             X, gloss, cat = X.to(device), gloss.to(device), cat.to(device)
             optimizer.zero_grad()
             
-            outputs = forward_adapter(model, X, lengths)
-            if isinstance(outputs, tuple) and len(outputs) == 2:
-                gloss_pred, cat_pred = outputs
-                loss_gloss = criterion(gloss_pred, gloss)
-                loss_cat = criterion(cat_pred, cat)
-                loss = alpha * loss_gloss + beta * loss_cat
-            else:
-                gloss_pred = outputs
-                loss_gloss = criterion(gloss_pred, gloss)
-                loss = loss_gloss
+            gloss_pred, cat_pred = forward_fn(model, X, lengths)
+            loss_gloss = criterion(gloss_pred, gloss)
+            loss_cat = criterion(cat_pred, cat)
+            loss = alpha * loss_gloss + beta * loss_cat
 
             loss.backward()
             optimizer.step()
@@ -152,7 +146,7 @@ def train_model(model, train_loader, val_loader, device, forward_adapter, epochs
             num_batches += 1
 
         # Validation
-        val_loss, val_gloss_acc, val_cat_acc = evaluate_with_adapter(model, val_loader, criterion, device, forward_adapter)
+        val_loss, val_gloss_acc, val_cat_acc = evaluate_with_forward(model, val_loader, criterion, device, forward_fn)
         
         avg_train_loss = total_loss / num_batches
         print(f"Epoch {epoch+1:2d}/{epochs} | "
@@ -168,7 +162,7 @@ def train_model(model, train_loader, val_loader, device, forward_adapter, epochs
     torch.save(model.state_dict(), model_filename)
     print(f"Model saved as: {model_filename}")
 
-def evaluate_with_adapter(model, dataloader, criterion, device, forward_adapter):
+def evaluate_with_forward(model, dataloader, criterion, device, forward_fn):
     model.eval()
     total_loss = 0.0
     correct_gloss = 0
@@ -185,18 +179,12 @@ def evaluate_with_adapter(model, dataloader, criterion, device, forward_adapter)
                 X, gloss, cat = batch
                 lengths = None
             X, gloss, cat = X.to(device), gloss.to(device), cat.to(device)
-            outputs = forward_adapter(model, X, lengths)
-
-            if isinstance(outputs, tuple) and len(outputs) == 2:
-                gloss_pred, cat_pred = outputs
-                loss_gloss = criterion(gloss_pred, gloss)
-                loss_cat = criterion(cat_pred, cat)
-                batch_loss = loss_gloss + loss_cat
-                cat_preds = cat_pred.argmax(dim=1)
-                correct_cat += (cat_preds == cat).sum().item()
-            else:
-                gloss_pred = outputs
-                batch_loss = criterion(gloss_pred, gloss)
+            gloss_pred, cat_pred = forward_fn(model, X, lengths)
+            loss_gloss = criterion(gloss_pred, gloss)
+            loss_cat = criterion(cat_pred, cat)
+            batch_loss = loss_gloss + loss_cat
+            cat_preds = cat_pred.argmax(dim=1)
+            correct_cat += (cat_preds == cat).sum().item()
 
             gloss_preds = gloss_pred.argmax(dim=1)
             correct_gloss += (gloss_preds == gloss).sum().item()
@@ -393,10 +381,10 @@ if __name__ == "__main__":
 
     # Forward adapter per model (unifies calling convention)
     if args.model == "transformer":
-        def forward_adapter(m, X, lengths=None):
+        def forward_fn(m, X, lengths=None):
             return m(X)
     else:
-        def forward_adapter(m, X, lengths=None):
+        def forward_fn(m, X, lengths=None):
             return m(X, lengths=lengths, features_already=True)
 
     # Training execution
@@ -404,4 +392,4 @@ if __name__ == "__main__":
     print("TRAINING START")
     print("="*60)
     
-    train_model(model, train_loader, val_loader, device, forward_adapter, epochs=args.epochs, alpha=args.alpha, beta=args.beta)
+    train_model(model, train_loader, val_loader, device, forward_fn, epochs=args.epochs, alpha=args.alpha, beta=args.beta)
