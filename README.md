@@ -47,3 +47,8 @@ python -m streamlit run ui\app.py --server.port 8502
 ```
 
 - The placeholder UI accepts a preprocessed `.npz` with at least key `X` shaped `[T,156]` and will simulate predictions.
+
+## Training and data guides
+
+- Training guide: [training/TRAINING_GUIDE.md](training/TRAINING_GUIDE.md)
+- Data layout: [data/DATA_LAYOUT.md](data/DATA_LAYOUT.md)
