@@ -262,6 +262,10 @@ def parse_args():
     parser.add_argument("--val-samples", type=int, default=20, help="Number of synthetic validation samples")
     parser.add_argument("--seq-length", type=int, default=50, help="Sequence length (T)")
     parser.add_argument("--seed", type=int, default=42, help="RNG seed for synthetic data")
+    # Smoke test
+    parser.add_argument("--smoke-test", action="store_true", help="Run a quick forward/backward/save/load test and exit")
+    parser.add_argument("--smoke-batch-size", type=int, default=4, help="Smoke test batch size")
+    parser.add_argument("--smoke-T", type=int, default=30, help="Smoke test sequence length T")
     return parser.parse_args()
 
 if __name__ == "__main__":
@@ -272,6 +276,54 @@ if __name__ == "__main__":
     if device.type == 'cuda':
         print(f"CUDA device: {torch.cuda.get_device_name(0)}")
         print(f"CUDA memory: {torch.cuda.get_device_properties(0).total_memory / 1e9:.1f} GB")
+
+    # Optional smoke test (only if comparable path exists for Transformer already)
+    if args.smoke_test:
+        import numpy as np
+        torch.manual_seed(args.seed)
+        if args.model == "iv3_gru":
+            # Random [B, T, 2048] features
+            B = args.smoke_batch_size
+            T = args.smoke_T
+            X = torch.randn(B, T, 2048, dtype=torch.float32, device=device)
+            lengths = torch.full((B,), T, dtype=torch.long, device=device)
+            model = InceptionV3GRU(
+                num_gloss=args.num_gloss,
+                num_cat=args.num_cat,
+                hidden1=args.hidden1,
+                hidden2=args.hidden2,
+                dropout=args.dropout,
+                pretrained_backbone=args.pretrained_backbone,
+                freeze_backbone=args.freeze_backbone,
+            ).to(device)
+            model.train()
+            gloss_logits, cat_logits = model(X, lengths=lengths, features_already=True)
+            assert gloss_logits.shape == (B, args.num_gloss)
+            assert cat_logits.shape == (B, args.num_cat)
+            loss = (gloss_logits.mean() + cat_logits.mean())
+            loss.backward()
+            ckpt = f"{model.__class__.__name__}.pt"
+            torch.save(model.state_dict(), ckpt)
+            _ = model.load_state_dict(torch.load(ckpt, map_location=device))
+            print(f"✓ IV3-GRU smoke test passed. Saved and loaded: {ckpt}")
+            exit(0)
+        else:
+            # Transformer smoke (uses existing forward contract on [B, T, 156])
+            B = args.smoke_batch_size
+            T = args.smoke_T
+            X = torch.randn(B, T, 156, dtype=torch.float32, device=device)
+            model = SignTransformer(num_gloss=args.num_gloss, num_cat=args.num_cat).to(device)
+            model.train()
+            gloss_logits, cat_logits = model(X)
+            assert gloss_logits.shape == (B, args.num_gloss)
+            assert cat_logits.shape == (B, args.num_cat)
+            loss = (gloss_logits.mean() + cat_logits.mean())
+            loss.backward()
+            ckpt = f"{model.__class__.__name__}.pt"
+            torch.save(model.state_dict(), ckpt)
+            _ = model.load_state_dict(torch.load(ckpt, map_location=device))
+            print(f"✓ Transformer smoke test passed. Saved and loaded: {ckpt}")
+            exit(0)
 
     # Data loading
     print("\n" + "="*60)
