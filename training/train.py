@@ -191,21 +191,23 @@ if __name__ == "__main__":
     
     print("Available models:")
     print("- transformer: Multi-head attention transformer")
-    print("- iv3_gru: InceptionV3 + GRU hybrid (placeholder)")
+    print("- iv3_gru: InceptionV3 + GRU hybrid")
     
     if args.model == "transformer":
         model = SignTransformer().to(device)
         print("✓ Using SignTransformer model")
     elif args.model == "iv3_gru":
-        try:
-            model = InceptionV3GRU().to(device)
-            print("✓ Using IV3_GRU model")
-        except Exception:
-            print("✗ IV3_GRU model not implemented, defaulting to SignTransformer")
-            model = SignTransformer().to(device)
+        model = InceptionV3GRU(
+            num_classes=105,
+            hidden1=16,
+            hidden2=12,
+            dropout=0.3,
+            pretrained_backbone=True,
+            freeze_backbone=True,
+        ).to(device)
+        print("✓ Using InceptionV3GRU model")
     else:
-        print("✗ Invalid --model, defaulting to SignTransformer")
-        model = SignTransformer().to(device)
+        raise ValueError(f"Invalid --model {args.model}")
 
     # Model information
     total_params = sum(p.numel() for p in model.parameters())
