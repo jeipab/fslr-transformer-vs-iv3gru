@@ -74,6 +74,10 @@ class PositionalEncoding(nn.Module):
         Returns:
             Tensor: positionally encoded embeddings of shape [B, T, E].
         """
+        # Guard: ensure we have enough precomputed positions
+        if x.size(1) > self.pe.size(1):
+            raise ValueError(f"Sequence length {x.size(1)} exceeds max_len {self.pe.size(1)} in PositionalEncoding")
+
         # Add positional encoding (up to sequence length T)
         x = x + self.pe[:, :x.size(1), :]
         
@@ -108,8 +112,9 @@ class LayerNormalization(nn.Module):
             Tensor: normalized tensor of the same shape as input.
         """
         mean = x.mean(dim=-1, keepdim=True)     # per-sample mean
-        std = x.std(dim=-1, keepdim=True)       # per-sample std
-        return self.gamma * (x - mean) / (std + self.eps) + self.beta
+        # Use variance with unbiased=False to avoid NaNs for length-1 tensors
+        var = x.var(dim=-1, keepdim=True, unbiased=False)
+        return self.gamma * (x - mean) / torch.sqrt(var + self.eps) + self.beta
 
 class FeedForwardBlock(nn.Module):
     """
@@ -217,7 +222,7 @@ class MultiHeadAttentionBlock(nn.Module):
         """
         Args:
             x (Tensor): input embeddings of shape [B, T, E].
-            mask (Tensor or None): optional attention mask of shape [B, T].
+            mask (Tensor or None): optional attention mask broadcastable to [B, 1, 1, T].
 
         Returns:
             out (Tensor): output embeddings of shape [B, T, E].
@@ -325,18 +330,17 @@ class EncoderLayer(nn.Module):
             Tensor: encoded output of shape [B, T, E].
             (Optional) Attention weights of shape [B, H, T, T].
         """
-        # Multi-head attention with residual connection
-        def attention_sublayer(x):
-            return self.attention(x, mask)[0]  # Return only output, not attention weights
-        
-        x = self.residual1(x, attention_sublayer)
+        # Pre-LN attention block with residual connection
+        normed_x = self.residual1.norm(x)
+        attn_out, attn = self.attention(normed_x, mask)
+        x = x + self.residual1.dropout(attn_out)
 
-        # Feed-forward with residual connection
-        x = self.residual2(x, self.feed_forward)
+        # Pre-LN feed-forward block with residual connection
+        normed_x2 = self.residual2.norm(x)
+        ff_out = self.feed_forward(normed_x2)
+        x = x + self.residual2.dropout(ff_out)
 
         if return_attn:
-            # Get attention weights from the last attention layer
-            _, attn = self.attention(self.residual1.norm(x), mask)
             return x, attn
         return x
 
@@ -358,7 +362,10 @@ class SignTransformer(nn.Module):
                     num_gloss=105,     # number of gloss classes
                     num_cat=10,        # number of category classes
                     dropout=0.1,       # dropout rate
-                    max_len=300):      # maximum sequence length
+                    max_len=300,       # maximum sequence length
+                    ff_dim=None,       # feed-forward hidden size (defaults to 4*emb_dim)
+                    pooling_method='mean'  # 'mean' | 'max' | 'cls'
+                ):
         super(SignTransformer, self).__init__()
 
         # ----- Input embedding -----
@@ -373,14 +380,18 @@ class SignTransformer(nn.Module):
 
         # ----- Transformer Encoder -----
         # Stack of N encoder layers
+        if ff_dim is None:
+            ff_dim = emb_dim * 4
         self.encoder_layers = nn.ModuleList([
-            EncoderLayer(emb_dim, n_heads, ff_dim=emb_dim*4, dropout=dropout)
+            EncoderLayer(emb_dim, n_heads, ff_dim=ff_dim, dropout=dropout)
             for _ in range(n_layers)
         ])
 
         # ----- Pooling strategy -----
         # How to collapse sequence → single vector
-        self.pooling_method = 'mean'  # options: 'mean', 'max', 'cls'
+        if pooling_method not in ('mean', 'max', 'cls'):
+            raise ValueError(f"Invalid pooling_method: {pooling_method}. Choose from 'mean', 'max', 'cls'")
+        self.pooling_method = pooling_method  # options: 'mean', 'max', 'cls'
         
         # CLS token (always create it, use it only when pooling_method == 'cls')
         self.cls_token = nn.Parameter(torch.randn(1, 1, emb_dim))
@@ -410,8 +421,8 @@ class SignTransformer(nn.Module):
 
         Args:
             x (Tensor): input sequence [B, T, 156].
-            mask (Tensor or None): binary mask [B, T],
-                                    1 = valid frame, 0 = padding.
+            mask (Tensor or None): binary mask [B, T], 1 = valid frame, 0 = padding.
+                                   Internally broadcast to [B, 1, 1, T] for attention.
 
         Returns:
             gloss_out (Tensor): [B, num_gloss] logits for gloss prediction.
@@ -487,7 +498,7 @@ class SignTransformer(nn.Module):
 
         Returns:
             List of attention weight tensors, one per encoder layer.
-            Each element is [B, H, T, T].
+            Each element is [B, H, T, T] (or [B, H, T+1, T+1] if using 'cls').
         """
         B, T, _ = x.size()
         attention_weights = []
