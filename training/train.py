@@ -96,7 +96,7 @@ def collate_features_with_padding(batch):
         X_pad[i, :t] = seq
     return X_pad, torch.stack(gloss, dim=0), torch.stack(cat, dim=0), lengths
 
-def train_model(model, train_loader, val_loader, device, forward_fn, epochs=20, alpha=0.5, beta=0.5):
+def train_model(model, train_loader, val_loader, device, forward_fn, epochs=20, alpha=0.5, beta=0.5, output_dir="data/processed"):
     """
     Train a sign language recognition model with multi-task learning.
     
@@ -158,7 +158,8 @@ def train_model(model, train_loader, val_loader, device, forward_fn, epochs=20, 
     print("-" * 60)
     print("Training completed!")
     
-    model_filename = f"{model.__class__.__name__}.pt"
+    os.makedirs(output_dir, exist_ok=True)
+    model_filename = os.path.join(output_dir, f"{model.__class__.__name__}.pt")
     torch.save(model.state_dict(), model_filename)
     print(f"Model saved as: {model_filename}")
 
@@ -266,6 +267,7 @@ def parse_args():
     parser.add_argument("--smoke-test", action="store_true", help="Run a quick forward/backward/save/load test and exit")
     parser.add_argument("--smoke-batch-size", type=int, default=4, help="Smoke test batch size")
     parser.add_argument("--smoke-T", type=int, default=30, help="Smoke test sequence length T")
+    parser.add_argument("--output-dir", type=str, default="data/processed", help="Directory to save model checkpoints")
     return parser.parse_args()
 
 if __name__ == "__main__":
@@ -302,7 +304,9 @@ if __name__ == "__main__":
             assert cat_logits.shape == (B, args.num_cat)
             loss = (gloss_logits.mean() + cat_logits.mean())
             loss.backward()
-            ckpt = f"{model.__class__.__name__}.pt"
+            ckpt_dir = os.path.join("data", "processed")
+            os.makedirs(ckpt_dir, exist_ok=True)
+            ckpt = os.path.join(ckpt_dir, f"{model.__class__.__name__}.pt")
             torch.save(model.state_dict(), ckpt)
             _ = model.load_state_dict(torch.load(ckpt, map_location=device))
             print(f"✓ IV3-GRU smoke test passed. Saved and loaded: {ckpt}")
@@ -319,7 +323,9 @@ if __name__ == "__main__":
             assert cat_logits.shape == (B, args.num_cat)
             loss = (gloss_logits.mean() + cat_logits.mean())
             loss.backward()
-            ckpt = f"{model.__class__.__name__}.pt"
+            ckpt_dir = os.path.join("data", "processed")
+            os.makedirs(ckpt_dir, exist_ok=True)
+            ckpt = os.path.join(ckpt_dir, f"{model.__class__.__name__}.pt")
             torch.save(model.state_dict(), ckpt)
             _ = model.load_state_dict(torch.load(ckpt, map_location=device))
             print(f"✓ Transformer smoke test passed. Saved and loaded: {ckpt}")
@@ -444,4 +450,14 @@ if __name__ == "__main__":
     print("TRAINING START")
     print("="*60)
     
-    train_model(model, train_loader, val_loader, device, forward_fn, epochs=args.epochs, alpha=args.alpha, beta=args.beta)
+    train_model(
+        model,
+        train_loader,
+        val_loader,
+        device,
+        forward_fn,
+        epochs=args.epochs,
+        alpha=args.alpha,
+        beta=args.beta,
+        output_dir=args.output_dir,
+    )
