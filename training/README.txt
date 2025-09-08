@@ -1,3 +1,33 @@
+Actual training with NPZ data
+=============================
+
+Prerequisites
+- Install deps (optionally inside a venv):
+  pip install -r requirments.txt
+- Prepare label CSVs with columns: file,gloss,cat
+
+Transformer (keypoints [T,156])
+- Expected .npz: key 'X' (configurable via --kp-key) shaped [T,156]
+- Example dirs:
+  keypoints_train\*.npz
+  keypoints_val\*.npz
+- Run:
+  python -m training.train --model transformer --keypoints-train path\to\keypoints_train --keypoints-val path\to\keypoints_val --labels-train-csv path\to\train_labels.csv --labels-val-csv path\to\val_labels.csv --num-gloss 105 --num-cat 10 --epochs 30 --batch-size 32 --output-dir data\processed
+
+IV3-GRU (precomputed features [T,2048])
+- Expected .npz: key 'X2048' (or 'X') shaped [T,2048]
+- Example dirs:
+  features_train\*.npz
+  features_val\*.npz
+- Run:
+  python -m training.train --model iv3_gru --features-train path\to\features_train --features-val path\to\features_val --labels-train-csv path\to\train_labels.csv --labels-val-csv path\to\val_labels.csv --feature-key X2048 --num-gloss 105 --num-cat 10 --epochs 30 --batch-size 32 --output-dir data\processed
+
+Notes
+- Use module mode (python -m training.train) to avoid import errors.
+- GPU is used automatically if available; otherwise CPU.
+- For Transformer, sequences are padded and a mask from lengths is applied.
+- Ensure class counts (--num-gloss/--num-cat) match your labels.
+
 Smoke tests
 ===========
 
