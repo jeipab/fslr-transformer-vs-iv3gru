@@ -1,13 +1,18 @@
+## Minimal, runnable requirements
 
-**requirements.txt (initial draft)**
-```txt
+# Core training
 torch
-torchvision
-mediapipe
-opencv-python
 numpy
+
+# Optional: UI demo
+streamlit
 pandas
+
+# Optional: preprocessing pipeline
+opencv-python
+mediapipe
+
+# Optional: analysis notebooks
 scikit-learn
 matplotlib
 seaborn
-streamlit
