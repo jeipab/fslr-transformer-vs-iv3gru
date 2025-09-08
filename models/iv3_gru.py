@@ -87,11 +87,13 @@ class InceptionV3FeatureExtractor(nn.Module):
         return self.backbone(x)
 
 
-def _dropout_packed(packed_seq: nn.utils.rnn.PackedSequence, p: float) -> nn.utils.rnn.PackedSequence:
+def _dropout_packed(packed_seq, p: float, training: bool):
     if p <= 0.0:
         return packed_seq
-    data = F.dropout(packed_seq.data, p=p, training=True)
-    return nn.utils.rnn.PackedSequence(data, packed_seq.batch_sizes, packed_seq.sorted_indices, packed_seq.unsorted_indices)
+    data = F.dropout(packed_seq.data, p=p, training=training)
+    return nn.utils.rnn.PackedSequence(
+        data, packed_seq.batch_sizes, packed_seq.sorted_indices, packed_seq.unsorted_indices
+    )
 
 
 class InceptionV3GRU(nn.Module):
@@ -117,7 +119,8 @@ class InceptionV3GRU(nn.Module):
     """
     def __init__(
         self,
-        num_classes: int,
+        num_gloss: int,
+        num_cat: int,
         hidden1: int = 16,
         hidden2: int = 12,
         dropout: float = 0.3,
@@ -125,7 +128,6 @@ class InceptionV3GRU(nn.Module):
         freeze_backbone: bool = True,
     ):
         super().__init__()
-        self.features_already = False  # default behavior
         self.feat_extractor = InceptionV3FeatureExtractor(
             pretrained=pretrained_backbone, freeze=freeze_backbone
         )
@@ -135,7 +137,9 @@ class InceptionV3GRU(nn.Module):
         self.gru2 = nn.GRU(input_size=hidden1, hidden_size=hidden2, num_layers=1, batch_first=True)
         self.do1 = nn.Dropout(dropout)
         self.do2 = nn.Dropout(dropout)
-        self.classifier = nn.Linear(hidden2, num_classes)
+        self.gloss_head = nn.Linear(hidden2, num_gloss)
+        self.category_head = nn.Linear(hidden2, num_cat)
+
 
         # Kaiming/orthogonal init for GRUs helps stability on small hidden sizes
         for gru in (self.gru1, self.gru2):
@@ -176,7 +180,7 @@ class InceptionV3GRU(nn.Module):
             lengths_cpu = lengths.to("cpu")
             packed = nn.utils.rnn.pack_padded_sequence(seq, lengths_cpu, batch_first=True, enforce_sorted=False)
             y1, h1 = self.gru1(packed)                     # y1: PackedSequence, h1: (1, B, hidden1)
-            y1 = _dropout_packed(y1, self.do1.p)           # dropout on packed.data
+            y1 = _dropout_packed(y1, self.do1.p, training=self.training)     # dropout on packed.data
             y2, h2 = self.gru2(y1)                         # h2: (1, B, hidden2)
             h = h2[-1]                                     # (B, hidden2)
         else:
@@ -186,10 +190,13 @@ class InceptionV3GRU(nn.Module):
             h = h2[-1]                                     # (B, hidden2)
 
         h = self.do2(h)                                    # final dropout on summary
-        logits = self.classifier(h)                        # (B, num_classes)
+        gloss_logits = self.gloss_head(h)                  # (B, num_gloss)
+        cat_logits = self.category_head(h)                 # (B, num_cat)
         if return_probs:
-            return F.softmax(logits, dim=-1)
-        return logits
+            gloss_probs = F.softmax(gloss_logits, dim=-1)
+            cat_probs = F.softmax(cat_logits, dim=-1)
+            return gloss_probs, cat_probs
+        return gloss_logits, cat_logits
 
     def predict_proba(
         self,
