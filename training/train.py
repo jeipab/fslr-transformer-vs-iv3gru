@@ -22,6 +22,7 @@ from torch.utils.data import DataLoader
 from training.utils import FSLDataset, evaluate
 from models.iv3_gru import IV3_GRU
 from models.transformer import SignTransformer
+import argparse
 
 def train_model(model, train_loader, val_loader, device, epochs=20, alpha=0.5, beta=0.5):
     """
@@ -83,7 +84,7 @@ def train_model(model, train_loader, val_loader, device, epochs=20, alpha=0.5, b
     torch.save(model.state_dict(), model_filename)
     print(f"Model saved as: {model_filename}")
 
-def load_data():
+def load_data(n_train_samples=100, n_val_samples=20, seq_length=50, input_dim=156, num_gloss=105, num_cat=10, seed=42):
     """
     Load training and validation data for sign language recognition.
     
@@ -101,25 +102,38 @@ def load_data():
     """
     import numpy as np
     
-    # Dummy data configuration
-    n_train_samples = 100
-    n_val_samples = 20
-    seq_length = 50
-    input_dim = 156
+    # Dummy data configuration (override via parameters)
+    rng = np.random.default_rng(seed)
     
     # Generate random training data
-    train_X = np.random.randn(n_train_samples, seq_length, input_dim).astype(np.float32)
-    train_gloss = np.random.randint(0, 105, n_train_samples)
-    train_cat = np.random.randint(0, 10, n_train_samples)
+    train_X = rng.standard_normal((n_train_samples, seq_length, input_dim), dtype=np.float32)
+    train_gloss = rng.integers(0, num_gloss, n_train_samples)
+    train_cat = rng.integers(0, num_cat, n_train_samples)
     
     # Generate random validation data
-    val_X = np.random.randn(n_val_samples, seq_length, input_dim).astype(np.float32)
-    val_gloss = np.random.randint(0, 105, n_val_samples)
-    val_cat = np.random.randint(0, 10, n_val_samples)
+    val_X = rng.standard_normal((n_val_samples, seq_length, input_dim), dtype=np.float32)
+    val_gloss = rng.integers(0, num_gloss, n_val_samples)
+    val_cat = rng.integers(0, num_cat, n_val_samples)
     
     return train_X, train_gloss, train_cat, val_X, val_gloss, val_cat
 
+
+def parse_args():
+    parser = argparse.ArgumentParser(description="Train Sign Language Recognition model (smoke-test ready)")
+    parser.add_argument("--model", choices=["transformer", "iv3_gru"], default="transformer", help="Model to train")
+    parser.add_argument("--epochs", type=int, default=20, help="Number of training epochs")
+    parser.add_argument("--batch-size", type=int, default=32, help="Batch size")
+    parser.add_argument("--alpha", type=float, default=0.5, help="Weight for gloss loss")
+    parser.add_argument("--beta", type=float, default=0.5, help="Weight for category loss")
+    # Synthetic data controls for smoke tests
+    parser.add_argument("--train-samples", type=int, default=100, help="Number of synthetic training samples")
+    parser.add_argument("--val-samples", type=int, default=20, help="Number of synthetic validation samples")
+    parser.add_argument("--seq-length", type=int, default=50, help="Sequence length (T)")
+    parser.add_argument("--seed", type=int, default=42, help="RNG seed for synthetic data")
+    return parser.parse_args()
+
 if __name__ == "__main__":
+    args = parse_args()
     # Device setup
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"Using device: {device}")
@@ -133,7 +147,15 @@ if __name__ == "__main__":
     print("="*60)
     
     try:
-        train_X, train_gloss, train_cat, val_X, val_gloss, val_cat = load_data()
+        train_X, train_gloss, train_cat, val_X, val_gloss, val_cat = load_data(
+            n_train_samples=args.train_samples,
+            n_val_samples=args.val_samples,
+            seq_length=args.seq_length,
+            input_dim=156,
+            num_gloss=105,
+            num_cat=10,
+            seed=args.seed,
+        )
         print(f"✓ Loaded data successfully")
         print(f"  - Training samples: {len(train_X)}")
         print(f"  - Validation samples: {len(val_X)}")
@@ -153,7 +175,7 @@ if __name__ == "__main__":
     train_dataset = FSLDataset(train_X, train_gloss, train_cat)
     val_dataset = FSLDataset(val_X, val_gloss, val_cat)
     
-    batch_size = 32
+    batch_size = args.batch_size
     train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, num_workers=0)
     val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False, num_workers=0)
     
@@ -168,23 +190,21 @@ if __name__ == "__main__":
     print("="*60)
     
     print("Available models:")
-    print("1. SignTransformer - Multi-head attention transformer")
-    print("2. IV3_GRU - InceptionV3 + GRU hybrid (placeholder)")
+    print("- transformer: Multi-head attention transformer")
+    print("- iv3_gru: InceptionV3 + GRU hybrid (placeholder)")
     
-    model_choice = input("\nSelect model (1 or 2): ").strip()
-    
-    if model_choice == "1":
+    if args.model == "transformer":
         model = SignTransformer().to(device)
         print("✓ Using SignTransformer model")
-    elif model_choice == "2":
+    elif args.model == "iv3_gru":
         try:
             model = IV3_GRU().to(device)
             print("✓ Using IV3_GRU model")
-        except:
+        except Exception:
             print("✗ IV3_GRU model not implemented, defaulting to SignTransformer")
             model = SignTransformer().to(device)
     else:
-        print("✗ Invalid choice, defaulting to SignTransformer")
+        print("✗ Invalid --model, defaulting to SignTransformer")
         model = SignTransformer().to(device)
 
     # Model information
@@ -202,4 +222,4 @@ if __name__ == "__main__":
     print("TRAINING START")
     print("="*60)
     
-    train_model(model, train_loader, val_loader, device)
+    train_model(model, train_loader, val_loader, device, epochs=args.epochs, alpha=args.alpha, beta=args.beta)
