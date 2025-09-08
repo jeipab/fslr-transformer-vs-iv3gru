@@ -250,12 +250,25 @@ def parse_args():
     parser.add_argument("--batch-size", type=int, default=32, help="Batch size")
     parser.add_argument("--alpha", type=float, default=0.5, help="Weight for gloss loss")
     parser.add_argument("--beta", type=float, default=0.5, help="Weight for category loss")
+    # Class counts
+    parser.add_argument("--num-gloss", type=int, default=105, help="Number of gloss classes")
+    parser.add_argument("--num-cat", type=int, default=10, help="Number of category classes")
     # IV3-GRU feature dataset options
     parser.add_argument("--features-train", type=str, default=None, help="Directory of training .npz 2048-d features")
     parser.add_argument("--features-val", type=str, default=None, help="Directory of validation .npz 2048-d features")
     parser.add_argument("--labels-train-csv", type=str, default=None, help="CSV with columns: file,gloss,cat for training")
     parser.add_argument("--labels-val-csv", type=str, default=None, help="CSV with columns: file,gloss,cat for validation")
     parser.add_argument("--feature-key", type=str, default="X2048", help="Key in .npz containing [T,2048] features")
+    # IV3-GRU hyperparameters
+    parser.add_argument("--hidden1", type=int, default=16, help="IV3-GRU first GRU hidden size")
+    parser.add_argument("--hidden2", type=int, default=12, help="IV3-GRU second GRU hidden size")
+    parser.add_argument("--dropout", type=float, default=0.3, help="IV3-GRU dropout rate")
+    parser.add_argument("--pretrained-backbone", action="store_true", help="Use ImageNet-pretrained InceptionV3")
+    parser.add_argument("--no-pretrained-backbone", dest="pretrained_backbone", action="store_false")
+    parser.set_defaults(pretrained_backbone=True)
+    parser.add_argument("--freeze-backbone", action="store_true", help="Freeze InceptionV3 weights")
+    parser.add_argument("--no-freeze-backbone", dest="freeze_backbone", action="store_false")
+    parser.set_defaults(freeze_backbone=True)
     # Synthetic data controls for smoke tests
     parser.add_argument("--train-samples", type=int, default=100, help="Number of synthetic training samples")
     parser.add_argument("--val-samples", type=int, default=20, help="Number of synthetic validation samples")
@@ -289,8 +302,8 @@ if __name__ == "__main__":
                 n_val_samples=args.val_samples,
                 seq_length=args.seq_length,
                 input_dim=input_dim,
-                num_gloss=105,
-                num_cat=10,
+                num_gloss=args.num_gloss,
+                num_cat=args.num_cat,
                 seed=args.seed,
             )
         print(f"✓ Loaded data successfully")
@@ -298,8 +311,8 @@ if __name__ == "__main__":
             print(f"  - Training samples: {len(train_X)}")
             print(f"  - Validation samples: {len(val_X)}")
             print(f"  - Sequence shape: {train_X.shape[1:]} (T, features)")
-        print(f"  - Gloss classes: {len(set(train_gloss))}")
-        print(f"  - Category classes: {len(set(train_cat))}")
+        print(f"  - Gloss classes: {args.num_gloss}")
+        print(f"  - Category classes: {args.num_cat}")
     except Exception as e:
         print(f"✗ Error loading data: {e}")
         print("Please implement the load_data() function with actual data loading logic")
@@ -349,16 +362,20 @@ if __name__ == "__main__":
     print("- iv3_gru: InceptionV3 + GRU hybrid")
     
     if args.model == "transformer":
-        model = SignTransformer().to(device)
+        model = SignTransformer(
+            num_gloss=args.num_gloss,
+            num_cat=args.num_cat,
+        ).to(device)
         print("✓ Using SignTransformer model")
     elif args.model == "iv3_gru":
         model = InceptionV3GRU(
-            num_classes=105,
-            hidden1=16,
-            hidden2=12,
-            dropout=0.3,
-            pretrained_backbone=True,
-            freeze_backbone=True,
+            num_gloss=args.num_gloss,
+            num_cat=args.num_cat,
+            hidden1=args.hidden1,
+            hidden2=args.hidden2,
+            dropout=args.dropout,
+            pretrained_backbone=args.pretrained_backbone,
+            freeze_backbone=args.freeze_backbone,
         ).to(device)
         print("✓ Using InceptionV3GRU model")
     else:
