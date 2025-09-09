@@ -52,23 +52,27 @@ Each `.npz` lives directly inside `keypoints_train/` or `keypoints_val/` (no nes
 
 ### 4) Running preprocessing from videos
 
-There are two entry points that both can create keypoints `X` and (optionally) IV3 features `X2048`:
+There are two entry points that can create keypoints `X` and (optionally) IV3 features `X2048`:
 
-- `preprocessing/preprocess.py` — end-to-end directory processor (MediaPipe Holistic for keypoints, Selfie Segmentation for background, and optional IV3 features). Processes entire directories.
-- `preprocessing/iv3_features.py` — single-video processor that can also write keypoints and update a `labels.csv` while you curate clips.
+- `preprocessing/preprocess.py` — supports both single video and directory modes.
+- `preprocessing/iv3_features.py` — single-video processor (also supports labeling).
 
 Pick one flow below.
 
-#### Option A: Batch process a whole directory (recommended for bulk)
+#### Option A: Process ONE video
 
 ```bash
-# Extract ONLY keypoints (Transformer-ready). Writes per-clip .npz with X [T,156]
-python preprocessing/preprocess.py /path/to/videos /path/to/out_dir \
-  --target-fps 30 --out-size 256 --conf-thresh 0.5 --max-gap 5 \
-  --write-keypoints
+# Single file (writes X and X2048 into one .npz)
+python preprocessing/preprocess.py \
+  --write-keypoints --write-iv3-features \
+  /path/to/video.mp4 /path/to/out_dir
+```
 
-# If you ALSO want IV3 features (X2048) inside the same .npz
-python preprocessing/preprocess.py /path/to/videos /path/to/out_dir \
+#### Option B: Batch process a WHOLE directory
+
+```bash
+# Directory mode: process all videos under the folder
+python -m preprocessing.preprocess /path/to/videos /path/to/out_dir \
   --target-fps 30 --out-size 256 --conf-thresh 0.5 --max-gap 5 \
   --write-keypoints --write-iv3-features
 ```
@@ -80,23 +84,6 @@ Notes:
 - A human-readable `.parquet` is also written for quick inspection (if `pyarrow` installed).
 
 After batch extraction, move/split the `.npz` files into `keypoints_train/` and `keypoints_val/`.
-
-#### Option B: Process one video at a time (useful during data curation)
-
-```bash
-# Writes both keypoints (X) and/or IV3 features (X2048) into .npz
-python preprocessing/iv3_features.py \
-  --write-keypoints --write-iv3-features \
-  --fps 30 --image-size 256 --feature-key X2048 \
-  --gloss <gloss_id> --cat <cat_id> \
-  --label-file /path/to/out_dir/labels.csv \
-  /path/to/video.mp4 /path/to/out_dir
-```
-
-Notes:
-
-- If `--label-file` is not provided, it defaults to `/path/to/out_dir/labels.csv` and gets created if missing.
-- This flow appends a row for the processed clip to `labels.csv` (with the provided `gloss` and `cat`). You can later split this into train/val CSVs.
 
 ---
 
@@ -209,7 +196,7 @@ python -m training.train --model transformer --smoke-test --num-gloss 105 --num-
   Yes. The Transformer only uses `X`. Extra keys are ignored.
 
 - How are keypoints ordered in `X`?  
-  `pose25,left_hand21,right_hand21,face11`, normalized coordinates in [0,1]. See `preprocessing/shared_utils.py`.
+  `pose25,left_hand21,right_hand21,face11`, normalized coordinates in [0,1]. See `preprocessing/keypoints_features.py`.
 
 ---
 
@@ -217,4 +204,4 @@ python -m training.train --model transformer --smoke-test --num-gloss 105 --num-
 
 - Dataset loaders: `training/train.py` (`FSLKeypointFileDataset`, `FSLFeatureFileDataset`).
 - Transformer model: `models/transformer.py`.
-- Preprocessing: `preprocessing/preprocess.py`, `preprocessing/iv3_features.py`, `preprocessing/shared_utils.py`.
+- Preprocessing: `preprocessing/preprocess.py`, `preprocessing/iv3_features.py`, `preprocessing/keypoints_features.py`.
