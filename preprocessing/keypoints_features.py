@@ -128,7 +128,8 @@ def extract_keypoints_from_frame(img_rgb, models: MPModels, conf_thresh=0.5):
         lms = res.pose_landmarks.landmark
         for i, idx in enumerate(POSE_UPPER_25):
             lm = lms[idx]
-            x, y = float(lm.x), float(lm.y)
+            # Clamp to [0,1] like hands/face for consistency
+            x, y = xy_from_landmark(lm, W, H)
             pose_points[i] = (x, y)
             pose_mask[i] = (getattr(lm, "visibility", 0.0) or 0.0) >= conf_thresh
 

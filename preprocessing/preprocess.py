@@ -136,6 +136,8 @@ def process_video(video_path, out_dir, target_fps=30, out_size=256, conf_thresh=
     assert X.shape[0] == X2048.shape[0], f"Mismatch in T (frames) between X and X2048: {X.shape[0]} vs {X2048.shape[0]}"
 
     X_filled, M_filled = interpolate_gaps(X, M, max_gap=max_gap)
+    # Ensure coordinate bounds
+    X_filled = np.clip(X_filled, 0.0, 1.0).astype(np.float32)
     # Do not interpolate CNN features using keypoint visibility mask; keep raw temporal values
     X2048_filled = X2048
 
