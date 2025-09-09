@@ -1,18 +1,18 @@
 """
-Batch validator for preprocessed .npz / .parquet files.
+Validator for preprocessed `.npz`/`.parquet` datasets.
 
-How to run:
-  - Validate a directory recursively (all *.npz):
-      python -m preprocessing.validate_npz data/processed/npz_val
+Purpose
+- Quickly check that extracted clips match model training requirements.
 
-  - Validate readiness for both Transformer (keypoints X) and IV3-GRU (X2048):
-      python -m preprocessing.validate_npz data/processed/npz_val --check-transformer --check-iv3
-
-  - Validate and require X2048 to be present and shaped [T,2048] (alias of --check-iv3):
-      python -m preprocessing.validate_npz data/processed/npz_val --require-x2048
-
-  - Skip parquet checks (if pyarrow/fastparquet is not installed):
-      python -m preprocessing.validate_npz data/processed/npz_val --skip-parquet
+Usage
+- Validate all `.npz` under a directory:
+    python -m preprocessing.validate_npz data/processed/keypoints_val
+- Validate for both Transformer (`X`) and IV3-GRU (`X2048`):
+    python -m preprocessing.validate_npz data/processed/keypoints_val --check-transformer --check-iv3
+- Require `X2048` [T,2048] to be present:
+    python -m preprocessing.validate_npz data/processed/keypoints_val --require-x2048
+- Skip parquet checks (no pyarrow/fastparquet):
+    python -m preprocessing.validate_npz data/processed/keypoints_val --skip-parquet
 
 Exit code is non-zero if any file has issues.
 """
@@ -35,7 +35,7 @@ except Exception:  # pragma: no cover
 
 
 def _load_meta(meta_any) -> dict:
-    """Load JSON meta from npz object (may be bytes/str/object array)."""
+    """Parse the `meta` field stored as a JSON string in `.npz`."""
     try:
         if hasattr(meta_any, "item"):
             meta_any = meta_any.item()
@@ -55,10 +55,10 @@ def validate_npz_file(
     check_transformer: bool,
     check_iv3: bool,
 ) -> List[str]:
-    """
-    Validate one .npz (and sibling .parquet if present/required).
+    """Validate one `.npz` file (and `.parquet` if present/required).
 
-    Returns a list of error strings; empty list means OK.
+    Returns:
+        List[str]: list of human-readable issues. Empty list means the file is OK.
     """
     errors: List[str] = []
     try:
@@ -176,11 +176,11 @@ def validate_directory(
     check_transformer: bool,
     check_iv3: bool,
 ) -> Tuple[int, list]:
-    """
-    Validate all .npz files under root_dir (recursive).
+    """Validate all `.npz` files under `root_dir` recursively.
 
-    Returns (num_files_checked, list_of_issues) where list_of_issues contains
-    tuples of (file_path, [error_strings...]).
+    Returns:
+        (num_files_checked, issues) where `issues` is a list of
+        `(file_path, [error_strings...])`.
     """
     npz_files = glob.glob(os.path.join(root_dir, "**", "*.npz"), recursive=True)
     issues: List[Tuple[str, List[str]]] = []
@@ -258,5 +258,3 @@ def main(argv: List[str] | None = None) -> int:
 
 if __name__ == "__main__":  # pragma: no cover
     sys.exit(main())
-
-
