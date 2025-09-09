@@ -65,9 +65,91 @@ mp_face_mesh = mp.solutions.face_mesh
 mp_drawing = mp.solutions.drawing_utils
 mp_pose = mp.solutions.pose
 
+def _compute_occlusion_from_mask(mask_bool_array, visibility_threshold=0.6, frame_prop_threshold=0.4, min_consecutive_occ_frames=15):
+    """Compute a binary occlusion flag from per-frame keypoint visibility mask.
+
+    Args:
+        mask_bool_array: np.ndarray [T, 78] of booleans (True means keypoint visible).
+        visibility_threshold: A frame is considered occluded if visible_kp/78 < threshold.
+        frame_prop_threshold: Mark clip as occluded if proportion of occluded frames exceeds this.
+        min_consecutive_occ_frames: Or if there exists a consecutive run of occluded frames >= this value.
+
+    Returns:
+        int: 1 if occluded, else 0.
+    """
+    try:
+        if mask_bool_array is None:
+            return 0
+        if mask_bool_array.ndim != 2 or mask_bool_array.shape[1] != 78:
+            return 0
+        T = mask_bool_array.shape[0]
+        if T == 0:
+            return 0
+        visible_frac = mask_bool_array.sum(axis=1) / 78.0  # [T]
+        occ_frames = (visible_frac < float(visibility_threshold))  # [T] bool
+        prop = float(occ_frames.mean())
+        if prop >= float(frame_prop_threshold):
+            return 1
+        # longest consecutive run
+        max_run = 0
+        current = 0
+        for v in occ_frames:
+            if bool(v):
+                current += 1
+                if current > max_run:
+                    max_run = current
+            else:
+                current = 0
+        if max_run >= int(min_consecutive_occ_frames):
+            return 1
+        return 0
+    except Exception:
+        return 0
 
 
-def process_video(video_path, out_dir, target_fps=30, out_size=256, conf_thresh=0.5, max_gap=5, write_keypoints=True, write_iv3_features=True, feature_key='X2048'):
+def _ensure_labels_csv(path, include_occluded_col=True, overwrite=False):
+    """Create or upgrade a labels CSV.
+
+    If overwrite=True, rewrites header. If file exists and is missing 'occluded', add it with default 0.
+    """
+    os.makedirs(os.path.dirname(path) or '.', exist_ok=True)
+    if overwrite or not os.path.exists(path):
+        cols = ["file", "gloss", "cat"] + (["occluded"] if include_occluded_col else [])
+        pd.DataFrame(columns=cols).to_csv(path, index=False)
+        return
+    # Upgrade path: ensure occluded column exists
+    try:
+        df = pd.read_csv(path)
+        if include_occluded_col and "occluded" not in (df.columns.tolist() if df is not None else []):
+            df["occluded"] = 0
+            df.to_csv(path, index=False)
+    except Exception as e:
+        print(f"[WARN] Could not inspect/upgrade labels csv '{path}': {e}")
+
+
+def _append_label_row(path, file_entry, gloss_id, cat_id, occluded_flag=0):
+    """Append one row (file,gloss,cat,occluded) into labels CSV.
+
+    'file' can be a basename or a relative subpath and may include extension.
+    """
+    try:
+        new_row = {"file": str(file_entry), "gloss": int(gloss_id), "cat": int(cat_id)}
+        # Add occluded if the CSV header contains it
+        try:
+            with open(path, "r", newline="") as fh:
+                header = fh.readline().strip().split(",") if fh else []
+        except Exception:
+            header = []
+        if "occluded" in header:
+            new_row["occluded"] = int(occluded_flag)
+        df = pd.DataFrame([new_row])
+        df.to_csv(path, mode="a", index=False, header=False)
+    except Exception as e:
+        print(f"[WARN] Failed to append to labels csv '{path}': {e}")
+
+
+def process_video(video_path, out_dir, target_fps=30, out_size=256, conf_thresh=0.5, max_gap=5, write_keypoints=True, write_iv3_features=True, feature_key='X2048',
+                 occ_vis_thresh=0.6, occ_frame_prop=0.4, occ_min_run=15, compute_occlusion=True, labels_csv_path=None, gloss_id=None, cat_id=None):
     """Process one video and save a `.npz` with keypoints and/or IV3 features.
 
     Extracts keypoints `X` [T,156] with visibility `mask` [T,78] using MediaPipe,
@@ -179,6 +261,19 @@ def process_video(video_path, out_dir, target_fps=30, out_size=256, conf_thresh=
 
     to_npz(npz_out_path, X_filled, M_filled, T_ms, meta, also_parquet=True)
 
+    # Occlusion detection and CSV update
+    occluded_flag = 0
+    if compute_occlusion and write_keypoints:
+        occluded_flag = _compute_occlusion_from_mask(M_filled, visibility_threshold=occ_vis_thresh,
+                                                     frame_prop_threshold=occ_frame_prop,
+                                                     min_consecutive_occ_frames=occ_min_run)
+    # Append to labels CSV if requested and ids are provided
+    if labels_csv_path is not None and gloss_id is not None:
+        final_cat = cat_id if cat_id is not None else gloss_id
+        # store file path relative to out_dir (e.g., '0/clip.npz')
+        rel_npz_path = os.path.relpath(npz_out_path + ".npz", start=out_dir)
+        _append_label_row(labels_csv_path, rel_npz_path, gloss_id, final_cat, occluded_flag)
+
     # Save X2048 features into the same .npz
     with np.load(npz_out_path + ".npz", allow_pickle=True) as data:
         meta_data = data['meta']
@@ -192,7 +287,7 @@ def process_video(video_path, out_dir, target_fps=30, out_size=256, conf_thresh=
 if __name__ == "__main__":
     import argparse
     
-    parser = argparse.ArgumentParser(description="Preprocess video files to extract keypoints and IV3 features")
+    parser = argparse.ArgumentParser(description="Preprocess video files to extract keypoints and IV3 features, detect occlusion, and write labels CSV")
     parser.add_argument('video_directory', help='Path to a video file or a directory containing videos')
     parser.add_argument('output_directory', help='Path to output directory for processed files')
     parser.add_argument('--target-fps', type=int, default=30, help='Target frames per second (default: 30)')
@@ -202,31 +297,74 @@ if __name__ == "__main__":
     parser.add_argument('--write-keypoints', action='store_true', help='Extract and save keypoints')
     parser.add_argument('--write-iv3-features', action='store_true', help='Extract and save IV3 features')
     parser.add_argument('--feature-key', type=str, default='X2048', help='Feature key name (default: X2048)')
+    # Label/CSV controls
+    parser.add_argument('--id', dest='single_id', type=int, default=None, help='Single integer id to use for both gloss and cat')
+    parser.add_argument('--gloss-id', type=int, default=None, help='Override gloss id (defaults to --id)')
+    parser.add_argument('--cat-id', type=int, default=None, help='Override category id (defaults to --id or --gloss-id)')
+    parser.add_argument('--labels-csv', type=str, default=None, help='Path to labels CSV to write (default: <output_directory>/labels.csv)')
+    parser.add_argument('--append', action='store_true', help='Append to labels CSV instead of overwriting header before this run')
+    # Occlusion controls
+    parser.add_argument('--occ-enable', action='store_true', help='Enable occlusion detection from keypoint visibility (defaults to enabled when keypoints are written)')
+    parser.add_argument('--occ-vis-thresh', type=float, default=0.6, help='Frame visible fraction threshold (default: 0.6)')
+    parser.add_argument('--occ-frame-prop', type=float, default=0.4, help='Clip occluded if proportion of occluded frames >= this (default: 0.4)')
+    parser.add_argument('--occ-min-run', type=int, default=15, help='Clip occluded if there exists a run of occluded frames >= this (default: 15)')
     
     args = parser.parse_args()
     
     # Accept either a single file or a directory
     input_path = args.video_directory
-    video_extensions = ['.mp4', '.mov', '.avi', '.mkv', '.MOV', '.MP4']
+    # Normalize allowed extensions (case-insensitive)
+    allowed_exts = {'.mp4', '.mov', '.avi', '.mkv'}
 
     if os.path.isfile(input_path):
         # Single-file mode
-        video_files = [input_path]
+        ext = os.path.splitext(input_path)[1].lower()
+        if ext not in allowed_exts:
+            print(f"Unsupported file extension: {ext}. Allowed: {sorted(allowed_exts)}")
+            exit(1)
+        video_files = [os.path.normpath(input_path)]
         print(f"Processing single file: {os.path.basename(input_path)}")
     else:
-        # Directory mode: collect all videos
+        # Directory mode: collect all videos (deduplicated)
         video_files = []
-        for ext in video_extensions:
-            video_files.extend(glob.glob(os.path.join(input_path, f"*{ext}")))
-            video_files.extend(glob.glob(os.path.join(input_path, "**", f"*{ext}"), recursive=True))
+        seen = set()
+        for root, _dirs, files in os.walk(input_path):
+            for name in files:
+                ext = os.path.splitext(name)[1].lower()
+                if ext in allowed_exts:
+                    full = os.path.normpath(os.path.join(root, name))
+                    key = os.path.normcase(full)
+                    if key in seen:
+                        continue
+                    seen.add(key)
+                    video_files.append(full)
         if not video_files:
             print(f"No video files found in {input_path}")
-            print(f"Looking for extensions: {video_extensions}")
+            print(f"Looking for extensions: {sorted(allowed_exts)}")
             exit(1)
         print(f"Found {len(video_files)} video files to process")
     
     # Create output directory
     ensure_dir(args.output_directory)
+
+    # Prepare labels CSV if ids are provided
+    gloss_id = args.gloss_id if args.gloss_id is not None else args.single_id
+    cat_id = args.cat_id if args.cat_id is not None else gloss_id
+    # Default label path to the output directory if ids are provided and no path was specified
+    labels_csv = None
+    if gloss_id is not None:
+        labels_csv = args.labels_csv if args.labels_csv is not None else os.path.join(args.output_directory, 'labels.csv')
+    if labels_csv is not None:
+        _ensure_labels_csv(labels_csv, include_occluded_col=True, overwrite=(not args.append))
+        if not args.append:
+            print(f"[INFO] Overwrote labels CSV header at: {labels_csv}")
+        else:
+            print(f"[INFO] Appending to labels CSV: {labels_csv}")
+    else:
+        print("[INFO] No labels will be written because no gloss/cat id was provided")
+    
+    # Determine occlusion usage
+    compute_occlusion = bool(args.occ_enable or args.write_keypoints)
     
     # Process each video file
     for video_path in video_files:
@@ -241,7 +379,14 @@ if __name__ == "__main__":
                 max_gap=args.max_gap,
                 write_keypoints=args.write_keypoints,
                 write_iv3_features=args.write_iv3_features,
-                feature_key=args.feature_key
+                feature_key=args.feature_key,
+                occ_vis_thresh=args.occ_vis_thresh,
+                occ_frame_prop=args.occ_frame_prop,
+                occ_min_run=args.occ_min_run,
+                compute_occlusion=compute_occlusion,
+                labels_csv_path=labels_csv,
+                gloss_id=gloss_id,
+                cat_id=cat_id,
             )
         except Exception as e:
             print(f"Error processing {video_path}: {e}")
