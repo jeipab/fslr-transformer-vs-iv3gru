@@ -10,6 +10,18 @@ pip install -r requirments.txt
 
 - Prepare label CSVs with columns: `file,gloss,cat` (0-based class ids).
 
+Data layout expected by the loaders (typical):
+
+```
+data/processed/
+  keypoints_train/        # or features_train/ for IV3-GRU
+  keypoints_val/          # or features_val/ for IV3-GRU
+  train_labels.csv        # file,gloss,cat (0-based)
+  val_labels.csv          # file,gloss,cat (0-based)
+```
+
+Each `.npz` file must live directly inside the split folder (no nested subfolders).
+
 ### Quick start
 
 - Transformer (keypoints `[T,156]` in `.npz` key `X`):
@@ -23,6 +35,7 @@ python -m training.train \
   --labels-val-csv   path\to\val_labels.csv \
   --num-gloss 105 --num-cat 10 \
   --epochs 30 --batch-size 32 --output-dir data\processed
+# If your keypoints are stored under a different key, add: --kp-key MyKey
 ```
 
 - IV3-GRU (features `[T,2048]` in `.npz` key `X2048` or `X`):
@@ -37,6 +50,7 @@ python -m training.train \
   --feature-key X2048 \
   --num-gloss 105 --num-cat 10 \
   --epochs 30 --batch-size 32 --output-dir data\processed
+# If your features are stored under a different key, add: --feature-key MyKey
 ```
 
 ### Data requirements
@@ -45,12 +59,18 @@ python -m training.train \
 - **IV3-GRU**: `.npz` key `X2048` (or `X`) shaped `[T,2048]`.
 - **Labels CSV**: `file,gloss,cat` where `file` matches the `.npz` basename.
 
+Notes:
+
+- Variable-length sequences are padded in the DataLoader; true lengths are used to build attention masks (Transformer) or packed sequences (IV3-GRU).
+- Defaults: `--kp-key X`, `--feature-key X2048`.
+
 ### Tips
 
 - Use module mode: `python -m training.train`.
 - GPU is auto-detected. CPU fallback works.
 - For Transformer, an attention mask from lengths is applied automatically.
 - Ensure `--num-gloss/--num-cat` match your dataset.
+- Put `.npz` files directly under the train/val folders (no nested class directories).
 
 ### Smoke tests
 
@@ -70,6 +90,16 @@ python -m training.train --model iv3_gru --smoke-test --num-gloss 105 --num-cat 
 
 Outputs saved to `data/processed` by default (override with `--output-dir`).
 
+Integrity checks for your data (optional but recommended):
+
+```bash
+# Validate key shapes/dtypes and meta; both checks enabled by default
+python -m preprocessing.validate_npz path\to\keypoints_train
+
+# Require X2048 for IV3-GRU data
+python -m preprocessing.validate_npz path\to\features_train --require-x2048
+```
+
 ### Advanced training options
 
 - **Learning**: `--lr`, `--weight-decay`
@@ -86,6 +116,12 @@ Notes:
 
 - Best and last checkpoints are saved in `--output-dir` as `{ModelName}_best.pt` and `{ModelName}_last.pt`.
 - Early stopping and scheduler use validation gloss accuracy.
+
+Common errors and fixes:
+
+- File not found: ensure `file` values in CSVs match `.npz` basenames and live in the right split folder.
+- Wrong shapes: Transformer expects `[T,156]` under key `X`; IV3-GRU expects `[T,2048]` under key `X2048` (or pass `--feature-key`).
+- Label ranges: `gloss` in `[0, num_gloss-1]`, `cat` in `[0, num_cat-1]`.
 
 Examples:
 
