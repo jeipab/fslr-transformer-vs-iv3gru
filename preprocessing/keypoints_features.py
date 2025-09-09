@@ -168,4 +168,4 @@ def extract_keypoints_from_frame(img_rgb, models: MPModels, conf_thresh=0.5):
             coords.extend([x, y])
         vis_mask.extend(block_mask)
 
-    return np.array(coords, dtype=np.float32), np.array(vis_mask, dtype=bool)s
+    return np.array(coords, dtype=np.float32), np.array(vis_mask, dtype=bool)
