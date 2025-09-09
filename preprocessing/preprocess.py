@@ -12,7 +12,7 @@ import mediapipe as mp
 if __package__ in (None, ""):
     sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 
-from preprocessing.iv3_features import extract_iv3_features  # torchvision IV3 feature extractor
+from preprocessing.iv3_features import extract_iv3_features  # InceptionV3 (torchvision) feature extractor
 from preprocessing.keypoints_features import (
     POSE_UPPER_25,
     N_HAND,
@@ -33,6 +33,14 @@ def ensure_dir(p):
 
 
 def to_npz(out_path, X, mask, timestamps_ms, meta, also_parquet=True):
+    """Write keys (`X`, `mask`, `timestamps_ms`, `meta`) to `<out_path>.npz`.
+
+    - X: [T,156] float32
+    - mask: [T,78] bool
+    - timestamps_ms: [T] int64
+    - meta: JSON string
+    Optionally writes a `.parquet` for quick inspection.
+    """
     np.savez_compressed(out_path + ".npz", X=X, mask=mask, timestamps_ms=timestamps_ms, meta=json.dumps(meta))
     if also_parquet:
         try:
@@ -59,10 +67,25 @@ mp_pose = mp.solutions.pose
 
 
 
-# ----------------------------
-# Video processing
-# ----------------------------
 def process_video(video_path, out_dir, target_fps=30, out_size=256, conf_thresh=0.5, max_gap=5, write_keypoints=True, write_iv3_features=True, feature_key='X2048'):
+    """Process one video and save a `.npz` with keypoints and/or IV3 features.
+
+    Extracts keypoints `X` [T,156] with visibility `mask` [T,78] using MediaPipe,
+    optionally extracts `X2048` [T,2048] using torchvision InceptionV3, and writes
+    `timestamps_ms` plus a concise `meta` description. Values are clipped and short
+    gaps are interpolated in `X` using `interpolate_gaps`.
+
+    Args:
+        video_path: Input video file path.
+        out_dir: Output directory root (files are stored under `<out_dir>/0/`).
+        target_fps: Target sampling frames-per-second.
+        out_size: Square resize used for keypoint extraction.
+        conf_thresh: Keypoint visibility/pose confidence threshold.
+        max_gap: Max consecutive missing frames to interpolate per keypoint.
+        write_keypoints: If True, compute and write `X` and `mask`.
+        write_iv3_features: If True, compute and write `X2048`.
+        feature_key: Kept for CLI compatibility (not used).
+    """
     basename = os.path.splitext(os.path.basename(video_path))[0]
     output_npz_folder = os.path.join(out_dir, '0')  # Assuming input vids are in '0' subfolder
     ensure_dir(output_npz_folder)
@@ -114,7 +137,7 @@ def process_video(video_path, out_dir, target_fps=30, out_size=256, conf_thresh=
                 M_frames.append(mask78)
 
             if write_iv3_features:
-                # Extract 2048-D InceptionV3 features from original frame (resized internally to 299x299)
+                # 2048-D InceptionV3 features from the original BGR frame
                 iv3_features = extract_iv3_features(frame_bgr, image_size=(299, 299), device=device)
                 X2048_frames.append(iv3_features)
 
