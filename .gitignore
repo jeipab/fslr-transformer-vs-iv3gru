@@ -10,6 +10,8 @@ env/
 *.mp4
 *.avi
 *.mov
+*.npz
+*.parquet
 
 # Checkpoints
 *.pt
