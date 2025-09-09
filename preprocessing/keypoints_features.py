@@ -1,12 +1,17 @@
 """
-Keypoint preprocessing utilities (MediaPipe Holistic) for Transformer input.
+Keypoint preprocessing utilities using MediaPipe Holistic.
 
-Provides:
-- Landmark index constants: POSE_UPPER_25, N_HAND, FACEMESH_11
-- MediaPipe lifecycle: create_models(), close_models(), MPModels dataclass
-- Frame extraction: extract_keypoints_from_frame(img_rgb, models, conf_thresh)
-- Gap filling: interpolate_gaps(X, mask, max_gap)
-- Helpers: xy_from_landmark(lm, w, h)
+What this provides
+- Landmark index sets and constants used to build the 156-D vector.
+- Model lifecycle helpers (`create_models`, `close_models`).
+- Per-frame extraction of 78 keypoints → `X` (156 floats) and `mask` (78 bools).
+- Small-gap interpolation to fill missing keypoints in time.
+
+Input/Output overview
+- Input image is RGB (H, W, 3), float/uint8 in standard OpenCV format.
+- `extract_keypoints_from_frame` returns:
+  - `vec156`: np.float32 shape (156,) with values in [0,1].
+  - `mask78`: np.bool_ shape (78,) visibility per keypoint.
 """
 
 from dataclasses import dataclass
@@ -54,7 +59,7 @@ def close_models(models: MPModels):
 
 
 def xy_from_landmark(lm, w, h):
-    """Return normalized (x,y) clipped to [0,1] from a MediaPipe landmark."""
+    """Convert a MediaPipe landmark to normalized (x, y) in [0, 1]."""
     x = float(lm.x)
     y = float(lm.y)
     return max(0.0, min(1.0, x)), max(0.0, min(1.0, y))
@@ -65,16 +70,15 @@ def _lerp(a, b, t):
 
 
 def interpolate_gaps(X, mask, max_gap=5):
-    """
-    Fill short missing segments in keypoint sequences by linear interpolation.
+    """Linearly interpolate short missing spans in a keypoint sequence.
 
     Args:
-        X: np.ndarray [T, 156] of keypoint coordinates (x1,y1,x2,y2,...)
-        mask: np.ndarray [T, 78] boolean visibility per keypoint
-        max_gap: maximum consecutive missing length to interpolate
+        X: [T,156] float32 keypoint coordinates (x1, y1, x2, y2, ...).
+        mask: [T,78] bool visibility mask.
+        max_gap: Interpolate only gaps with length in [1, max_gap].
 
     Returns:
-        (X_filled, mask_filled)
+        Tuple (X_filled, mask_filled) with the same shapes.
     """
     T = X.shape[0]
     K = mask.shape[1]
@@ -110,10 +114,18 @@ def interpolate_gaps(X, mask, max_gap=5):
 
 
 def extract_keypoints_from_frame(img_rgb, models: MPModels, conf_thresh=0.5):
-    """
-    Extract 78 keypoints (156 values) and visibility mask from an RGB frame.
+    """Extract 78 keypoints and a visibility mask from one RGB frame.
 
-    Order: pose25, left_hand21, right_hand21, face11. Returns (vec156, mask78).
+    Keypoint order: `pose25,left_hand21,right_hand21,face11`.
+
+    Args:
+        img_rgb: RGB frame (H, W, 3).
+        models: MPModels with initialized holistic and segmentation models.
+        conf_thresh: Minimum visibility (pose) to mark keypoint as present.
+
+    Returns:
+        vec156: np.float32 (156,) normalized coordinates in [0,1].
+        mask78: np.bool_ (78,) True where the keypoint is considered visible.
     """
     H, W, _ = img_rgb.shape
     res = models.hol.process(img_rgb)
