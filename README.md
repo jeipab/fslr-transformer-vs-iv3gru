@@ -50,7 +50,7 @@ python -m streamlit run ui\app.py --server.port 8502
 
 ## Guide
 
-- Preprocessing guide: [preprocessing/PREPROCESS_GUIDE.md](preprocessing/PREPROCESS_GUIDE.md)
+- Preprocessing guide: [preprocessing/PREPROCESS_GUIDE.MD](preprocessing/PREPROCESS_GUIDE.MD)
 - Training guide: [training/TRAINING_GUIDE.md](training/TRAINING_GUIDE.md)
 - Data layout: [data/DATA_LAYOUT.md](data/DATA_LAYOUT.md)
 - Sharing guide: [shared/SHARING_GUIDE.md](shared/SHARING_GUIDE.md)
