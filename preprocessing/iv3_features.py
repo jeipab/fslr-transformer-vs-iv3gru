@@ -1,12 +1,14 @@
 """
-Lightweight InceptionV3 feature extractor (PyTorch/torchvision).
+InceptionV3 feature extraction utilities (PyTorch/torchvision).
 
-Purpose
-- Produce a 2048-dimensional ImageNet feature vector for a single BGR frame.
-- Matches the training stack (torchvision InceptionV3 with global average pooling).
+What this provides
+- Single-frame feature extraction that returns a 2048-D ImageNet embedding.
+- A simple video processor that can write both keypoints (`X`) and IV3 features (`X2048`).
 
-API
-- extract_iv3_features(frame_bgr, image_size=(299, 299), device=None) -> np.ndarray (2048,)
+Key facts
+- Input frame format: OpenCV BGR image.
+- Output feature: NumPy array of shape (2048,) with dtype float32.
+- Matches the training stack (torchvision InceptionV3, global average pooling).
 """
 import argparse
 import cv2
@@ -42,7 +44,16 @@ _IMAGENET_MEAN = torch.tensor([0.485, 0.456, 0.406]).view(3, 1, 1)
 _IMAGENET_STD = torch.tensor([0.229, 0.224, 0.225]).view(3, 1, 1)
 
 def extract_iv3_features(frame_bgr, image_size=(299, 299), device=None):
-    """Extract a 2048-D ImageNet InceptionV3 feature vector for one frame."""
+    """Extract a 2048-D InceptionV3 feature for a single BGR frame.
+
+    Args:
+        frame_bgr: OpenCV BGR image (H, W, 3), uint8 in [0, 255].
+        image_size: Spatial size used for InceptionV3 (default: 299x299).
+        device: Optional torch.device; CUDA is used if available.
+
+    Returns:
+        np.ndarray of shape (2048,) and dtype float32.
+    """
     if device is None:
         device = torch.device("cpu")
 
@@ -63,6 +74,15 @@ def ensure_dir(p):
     os.makedirs(p, exist_ok=True)
 
 def to_npz(out_path, X, X2048, mask, timestamps_ms, meta, also_parquet=True):
+    """Write a single clip to `.npz` (and optional `.parquet`).
+
+    Saves keys:
+    - X: [T,156] float32
+    - X2048: [T,2048] float32
+    - mask: [T,78] bool
+    - timestamps_ms: [T] int64
+    - meta: JSON string
+    """
     np.savez_compressed(out_path + ".npz", X=X, X2048=X2048, mask=mask, timestamps_ms=timestamps_ms, meta=json.dumps(meta))
     if also_parquet:
         try:
@@ -76,7 +96,7 @@ def to_npz(out_path, X, X2048, mask, timestamps_ms, meta, also_parquet=True):
             print("[INFO] Install pyarrow or fastparquet for parquet support: pip install pyarrow")
 
 def read_or_create_labels_csv(label_file):
-    """Reads the labels.csv or creates it if not exists."""
+    """Read `labels.csv` if present; otherwise create an empty one with header."""
     if os.path.exists(label_file):
         return pd.read_csv(label_file)
     else:
@@ -86,14 +106,35 @@ def read_or_create_labels_csv(label_file):
         return df
 
 def update_labels_csv(label_file, video_file, gloss, cat):
-    """Updates the labels.csv with new information."""
+    """Append or update one row in `labels.csv` for the given clip."""
     df = read_or_create_labels_csv(label_file)
     new_row = pd.DataFrame({"file": [video_file], "gloss": [gloss], "cat": [cat]})
     df = pd.concat([df, new_row], ignore_index=True)
     df.to_csv(label_file, index=False)
 
 def process_video(video_path, out_dir, label_file=None, target_fps=30, out_size=256, conf_thresh=0.5, max_gap=5, write_keypoints=True, write_iv3_features=True, feature_key='X2048', gloss=None, cat=None):
-    """Process the video and extract both keypoints and IV3 features, saving them to a .npz file."""
+    """Process one video into a training-ready `.npz`.
+
+    Extracts per-frame keypoints (`X` [T,156]) and/or IV3 features (`X2048` [T,2048]),
+    plus `mask` [T,78], `timestamps_ms` [T], and `meta`.
+
+    Args:
+        video_path: Path to the input video file.
+        out_dir: Output root directory (files are saved under `<out_dir>/0/`).
+        label_file: Optional CSV to update (`file,gloss,cat`). Defaults to `<out_dir>/labels.csv`.
+        target_fps: Sampling fps for frames.
+        out_size: Side length used to resize frames for keypoint extraction.
+        conf_thresh: Confidence/visibility threshold for keypoints.
+        max_gap: Max gap (frames) to interpolate for missing keypoints.
+        write_keypoints: If True, write `X` and `mask`.
+        write_iv3_features: If True, write `X2048`.
+        feature_key: Unused here (kept for compatibility).
+        gloss: Optional gloss id (written to labels CSV if provided).
+        cat: Optional category id (written to labels CSV if provided).
+
+    Returns:
+        None. Writes `<basename>.npz` (and `.parquet` if available) to disk.
+    """
     basename = os.path.splitext(os.path.basename(video_path))[0]
     output_npz_folder = os.path.join(out_dir, '0')  # Assuming input vids are in '0' subfolder
     ensure_dir(output_npz_folder)
@@ -228,4 +269,3 @@ if __name__ == "__main__":
         args.label_file = os.path.join(args.out_dir, "labels.csv")
 
     process_video(args.video_path, args.out_dir, label_file=args.label_file, target_fps=args.fps, out_size=args.image_size, write_keypoints=args.write_keypoints, write_iv3_features=args.write_iv3_features, feature_key=args.feature_key, gloss=args.gloss, cat=args.cat)
-
