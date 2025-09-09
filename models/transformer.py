@@ -1,35 +1,21 @@
 """
-transformer.py
+Transformer model for sign language recognition from 156-d keypoint sequences.
 
-This module implements a Transformer-based model for recognizing Filipino Sign Language
-from sequences of body keypoints. The model processes 156-dimensional keypoint vectors
-(pose, hands, face) and predicts both gloss (word-level) and category classifications.
+This module provides:
+- Sinusoidal positional encoding, custom layer normalization, and residual blocks
+- A configurable Transformer encoder stack with mean/max/CLS pooling
+- Dual output heads for gloss and category classification
 
-Key Components:
-- PositionalEncoding: Adds temporal order information to input embeddings
-- LayerNormalization: Custom layer normalization implementation
-- FeedForwardBlock: Position-wise feed-forward network
-- MultiHeadAttentionBlock: Scaled dot-product attention with multiple heads
-- ResidualConnection: Pre-layer normalization residual connections
-- EncoderLayer: Complete transformer encoder layer
-- SignTransformer: Main model with dual output heads
-
-Architecture:
-Input: [B, T, 156] keypoint sequences
-→ Embedding: [B, T, 256] 
-→ Positional Encoding + Layer Norm
-→ 4 Transformer Encoder Layers
-→ Pooling (mean/max/CLS)
-→ Dual Classification Heads (gloss: 105 classes, category: 10 classes)
+Input/Output overview:
+- Input: keypoints `x` with shape [B, T, 156]
+- Encoder embeddings: [B, T, 256] (default)
+- Outputs: gloss logits [B, num_gloss], category logits [B, num_cat]
 
 Usage:
     from models.transformer import SignTransformer
-    
-    # Initialize model
+
     model = SignTransformer()
-    
-    # Forward pass
-    gloss_pred, cat_pred = model(keypoint_sequences)
+    gloss_logits, cat_logits = model(x)  # x: [B, T, 156]
 """
 
 import torch
@@ -37,11 +23,9 @@ import torch.nn as nn
 
 class PositionalEncoding(nn.Module):
     """
-    Implements sinusoidal positional encoding as described in
-    "Attention Is All You Need".
-    
-    Adds information about the order of sequence elements
-    to the input embeddings.
+    Sinusoidal positional encoding ("Attention Is All You Need").
+
+    Adds temporal order information to input embeddings.
     """
     
     def __init__(self, emb_dim, dropout=0.1, max_len=300):
@@ -69,10 +53,9 @@ class PositionalEncoding(nn.Module):
     def forward(self, x):
         """
         Args:
-            x (Tensor): input embeddings of shape [B, T, E]
-                        where B = batch size, T = sequence length, E = embedding dim.
+            x (Tensor): input embeddings [B, T, E].
         Returns:
-            Tensor: positionally encoded embeddings of shape [B, T, E].
+            Tensor: positionally encoded embeddings [B, T, E].
         """
         # Guard: ensure we have enough precomputed positions
         if x.size(1) > self.pe.size(1):
@@ -86,10 +69,7 @@ class PositionalEncoding(nn.Module):
 
 class LayerNormalization(nn.Module):
     """
-    Custom implementation of Layer Normalization.
-    
-    Normalizes inputs across the last dimension (features) and
-    applies learnable scale (gamma) and shift (beta) parameters.
+    Custom Layer Normalization across the last dimension with learnable scale/shift.
     """
     
     def __init__(self, features, eps=1e-6):
@@ -109,7 +89,7 @@ class LayerNormalization(nn.Module):
             x (Tensor): input tensor of shape [B, T, E] or [B, E].
                         Normalization is applied across the last dimension (E).
         Returns:
-            Tensor: normalized tensor of the same shape as input.
+            Tensor: normalized tensor with the same shape as input.
         """
         mean = x.mean(dim=-1, keepdim=True)     # per-sample mean
         # Use variance with unbiased=False to avoid NaNs for length-1 tensors
@@ -120,8 +100,7 @@ class FeedForwardBlock(nn.Module):
     """
     Position-wise feed-forward network (FFN) used inside Transformer layers.
 
-    Applies two linear transformations with a ReLU activation in between,
-    and dropout for regularization.
+    Two linear layers with ReLU in between and dropout for regularization.
     """
     
     def __init__(self, emb_dim, ff_dim=512, dropout=0.1):
@@ -190,8 +169,8 @@ class MultiHeadAttentionBlock(nn.Module):
             Q (Tensor): queries of shape [B, H, T, D].
             K (Tensor): keys of shape [B, H, T, D].
             V (Tensor): values of shape [B, H, T, D].
-            mask (Tensor or None): optional attention mask of shape [B, 1, 1, T].
-                                    1 = valid, 0 = masked.
+            mask (Tensor or None): optional mask broadcastable to [B, 1, 1, T];
+                                   1 = keep, 0 = mask.
             dropout (nn.Dropout or None): optional dropout layer for attention weights.
 
         Returns:
@@ -222,7 +201,7 @@ class MultiHeadAttentionBlock(nn.Module):
         """
         Args:
             x (Tensor): input embeddings of shape [B, T, E].
-            mask (Tensor or None): optional attention mask broadcastable to [B, 1, 1, T].
+            mask (Tensor or None): optional mask broadcastable to [B, 1, 1, T].
 
         Returns:
             out (Tensor): output embeddings of shape [B, T, E].
@@ -253,10 +232,10 @@ class MultiHeadAttentionBlock(nn.Module):
 
 class ResidualConnection(nn.Module):
     """
-    Implements a residual connection with pre-layer normalization.
-    
-    Each sublayer (e.g., attention or feed-forward) is wrapped with:
-        x + Dropout(Sublayer(LayerNorm(x)))
+    Residual connection with pre-layer normalization.
+
+    Wraps a sublayer (attention or FFN) as:
+        x + Dropout(Sublayer(LayerNorm(x))).
     """
     
     def __init__(self, emb_dim, dropout=0.1):
@@ -275,8 +254,6 @@ class ResidualConnection(nn.Module):
 
     def forward(self, x, sublayer):
         """
-        Forward pass for residual connection.
-
         Args:
             x (Tensor): input tensor of shape [B, T, E].
             sublayer (callable): function or layer applied to normalized x.
@@ -288,15 +265,12 @@ class ResidualConnection(nn.Module):
 
 class EncoderLayer(nn.Module):
     """
-    A single Transformer encoder layer.
-
-    Consists of:
-        1. Multi-head self-attention with residual connection.
-        2. Position-wise feed-forward network with residual connection.
+    Single Transformer encoder layer consisting of:
+      1) Multi-head self-attention + residual, and
+      2) Position-wise feed-forward + residual.
     """
     
     def __init__(self, emb_dim, num_heads, ff_dim=512, dropout=0.1):
-        
         """
         Args:
             emb_dim (int): embedding dimension (E).
@@ -318,8 +292,6 @@ class EncoderLayer(nn.Module):
 
     def forward(self, x, mask=None, return_attn=False):
         """
-        Forward pass of encoder layer.
-
         Args:
             x (Tensor): input of shape [B, T, E].
             mask (Tensor or None): attention mask of shape [B, 1, 1, T].
@@ -352,6 +324,18 @@ class SignTransformer(nn.Module):
     and predicts both:
         - Gloss classification (word/sign ID)
         - Category classification (semantic class/group)
+
+    Args:
+        input_dim: Input feature dimension per frame (default 156).
+        emb_dim: Embedding dimension E.
+        n_heads: Number of attention heads H.
+        n_layers: Number of encoder layers.
+        num_gloss: Number of gloss classes.
+        num_cat: Number of category classes.
+        dropout: Dropout rate used throughout the model.
+        max_len: Maximum supported sequence length for positional encoding.
+        ff_dim: Hidden dimension of FFN (defaults to 4× emb_dim).
+        pooling_method: One of 'mean' | 'max' | 'cls'.
     """
     
     def __init__(self,
@@ -497,8 +481,8 @@ class SignTransformer(nn.Module):
             mask (Tensor or None): binary mask [B, T].
 
         Returns:
-            List of attention weight tensors, one per encoder layer.
-            Each element is [B, H, T, T] (or [B, H, T+1, T+1] if using 'cls').
+            List[Tensor]: attention weights per encoder layer.
+            Each is [B, H, T, T] (or [B, H, T+1, T+1] if using 'cls').
         """
         B, T, _ = x.size()
         attention_weights = []
