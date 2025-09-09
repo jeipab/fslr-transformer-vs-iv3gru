@@ -85,12 +85,16 @@ def update_labels_csv(label_file, video_file, gloss, cat):
     df = pd.concat([df, new_row], ignore_index=True)
     df.to_csv(label_file, index=False)
 
-def process_video(video_path, out_dir, label_file="labels.csv", target_fps=30, out_size=256, conf_thresh=0.5, max_gap=5, write_keypoints=True, write_iv3_features=True, feature_key='X2048', gloss=None, cat=None):
+def process_video(video_path, out_dir, label_file=None, target_fps=30, out_size=256, conf_thresh=0.5, max_gap=5, write_keypoints=True, write_iv3_features=True, feature_key='X2048', gloss=None, cat=None):
     """Process the video and extract both keypoints and IV3 features, saving them to a .npz file."""
     basename = os.path.splitext(os.path.basename(video_path))[0]
     output_npz_folder = os.path.join(out_dir, '0')  # Assuming input vids are in '0' subfolder
     ensure_dir(output_npz_folder)
     npz_out_path = os.path.join(output_npz_folder, basename)
+    
+    # Set default label_file to be in the output directory
+    if label_file is None:
+        label_file = os.path.join(out_dir, "labels.csv")
 
     cap = cv2.VideoCapture(video_path)
     if not cap.isOpened():
@@ -204,11 +208,15 @@ if __name__ == "__main__":
     parser.add_argument('--feature-key', type=str, default='X2048', help='Which feature key to use')
     parser.add_argument('--gloss', type=str, help='Gloss (optional) for labeling')
     parser.add_argument('--cat', type=str, help='Category (optional) for labeling')
-    parser.add_argument('--label-file', type=str, default="labels.csv", help='Path to the labels.csv file')
+    parser.add_argument('--label-file', type=str, help='Path to the labels.csv file (default: output_dir/labels.csv)')
     parser.add_argument('video_path', type=str, help='Path to the video file to process')
     parser.add_argument('out_dir', type=str, help='Directory to save the processed output')
     
     args = parser.parse_args()
+    
+    # Set default label_file to be in the output directory if not specified
+    if args.label_file is None:
+        args.label_file = os.path.join(args.out_dir, "labels.csv")
 
     process_video(args.video_path, args.out_dir, label_file=args.label_file, target_fps=args.fps, out_size=args.image_size, write_keypoints=args.write_keypoints, write_iv3_features=args.write_iv3_features, feature_key=args.feature_key, gloss=args.gloss, cat=args.cat)
 
