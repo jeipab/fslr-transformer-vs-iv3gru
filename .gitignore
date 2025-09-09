@@ -13,3 +13,7 @@ env/
 # Checkpoints
 *.pt
 *.pth
+
+# Allow shared/ to be tracked despite global ignores
+!shared/
+!shared/**
