@@ -1,55 +1,30 @@
 """
-inceptionv3_gru.py
+InceptionV3 + GRU model for sign language recognition from short video clips.
 
-This module implements an InceptionV3–GRU model for recognizing Filipino Sign Language
-from short video clips. A pretrained InceptionV3 extracts 2048-D spatial features per frame,
-which are modeled temporally by a lightweight two-layer GRU to predict gloss classes.
+This module provides:
+- InceptionV3 backbone to extract 2048-D frame embeddings (optionally frozen)
+- Two-layer GRU head for temporal modeling, with dropout regularization
+- Dual heads for gloss and category classification
+- Support for raw frames or precomputed 2048-D features and variable-length clips
 
-Key Components:
-- InceptionV3FeatureExtractor: Pretrained CNN backbone (2048-D per frame; frozen by default)
-- GRUStack: Two GRU layers with 16 and 12 hidden units to capture temporal dynamics
-- Dropout: Regularization (p = 0.3) after GRU layers to reduce overfitting
-- ClassifierHead: Linear → Softmax over gloss classes
-- Variable-Length Support: Optional pack_padded_sequence handling for ragged clips
-- Feature Flexibility: Accepts raw frames or precomputed 2048-D features (features_already=True)
-
-Architecture:
-Input (raw frames): [B, T=30, 3, H, W] (expected 299×299, ImageNet-normalized)
-or Input (features): [B, T=30, 2048]
+Architecture (typical):
+Input (raw): [B, T, 3, 299, 299] (ImageNet-normalized)
+or Input (features): [B, T, 2048]
 → InceptionV3 (pretrained) → [B, T, 2048]
 → GRU (hidden=16) → Dropout(0.3)
 → GRU (hidden=12) → Dropout(0.3)
-→ Linear → Softmax (gloss: N classes)
+→ Linear heads → logits (gloss, category)
 
 Usage:
-    from models.inceptionv3_gru import InceptionV3GRU
-    import torch
+    from models.iv3_gru import InceptionV3GRU
+    
+    model = InceptionV3GRU(num_gloss=105, num_cat=10)
+    gloss_logits, cat_logits = model(feats, features_already=True)
 
-    # Initialize model (set num_classes to your gloss vocabulary size)
-    model = InceptionV3GRU(
-        num_classes=105,
-        hidden1=16,
-        hidden2=12,
-        dropout=0.3,
-        pretrained_backbone=True,
-        freeze_backbone=True,  # unfreeze later for fine-tuning if desired
-    )
-
-    # Forward with raw frames (B, T=30, 3, 299, 299), normalized to ImageNet stats
-    logits = model(frames, features_already=False)        # -> [B, 105]
-
-    # Or forward with precomputed features (B, T=30, 2048)
-    logits = model(feats, features_already=True)
-
-    # Optional variable-length handling (when sequences are padded)
-    logits = model(feats, lengths=seq_lengths, features_already=True)
-
-    # Get probabilities instead of logits
-    probs = model.predict_proba(feats, features_already=True)
-
-Training Notes:
-- Use CrossEntropyLoss with logits; apply standard augmentation at the frame level if using raw frames.
-- Start with the backbone frozen; optionally unfreeze later for modest gains once the GRU head stabilizes.
+Training notes:
+- Use CrossEntropyLoss on logits. If using raw frames, apply standard ImageNet normalization
+  and consider light augmentations per-frame.
+- Start with the backbone frozen; unfreeze for fine-tuning after the GRU head stabilizes.
 """
 
 from typing import Optional, Tuple
@@ -89,6 +64,17 @@ class InceptionV3FeatureExtractor(nn.Module):
 
 
 def _dropout_packed(packed_seq, p: float, training: bool):
+    """
+    Apply dropout to a PackedSequence by dropping on its `.data` field.
+
+    Args:
+        packed_seq: torch.nn.utils.rnn.PackedSequence to be dropped out.
+        p: Dropout probability.
+        training: Whether in training mode.
+
+    Returns:
+        PackedSequence with dropout applied to underlying data.
+    """
     if p <= 0.0:
         return packed_seq
     data = F.dropout(packed_seq.data, p=p, training=training)
@@ -99,24 +85,27 @@ def _dropout_packed(packed_seq, p: float, training: bool):
 
 class InceptionV3GRU(nn.Module):
     """
-    InceptionV3-GRU for sign gloss recognition.
+    InceptionV3-GRU for gloss and category classification from video sequences.
 
     Args:
-        num_classes: number of gloss classes.
-        hidden1: hidden units for first GRU layer (default 16).
-        hidden2: hidden units for second GRU layer (default 12).
-        dropout: dropout rate applied after each GRU layer (default 0.3).
-        pretrained_backbone: load ImageNet weights for InceptionV3.
-        freeze_backbone: freeze CNN weights (recommended to start).
+        num_gloss: Number of gloss classes.
+        num_cat: Number of category classes.
+        hidden1: Hidden units for first GRU layer (default 16).
+        hidden2: Hidden units for second GRU layer (default 12).
+        dropout: Dropout rate applied after GRU layers (default 0.3).
+        pretrained_backbone: Load ImageNet weights for InceptionV3.
+        freeze_backbone: Freeze CNN weights (recommended at start).
+
     Forward inputs:
         frames_or_feats:
-            - If features_already=False: Tensor of shape (B, T, 3, H, W)
-            - If features_already=True: Tensor of shape (B, T, 2048)
-        lengths (optional): 1D Tensor of sequence lengths before padding (B,)
-        return_probs: if True returns probabilities (softmax); else logits.
-        features_already: set True if passing precomputed 2048-D features.
+            - If features_already=False: Tensor (B, T, 3, H, W)
+            - If features_already=True: Tensor (B, T, 2048)
+        lengths: Optional 1D Tensor (B,) with true sequence lengths.
+        return_probs: If True, return probabilities; otherwise logits.
+        features_already: Set True when passing precomputed 2048-D features.
+
     Returns:
-        logits or probabilities of shape (B, num_classes)
+        Tuple[Tensor, Tensor]: (gloss, category) tensors of shape (B, num_classes).
     """
     def __init__(
         self,
@@ -154,7 +143,13 @@ class InceptionV3GRU(nn.Module):
 
     def extract_features(self, frames: torch.Tensor) -> torch.Tensor:
         """
-        frames: (B, T, 3, H, W) → features: (B, T, 2048)
+        Extract per-frame 2048-D features using InceptionV3.
+
+        Args:
+            frames: Tensor of raw frames (B, T, 3, H, W), ImageNet-normalized.
+
+        Returns:
+            Tensor: features of shape (B, T, 2048).
         """
         B, T, C, H, W = frames.shape
         x = frames.reshape(B * T, C, H, W)
@@ -168,7 +163,20 @@ class InceptionV3GRU(nn.Module):
         lengths: Optional[torch.Tensor] = None,
         return_probs: bool = False,
         features_already: bool = False,
-    ) -> torch.Tensor:
+    ) -> Tuple[torch.Tensor, torch.Tensor]:
+        """
+        Forward pass with either raw frames or precomputed features.
+
+        Args:
+            frames_or_feats: (B, T, 3, H, W) if features_already=False, else (B, T, 2048).
+            lengths: Optional true lengths (B,) for packed-sequence processing.
+            return_probs: If True, return softmax probabilities instead of logits.
+            features_already: Whether `frames_or_feats` are 2048-D features.
+
+        Returns:
+            Tuple[Tensor, Tensor]: (gloss, category) logits or probabilities of
+            shapes (B, num_gloss) and (B, num_cat).
+        """
         # Build (B, T, 2048) sequence
         if features_already:
             seq = frames_or_feats  # (B, T, 2048)
@@ -204,5 +212,21 @@ class InceptionV3GRU(nn.Module):
         frames_or_feats: torch.Tensor,
         lengths: Optional[torch.Tensor] = None,
         features_already: bool = False,
-    ) -> torch.Tensor:
-        return self.forward(frames_or_feats, lengths=lengths, return_probs=True, features_already=features_already)
+    ) -> Tuple[torch.Tensor, torch.Tensor]:
+        """
+        Convenience wrapper to return probability outputs from `forward`.
+
+        Args:
+            frames_or_feats: See `forward`.
+            lengths: See `forward`.
+            features_already: See `forward`.
+
+        Returns:
+            Tuple[Tensor, Tensor]: (gloss_probs, cat_probs), both softmaxed along class dim.
+        """
+        return self.forward(
+            frames_or_feats,
+            lengths=lengths,
+            return_probs=True,
+            features_already=features_already,
+        )
