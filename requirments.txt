@@ -12,6 +12,8 @@ pandas
 # Optional: preprocessing pipeline
 opencv-python
 mediapipe
+tqdm
+pyarrow
 
 # Optional: analysis notebooks
 scikit-learn
