@@ -59,14 +59,29 @@ There are two entry points that can create keypoints `X` and (optionally) IV3 fe
 
 Pick one flow below.
 
-#### Option A: Process ONE video
+#### Option A: Process ONE video (generic extractor)
 
 ```bash
-# Single file (writes X and X2048 into one .npz)
+# Single file (writes X and optionally X2048 into one .npz)
 python preprocessing/preprocess.py \
   --write-keypoints --write-iv3-features \
   /path/to/video.mp4 /path/to/out_dir
 ```
+
+#### Option A2: Process ONE video and write labels (curation helper)
+
+```bash
+# Also writes/updates <out_dir>/labels.csv with (file,gloss,cat) 0-based ints
+python preprocessing/iv3_features.py \
+  --write-keypoints --write-iv3-features \
+  --gloss 12 --cat 3 \
+  /path/to/video.mp4 /path/to/out_dir
+```
+
+Notes for A2:
+
+- `--gloss` and `--cat` should be 0-based integers because training loaders parse them as ints.
+- Optional: `--label-file` to override the default `<out_dir>/labels.csv`.
 
 #### Option B: Batch process a WHOLE directory
 
@@ -84,6 +99,7 @@ Notes:
 - A human-readable `.parquet` is also written for quick inspection (if `pyarrow` installed).
 
 After batch extraction, move/split the `.npz` files into `keypoints_train/` and `keypoints_val/`.
+When creating the split folders, place the `.npz` files directly inside `keypoints_train/` or `keypoints_val/` (no nested `0/` subfolder).
 
 ---
 
@@ -148,6 +164,12 @@ When you run training for the Transformer, set:
 - `--num-gloss` and `--num-cat` → total counts in your dataset
 - `--kp-key` → only if you stored keypoints under a different key than `X`
 
+When you run training for IV3-GRU (precomputed features), set:
+
+- `--features-train` / `--features-val` → your feature folders
+- `--labels-train-csv` / `--labels-val-csv` → your CSVs
+- `--feature-key` → only if you stored features under a different key than `X2048` (loader falls back to `X`)
+
 Example command:
 
 ```bash
@@ -180,6 +202,19 @@ python -m training.train --model transformer --smoke-test --num-gloss 105 --num-
 # Quick integrity check script idea (pseudo):
 # - list .npz in train/val
 # - for each row in CSV ensure matching .npz exists and loads X with shape [:,156]
+```
+
+Validation of preprocessed files:
+
+```bash
+# Validate all files under a directory for both models (both checks are enabled by default)
+python -m preprocessing.validate_npz data/processed/keypoints_train
+
+# Require X2048 to exist and be [T,2048]
+python -m preprocessing.validate_npz data/processed/keypoints_train --require-x2048
+
+# Skip parquet checks if you don't have pyarrow/fastparquet installed
+python -m preprocessing.validate_npz data/processed/keypoints_train --skip-parquet
 ```
 
 ---
