@@ -8,6 +8,7 @@ numpy
 # Optional: UI demo
 streamlit
 pandas
+plotly
 
 # Optional: preprocessing pipeline
 opencv-python
