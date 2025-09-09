@@ -18,8 +18,15 @@ import os
 import pandas as pd
 import json
 
-from shared_utils import extract_keypoints_from_frame, interpolate_gaps, POSE_UPPER_25, FACEMESH_11, create_models, close_models, MPModels
-
+from preprocessing.keypoints_features import (
+    extract_keypoints_from_frame,
+    interpolate_gaps,
+    POSE_UPPER_25,
+    FACEMESH_11,
+    create_models,
+    close_models,
+    MPModels,
+)
 
 # Initialize a single global InceptionV3 backbone (ImageNet weights).
 _iv3_weights = Inception_V3_Weights.IMAGENET1K_V1
