@@ -4,6 +4,7 @@ import cv2
 import numpy as np
 import pandas as pd
 from tqdm import tqdm
+import torch
 
 import mediapipe as mp
 
@@ -187,6 +188,7 @@ def process_video(video_path, out_dir, target_fps=30, out_size=256, conf_thresh=
     next_t = 0.0
 
     models = create_models(seg_model=1, detection_conf=conf_thresh, tracking_conf=conf_thresh)
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     X_frames = []
     M_frames = []
@@ -219,7 +221,8 @@ def process_video(video_path, out_dir, target_fps=30, out_size=256, conf_thresh=
                 M_frames.append(mask78)
 
             if write_iv3_features:
-                iv3_features = extract_iv3_features(frame_bgr_resized)  # X2048
+                # Extract 2048-D InceptionV3 features from original frame (resized internally to 299x299)
+                iv3_features = extract_iv3_features(frame_bgr, image_size=(299, 299), device=device)
                 X2048_frames.append(iv3_features)
 
             T_ms.append(ms)
@@ -240,7 +243,8 @@ def process_video(video_path, out_dir, target_fps=30, out_size=256, conf_thresh=
     assert X.shape[0] == X2048.shape[0], f"Mismatch in T (frames) between X and X2048: {X.shape[0]} vs {X2048.shape[0]}"
 
     X_filled, M_filled = interpolate_gaps(X, M, max_gap=max_gap)
-    X2048_filled, _ = interpolate_gaps(X2048, M, max_gap=max_gap)
+    # Do not interpolate CNN features using keypoint visibility mask; keep raw temporal values
+    X2048_filled = X2048
 
     meta = dict(
         video=os.path.basename(video_path),
