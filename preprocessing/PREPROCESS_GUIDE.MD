@@ -9,7 +9,7 @@ This guide explains how to turn raw videos into training-ready artifacts for the
 - **Transformer model input**: `.npz` per clip, with key `X` containing keypoints shaped `[T,156]` (variable T). 156 = 78 keypoints × 2D coords.
 - **IV3-GRU model input (optional)**: `.npz` per clip, with key `X2048` containing CNN features shaped `[T,2048]`.
 - **Shared metadata**: `mask` (visibility per keypoint), `timestamps_ms`, `meta` JSON string, optional `.parquet` for inspection.
-- **Labels CSVs**: `train_labels.csv` and `val_labels.csv` mapping each clip (by basename) to integer class ids: `gloss` and `cat` (0-based indices).
+- **Labels CSVs**: `train_labels.csv` and `val_labels.csv` mapping each clip (by basename) to integer class ids: `gloss` and `cat` (0-based indices). During preprocessing you can also auto-generate/update a labels CSV (with optional `occluded`) via `preprocessing/preprocess.py`.
 
 You can generate `.npz` files directly from videos using `preprocessing/preprocess.py` or `preprocessing/iv3_features.py`.
 
@@ -83,13 +83,15 @@ Notes for A2:
 - `--gloss` and `--cat` should be 0-based integers because training loaders parse them as ints.
 - Optional: `--label-file` to override the default `<out_dir>/labels.csv`.
 
-#### Option B: Batch process a WHOLE directory
+#### Option B: Batch process a WHOLE directory (with optional CSV writing and occlusion)
 
 ```bash
 # Directory mode: process all videos under the folder
 python -m preprocessing.preprocess /path/to/videos /path/to/out_dir \
   --target-fps 30 --out-size 256 --conf-thresh 0.5 --max-gap 5 \
-  --write-keypoints --write-iv3-features
+  --write-keypoints --write-iv3-features \
+  --id 12
+# This writes /path/to/out_dir/labels.csv by default. Use --append to accumulate.
 ```
 
 Notes:
@@ -97,6 +99,7 @@ Notes:
 - Output files are saved as `/path/to/out_dir/0/<video_basename>.npz` (the script uses a subfolder `0` by default).
 - Each `.npz` contains keys: `X` (and optionally `X2048`), `mask`, `timestamps_ms`, `meta`.
 - A human-readable `.parquet` is also written for quick inspection (if `pyarrow` installed).
+- If `--id` (or `--gloss-id`/`--cat-id`) is provided, a row is appended per processed file to `<out_dir>/labels.csv` by default. Override with `--labels-csv <path>`.
 
 After batch extraction, move/split the `.npz` files into `keypoints_train/` and `keypoints_val/`.
 When creating the split folders, place the `.npz` files directly inside `keypoints_train/` or `keypoints_val/` (no nested `0/` subfolder).
@@ -142,10 +145,33 @@ Rules:
 - `gloss`, `cat`: 0-based integer IDs. Ensure ranges match `--num-gloss` and `--num-cat` during training.
 - Each CSV should reference files present in its corresponding directory (`keypoints_train/` vs `keypoints_val/`).
 
+Optional column:
+
+- `occluded`: 0/1 flag produced during preprocessing (currently ignored during training). If present, it will be ignored by loaders.
+
 How to build them:
 
 - If you curated with `iv3_features.py` and used a `labels.csv`, you can split this file into two by sampling rows into train/val and moving the corresponding `.npz` files into the matching folders.
 - If you started from directory names or a separate annotation source, write a small script to enumerate `.npz` basenames and join with your annotations to produce the CSVs.
+- Alternatively, auto-generate using `preprocessing/preprocess.py` with `--id` (see Option B above). By default it writes `<out_dir>/labels.csv`; use `--append` to accumulate multiple batches/classes or `--labels-csv` to customize the path.
+
+Occlusion detection (auto):
+
+- Enabled when you use `--write-keypoints` (or explicitly add `--occ-enable`).
+- Heuristic: a frame is occluded if visible keypoints/78 < `--occ-vis-thresh` (default 0.6). A clip is marked occluded if either:
+  - Proportion of occluded frames ≥ `--occ-frame-prop` (default 0.4), or
+  - Longest consecutive occluded run ≥ `--occ-min-run` frames (default 15).
+- Flags to tune:
+  - `--occ-vis-thresh <float>`
+  - `--occ-frame-prop <float>`
+  - `--occ-min-run <int>`
+
+CSV writing flags:
+
+- `--id <int>`: use same id for `gloss` and `cat`.
+- `--gloss-id <int>` and/or `--cat-id <int>`: override individually.
+- `--labels-csv <path>`: file to create/append (default `<out_dir>/labels.csv`).
+- `--append`: append rows; otherwise the header is rewritten before this run.
 
 Quick check:
 
