@@ -1,15 +1,29 @@
 import os, sys, glob, json, math, argparse, time
+import warnings
 from dataclasses import dataclass
 import cv2
 import numpy as np
 import pandas as pd
 from tqdm import tqdm
 import torch
-
 import mediapipe as mp
 
-from iv3_features import extract_iv3_features  # Import the IV3 feature extraction function
-from shared_utils import POSE_UPPER_25, N_HAND, FACEMESH_11, extract_keypoints_from_frame, interpolate_gaps, xy_from_landmark, create_models, close_models, MPModels
+# Allow running both as a module (-m) and as a script (python preprocessing/preprocess.py)
+if __package__ in (None, ""):
+    sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
+
+from preprocessing.iv3_features import extract_iv3_features  # torchvision IV3 feature extractor
+from preprocessing.keypoints_features import (
+    POSE_UPPER_25,
+    N_HAND,
+    FACEMESH_11,
+    extract_keypoints_from_frame,
+    interpolate_gaps,
+    xy_from_landmark,
+    create_models,
+    close_models,
+    MPModels,
+)
 
 # ----------------------------
 # Utilities
@@ -24,6 +38,8 @@ def to_npz(out_path, X, mask, timestamps_ms, meta, also_parquet=True):
         try:
             # flatten per-frame records for quick debugging in spreadsheets
             df = pd.DataFrame(X)
+            # ensure string column names to avoid parquet mixed-type warning
+            df.columns = df.columns.astype(str)
             df["t_ms"] = timestamps_ms
             # store mask as a compact string of 0/1 for quick inspection
             df["mask_bits"] = ["".join("1" if b else "0" for b in row) for row in mask]
@@ -152,7 +168,7 @@ if __name__ == "__main__":
     import argparse
     
     parser = argparse.ArgumentParser(description="Preprocess video files to extract keypoints and IV3 features")
-    parser.add_argument('video_directory', help='Path to directory containing video files')
+    parser.add_argument('video_directory', help='Path to a video file or a directory containing videos')
     parser.add_argument('output_directory', help='Path to output directory for processed files')
     parser.add_argument('--target-fps', type=int, default=30, help='Target frames per second (default: 30)')
     parser.add_argument('--out-size', type=int, default=256, help='Output image size (default: 256)')
@@ -164,20 +180,25 @@ if __name__ == "__main__":
     
     args = parser.parse_args()
     
-    # Process all video files in the directory
+    # Accept either a single file or a directory
+    input_path = args.video_directory
     video_extensions = ['.mp4', '.mov', '.avi', '.mkv', '.MOV', '.MP4']
-    video_files = []
-    
-    for ext in video_extensions:
-        video_files.extend(glob.glob(os.path.join(args.video_directory, f"*{ext}")))
-        video_files.extend(glob.glob(os.path.join(args.video_directory, "**", f"*{ext}"), recursive=True))
-    
-    if not video_files:
-        print(f"No video files found in {args.video_directory}")
-        print(f"Looking for extensions: {video_extensions}")
-        exit(1)
-    
-    print(f"Found {len(video_files)} video files to process")
+
+    if os.path.isfile(input_path):
+        # Single-file mode
+        video_files = [input_path]
+        print(f"Processing single file: {os.path.basename(input_path)}")
+    else:
+        # Directory mode: collect all videos
+        video_files = []
+        for ext in video_extensions:
+            video_files.extend(glob.glob(os.path.join(input_path, f"*{ext}")))
+            video_files.extend(glob.glob(os.path.join(input_path, "**", f"*{ext}"), recursive=True))
+        if not video_files:
+            print(f"No video files found in {input_path}")
+            print(f"Looking for extensions: {video_extensions}")
+            exit(1)
+        print(f"Found {len(video_files)} video files to process")
     
     # Create output directory
     ensure_dir(args.output_directory)
