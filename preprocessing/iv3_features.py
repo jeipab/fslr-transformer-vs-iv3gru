@@ -179,6 +179,8 @@ def process_video(video_path, out_dir, label_file=None, target_fps=30, out_size=
         print("[WARN] No IV3 features extracted.")
 
     X_filled, M_filled = interpolate_gaps(X, M, max_gap=max_gap)
+    # Ensure coordinate bounds
+    X_filled = np.clip(X_filled, 0.0, 1.0).astype(np.float32)
     X2048_filled = X2048
 
     meta = dict(
