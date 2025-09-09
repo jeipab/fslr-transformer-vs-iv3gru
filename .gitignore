@@ -9,6 +9,7 @@ env/
 *.csv
 *.mp4
 *.avi
+*.mov
 
 # Checkpoints
 *.pt
