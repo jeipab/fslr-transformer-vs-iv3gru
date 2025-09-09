@@ -1,15 +1,11 @@
 """
-train.py
+Training entrypoint for sign language recognition.
 
-Handles data loading, model training, validation, and model saving.
-Supports multi-task learning (gloss + category classification).
-
-Key Features:
-- Multi-task learning (gloss + category classification)
-- Configurable loss weighting (alpha, beta parameters)
-- Comprehensive evaluation metrics
-- Model selection interface
-- Automatic device detection (CUDA/CPU)
+This module provides:
+- Multi-task training (gloss and category classification) with configurable loss weights
+- Dataset preparation for file-based features/keypoints or synthetic data (smoke tests)
+- Model selection (Transformer or InceptionV3+GRU), evaluation, and checkpointing
+- Resume support, optional LR schedulers, AMP, early stopping, and CSV logging
 
 Usage:
     python training/train.py
@@ -30,12 +26,19 @@ import numpy as np
 
 class FSLFeatureFileDataset(Dataset):
     """
-    Dataset for precomputed visual features [T, 2048] stored in .npz files.
-    Expects a labels CSV mapping filename (column 'file', without extension also accepted) to 'gloss' and 'cat'.
+    Dataset for precomputed visual features with shape [T, 2048] stored as .npz files.
 
-    .npz requirements:
-      - Feature array under key specified by feature_key (default: 'X2048').
-        If not present, falls back to 'X' and verifies last dim == 2048.
+    Expects a labels CSV mapping column 'file' (stem or with extension) to
+    'gloss' and 'cat'. The .npz must contain the feature array under
+    `feature_key` (default: 'X2048'); if missing, it falls back to 'X'.
+
+    Args:
+        features_dir: Directory containing .npz feature files.
+        labels_csv: CSV file with columns: file, gloss, cat.
+        feature_key: Key inside each .npz for the [T, 2048] array.
+
+    Returns:
+        __getitem__ returns (X[T,2048] float32, gloss long, cat long, length long).
     """
     def __init__(self, features_dir, labels_csv, feature_key='X2048'):
         self.features_dir = features_dir
@@ -84,12 +87,19 @@ class FSLFeatureFileDataset(Dataset):
 
 class FSLKeypointFileDataset(Dataset):
     """
-    Dataset for precomputed keypoint sequences [T, 156] stored in .npz files.
-    Expects a labels CSV mapping filename (column 'file', without extension also accepted) to 'gloss' and 'cat'.
+    Dataset for precomputed keypoint sequences with shape [T, 156] stored as .npz.
 
-    .npz requirements:
-      - Keypoint array under key specified by kp_key (default: 'X').
-        Validates last dimension == 156.
+    Expects a labels CSV mapping column 'file' (stem or with extension) to
+    'gloss' and 'cat'. The .npz must contain the key specified by `kp_key`
+    (default: 'X').
+
+    Args:
+        keypoints_dir: Directory containing .npz keypoint files.
+        labels_csv: CSV with columns: file, gloss, cat.
+        kp_key: Key inside each .npz for the [T, 156] array.
+
+    Returns:
+        __getitem__ returns (X[T,156] float32, gloss long, cat long, length long).
     """
     def __init__(self, keypoints_dir, labels_csv, kp_key='X'):
         self.keypoints_dir = keypoints_dir
@@ -135,8 +145,13 @@ class FSLKeypointFileDataset(Dataset):
 
 def collate_features_with_padding(batch):
     """
-    Pad variable-length [T, 2048] sequences to max T in batch. Returns:
-      X_pad [B, Tmax, 2048], gloss [B], cat [B], lengths [B]
+    Pad variable-length feature sequences [T, 2048] to the max length in batch.
+
+    Args:
+        batch: Iterable of (X[T,2048], gloss, cat, length) items.
+
+    Returns:
+        tuple: (X_pad [B,Tmax,2048], gloss [B], cat [B], lengths [B])
     """
     sequences, gloss, cat, lengths = zip(*batch)
     lengths = torch.stack(lengths, dim=0)
@@ -151,8 +166,13 @@ def collate_features_with_padding(batch):
 
 def collate_keypoints_with_padding(batch):
     """
-    Pad variable-length [T, 156] sequences to max T in batch. Returns:
-      X_pad [B, Tmax, 156], gloss [B], cat [B], lengths [B]
+    Pad variable-length keypoint sequences [T, 156] to the max length in batch.
+
+    Args:
+        batch: Iterable of (X[T,156], gloss, cat, length) items.
+
+    Returns:
+        tuple: (X_pad [B,Tmax,156], gloss [B], cat [B], lengths [B])
     """
     sequences, gloss, cat, lengths = zip(*batch)
     lengths = torch.stack(lengths, dim=0)
@@ -205,19 +225,35 @@ def train_model(
     log_csv_path=None,
 ):
     """
-    Train a sign language recognition model with multi-task learning.
-    
+    Train a model with multi-task loss on gloss and category predictions.
+
     Args:
-        model: Model to train (SignTransformer or InceptionV3GRU)
-        train_loader: Training data loader
-        val_loader: Validation data loader
-        device: Device to run on (CPU/CUDA)
-        epochs: Number of training epochs (default: 20)
-        alpha: Weight for gloss loss (default: 0.5)
-        beta: Weight for category loss (default: 0.5)
-    
+        model: The model to train (e.g., `SignTransformer`, `InceptionV3GRU`).
+        train_loader: DataLoader for training data.
+        val_loader: DataLoader for validation data.
+        device: Torch device to run on.
+        forward_fn: Callable(model, X, lengths) -> (gloss_logits, cat_logits).
+        epochs: Number of training epochs.
+        alpha: Weight for gloss loss component.
+        beta: Weight for category loss component.
+        output_dir: Directory to save checkpoints.
+        lr: Learning rate for Adam optimizer.
+        weight_decay: Weight decay for Adam optimizer.
+        use_amp: Enable automatic mixed precision if True.
+        grad_clip: Max norm for gradient clipping (None to disable).
+        scheduler_type: LR scheduler type (None, 'plateau', or 'cosine').
+        scheduler_patience: Patience for ReduceLROnPlateau.
+        early_stop_patience: Stop if no improvement for this many epochs.
+        resume_path: Path to checkpoint to resume from.
+        log_csv_path: Path to append per-epoch metrics as CSV.
+
     Returns:
-        None: Model saved automatically as {ModelName}.pt
+        None
+
+    Side effects:
+        Saves checkpoints to `output_dir` as `{ModelName}_last.pt` (each epoch)
+        and `{ModelName}_best.pt` (best validation metric). Appends metrics to
+        `log_csv_path` if provided.
     """
     criterion = nn.CrossEntropyLoss()
     optimizer = optim.Adam(model.parameters(), lr=lr, weight_decay=weight_decay)
@@ -347,6 +383,21 @@ def train_model(
         csv_fh.close()
 
 def evaluate_with_forward(model, dataloader, criterion, device, forward_fn, alpha=1.0, beta=1.0):
+    """
+    Evaluate model on a dataloader using a provided forward adapter.
+
+    Args:
+        model: Trained model under evaluation.
+        dataloader: DataLoader providing batches.
+        criterion: Loss function (cross-entropy expected).
+        device: Torch device.
+        forward_fn: Callable(model, X, lengths) -> (gloss_logits, cat_logits).
+        alpha: Weight for gloss loss.
+        beta: Weight for category loss.
+
+    Returns:
+        tuple: (avg_loss, gloss_accuracy, category_accuracy)
+    """
     model.eval()
     total_loss = 0.0
     correct_gloss = 0
@@ -416,6 +467,12 @@ def load_data(n_train_samples=100, n_val_samples=20, seq_length=50, input_dim=15
 
 
 def parse_args():
+    """
+    Parse command-line arguments for training configuration.
+
+    Returns:
+        argparse.Namespace: Parsed arguments.
+    """
     parser = argparse.ArgumentParser(description="Train Sign Language Recognition model (smoke-test ready)")
     parser.add_argument("--model", choices=["transformer", "iv3_gru"], default="transformer", help="Model to train")
     parser.add_argument("--epochs", type=int, default=20, help="Number of training epochs")
