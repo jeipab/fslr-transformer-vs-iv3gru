@@ -5,7 +5,10 @@ How to run:
   - Validate a directory recursively (all *.npz):
       python -m preprocessing.validate_npz data/processed/npz_val
 
-  - Validate and require X2048 to be present and shaped [T,2048]:
+  - Validate readiness for both Transformer (keypoints X) and IV3-GRU (X2048):
+      python -m preprocessing.validate_npz data/processed/npz_val --check-transformer --check-iv3
+
+  - Validate and require X2048 to be present and shaped [T,2048] (alias of --check-iv3):
       python -m preprocessing.validate_npz data/processed/npz_val --require-x2048
 
   - Skip parquet checks (if pyarrow/fastparquet is not installed):
@@ -45,7 +48,13 @@ def _load_meta(meta_any) -> dict:
     raise ValueError("meta field is not a JSON-encoded string")
 
 
-def validate_npz_file(npz_path: str, require_x2048: bool, check_parquet: bool) -> List[str]:
+def validate_npz_file(
+    npz_path: str,
+    require_x2048: bool,
+    check_parquet: bool,
+    check_transformer: bool,
+    check_iv3: bool,
+) -> List[str]:
     """
     Validate one .npz (and sibling .parquet if present/required).
 
@@ -72,7 +81,7 @@ def validate_npz_file(npz_path: str, require_x2048: bool, check_parquet: bool) -
     except Exception as exc:
         errors.append(str(exc))
 
-    # Shapes and dtypes
+    # Shapes and dtypes (core invariants)
     if not (X.ndim == 2 and X.shape[1] == 156 and X.dtype == np.float32):
         errors.append(f"X bad shape/dtype: {X.shape} {X.dtype}")
     if not (mask.ndim == 2 and mask.shape[1] == 78 and mask.dtype == np.bool_):
@@ -89,10 +98,37 @@ def validate_npz_file(npz_path: str, require_x2048: bool, check_parquet: bool) -
         errors.append("X outside [0,1]")
     if timestamps_ms.size > 1 and not (timestamps_ms[1:] >= timestamps_ms[:-1]).all():
         errors.append("timestamps_ms not monotonic nondecreasing")
+    if timestamps_ms.size and (timestamps_ms < 0).any():
+        errors.append("timestamps_ms contains negative values")
+
+    # Transformer readiness (sequence non-empty, mask coverage, meta consistency)
+    if check_transformer:
+        T = int(X.shape[0])
+        if T < 1:
+            errors.append("empty sequence (T == 0)")
+        # At least some keypoints visible across the sequence
+        try:
+            if not bool(mask.any()):
+                errors.append("mask has no visible keypoints across all frames")
+        except Exception:
+            pass
+        # Meta invariants
+        try:
+            meta = _load_meta(data["meta"])
+            if meta.get("dims_per_frame") not in (156, "156"):
+                errors.append(f"meta.dims_per_frame != 156 (got {meta.get('dims_per_frame')})")
+            if meta.get("keypoints_total") not in (78, "78"):
+                errors.append(f"meta.keypoints_total != 78 (got {meta.get('keypoints_total')})")
+            order = meta.get("order")
+            if order not in ("pose25,left_hand21,right_hand21,face11",):
+                errors.append(f"meta.order unexpected: {order}")
+        except Exception as exc:
+            # Already reported bad meta json above; add a hint here
+            errors.append(f"meta validation failed: {exc}")
 
     # Optional X2048
     has_x2048 = "X2048" in data.files
-    if require_x2048 and not has_x2048:
+    if (require_x2048 or check_iv3) and not has_x2048:
         errors.append("missing key: X2048 (required)")
     if has_x2048:
         X2048 = data["X2048"]
@@ -103,6 +139,9 @@ def validate_npz_file(npz_path: str, require_x2048: bool, check_parquet: bool) -
             and X2048.dtype == np.float32
         ):
             errors.append(f"X2048 bad shape/dtype: {X2048.shape} {X2048.dtype}")
+        # Numerical sanity for CNN features
+        if X2048.size and (not np.isfinite(X2048).all()):
+            errors.append("X2048 has non-finite values")
 
     # Parquet (optional)
     if check_parquet:
@@ -130,7 +169,13 @@ def validate_npz_file(npz_path: str, require_x2048: bool, check_parquet: bool) -
     return errors
 
 
-def validate_directory(root_dir: str, require_x2048: bool, skip_parquet: bool) -> Tuple[int, list]:
+def validate_directory(
+    root_dir: str,
+    require_x2048: bool,
+    skip_parquet: bool,
+    check_transformer: bool,
+    check_iv3: bool,
+) -> Tuple[int, list]:
     """
     Validate all .npz files under root_dir (recursive).
 
@@ -140,7 +185,13 @@ def validate_directory(root_dir: str, require_x2048: bool, skip_parquet: bool) -
     npz_files = glob.glob(os.path.join(root_dir, "**", "*.npz"), recursive=True)
     issues: List[Tuple[str, List[str]]] = []
     for path in npz_files:
-        errs = validate_npz_file(path, require_x2048=require_x2048, check_parquet=not skip_parquet)
+        errs = validate_npz_file(
+            path,
+            require_x2048=require_x2048,
+            check_parquet=not skip_parquet,
+            check_transformer=check_transformer,
+            check_iv3=check_iv3,
+        )
         if errs:
             issues.append((path, errs))
     return len(npz_files), issues
@@ -155,14 +206,45 @@ def main(argv: List[str] | None = None) -> int:
         help="Require X2048 to be present with shape [T,2048]",
     )
     parser.add_argument(
+        "--check-transformer",
+        action="store_true",
+        default=True,
+        help="Check readiness for Transformer (keypoints X). Enabled by default.",
+    )
+    parser.add_argument(
+        "--no-check-transformer",
+        dest="check_transformer",
+        action="store_false",
+        help="Disable Transformer checks.",
+    )
+    parser.add_argument(
+        "--check-iv3",
+        action="store_true",
+        default=True,
+        help="Check readiness for IV3-GRU (X2048). Enabled by default.",
+    )
+    parser.add_argument(
+        "--no-check-iv3",
+        dest="check_iv3",
+        action="store_false",
+        help="Disable IV3-GRU checks.",
+    )
+    parser.add_argument(
         "--skip-parquet",
         action="store_true",
         help="Skip .parquet validation even if files exist",
     )
     args = parser.parse_args(argv)
 
+    # --require-x2048 implies IV3 checks
+    check_iv3 = args.check_iv3 or args.require_x2048
+
     num_checked, issues = validate_directory(
-        args.root, require_x2048=args.require_x2048, skip_parquet=args.skip_parquet
+        args.root,
+        require_x2048=args.require_x2048,
+        skip_parquet=args.skip_parquet,
+        check_transformer=args.check_transformer,
+        check_iv3=check_iv3,
     )
 
     print(f"Checked {num_checked} files; {len(issues)} with issues.")
