@@ -14,16 +14,18 @@ Usage:
 import os
 import csv
 import random
+import argparse
+from typing import Optional, Tuple, Callable
+
+import numpy as np
 import torch
 import torch.nn as nn
 import torch.optim as optim
 from torch.utils.data import DataLoader, Dataset
+
 from training.utils import FSLDataset
 from models.iv3_gru import InceptionV3GRU
 from models.transformer import SignTransformer
-import argparse
-from typing import Optional, Tuple, Callable
-import numpy as np
 
 class FSLFeatureFileDataset(Dataset):
     """
@@ -55,11 +57,14 @@ class FSLFeatureFileDataset(Dataset):
             if not required.issubset(set(reader.fieldnames or [])):
                 raise ValueError(f"labels_csv must have columns: {required}")
             for row in reader:
-                # accept values with or without extension
-                stem = os.path.splitext(row['file'])[0]
-                gloss = int(row['gloss'])
-                cat = int(row['cat'])
-                self.index.append((stem, gloss, cat))
+                try:
+                    # accept values with or without extension
+                    stem = os.path.splitext(row['file'])[0]
+                    gloss = int(row['gloss'])
+                    cat = int(row['cat'])
+                    self.index.append((stem, gloss, cat))
+                except (ValueError, KeyError) as e:
+                    raise ValueError(f"Invalid data in row {row}: {e}")
 
     def __len__(self):
         return len(self.index)
@@ -74,7 +79,6 @@ class FSLFeatureFileDataset(Dataset):
         return data.float(), torch.tensor(gloss, dtype=torch.long), torch.tensor(cat, dtype=torch.long), torch.tensor(length, dtype=torch.long)
 
     def _load_npz_features(self, path):
-        import numpy as np
         with np.load(path, allow_pickle=True) as npz:
             if self.feature_key in npz:
                 X = np.array(npz[self.feature_key])
@@ -116,10 +120,13 @@ class FSLKeypointFileDataset(Dataset):
             if not required.issubset(set(reader.fieldnames or [])):
                 raise ValueError(f"labels_csv must have columns: {required}")
             for row in reader:
-                stem = os.path.splitext(row['file'])[0]
-                gloss = int(row['gloss'])
-                cat = int(row['cat'])
-                self.index.append((stem, gloss, cat))
+                try:
+                    stem = os.path.splitext(row['file'])[0]
+                    gloss = int(row['gloss'])
+                    cat = int(row['cat'])
+                    self.index.append((stem, gloss, cat))
+                except (ValueError, KeyError) as e:
+                    raise ValueError(f"Invalid data in row {row}: {e}")
 
     def __len__(self):
         return len(self.index)
@@ -134,7 +141,6 @@ class FSLKeypointFileDataset(Dataset):
         return data.float(), torch.tensor(gloss, dtype=torch.long), torch.tensor(cat, dtype=torch.long), torch.tensor(length, dtype=torch.long)
 
     def _load_npz_keypoints(self, path):
-        import numpy as np
         with np.load(path, allow_pickle=True) as npz:
             if self.kp_key in npz:
                 X = np.array(npz[self.kp_key])
@@ -200,7 +206,9 @@ def _make_dataloader(dataset, batch_size, shuffle, args, collate_fn=None):
     }
     if collate_fn is not None:
         kwargs['collate_fn'] = collate_fn
-    if isinstance(args.num_workers, int) and args.num_workers > 0 and isinstance(args.prefetch_factor, int) and args.prefetch_factor > 0:
+    if (hasattr(args, 'prefetch_factor') and args.prefetch_factor is not None and 
+        isinstance(args.num_workers, int) and args.num_workers > 0 and 
+        isinstance(args.prefetch_factor, int) and args.prefetch_factor > 0):
         kwargs['prefetch_factor'] = args.prefetch_factor
     return DataLoader(dataset, **kwargs)
 
@@ -366,7 +374,9 @@ def train_model(
         # Handle case where training dataloader yields zero batches
         if num_batches == 0:
             print("No training batches were provided. Check your dataset and DataLoader settings.")
-            break
+            if csv_fh is not None:
+                csv_fh.close()
+            return
 
         # Validation
         val_loss, val_gloss_acc, val_cat_acc = evaluate_with_forward(model, val_loader, criterion, device, forward_fn, alpha=alpha, beta=beta)
@@ -488,8 +498,6 @@ def load_data(n_train_samples=100, n_val_samples=20, seq_length=50, input_dim=15
             - val_gloss: Validation gloss labels [N_val]
             - val_cat: Validation category labels [N_val]
     """
-    import numpy as np
-    
     # Dummy data configuration (override via parameters)
     rng = np.random.default_rng(seed)
     
@@ -581,7 +589,6 @@ if __name__ == "__main__":
 
     # Optional smoke test (only if comparable path exists for Transformer already)
     if args.smoke_test:
-        import numpy as np
         torch.manual_seed(args.seed)
         if args.model == "iv3_gru":
             # Random [B, T, 2048] features
