@@ -22,6 +22,7 @@ from training.utils import FSLDataset
 from models.iv3_gru import InceptionV3GRU
 from models.transformer import SignTransformer
 import argparse
+from typing import Optional, Tuple, Callable
 import numpy as np
 
 class FSLFeatureFileDataset(Dataset):
@@ -185,7 +186,33 @@ def collate_keypoints_with_padding(batch):
         X_pad[i, :t] = seq
     return X_pad, torch.stack(gloss, dim=0), torch.stack(cat, dim=0), lengths
 
-def save_checkpoint(state, is_best, output_dir, model_name):
+def _make_dataloader(dataset, batch_size, shuffle, args, collate_fn=None):
+    """
+    Internal helper to build a DataLoader without passing invalid kwargs.
+
+    Only sets `prefetch_factor` when `num_workers > 0` and a positive int is provided.
+    """
+    kwargs = {
+        'batch_size': batch_size,
+        'shuffle': shuffle,
+        'num_workers': args.num_workers,
+        'pin_memory': args.pin_memory,
+    }
+    if collate_fn is not None:
+        kwargs['collate_fn'] = collate_fn
+    if isinstance(args.num_workers, int) and args.num_workers > 0 and isinstance(args.prefetch_factor, int) and args.prefetch_factor > 0:
+        kwargs['prefetch_factor'] = args.prefetch_factor
+    return DataLoader(dataset, **kwargs)
+
+def save_checkpoint(state: dict, is_best: bool, output_dir: str, model_name: str) -> None:
+    """Save training state to disk, keeping both last and best checkpoints.
+
+    Args:
+        state: Serializable checkpoint dict (model, optimizer, etc.).
+        is_best: Whether this state is the current best by validation metric.
+        output_dir: Directory path to store checkpoints.
+        model_name: Base model name used for file naming.
+    """
     os.makedirs(output_dir, exist_ok=True)
     last_path = os.path.join(output_dir, f"{model_name}_last.pt")
     torch.save(state, last_path)
@@ -193,7 +220,12 @@ def save_checkpoint(state, is_best, output_dir, model_name):
         best_path = os.path.join(output_dir, f"{model_name}_best.pt")
         torch.save(state, best_path)
 
-def set_global_seed(seed: int, deterministic: bool = False):
+def set_global_seed(seed: int, deterministic: bool = False) -> None:
+    """Set global RNG seeds across Python, NumPy, and PyTorch.
+
+    Optionally configures deterministic CuDNN for reproducibility at the
+    expense of performance.
+    """
     random.seed(seed)
     np.random.seed(seed)
     torch.manual_seed(seed)
@@ -257,7 +289,9 @@ def train_model(
     """
     criterion = nn.CrossEntropyLoss()
     optimizer = optim.Adam(model.parameters(), lr=lr, weight_decay=weight_decay)
-    scaler = torch.amp.GradScaler(enabled=use_amp)
+    # Enable AMP only when running on CUDA to avoid CPU-only issues
+    amp_enabled = bool(use_amp and getattr(device, "type", "cpu") == "cuda")
+    scaler = torch.amp.GradScaler(enabled=amp_enabled)
 
     if scheduler_type == "plateau":
         scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='max', factor=0.5, patience=scheduler_patience)
@@ -314,7 +348,7 @@ def train_model(
             X, gloss, cat = X.to(device), gloss.to(device), cat.to(device)
             optimizer.zero_grad(set_to_none=True)
 
-            with torch.amp.autocast('cuda', enabled=use_amp):
+            with torch.amp.autocast(device_type=getattr(device, "type", "cpu"), enabled=amp_enabled):
                 gloss_pred, cat_pred = forward_fn(model, X, lengths)
                 loss_gloss = criterion(gloss_pred, gloss)
                 loss_cat = criterion(cat_pred, cat)
@@ -329,6 +363,11 @@ def train_model(
             total_loss += loss.item()
             num_batches += 1
 
+        # Handle case where training dataloader yields zero batches
+        if num_batches == 0:
+            print("No training batches were provided. Check your dataset and DataLoader settings.")
+            break
+
         # Validation
         val_loss, val_gloss_acc, val_cat_acc = evaluate_with_forward(model, val_loader, criterion, device, forward_fn, alpha=alpha, beta=beta)
         
@@ -339,17 +378,18 @@ def train_model(
               f"Val Gloss Acc: {val_gloss_acc:.3f} | "
               f"Val Cat Acc: {val_cat_acc:.3f}")
 
-        # Scheduler step
-        current_lr = optimizer.param_groups[0]['lr']
+        # Scheduler step (and then read the effective LR)
         if scheduler is not None:
             if isinstance(scheduler, optim.lr_scheduler.ReduceLROnPlateau):
                 scheduler.step(val_gloss_acc)
             else:
                 scheduler.step()
+        current_lr = optimizer.param_groups[0]['lr']
 
         # CSV log
         if csv_fh is not None:
             csv_writer.writerow([epoch + 1, avg_train_loss, val_loss, val_gloss_acc, val_cat_acc, current_lr])
+            csv_fh.flush()
 
         # Checkpointing on best metric (gloss accuracy)
         metric = val_gloss_acc
@@ -364,7 +404,7 @@ def train_model(
             'epoch': epoch + 1,
             'model': model.state_dict(),
             'optimizer': optimizer.state_dict(),
-            'scaler': scaler.state_dict() if use_amp else None,
+            'scaler': scaler.state_dict() if amp_enabled else None,
             'scheduler': scheduler.state_dict() if scheduler is not None else None,
             'best_metric': best_metric,
             'args': None,
@@ -382,7 +422,7 @@ def train_model(
     if csv_fh is not None:
         csv_fh.close()
 
-def evaluate_with_forward(model, dataloader, criterion, device, forward_fn, alpha=1.0, beta=1.0):
+def evaluate_with_forward(model, dataloader, criterion, device, forward_fn: Callable, alpha: float = 1.0, beta: float = 1.0) -> Tuple[float, float, float]:
     """
     Evaluate model on a dataloader using a provided forward adapter.
 
@@ -507,7 +547,7 @@ def parse_args():
     parser.add_argument("--weight-decay", type=float, default=0.0, help="Weight decay")
     parser.add_argument("--amp", action="store_true", help="Enable mixed precision training (AMP)")
     parser.add_argument("--grad-clip", type=float, default=None, help="Gradient clipping max norm")
-    parser.add_argument("--scheduler", type=str, default=None, choices=[None, "plateau", "cosine"], help="LR scheduler type")
+    parser.add_argument("--scheduler", type=str, default=None, choices=["plateau", "cosine"], help="LR scheduler type")
     parser.add_argument("--scheduler-patience", type=int, default=5, help="Patience for plateau scheduler")
     parser.add_argument("--early-stop", type=int, default=None, help="Early stopping patience (epochs)")
     parser.add_argument("--resume", type=str, default=None, help="Path to checkpoint to resume from")
@@ -651,24 +691,8 @@ if __name__ == "__main__":
             labels_csv=args.labels_val_csv,
             feature_key=args.feature_key,
         )
-        train_loader = DataLoader(
-            train_dataset,
-            batch_size=batch_size,
-            shuffle=True,
-            num_workers=args.num_workers,
-            pin_memory=args.pin_memory,
-            prefetch_factor=args.prefetch_factor if args.num_workers and args.prefetch_factor is not None else None,
-            collate_fn=collate_features_with_padding,
-        )
-        val_loader = DataLoader(
-            val_dataset,
-            batch_size=batch_size,
-            shuffle=False,
-            num_workers=args.num_workers,
-            pin_memory=args.pin_memory,
-            prefetch_factor=args.prefetch_factor if args.num_workers and args.prefetch_factor is not None else None,
-            collate_fn=collate_features_with_padding,
-        )
+        train_loader = _make_dataloader(train_dataset, batch_size, True, args, collate_fn=collate_features_with_padding)
+        val_loader = _make_dataloader(val_dataset, batch_size, False, args, collate_fn=collate_features_with_padding)
     elif use_keypoint_files:
         train_dataset = FSLKeypointFileDataset(
             keypoints_dir=args.keypoints_train,
@@ -680,43 +704,13 @@ if __name__ == "__main__":
             labels_csv=args.labels_val_csv,
             kp_key=args.kp_key,
         )
-        train_loader = DataLoader(
-            train_dataset,
-            batch_size=batch_size,
-            shuffle=True,
-            num_workers=args.num_workers,
-            pin_memory=args.pin_memory,
-            prefetch_factor=args.prefetch_factor if args.num_workers and args.prefetch_factor is not None else None,
-            collate_fn=collate_keypoints_with_padding,
-        )
-        val_loader = DataLoader(
-            val_dataset,
-            batch_size=batch_size,
-            shuffle=False,
-            num_workers=args.num_workers,
-            pin_memory=args.pin_memory,
-            prefetch_factor=args.prefetch_factor if args.num_workers and args.prefetch_factor is not None else None,
-            collate_fn=collate_keypoints_with_padding,
-        )
+        train_loader = _make_dataloader(train_dataset, batch_size, True, args, collate_fn=collate_keypoints_with_padding)
+        val_loader = _make_dataloader(val_dataset, batch_size, False, args, collate_fn=collate_keypoints_with_padding)
     else:
         train_dataset = FSLDataset(train_X, train_gloss, train_cat)
         val_dataset = FSLDataset(val_X, val_gloss, val_cat)
-        train_loader = DataLoader(
-            train_dataset,
-            batch_size=batch_size,
-            shuffle=True,
-            num_workers=args.num_workers,
-            pin_memory=args.pin_memory,
-            prefetch_factor=args.prefetch_factor if args.num_workers and args.prefetch_factor is not None else None,
-        )
-        val_loader = DataLoader(
-            val_dataset,
-            batch_size=batch_size,
-            shuffle=False,
-            num_workers=args.num_workers,
-            pin_memory=args.pin_memory,
-            prefetch_factor=args.prefetch_factor if args.num_workers and args.prefetch_factor is not None else None,
-        )
+        train_loader = _make_dataloader(train_dataset, batch_size, True, args)
+        val_loader = _make_dataloader(val_dataset, batch_size, False, args)
     
     print(f"✓ Created datasets and data loaders")
     print(f"  - Batch size: {batch_size}")
