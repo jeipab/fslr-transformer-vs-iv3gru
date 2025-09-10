@@ -54,6 +54,7 @@ class InceptionV3FeatureExtractor(nn.Module):
 
     @torch.no_grad()
     def _forward_frozen(self, x: torch.Tensor) -> torch.Tensor:
+        """Forward pass when backbone is frozen (more efficient)."""
         # x: (N, 3, H, W), ideally H=W=299 and normalized to ImageNet stats.
         return self.backbone(x)  # (N, 2048)
 
@@ -131,7 +132,7 @@ class InceptionV3GRU(nn.Module):
         self.category_head = nn.Linear(hidden2, num_cat)
 
 
-        # Kaiming/orthogonal init for GRUs helps stability on small hidden sizes
+        # Xavier/orthogonal init for GRUs helps stability on small hidden sizes
         for gru in (self.gru1, self.gru2):
             for name, param in gru.named_parameters():
                 if "weight_ih" in name:
@@ -151,7 +152,13 @@ class InceptionV3GRU(nn.Module):
         Returns:
             Tensor: features of shape (B, T, 2048).
         """
+        if len(frames.shape) != 5:
+            raise ValueError(f"Expected frames with 5 dimensions [B, T, C, H, W], got shape {frames.shape}")
+        
         B, T, C, H, W = frames.shape
+        if C != 3:
+            raise ValueError(f"Expected 3 color channels, got {C}")
+        
         x = frames.reshape(B * T, C, H, W)
         feats = self.feat_extractor(x)                     # (B*T, 2048)
         feats = feats.reshape(B, T, -1)                    # (B, T, 2048)
@@ -180,13 +187,23 @@ class InceptionV3GRU(nn.Module):
         # Build (B, T, 2048) sequence
         if features_already:
             seq = frames_or_feats  # (B, T, 2048)
+            if seq.shape[-1] != 2048:
+                raise ValueError(f"Expected features with 2048 dimensions, got {seq.shape[-1]}")
         else:
+            if len(frames_or_feats.shape) != 5:
+                raise ValueError(f"Expected raw frames with shape [B, T, 3, H, W], got {frames_or_feats.shape}")
             seq = self.extract_features(frames_or_feats)  # (B, T, 2048)
 
         # Packed or plain sequence through GRUs
         if lengths is not None:
-            # ensure lengths on CPU for pack_padded_sequence
-            lengths_cpu = lengths.to("cpu")
+            # Validate lengths tensor
+            if lengths.min() < 1:
+                raise ValueError("All sequence lengths must be positive")
+            if lengths.max() > seq.shape[1]:
+                raise ValueError(f"Maximum length {lengths.max()} exceeds sequence length {seq.shape[1]}")
+            
+            # ensure lengths on CPU for pack_padded_sequence (avoid unnecessary device transfer)
+            lengths_cpu = lengths if lengths.device.type == 'cpu' else lengths.to("cpu")
             packed = nn.utils.rnn.pack_padded_sequence(seq, lengths_cpu, batch_first=True, enforce_sorted=False)
             y1, h1 = self.gru1(packed)                     # y1: PackedSequence, h1: (1, B, hidden1)
             y1 = _dropout_packed(y1, self.do1.p, training=self.training)     # dropout on packed.data
