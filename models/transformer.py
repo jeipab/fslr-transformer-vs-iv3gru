@@ -59,7 +59,8 @@ class PositionalEncoding(nn.Module):
         """
         # Guard: ensure we have enough precomputed positions
         if x.size(1) > self.pe.size(1):
-            raise ValueError(f"Sequence length {x.size(1)} exceeds max_len {self.pe.size(1)} in PositionalEncoding")
+            raise ValueError(f"Sequence length {x.size(1)} exceeds max_len {self.pe.size(1)} in PositionalEncoding. "
+                           f"Consider increasing max_len parameter or reducing sequence length.")
 
         # Add positional encoding (up to sequence length T)
         x = x + self.pe[:, :x.size(1), :]
@@ -146,7 +147,8 @@ class MultiHeadAttentionBlock(nn.Module):
             dropout (float): dropout rate applied to attention weights.
         """
         super(MultiHeadAttentionBlock, self).__init__()
-        assert emb_dim % num_heads == 0, "Embedding dim must be divisible by num_heads"
+        if emb_dim % num_heads != 0:
+            raise ValueError(f"Embedding dim {emb_dim} must be divisible by num_heads {num_heads}")
 
         self.num_heads = num_heads
         self.head_dim = emb_dim // num_heads       # dimension per head (D = E / H)
@@ -184,6 +186,8 @@ class MultiHeadAttentionBlock(nn.Module):
 
         # Apply mask (set masked positions to -inf so softmax → 0)
         if mask is not None:
+            if mask.shape[-1] != scores.shape[-1]:
+                raise ValueError(f"Mask last dimension {mask.shape[-1]} doesn't match scores {scores.shape[-1]}")
             scores = scores.masked_fill(mask == 0, float("-inf"))
 
         # Normalize scores into probabilities
@@ -336,6 +340,10 @@ class SignTransformer(nn.Module):
         max_len: Maximum supported sequence length for positional encoding.
         ff_dim: Hidden dimension of FFN (defaults to 4× emb_dim).
         pooling_method: One of 'mean' | 'max' | 'cls'.
+        
+    Note:
+        Input sequences are expected to have shape [B, T, 156] where 156 is the
+        number of keypoint features (78 keypoints × 2 coordinates).
     """
     
     def __init__(self,
@@ -405,13 +413,20 @@ class SignTransformer(nn.Module):
 
         Args:
             x (Tensor): input sequence [B, T, 156].
-            mask (Tensor or None): binary mask [B, T], 1 = valid frame, 0 = padding.
-                                   Internally broadcast to [B, 1, 1, T] for attention.
+            mask (Tensor or None): binary mask [B, T] or [B, T+1] if using CLS token, 
+                                   1 = valid frame, 0 = padding.
+                                   Internally broadcast to [B, 1, 1, T(+1)] for attention.
 
         Returns:
             gloss_out (Tensor): [B, num_gloss] logits for gloss prediction.
             cat_out   (Tensor): [B, num_cat] logits for category prediction.
         """
+        # Input validation
+        if len(x.shape) != 3:
+            raise ValueError(f"Expected input with 3 dimensions [B, T, features], got shape {x.shape}")
+        if x.shape[-1] != 156:
+            raise ValueError(f"Expected 156 input features, got {x.shape[-1]}")
+        
         B, T, _ = x.size()
 
         # ----- Embedding -----
@@ -433,6 +448,11 @@ class SignTransformer(nn.Module):
 
         # Prepare attention mask for broadcasting
         if mask is not None:
+            expected_len = T + (1 if self.pooling_method == 'cls' else 0)
+            if mask.shape[0] != B:
+                raise ValueError(f"Mask batch size {mask.shape[0]} doesn't match input batch size {B}")
+            if mask.shape[1] != expected_len:
+                raise ValueError(f"Mask sequence length {mask.shape[1]} doesn't match expected length {expected_len}")
             attention_mask = mask.unsqueeze(1).unsqueeze(2)  # [B, 1, 1, T(+1)]
         else:
             attention_mask = None
@@ -448,7 +468,13 @@ class SignTransformer(nn.Module):
             if mask is not None:
                 mask_expanded = mask.unsqueeze(-1).expand_as(x)
                 masked_x = x * mask_expanded
-                pooled = masked_x.sum(dim=1) / mask.sum(dim=1, keepdim=True).clamp(min=1)
+                mask_sum = mask.sum(dim=1, keepdim=True)
+                # Handle empty sequences (all masked)
+                valid_lengths = mask_sum.clamp(min=1)
+                pooled = masked_x.sum(dim=1) / valid_lengths
+                # Zero out results for completely masked sequences
+                completely_masked = (mask_sum == 0).expand_as(pooled)
+                pooled = pooled.masked_fill(completely_masked, 0.0)
             else:
                 pooled = x.mean(dim=1)
         elif self.pooling_method == 'max':
@@ -456,8 +482,9 @@ class SignTransformer(nn.Module):
                 mask_expanded = mask.unsqueeze(-1).expand_as(x)
                 masked_x = x.masked_fill(~mask_expanded.bool(), float('-inf'))
                 pooled = masked_x.max(dim=1)[0]
-                valid = (mask.sum(dim=1) > 0).unsqueeze(-1)
-                pooled = torch.where(valid, pooled, torch.zeros_like(pooled))
+                # Handle completely masked sequences (replace -inf with zeros)
+                has_valid_tokens = (mask.sum(dim=1) > 0).unsqueeze(-1)
+                pooled = torch.where(has_valid_tokens, pooled, torch.zeros_like(pooled))
             else:
                 pooled = x.max(dim=1)[0]
         else:
