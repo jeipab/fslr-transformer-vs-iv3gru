@@ -141,7 +141,7 @@ python -m training.train --model iv3_gru --smoke-test --num-gloss 105 --num-cat 
 
 - Preprocessing guide: [preprocessing/PREPROCESS_GUIDE.md](preprocessing/PREPROCESS_GUIDE.md)
 - Training guide: [training/TRAINING_GUIDE.md](training/TRAINING_GUIDE.md)
-- Data layout: [data/DATA_LAYOUT.md](data/DATA_LAYOUT.md)
+- Data guide: [data/DATA_GUIDE.md](data/DATA_GUIDE.md)
 - Sharing guide: [shared/SHARING_GUIDE.md](shared/SHARING_GUIDE.md)
 
 ## Troubleshooting
