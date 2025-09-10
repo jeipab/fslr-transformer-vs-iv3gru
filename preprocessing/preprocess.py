@@ -13,7 +13,7 @@ if __package__ in (None, ""):
     sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 
 from preprocessing.iv3_features import extract_iv3_features  # InceptionV3 (torchvision) feature extractor
-from preprocessing.occlusion_detection import _compute_occlusion_from_mask
+from preprocessing.occlusion_detection import compute_occlusion_flag_from_keypoints
 from preprocessing.keypoints_features import (
     POSE_UPPER_25,
     N_HAND,
@@ -226,9 +226,13 @@ def process_video(video_path, out_dir, target_fps=30, out_size=256, conf_thresh=
     # Occlusion detection and CSV update
     occluded_flag = 0
     if compute_occlusion and write_keypoints:
-        occluded_flag = _compute_occlusion_from_mask(M_filled, visibility_threshold=occ_vis_thresh,
-                                                     frame_prop_threshold=occ_frame_prop,
-                                                     min_consecutive_occ_frames=occ_min_run)
+        occluded_flag = compute_occlusion_flag_from_keypoints(
+            X_filled,
+            M_filled,
+            frame_prop_threshold=occ_frame_prop,
+            min_consecutive_occ_frames=occ_min_run,
+            visibility_fallback_threshold=occ_vis_thresh,
+        )
     # Append to labels CSV if requested and ids are provided
     if labels_csv_path is not None and gloss_id is not None:
         final_cat = cat_id if cat_id is not None else gloss_id
