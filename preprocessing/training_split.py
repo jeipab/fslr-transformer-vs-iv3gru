@@ -8,6 +8,22 @@ from collections import defaultdict
 import pandas as pd
 import numpy as np
 
+"""
+Train/Val split maker for keypoint/CNN feature datasets.
+
+Creates an 80/20 (configurable) split from a master labels CSV and organizes files.
+
+Inputs
+- A processed root directory that already contains your preprocessed .npz files.
+- A labels CSV with columns: file,gloss,cat  (optionally 'occluded').
+
+Outputs
+- <out_root>/keypoints_train/        # .npz files (moved or copied)
+- <out_root>/keypoints_val/
+- <out_root>/train_labels.csv        # file,gloss,cat
+- <out_root>/val_labels.csv
+"""
+
 def _resolve_npz_path(processed_root: Path, file_entry: str) -> Path:
     """
     Try to resolve a .npz path for a given 'file' entry.
