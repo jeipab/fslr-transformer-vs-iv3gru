@@ -2,8 +2,13 @@
 __pycache__/
 *.pyc
 .venv/
-venv/
 env/
+raw/
+
+#User Specific Folders
+venv311/
+venv/
+raw/
 
 # Data
 *.npy
