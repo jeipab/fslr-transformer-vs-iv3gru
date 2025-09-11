@@ -12,7 +12,7 @@
 
 ## Pipeline File Specifications
 
-This section details the expected file formats and structures for each stage of the FSLR (Few-Shot Learning Recognition) pipeline.
+This section details the expected file formats and structures for each stage of the FSLR (Filipino Sign Language Recognition) pipeline.
 
 ### 1. Raw Data Stage
 
