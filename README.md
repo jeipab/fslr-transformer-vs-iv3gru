@@ -22,6 +22,13 @@ git clone https://github.com/jeipab/fslr-transformer-vs-iv3gru.git
 cd fslr-transformer-vs-iv3gru
 pip install -r requirments.txt
 ```
+Alternatively you can use a virtual environment:
+
+```bash
+python3 -m venv venv
+source venv/bin/activate
+pip install -r requirments.txt
+```
 
 If you plan to inspect `.parquet` outputs from preprocessing:
 
