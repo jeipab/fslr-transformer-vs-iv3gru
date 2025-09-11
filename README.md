@@ -40,17 +40,20 @@ pip install pyarrow
 
 Use PowerShell from the repo root:
 
-```powershell
-# 1) (Optional) Create & activate a virtual environment
+**1. (Optional) Create & activate a virtual environment**
+```bash
 python -m venv .venv
 \.venv\Scripts\Activate.ps1
-
+```
 - If you already have a terminal with (venv) active, you don’t need to reactivate.
 
-# 2) Install dependencies
+**2. Install dependencies**
+```bash
 pip install -r .\requirments.txt
+```
 
-# 3) Run the app
+**3. Run the app**
+```bash
 python -m streamlit run ui\app.py
 ```
 
@@ -63,7 +66,7 @@ python -m streamlit run ui\app.py --server.port 8502
 
 - The placeholder UI accepts a preprocessed `.npz` with at least key `X` shaped `[T,156]` and will simulate predictions.
 
-## Quick start: preprocessing
+## Quick start: Preprocessing
 
 Generate training-ready `.npz` from videos. Use either the single-file or directory mode.
 
@@ -97,7 +100,7 @@ data/processed/
   val_labels.csv
 ```
 
-## Quick start: training
+## Quick start: Training
 
 Transformer (uses keypoints `X [T,156]`):
 
