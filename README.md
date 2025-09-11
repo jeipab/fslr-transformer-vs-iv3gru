@@ -45,6 +45,8 @@ Use PowerShell from the repo root:
 python -m venv .venv
 \.venv\Scripts\Activate.ps1
 
+- If you already have a terminal with (venv) active, you don’t need to reactivate.
+
 # 2) Install dependencies
 pip install -r .\requirments.txt
 
