@@ -83,15 +83,15 @@ Notes for A2:
 - `--gloss` and `--cat` should be 0-based integers because training loaders parse them as ints.
 - Optional: `--label-file` to override the default `<out_dir>/labels.csv`.
 
-#### Option B: Batch process a WHOLE directory (with optional CSV writing and occlusion)
+#### Option B: Batch process a WHOLE directory and store in `keypoints_all` (with optional CSV writing and occlusion)
 
 ```bash
 # Directory mode: process all videos under the folder
-python -m preprocessing.preprocess /path/to/videos /path/to/out_dir \
-  --target-fps 30 --out-size 256 --conf-thresh 0.5 --max-gap 5 \
-  --write-keypoints --write-iv3-features \
-  --id 12
-# This writes /path/to/out_dir/labels.csv by default. Use --append to accumulate.
+python -m preprocessing.preprocess data\raw\videos data\processed\keypoints_all 
+  --target-fps 30 --out-size 256 --conf-thresh 0.5 --max-gap 5
+  --write-keypoints --write-iv3-features
+  --id 0
+# This writes data\processed\labels.csv by default. Use --append to accumulate.
 ```
 
 Notes:
@@ -101,8 +101,10 @@ Notes:
 - A human-readable `.parquet` is also written for quick inspection (if `pyarrow` installed).
 - If `--id` (or `--gloss-id`/`--cat-id`) is provided, a row is appended per processed file to `<out_dir>/labels.csv` by default. Override with `--labels-csv <path>`.
 
-After batch extraction, move/split the `.npz` files into `keypoints_train/` and `keypoints_val/`.
-When creating the split folders, place the `.npz` files directly inside `keypoints_train/` or `keypoints_val/` (no nested `0/` subfolder).
+After batch extraction, split the `.npz` files from `keypoints_all/` into `keypoints_train/` and `keypoints_val/`.
+- Run `data_split.py`
+
+When creating the split folders, place the `.npz` files directly inside `keypoints_train/` or `keypoints_val/` (no nested subfolder).
 
 ---
 
