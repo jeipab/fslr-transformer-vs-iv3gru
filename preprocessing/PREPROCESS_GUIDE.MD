@@ -96,7 +96,7 @@ python -m preprocessing.preprocess /path/to/videos /path/to/out_dir \
 
 Notes:
 
-- Output files are saved as `/path/to/out_dir/0/<video_basename>.npz` (the script uses a subfolder `0` by default).
+- Output files are saved as `/path/to/out_dir/<video_basename>.npz`.
 - Each `.npz` contains keys: `X` (and optionally `X2048`), `mask`, `timestamps_ms`, `meta`.
 - A human-readable `.parquet` is also written for quick inspection (if `pyarrow` installed).
 - If `--id` (or `--gloss-id`/`--cat-id`) is provided, a row is appended per processed file to `<out_dir>/labels.csv` by default. Override with `--labels-csv <path>`.
