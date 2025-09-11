@@ -238,7 +238,7 @@ data/
       gesture_001.mp4
       gesture_002.mp4
   processed/
-    0/                          # Preprocessing output directory
+    all/                        # Preprocessing output directory
       gesture_001.npz           # X: [45,156], X2048: [45,2048], mask: [45,78]
       gesture_002.npz           # Contains both keypoints and features
     train/                      # After data splitting
