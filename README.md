@@ -22,7 +22,7 @@ git clone https://github.com/jeipab/fslr-transformer-vs-iv3gru.git
 cd fslr-transformer-vs-iv3gru
 pip install -r requirments.txt
 ```
-Alternatively you can use a virtual environment:
+Alternatively, you can use a virtual environment:
 
 ```bash
 python3 -m venv venv
@@ -41,7 +41,7 @@ pip install pyarrow
 Use PowerShell from the repo root:
 
 ```powershell
-# 1) (Optional) create & activate a virtual environment
+# 1) (Optional) Create & activate a virtual environment
 python -m venv .venv
 \.venv\Scripts\Activate.ps1
 
