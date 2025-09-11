@@ -131,7 +131,7 @@ def process_video(video_path, out_dir, target_fps=30, out_size=256, conf_thresh=
         feature_key: Kept for CLI compatibility (not used).
     """
     basename = os.path.splitext(os.path.basename(video_path))[0]
-    output_npz_folder = os.path.join(out_dir, '0')  # Assuming input vids are in '0' subfolder
+    output_npz_folder = os.path.join(out_dir)
     ensure_dir(output_npz_folder)
     npz_out_path = os.path.join(output_npz_folder, basename)
 
