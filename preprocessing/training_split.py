@@ -43,7 +43,6 @@ def _resolve_npz_path(processed_root: Path, file_entry: str) -> Path:
     rel = Path(fe)
     if len(rel.parts) > 1:
         candidates.append(processed_root / f"{fe}.npz")
-
     # Search recursively as a fallback
     # (in case files are nested elsewhere)
     for c in candidates:
@@ -95,7 +94,6 @@ def _split_indices_stratified(n: int, groups: np.ndarray, train_ratio: float, rn
     # As a safety, if val is empty due to tiny dataset, force one item to val
     if len(val_idxs) == 0 and len(train_idxs) > 1:
         val_idxs.append(train_idxs.pop())
-
     return sorted(train_idxs), sorted(val_idxs)
 
 
@@ -108,9 +106,9 @@ def _write_csv(path: Path, rows):
             writer.writerow([r["file"], r["gloss"], r["cat"]])
 
 
-def _move_or_copy(src: Path, dst_dir: Path, do_copy: bool):
+def _move_or_copy(src: Path, dst_dir: Path, do_copy: bool, new_name: str):
     dst_dir.mkdir(parents=True, exist_ok=True)
-    dst = dst_dir / src.name
+    dst = dst_dir / f"{new_name}{src.suffix}"
     if do_copy:
         shutil.copy2(src, dst)
     else:
@@ -118,7 +116,7 @@ def _move_or_copy(src: Path, dst_dir: Path, do_copy: bool):
     # move/copy optional parquet neighbor
     pq_src = src.with_suffix(".parquet")
     if pq_src.exists():
-        pq_dst = dst_dir / pq_src.name
+        pq_dst = dst_dir / f"{new_name}.parquet"
         if do_copy:
             shutil.copy2(pq_src, pq_dst)
         else:
@@ -160,7 +158,9 @@ def main():
         try:
             p = _resolve_npz_path(processed_root, file_entry)
             paths.append(p)
-            basenames.append(p.stem)  # without extension
+            rel = p.relative_to(processed_root)              # e.g. "0/1.npz"
+            safe_name = "_".join(rel.with_suffix("").parts)  # e.g. "0_1"
+            basenames.append(safe_name)
         except FileNotFoundError as e:
             print(f"ERROR: {e}", file=sys.stderr)
             return 2
@@ -182,12 +182,12 @@ def main():
 
     # Move/copy files
     print(f"Organizing files into:\n  {d_train}\n  {d_val}")
-    for p in df_train["__npz_path"]:
-        _move_or_copy(p, d_train, args.copy)
-    for p in df_val["__npz_path"]:
-        _move_or_copy(p, d_val, args.copy)
+    for safe_name, p in zip(df_train["__basename"], df_train["__npz_path"]):
+        _move_or_copy(p, d_train, args.copy, safe_name)
+    for safe_name, p in zip(df_val["__basename"], df_val["__npz_path"]):
+        _move_or_copy(p, d_val, args.copy, safe_name)
 
-    # Write CSVs with required header and file basenames (no extension)
+    # Write CSVs with required header and file basenames (no extension)        
     rows_train = [{"file": b, "gloss": int(g), "cat": int(c)} for b, g, c in zip(df_train["__basename"], df_train["gloss"], df_train["cat"])]
     rows_val   = [{"file": b, "gloss": int(g), "cat": int(c)} for b, g, c in zip(df_val["__basename"], df_val["gloss"], df_val["cat"])]
     csv_train = out_root / "train_labels.csv"
