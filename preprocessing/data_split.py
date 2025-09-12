@@ -4,6 +4,7 @@ import shutil
 import sys
 import csv
 import random
+import hashlib
 from collections import defaultdict
 import pandas as pd
 import numpy as np
