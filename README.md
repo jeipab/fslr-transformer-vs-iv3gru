@@ -54,12 +54,6 @@ pip install -r .\requirments.txt
 streamlit run run_app.py
 ```
 
-**3) Run the app**
-
-```bash
-python -m streamlit run ui\app.py
-```
-
 ```bash
 cd streamlit_app
 streamlit run main.py
