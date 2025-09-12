@@ -65,6 +65,8 @@ After renaming, a new `labels.csv` will be generated in `data\processed\keypoint
 
 Once the renaming and CSV generation are complete, the labels CSV from Tupal is no longer necessary.
 
+---
+
 ### 5) Running preprocessing from videos
 
 There are two entry points that can create keypoints `X` and (optionally) IV3 features `X2048`:
