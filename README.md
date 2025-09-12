@@ -22,7 +22,7 @@ Clone the repository and install dependencies:
 ```bash
 git clone https://github.com/jeipab/fslr-transformer-vs-iv3gru.git
 cd fslr-transformer-vs-iv3gru
-pip install -r requirments.txt
+pip install -r requirements.txt
 ```
 
 If you plan to inspect `.parquet` outputs from preprocessing:
@@ -47,7 +47,7 @@ python -m venv .venv
 **2) Install dependencies**
 
 ```bash
-pip install -r .\requirments.txt
+pip install -r .\requirements.txt
 ```
 
 **3) Run the app**
