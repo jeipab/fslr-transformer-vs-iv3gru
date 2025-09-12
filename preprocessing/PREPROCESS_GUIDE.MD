@@ -50,7 +50,22 @@ Each `.npz` lives directly inside `keypoints_train/` or `keypoints_val/` (no nes
 
 ---
 
-### 4) Running preprocessing from videos
+### 4) Renaming Clips Before Preprocessing
+
+Before preprocessing, rename the clips to ensure that file names are unique (e.g., `clip_0001_good_morning.MOV`, not `0.MOV`). This will prevent the system from assigning the same identifier to multiple clips.
+
+To rename the clips:
+
+1. Retrieve the master `labels.csv` from Tupal's drive (the one in the `fsl-105` drive).
+2. Import/copy Tupal's `labels.csv` to `data\raw`.
+3. Ensure the unflattened input clips are in `data\raw\` (i.e., `data\raw\clips\*\*.MOV`)
+4. Execute `rename_clips.py`.
+
+After renaming, a new `labels.csv` will be generated in `data\processed\keypoints_all` along with the renamed video clips (a total of 2,130 .mov files). This new CSV will be the master file for data splitting going forward.
+
+Once the renaming and CSV generation are complete, the labels CSV from Tupal is no longer necessary.
+
+### 5) Running preprocessing from videos
 
 There are two entry points that can create keypoints `X` and (optionally) IV3 features `X2048`:
 
@@ -108,7 +123,7 @@ When creating the split folders, place the `.npz` files directly inside `keypoin
 
 ---
 
-### 5) What’s inside each .npz
+### 6) What’s inside each .npz
 
 A typical file `<clip>.npz` contains:
 
@@ -120,7 +135,7 @@ A typical file `<clip>.npz` contains:
 
 ---
 
-### 6) Creating train/val splits and CSVs
+### 7) Creating train/val splits and CSVs
 
 You need two CSVs:
 
@@ -182,7 +197,7 @@ Quick check:
 
 ---
 
-### 7) Training parameters that must match your data
+### 8) Training parameters that must match your data
 
 When you run training for the Transformer, set:
 
@@ -214,7 +229,7 @@ python -m training.train \
 
 ---
 
-### 8) Common pitfalls & validation
+### 9) Common pitfalls & validation
 
 - Mismatched names: a `file` entry that doesn’t exist under the split directory.
 - Wrong shape: ensure `X` is `[T,156]`. If you used a different key, pass `--kp-key`.
@@ -247,7 +262,7 @@ python -m preprocessing.validate_npz data/processed/keypoints_train --skip-parqu
 
 ---
 
-### 9) FAQ
+### 10) FAQ
 
 - Do I need to create CSVs myself?  
   Yes. You provide `train_labels.csv` and `val_labels.csv`. Each maps `.npz` files to integer IDs for `gloss` and `cat`.
@@ -263,7 +278,7 @@ python -m preprocessing.validate_npz data/processed/keypoints_train --skip-parqu
 
 ---
 
-### 10) Where to look in code
+### 11) Where to look in code
 
 - Dataset loaders: `training/train.py` (`FSLKeypointFileDataset`, `FSLFeatureFileDataset`).
 - Transformer model: `models/transformer.py`.
