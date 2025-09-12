@@ -1,5 +1,8 @@
 ## Minimal, runnable requirements
 
+# Development environment
+virtualenv
+
 # Core training
 torch
 torchvision
@@ -21,3 +24,4 @@ scikit-learn
 matplotlib
 seaborn
 ipykernel
+ipython
