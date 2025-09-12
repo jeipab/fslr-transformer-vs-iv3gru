@@ -3,8 +3,10 @@ from pathlib import Path
 import shutil
 import sys
 import csv
-import hashlib
+import random
+from collections import defaultdict
 import pandas as pd
+import numpy as np
 
 """
 Dataset organizer using predefined train/val split assignments.
@@ -28,29 +30,25 @@ def _resolve_npz_path(processed_root: Path, file_entry: str) -> Path:
     Try to resolve a .npz path for a given 'file' entry.
     Accepts values with or without '.npz', with or without subfolder prefixes like '0/'.
     """
-    fe = file_entry.strip()
-    # Strip .npz if given
+    fe = str(file_entry).strip()
     if fe.lower().endswith(".npz"):
         fe = fe[:-4]
-    candidates = []
-    # Candidate basenames
-    base = Path(fe).name  # ensure basename only
-    candidates.append(processed_root / f"{base}.npz")
-    # Common subfolder used by preprocessing scripts
-    candidates.append(processed_root / "0" / f"{base}.npz")
-    # If 'file' encoded a relative subpath, also try it directly under processed_root
+    base = Path(fe).name
+    candidates = [
+        processed_root / f"{base}.npz",
+        processed_root / "0" / f"{base}.npz",
+    ]
     rel = Path(fe)
     if len(rel.parts) > 1:
         candidates.append(processed_root / f"{fe}.npz")
-    # Search recursively as a fallback
-    # (in case files are nested elsewhere)
+
     for c in candidates:
         if c.exists():
             return c
+    # Fallback: recursive search by basename
     for p in processed_root.rglob(f"{base}.npz"):
         return p
     raise FileNotFoundError(f"Could not resolve path for file entry '{file_entry}' under {processed_root}")
-
 
 def _stratify_groups(df: pd.DataFrame, mode: str) -> np.ndarray:
     """
