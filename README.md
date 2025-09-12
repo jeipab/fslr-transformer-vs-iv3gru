@@ -8,7 +8,7 @@ This repository contains the implementation of our thesis project:
 - `preprocessing/` → keypoint extraction and occlusion handling
 - `models/` → model architectures (IV3-GRU, Transformer)
 - `training/` → training scripts, utilities, evaluation
-- `ui/` → Streamlit demo application
+- `streamlit_app/` → Enhanced Streamlit demo application with modular architecture
 - `notebooks/` → Jupyter notebooks for experiments
 
 ## Setup
@@ -33,28 +33,41 @@ pip install pyarrow
 
 Use PowerShell from the repo root:
 
-```powershell
-# 1) (Optional) create & activate a virtual environment
+**1) (Optional) create & activate a virtual environment**
+
+```bash
 python -m venv .venv
 \.venv\Scripts\Activate.ps1
+```
 
-# 2) Install dependencies
+**2) Install dependencies**
+
+```bash
 pip install -r .\requirments.txt
-
-# 3) Run the app
-python -m streamlit run ui\app.py
 ```
 
-- Open the Local URL shown (e.g., http://localhost:8501). Press Ctrl+C in the terminal to stop.
-- If the default port is busy, specify another port:
+**3) Run the app**
 
-```powershell
-python -m streamlit run ui\app.py --server.port 8502
+```bash
+streamlit run run_app.py
 ```
 
-- The placeholder UI accepts a preprocessed `.npz` with at least key `X` shaped `[T,156]` and will simulate predictions.
+Alternative (from streamlit_app directory):
 
-## Quick start: preprocessing
+```bash
+cd streamlit_app
+streamlit run main.py
+```
+
+The demo supports both preprocessed `.npz` files and video files. It includes animated keypoint visualization, feature analysis, and simulated predictions.
+
+If the default port is busy:
+
+```bash
+streamlit run run_app.py --server.port 8502
+```
+
+## Quick start: Preprocessing
 
 Generate training-ready `.npz` from videos. Use either the single-file or directory mode.
 
@@ -88,7 +101,7 @@ data/processed/
   val_labels.csv
 ```
 
-## Quick start: training
+## Quick start: Training
 
 Transformer (uses keypoints `X [T,156]`):
 
