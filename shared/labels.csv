@@ -1,0 +1,712 @@
+file,gloss,cat,occluded
+clip_0001_good morning.npz,0,0,0
+clip_0002_good morning.npz,0,0,0
+clip_0003_good morning.npz,0,0,0
+clip_0004_good morning.npz,0,0,0
+clip_0005_good morning.npz,0,0,0
+clip_0006_good morning.npz,0,0,1
+clip_0007_good morning.npz,0,0,1
+clip_0008_good morning.npz,0,0,1
+clip_0009_good morning.npz,0,0,1
+clip_0010_good morning.npz,0,0,1
+clip_0011_good morning.npz,0,0,1
+clip_0012_good morning.npz,0,0,1
+clip_0013_good morning.npz,0,0,1
+clip_0014_good morning.npz,0,0,1
+clip_0015_good morning.npz,0,0,1
+clip_0016_good morning.npz,0,0,0
+clip_0017_good morning.npz,0,0,0
+clip_0018_good morning.npz,0,0,0
+clip_0019_good morning.npz,0,0,0
+clip_0020_good morning.npz,0,0,0
+clip_0021_good afternoon.npz,0,0,0
+clip_0022_good afternoon.npz,0,0,1
+clip_0023_good afternoon.npz,0,0,1
+clip_0024_good afternoon.npz,0,0,0
+clip_0025_good afternoon.npz,0,0,0
+clip_0026_good afternoon.npz,0,0,1
+clip_0027_good afternoon.npz,0,0,1
+clip_0028_good afternoon.npz,0,0,1
+clip_0029_good afternoon.npz,0,0,1
+clip_0030_good afternoon.npz,0,0,1
+clip_0031_good afternoon.npz,0,0,1
+clip_0032_good afternoon.npz,0,0,1
+clip_0033_good afternoon.npz,0,0,1
+clip_0034_good afternoon.npz,0,0,1
+clip_0035_good afternoon.npz,0,0,1
+clip_0036_good afternoon.npz,0,0,1
+clip_0037_good afternoon.npz,0,0,0
+clip_0038_good afternoon.npz,0,0,1
+clip_0039_good afternoon.npz,0,0,1
+clip_0040_good afternoon.npz,0,0,0
+clip_0041_good afternoon.npz,0,0,1
+clip_0042_good evening.npz,0,0,0
+clip_0043_good evening.npz,0,0,1
+clip_0044_good evening.npz,0,0,1
+clip_0045_good evening.npz,0,0,1
+clip_0046_good evening.npz,0,0,1
+clip_0047_good evening.npz,0,0,1
+clip_0048_good evening.npz,0,0,0
+clip_0049_good evening.npz,0,0,0
+clip_0050_good evening.npz,0,0,1
+clip_0051_good evening.npz,0,0,1
+clip_0052_good evening.npz,0,0,0
+clip_0053_good evening.npz,0,0,1
+clip_0054_good evening.npz,0,0,1
+clip_0055_good evening.npz,0,0,1
+clip_0056_good evening.npz,0,0,1
+clip_0057_good evening.npz,0,0,1
+clip_0058_good evening.npz,0,0,0
+clip_0059_good evening.npz,0,0,0
+clip_0060_good evening.npz,0,0,0
+clip_0061_good evening.npz,0,0,0
+clip_0062_good evening.npz,0,0,0
+clip_0063_good evening.npz,0,0,0
+clip_0064_hello.npz,0,0,0
+clip_0065_hello.npz,0,0,0
+clip_0066_hello.npz,0,0,0
+clip_0067_hello.npz,0,0,0
+clip_0068_hello.npz,0,0,0
+clip_0069_hello.npz,0,0,0
+clip_0070_hello.npz,0,0,0
+clip_0071_hello.npz,0,0,0
+clip_0072_hello.npz,0,0,1
+clip_0073_hello.npz,0,0,0
+clip_0074_hello.npz,0,0,0
+clip_0075_hello.npz,0,0,0
+clip_0076_hello.npz,0,0,1
+clip_0077_hello.npz,0,0,0
+clip_0078_hello.npz,0,0,0
+clip_0079_hello.npz,0,0,0
+clip_0080_hello.npz,0,0,0
+clip_0081_hello.npz,0,0,0
+clip_0082_hello.npz,0,0,0
+clip_0083_hello.npz,0,0,0
+clip_0084_how are you.npz,0,0,1
+clip_0085_how are you.npz,0,0,1
+clip_0086_how are you.npz,0,0,1
+clip_0087_how are you.npz,0,0,0
+clip_0088_how are you.npz,0,0,1
+clip_0089_how are you.npz,0,0,0
+clip_0090_how are you.npz,0,0,0
+clip_0091_how are you.npz,0,0,0
+clip_0092_how are you.npz,0,0,0
+clip_0093_how are you.npz,0,0,0
+clip_0094_how are you.npz,0,0,1
+clip_0095_how are you.npz,0,0,1
+clip_0096_how are you.npz,0,0,1
+clip_0097_how are you.npz,0,0,1
+clip_0098_how are you.npz,0,0,1
+clip_0099_how are you.npz,0,0,1
+clip_0100_how are you.npz,0,0,1
+clip_0101_how are you.npz,0,0,0
+clip_0102_how are you.npz,0,0,1
+clip_0103_how are you.npz,0,0,1
+clip_0104_how are you.npz,0,0,0
+clip_0105_im fine.npz,0,0,1
+clip_0106_im fine.npz,0,0,1
+clip_0107_im fine.npz,0,0,1
+clip_0108_im fine.npz,0,0,1
+clip_0109_im fine.npz,0,0,1
+clip_0110_im fine.npz,0,0,1
+clip_0111_im fine.npz,0,0,1
+clip_0112_im fine.npz,0,0,1
+clip_0113_im fine.npz,0,0,1
+clip_0114_im fine.npz,0,0,1
+clip_0115_im fine.npz,0,0,1
+clip_0116_im fine.npz,0,0,1
+clip_0117_im fine.npz,0,0,1
+clip_0118_im fine.npz,0,0,1
+clip_0119_im fine.npz,0,0,1
+clip_0120_im fine.npz,0,0,1
+clip_0121_im fine.npz,0,0,1
+clip_0122_im fine.npz,0,0,1
+clip_0123_im fine.npz,0,0,1
+clip_0124_im fine.npz,0,0,1
+clip_0125_nice to meet you.npz,0,0,0
+clip_0126_nice to meet you.npz,0,0,0
+clip_0127_nice to meet you.npz,0,0,0
+clip_0128_nice to meet you.npz,0,0,0
+clip_0129_nice to meet you.npz,0,0,0
+clip_0130_nice to meet you.npz,0,0,0
+clip_0131_nice to meet you.npz,0,0,0
+clip_0132_nice to meet you.npz,0,0,1
+clip_0133_nice to meet you.npz,0,0,1
+clip_0134_nice to meet you.npz,0,0,1
+clip_0135_nice to meet you.npz,0,0,1
+clip_0136_nice to meet you.npz,0,0,1
+clip_0137_nice to meet you.npz,0,0,0
+clip_0138_nice to meet you.npz,0,0,0
+clip_0139_nice to meet you.npz,0,0,1
+clip_0140_nice to meet you.npz,0,0,0
+clip_0141_nice to meet you.npz,0,0,1
+clip_0142_nice to meet you.npz,0,0,1
+clip_0143_nice to meet you.npz,0,0,0
+clip_0144_nice to meet you.npz,0,0,0
+clip_0145_nice to meet you.npz,0,0,1
+clip_0146_nice to meet you.npz,0,0,0
+clip_0147_thank you.npz,0,0,1
+clip_0148_thank you.npz,0,0,0
+clip_0149_thank you.npz,0,0,1
+clip_0150_thank you.npz,0,0,0
+clip_0151_thank you.npz,0,0,0
+clip_0152_thank you.npz,0,0,0
+clip_0153_thank you.npz,0,0,0
+clip_0154_thank you.npz,0,0,1
+clip_0155_thank you.npz,0,0,1
+clip_0156_thank you.npz,0,0,1
+clip_0157_thank you.npz,0,0,0
+clip_0158_thank you.npz,0,0,0
+clip_0159_thank you.npz,0,0,0
+clip_0160_thank you.npz,0,0,0
+clip_0161_thank you.npz,0,0,0
+clip_0162_thank you.npz,0,0,1
+clip_0163_thank you.npz,0,0,1
+clip_0164_thank you.npz,0,0,1
+clip_0165_thank you.npz,0,0,1
+clip_0166_thank you.npz,0,0,1
+clip_0167_youre welcome.npz,0,0,0
+clip_0168_youre welcome.npz,0,0,1
+clip_0169_youre welcome.npz,0,0,1
+clip_0170_youre welcome.npz,0,0,0
+clip_0171_youre welcome.npz,0,0,0
+clip_0172_youre welcome.npz,0,0,0
+clip_0173_youre welcome.npz,0,0,0
+clip_0174_youre welcome.npz,0,0,0
+clip_0175_youre welcome.npz,0,0,0
+clip_0176_youre welcome.npz,0,0,0
+clip_0177_youre welcome.npz,0,0,0
+clip_0178_youre welcome.npz,0,0,1
+clip_0179_youre welcome.npz,0,0,0
+clip_0180_youre welcome.npz,0,0,0
+clip_0181_youre welcome.npz,0,0,0
+clip_0182_youre welcome.npz,0,0,1
+clip_0183_youre welcome.npz,0,0,1
+clip_0184_youre welcome.npz,0,0,0
+clip_0185_youre welcome.npz,0,0,0
+clip_0186_youre welcome.npz,0,0,1
+clip_0187_see you tomorrow.npz,0,0,0
+clip_0188_see you tomorrow.npz,0,0,0
+clip_0189_see you tomorrow.npz,0,0,0
+clip_0190_see you tomorrow.npz,0,0,0
+clip_0191_see you tomorrow.npz,0,0,0
+clip_0192_see you tomorrow.npz,0,0,1
+clip_0193_see you tomorrow.npz,0,0,0
+clip_0194_see you tomorrow.npz,0,0,0
+clip_0195_see you tomorrow.npz,0,0,1
+clip_0196_see you tomorrow.npz,0,0,1
+clip_0197_see you tomorrow.npz,0,0,0
+clip_0198_see you tomorrow.npz,0,0,0
+clip_0199_see you tomorrow.npz,0,0,0
+clip_0200_see you tomorrow.npz,0,0,0
+clip_0201_see you tomorrow.npz,0,0,0
+clip_0202_see you tomorrow.npz,0,0,0
+clip_0203_see you tomorrow.npz,0,0,0
+clip_0204_see you tomorrow.npz,0,0,0
+clip_0205_see you tomorrow.npz,0,0,0
+clip_0206_see you tomorrow.npz,0,0,1
+clip_0207_understand.npz,0,0,1
+clip_0208_understand.npz,0,0,0
+clip_0209_understand.npz,0,0,0
+clip_0210_understand.npz,0,0,0
+clip_0211_understand.npz,0,0,0
+clip_0212_understand.npz,0,0,1
+clip_0213_understand.npz,0,0,0
+clip_0214_understand.npz,0,0,0
+clip_0215_understand.npz,0,0,1
+clip_0216_understand.npz,0,0,0
+clip_0217_understand.npz,0,0,1
+clip_0218_understand.npz,0,0,1
+clip_0219_understand.npz,0,0,1
+clip_0220_understand.npz,0,0,1
+clip_0221_understand.npz,0,0,0
+clip_0222_understand.npz,0,0,0
+clip_0223_understand.npz,0,0,0
+clip_0224_understand.npz,0,0,1
+clip_0225_understand.npz,0,0,0
+clip_0226_understand.npz,0,0,0
+clip_0227_don’t understand.npz,0,0,0
+clip_0228_don’t understand.npz,0,0,0
+clip_0229_don’t understand.npz,0,0,0
+clip_0230_don’t understand.npz,0,0,0
+clip_0231_don’t understand.npz,0,0,0
+clip_0232_don’t understand.npz,0,0,0
+clip_0233_don’t understand.npz,0,0,0
+clip_0234_don’t understand.npz,0,0,0
+clip_0235_don’t understand.npz,0,0,0
+clip_0236_don’t understand.npz,0,0,0
+clip_0237_don’t understand.npz,0,0,0
+clip_0238_don’t understand.npz,0,0,0
+clip_0239_don’t understand.npz,0,0,0
+clip_0240_don’t understand.npz,0,0,0
+clip_0241_don’t understand.npz,0,0,0
+clip_0242_don’t understand.npz,0,0,0
+clip_0243_don’t understand.npz,0,0,0
+clip_0244_don’t understand.npz,0,0,0
+clip_0245_don’t understand.npz,0,0,0
+clip_0246_don’t understand.npz,0,0,0
+clip_0247_don’t understand.npz,0,0,0
+clip_0248_know.npz,0,0,1
+clip_0249_know.npz,0,0,1
+clip_0250_know.npz,0,0,1
+clip_0251_know.npz,0,0,1
+clip_0252_know.npz,0,0,1
+clip_0253_know.npz,0,0,1
+clip_0254_know.npz,0,0,0
+clip_0255_know.npz,0,0,0
+clip_0256_know.npz,0,0,0
+clip_0257_know.npz,0,0,0
+clip_0258_know.npz,0,0,1
+clip_0259_know.npz,0,0,0
+clip_0260_know.npz,0,0,1
+clip_0261_know.npz,0,0,1
+clip_0262_know.npz,0,0,1
+clip_0263_know.npz,0,0,0
+clip_0264_know.npz,0,0,0
+clip_0265_know.npz,0,0,0
+clip_0266_know.npz,0,0,0
+clip_0267_know.npz,0,0,1
+clip_0268_know.npz,0,0,1
+clip_0269_don’t know.npz,0,0,1
+clip_0270_don’t know.npz,0,0,1
+clip_0271_don’t know.npz,0,0,1
+clip_0272_don’t know.npz,0,0,1
+clip_0273_don’t know.npz,0,0,1
+clip_0274_don’t know.npz,0,0,0
+clip_0275_don’t know.npz,0,0,0
+clip_0276_don’t know.npz,0,0,1
+clip_0277_don’t know.npz,0,0,0
+clip_0278_don’t know.npz,0,0,1
+clip_0279_don’t know.npz,0,0,0
+clip_0280_don’t know.npz,0,0,0
+clip_0281_don’t know.npz,0,0,0
+clip_0282_don’t know.npz,0,0,0
+clip_0283_don’t know.npz,0,0,0
+clip_0284_don’t know.npz,0,0,0
+clip_0285_don’t know.npz,0,0,0
+clip_0286_don’t know.npz,0,0,0
+clip_0287_don’t know.npz,0,0,1
+clip_0288_don’t know.npz,0,0,0
+clip_0289_no.npz,0,0,1
+clip_0290_no.npz,0,0,1
+clip_0291_no.npz,0,0,1
+clip_0292_no.npz,0,0,1
+clip_0293_no.npz,0,0,1
+clip_0294_no.npz,0,0,0
+clip_0295_no.npz,0,0,0
+clip_0296_no.npz,0,0,0
+clip_0297_no.npz,0,0,1
+clip_0298_no.npz,0,0,0
+clip_0299_no.npz,0,0,1
+clip_0300_no.npz,0,0,1
+clip_0301_no.npz,0,0,1
+clip_0302_no.npz,0,0,1
+clip_0303_no.npz,0,0,1
+clip_0304_no.npz,0,0,1
+clip_0305_no.npz,0,0,0
+clip_0306_no.npz,0,0,0
+clip_0307_no.npz,0,0,0
+clip_0308_no.npz,0,0,1
+clip_0309_no.npz,0,0,1
+clip_0310_yes.npz,0,0,1
+clip_0311_yes.npz,0,0,1
+clip_0312_yes.npz,0,0,1
+clip_0313_yes.npz,0,0,1
+clip_0314_yes.npz,0,0,1
+clip_0315_yes.npz,0,0,0
+clip_0316_yes.npz,0,0,1
+clip_0317_yes.npz,0,0,0
+clip_0318_yes.npz,0,0,1
+clip_0319_yes.npz,0,0,0
+clip_0320_yes.npz,0,0,1
+clip_0321_yes.npz,0,0,1
+clip_0322_yes.npz,0,0,1
+clip_0323_yes.npz,0,0,1
+clip_0324_yes.npz,0,0,1
+clip_0325_yes.npz,0,0,1
+clip_0326_yes.npz,0,0,1
+clip_0327_yes.npz,0,0,0
+clip_0328_yes.npz,0,0,1
+clip_0329_yes.npz,0,0,1
+clip_0330_wrong.npz,0,0,1
+clip_0331_wrong.npz,0,0,1
+clip_0332_wrong.npz,0,0,0
+clip_0333_wrong.npz,0,0,0
+clip_0334_wrong.npz,0,0,0
+clip_0335_wrong.npz,0,0,0
+clip_0336_wrong.npz,0,0,0
+clip_0337_wrong.npz,0,0,0
+clip_0338_wrong.npz,0,0,0
+clip_0339_wrong.npz,0,0,0
+clip_0340_wrong.npz,0,0,0
+clip_0341_wrong.npz,0,0,1
+clip_0342_wrong.npz,0,0,1
+clip_0343_wrong.npz,0,0,1
+clip_0344_wrong.npz,0,0,1
+clip_0345_wrong.npz,0,0,1
+clip_0346_wrong.npz,0,0,0
+clip_0347_wrong.npz,0,0,1
+clip_0348_wrong.npz,0,0,0
+clip_0349_wrong.npz,0,0,0
+clip_0350_wrong.npz,0,0,0
+clip_0351_correct.npz,0,0,1
+clip_0352_correct.npz,0,0,1
+clip_0353_correct.npz,0,0,1
+clip_0354_correct.npz,0,0,1
+clip_0355_correct.npz,0,0,1
+clip_0356_correct.npz,0,0,1
+clip_0357_correct.npz,0,0,1
+clip_0358_correct.npz,0,0,0
+clip_0359_correct.npz,0,0,1
+clip_0360_correct.npz,0,0,0
+clip_0361_correct.npz,0,0,1
+clip_0362_correct.npz,0,0,1
+clip_0363_correct.npz,0,0,1
+clip_0364_correct.npz,0,0,1
+clip_0365_correct.npz,0,0,1
+clip_0366_correct.npz,0,0,1
+clip_0367_correct.npz,0,0,1
+clip_0368_correct.npz,0,0,0
+clip_0369_correct.npz,0,0,1
+clip_0370_correct.npz,0,0,0
+clip_0371_correct.npz,0,0,1
+clip_0372_correct.npz,0,0,1
+clip_0373_slow.npz,0,0,1
+clip_0374_slow.npz,0,0,1
+clip_0375_slow.npz,0,0,1
+clip_0376_slow.npz,0,0,1
+clip_0377_slow.npz,0,0,1
+clip_0378_slow.npz,0,0,1
+clip_0379_slow.npz,0,0,1
+clip_0380_slow.npz,0,0,1
+clip_0381_slow.npz,0,0,1
+clip_0382_slow.npz,0,0,1
+clip_0383_slow.npz,0,0,1
+clip_0384_slow.npz,0,0,1
+clip_0385_slow.npz,0,0,1
+clip_0386_slow.npz,0,0,1
+clip_0387_slow.npz,0,0,1
+clip_0388_slow.npz,0,0,0
+clip_0389_slow.npz,0,0,0
+clip_0390_slow.npz,0,0,0
+clip_0391_slow.npz,0,0,0
+clip_0392_slow.npz,0,0,0
+clip_0393_slow.npz,0,0,0
+clip_0394_fast.npz,0,0,1
+clip_0395_fast.npz,0,0,1
+clip_0396_fast.npz,0,0,1
+clip_0397_fast.npz,0,0,1
+clip_0398_fast.npz,0,0,0
+clip_0399_fast.npz,0,0,1
+clip_0400_fast.npz,0,0,0
+clip_0401_fast.npz,0,0,1
+clip_0402_fast.npz,0,0,0
+clip_0403_fast.npz,0,0,1
+clip_0404_fast.npz,0,0,1
+clip_0405_fast.npz,0,0,1
+clip_0406_fast.npz,0,0,1
+clip_0407_fast.npz,0,0,1
+clip_0408_fast.npz,0,0,1
+clip_0409_fast.npz,0,0,1
+clip_0410_fast.npz,0,0,1
+clip_0411_fast.npz,0,0,1
+clip_0412_fast.npz,0,0,1
+clip_0413_fast.npz,0,0,1
+clip_0414_fast.npz,0,0,1
+clip_0415_one.npz,0,0,1
+clip_0416_one.npz,0,0,1
+clip_0417_one.npz,0,0,1
+clip_0418_one.npz,0,0,1
+clip_0419_one.npz,0,0,1
+clip_0420_one.npz,0,0,0
+clip_0421_one.npz,0,0,1
+clip_0422_one.npz,0,0,0
+clip_0423_one.npz,0,0,0
+clip_0424_one.npz,0,0,1
+clip_0425_one.npz,0,0,1
+clip_0426_one.npz,0,0,1
+clip_0427_one.npz,0,0,1
+clip_0428_one.npz,0,0,1
+clip_0429_one.npz,0,0,1
+clip_0430_one.npz,0,0,1
+clip_0431_one.npz,0,0,1
+clip_0432_one.npz,0,0,1
+clip_0433_one.npz,0,0,1
+clip_0434_one.npz,0,0,1
+clip_0435_two.npz,0,0,1
+clip_0436_two.npz,0,0,1
+clip_0437_two.npz,0,0,1
+clip_0438_two.npz,0,0,1
+clip_0439_two.npz,0,0,1
+clip_0440_two.npz,0,0,1
+clip_0441_two.npz,0,0,1
+clip_0442_two.npz,0,0,1
+clip_0443_two.npz,0,0,1
+clip_0444_two.npz,0,0,1
+clip_0445_two.npz,0,0,1
+clip_0446_two.npz,0,0,1
+clip_0447_two.npz,0,0,1
+clip_0448_two.npz,0,0,1
+clip_0449_two.npz,0,0,1
+clip_0450_two.npz,0,0,1
+clip_0451_two.npz,0,0,1
+clip_0452_two.npz,0,0,1
+clip_0453_two.npz,0,0,1
+clip_0454_two.npz,0,0,1
+clip_0455_three.npz,0,0,1
+clip_0456_three.npz,0,0,1
+clip_0457_three.npz,0,0,1
+clip_0458_three.npz,0,0,1
+clip_0459_three.npz,0,0,1
+clip_0460_three.npz,0,0,1
+clip_0461_three.npz,0,0,0
+clip_0462_three.npz,0,0,1
+clip_0463_three.npz,0,0,1
+clip_0464_three.npz,0,0,1
+clip_0465_three.npz,0,0,1
+clip_0466_three.npz,0,0,1
+clip_0467_three.npz,0,0,1
+clip_0468_three.npz,0,0,1
+clip_0469_three.npz,0,0,1
+clip_0470_three.npz,0,0,1
+clip_0471_three.npz,0,0,1
+clip_0472_three.npz,0,0,1
+clip_0473_three.npz,0,0,1
+clip_0474_three.npz,0,0,1
+clip_0475_four.npz,0,0,1
+clip_0476_four.npz,0,0,1
+clip_0477_four.npz,0,0,1
+clip_0478_four.npz,0,0,1
+clip_0479_four.npz,0,0,1
+clip_0480_four.npz,0,0,1
+clip_0481_four.npz,0,0,1
+clip_0482_four.npz,0,0,1
+clip_0483_four.npz,0,0,1
+clip_0484_four.npz,0,0,1
+clip_0485_four.npz,0,0,1
+clip_0486_four.npz,0,0,1
+clip_0487_four.npz,0,0,1
+clip_0488_four.npz,0,0,1
+clip_0489_four.npz,0,0,1
+clip_0490_four.npz,0,0,0
+clip_0491_four.npz,0,0,1
+clip_0492_four.npz,0,0,0
+clip_0493_four.npz,0,0,1
+clip_0494_four.npz,0,0,1
+clip_0495_five.npz,0,0,1
+clip_0496_five.npz,0,0,1
+clip_0497_five.npz,0,0,1
+clip_0498_five.npz,0,0,1
+clip_0499_five.npz,0,0,1
+clip_0500_five.npz,0,0,1
+clip_0501_five.npz,0,0,1
+clip_0502_five.npz,0,0,1
+clip_0503_five.npz,0,0,1
+clip_0504_five.npz,0,0,1
+clip_0505_five.npz,0,0,1
+clip_0506_five.npz,0,0,1
+clip_0507_five.npz,0,0,1
+clip_0508_five.npz,0,0,1
+clip_0509_five.npz,0,0,1
+clip_0510_five.npz,0,0,1
+clip_0511_five.npz,0,0,1
+clip_0512_five.npz,0,0,1
+clip_0513_five.npz,0,0,1
+clip_0514_five.npz,0,0,1
+clip_0515_six.npz,0,0,1
+clip_0516_six.npz,0,0,1
+clip_0517_six.npz,0,0,1
+clip_0518_six.npz,0,0,1
+clip_0519_six.npz,0,0,1
+clip_0520_six.npz,0,0,0
+clip_0521_six.npz,0,0,1
+clip_0522_six.npz,0,0,1
+clip_0523_six.npz,0,0,1
+clip_0524_six.npz,0,0,1
+clip_0525_six.npz,0,0,0
+clip_0526_six.npz,0,0,0
+clip_0527_six.npz,0,0,0
+clip_0528_six.npz,0,0,0
+clip_0529_six.npz,0,0,1
+clip_0530_six.npz,0,0,1
+clip_0531_six.npz,0,0,1
+clip_0532_six.npz,0,0,1
+clip_0533_six.npz,0,0,1
+clip_0534_six.npz,0,0,1
+clip_0535_seven.npz,0,0,1
+clip_0536_seven.npz,0,0,1
+clip_0537_seven.npz,0,0,1
+clip_0538_seven.npz,0,0,1
+clip_0539_seven.npz,0,0,1
+clip_0540_seven.npz,0,0,1
+clip_0541_seven.npz,0,0,1
+clip_0542_seven.npz,0,0,1
+clip_0543_seven.npz,0,0,1
+clip_0544_seven.npz,0,0,1
+clip_0545_seven.npz,0,0,1
+clip_0546_seven.npz,0,0,1
+clip_0547_seven.npz,0,0,0
+clip_0548_seven.npz,0,0,1
+clip_0549_seven.npz,0,0,1
+clip_0550_seven.npz,0,0,0
+clip_0551_seven.npz,0,0,1
+clip_0552_seven.npz,0,0,1
+clip_0553_seven.npz,0,0,0
+clip_0554_seven.npz,0,0,1
+clip_0555_seven.npz,0,0,1
+clip_0556_eight.npz,0,0,1
+clip_0557_eight.npz,0,0,1
+clip_0558_eight.npz,0,0,1
+clip_0559_eight.npz,0,0,1
+clip_0560_eight.npz,0,0,1
+clip_0561_eight.npz,0,0,1
+clip_0562_eight.npz,0,0,1
+clip_0563_eight.npz,0,0,1
+clip_0564_eight.npz,0,0,1
+clip_0565_eight.npz,0,0,1
+clip_0566_eight.npz,0,0,1
+clip_0567_eight.npz,0,0,1
+clip_0568_eight.npz,0,0,1
+clip_0569_eight.npz,0,0,1
+clip_0570_eight.npz,0,0,1
+clip_0571_eight.npz,0,0,1
+clip_0572_eight.npz,0,0,1
+clip_0573_eight.npz,0,0,1
+clip_0574_eight.npz,0,0,0
+clip_0575_eight.npz,0,0,1
+clip_0576_eight.npz,0,0,1
+clip_0577_nine.npz,0,0,1
+clip_0578_nine.npz,0,0,1
+clip_0579_nine.npz,0,0,1
+clip_0580_nine.npz,0,0,1
+clip_0581_nine.npz,0,0,1
+clip_0582_nine.npz,0,0,1
+clip_0583_nine.npz,0,0,1
+clip_0584_nine.npz,0,0,1
+clip_0585_nine.npz,0,0,1
+clip_0586_nine.npz,0,0,1
+clip_0587_nine.npz,0,0,1
+clip_0588_nine.npz,0,0,1
+clip_0589_nine.npz,0,0,1
+clip_0590_nine.npz,0,0,1
+clip_0591_nine.npz,0,0,1
+clip_0592_nine.npz,0,0,1
+clip_0593_nine.npz,0,0,1
+clip_0594_nine.npz,0,0,1
+clip_0595_nine.npz,0,0,0
+clip_0596_nine.npz,0,0,1
+clip_0597_ten.npz,0,0,1
+clip_0598_ten.npz,0,0,1
+clip_0599_ten.npz,0,0,1
+clip_0600_ten.npz,0,0,1
+clip_0601_ten.npz,0,0,1
+clip_0602_ten.npz,0,0,1
+clip_0603_ten.npz,0,0,0
+clip_0604_ten.npz,0,0,1
+clip_0605_ten.npz,0,0,0
+clip_0606_ten.npz,0,0,0
+clip_0607_ten.npz,0,0,1
+clip_0608_ten.npz,0,0,1
+clip_0609_ten.npz,0,0,1
+clip_0610_ten.npz,0,0,1
+clip_0611_ten.npz,0,0,1
+clip_0612_ten.npz,0,0,1
+clip_0613_ten.npz,0,0,1
+clip_0614_ten.npz,0,0,1
+clip_0615_ten.npz,0,0,0
+clip_0616_ten.npz,0,0,1
+clip_0617_january.npz,0,0,1
+clip_0618_january.npz,0,0,0
+clip_0619_january.npz,0,0,0
+clip_0620_january.npz,0,0,1
+clip_0621_january.npz,0,0,0
+clip_0622_january.npz,0,0,0
+clip_0623_january.npz,0,0,0
+clip_0624_january.npz,0,0,0
+clip_0625_january.npz,0,0,0
+clip_0626_january.npz,0,0,0
+clip_0627_january.npz,0,0,1
+clip_0628_january.npz,0,0,1
+clip_0629_january.npz,0,0,1
+clip_0630_january.npz,0,0,1
+clip_0631_january.npz,0,0,1
+clip_0632_january.npz,0,0,1
+clip_0633_january.npz,0,0,0
+clip_0634_january.npz,0,0,0
+clip_0635_january.npz,0,0,0
+clip_0636_january.npz,0,0,0
+clip_0637_february.npz,0,0,0
+clip_0638_february.npz,0,0,0
+clip_0639_february.npz,0,0,0
+clip_0640_february.npz,0,0,0
+clip_0641_february.npz,0,0,0
+clip_0642_february.npz,0,0,0
+clip_0643_february.npz,0,0,0
+clip_0644_february.npz,0,0,0
+clip_0645_february.npz,0,0,0
+clip_0646_february.npz,0,0,0
+clip_0647_february.npz,0,0,0
+clip_0648_february.npz,0,0,1
+clip_0649_february.npz,0,0,1
+clip_0650_february.npz,0,0,1
+clip_0651_february.npz,0,0,1
+clip_0652_february.npz,0,0,1
+clip_0653_february.npz,0,0,0
+clip_0654_february.npz,0,0,0
+clip_0655_february.npz,0,0,0
+clip_0656_march.npz,0,0,0
+clip_0657_march.npz,0,0,1
+clip_0658_march.npz,0,0,0
+clip_0659_march.npz,0,0,0
+clip_0660_march.npz,0,0,0
+clip_0661_march.npz,0,0,0
+clip_0662_march.npz,0,0,0
+clip_0663_march.npz,0,0,0
+clip_0664_march.npz,0,0,0
+clip_0665_march.npz,0,0,0
+clip_0666_march.npz,0,0,0
+clip_0667_march.npz,0,0,0
+clip_0668_march.npz,0,0,0
+clip_0669_march.npz,0,0,1
+clip_0670_march.npz,0,0,1
+clip_0671_march.npz,0,0,0
+clip_0672_march.npz,0,0,0
+clip_0673_march.npz,0,0,0
+clip_0674_march.npz,0,0,0
+clip_0675_march.npz,0,0,0
+clip_0676_april.npz,0,0,1
+clip_0677_april.npz,0,0,0
+clip_0678_april.npz,0,0,0
+clip_0679_april.npz,0,0,0
+clip_0680_april.npz,0,0,0
+clip_0681_april.npz,0,0,0
+clip_0682_april.npz,0,0,0
+clip_0683_april.npz,0,0,1
+clip_0684_april.npz,0,0,1
+clip_0685_april.npz,0,0,1
+clip_0686_april.npz,0,0,0
+clip_0687_april.npz,0,0,0
+clip_0688_april.npz,0,0,0
+clip_0689_april.npz,0,0,0
+clip_0690_april.npz,0,0,0
+clip_0691_april.npz,0,0,1
+clip_0692_april.npz,0,0,0
+clip_0693_april.npz,0,0,1
+clip_0694_april.npz,0,0,1
+clip_0695_april.npz,0,0,1
+clip_0696_may.npz,0,0,0
+clip_0697_may.npz,0,0,0
+clip_0698_may.npz,0,0,0
+clip_0699_may.npz,0,0,0
+clip_0700_may.npz,0,0,0
+clip_0701_may.npz,0,0,0
+clip_0702_may.npz,0,0,0
+clip_0703_may.npz,0,0,0
+clip_0704_may.npz,0,0,0
+clip_0705_may.npz,0,0,0
+clip_0706_may.npz,0,0,0
+clip_0707_may.npz,0,0,0
+clip_0708_may.npz,0,0,0
+clip_0709_may.npz,0,0,0
+clip_0710_may.npz,0,0,0
+clip_0711_may.npz,0,0,0
