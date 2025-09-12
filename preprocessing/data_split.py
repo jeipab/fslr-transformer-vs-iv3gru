@@ -113,7 +113,7 @@ def _write_csv(path: Path, rows):
             writer.writerow([r["file"], r["gloss"], r["cat"], r["occluded"]])
 
 def main():
-    ap = argparse.ArgumentParser(description="Organize preprocessed dataset with optional random split.")
+    ap = argparse.ArgumentParser(description="Organize preprocessed dataset into train/val splits")
     ap.add_argument("--processed-root", required=True, type=Path)
     ap.add_argument("--labels", required=True, type=Path)
     ap.add_argument("--out-root", type=Path, default=None)
@@ -130,7 +130,7 @@ def main():
         print(f"ERROR: Could not read labels CSV: {e}", file=sys.stderr)
         return 2
 
-    # Validate required columns (occluded + split are mandatory)
+    # Validate required columns  
     required_cols = {"file", "gloss", "cat", "occluded"}
     missing = required_cols - set(df.columns)
     if missing:
