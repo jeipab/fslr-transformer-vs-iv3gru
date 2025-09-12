@@ -130,8 +130,6 @@ data/processed/
 
 ## Quick start: Training
 
-## Quick start: Training
-
 Transformer (uses keypoints `X [T,156]`):
 
 ```bash
