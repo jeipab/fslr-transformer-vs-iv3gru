@@ -1,131 +1,91 @@
 # Multi-Process Preprocessing Guide
 
-This guide covers the multi-process preprocessing script that provides performance improvements over the original sequential processing.
+Multi-process preprocessing script with 30-50x performance improvement over sequential processing.
 
 ## Key Features
 
-- **Multi-process parallelization**: Process multiple videos simultaneously across CPU cores
-- **Batched GPU inference**: InceptionV3 features extracted in batches for maximum GPU utilization
-- **Configurable workers**: Control the number of parallel processes
-- **Optional parquet output**: Disable parquet files to speed up I/O
-- **Progress tracking**: Real-time progress monitoring with tqdm
-- **Error handling**: Robust error handling for individual video failures
+- Multi-process parallelization across CPU cores
+- Batched GPU inference for InceptionV3 features
+- Configurable workers and batch sizes
+- Optional parquet output disable
+- Real-time progress tracking
 
-## Performance Improvements
+## Hardware Recommendations
 
-### Expected Speedup
-
-- **30-50x faster** than sequential processing on your hardware
-- **GPU utilization**: Batched InceptionV3 processing keeps GPU busy
-- **CPU utilization**: MediaPipe processing distributed across cores
-- **I/O optimization**: Optional parquet disable reduces disk writes
-
-### Hardware Recommendations
-
-- **Workers**: 8-12 workers (default: min(cpu_count, 12))
-- **Batch size**: 32-64 for InceptionV3 (default: 32)
-- **Target FPS**: 15 fps recommended for speed vs quality balance
+- **Workers**: 8-12 (default: min(cpu_count, 12))
+- **Batch size**: 32-64 (default: 32)
+- **Target FPS**: 15 fps for speed vs quality balance
 
 ## Usage
 
-### Basic Usage
+### Basic
 
 ```bash
 python preprocessing/multi_preprocess.py /path/to/videos /path/to/output --write-keypoints --write-iv3-features
 ```
 
-### Optimized Usage (Recommended)
+### Optimized (Recommended)
 
 ```bash
 python preprocessing/multi_preprocess.py /path/to/videos /path/to/output \
-    --write-keypoints \
-    --write-iv3-features \
-    --workers 10 \
-    --batch-size 64 \
-    --target-fps 15 \
-    --disable-parquet
+    --write-keypoints --write-iv3-features \
+    --workers 10 --batch-size 64 --target-fps 15 --disable-parquet
 ```
 
-### Full Options
+## Arguments
 
-```bash
-python preprocessing/multi_preprocess.py /path/to/videos /path/to/output \
-    --write-keypoints \
-    --write-iv3-features \
-    --workers 10 \
-    --batch-size 64 \
-    --target-fps 15 \
-    --out-size 256 \
-    --conf-thresh 0.5 \
-    --max-gap 5 \
-    --disable-parquet \
-    --id 1 \
-    --labels-csv /path/to/labels.csv \
-    --occ-enable
-```
+### Core
 
-## Command Line Arguments
-
-### Core Processing
-
-- `video_directory`: Path to video file or directory containing videos
+- `video_directory`: Path to video file or directory
 - `output_directory`: Output directory for processed files
-- `--write-keypoints`: Extract and save MediaPipe keypoints
-- `--write-iv3-features`: Extract and save InceptionV3 features
+- `--write-keypoints`: Extract MediaPipe keypoints
+- `--write-iv3-features`: Extract InceptionV3 features
 
-### Performance Tuning
+### Performance
 
-- `--workers N`: Number of parallel worker processes (default: min(cpu_count, 12))
-- `--batch-size N`: Batch size for InceptionV3 GPU inference (default: 32)
-- `--target-fps N`: Target frames per second (default: 15, recommended for speed)
-- `--disable-parquet`: Disable parquet output to speed up I/O
+- `--workers N`: Parallel worker processes (default: min(cpu_count, 12))
+- `--batch-size N`: InceptionV3 batch size (default: 32)
+- `--target-fps N`: Target FPS (default: 15)
+- `--disable-parquet`: Disable parquet output
 
-### Processing Parameters
+### Processing
 
-- `--out-size N`: Output image size for keypoint extraction (default: 256)
-- `--conf-thresh F`: Confidence threshold for keypoints (default: 0.5)
-- `--max-gap N`: Maximum gap for interpolation (default: 5)
+- `--out-size N`: Image size for keypoints (default: 256)
+- `--conf-thresh F`: Keypoint confidence threshold (default: 0.5)
+- `--max-gap N`: Max interpolation gap (default: 5)
 
-### Labeling
+### Labels
 
-- `--id N`: Single integer ID for both gloss and category
-- `--gloss-id N`: Override gloss ID
-- `--cat-id N`: Override category ID
-- `--labels-csv PATH`: Path to labels CSV file
-- `--append`: Append to existing labels CSV
+- `--id N`: Single ID for gloss and category
+- `--labels-csv PATH`: Labels CSV file path
+- `--append`: Append to existing CSV
 
-### Occlusion Detection
+### Occlusion
 
 - `--occ-enable`: Enable occlusion detection
-- `--occ-vis-thresh F`: Frame visible fraction threshold (default: 0.6)
-- `--occ-frame-prop F`: Clip occluded if proportion >= this (default: 0.4)
-- `--occ-min-run N`: Clip occluded if run length >= this (default: 15)
+- `--occ-vis-thresh F`: Visibility threshold (default: 0.6)
+- `--occ-frame-prop F`: Occluded frame proportion (default: 0.4)
+- `--occ-min-run N`: Min consecutive occluded frames (default: 15)
 
 ## Performance Tips
 
-### For Maximum Speed
+### Speed Priority
 
-1. Use `--target-fps 15` (reduces processing load)
-2. Use `--disable-parquet` (faster I/O)
-3. Use `--batch-size 64` (better GPU utilization)
-4. Use `--workers 10-12` (optimal for your CPU)
+- `--target-fps 15` --disable-parquet --batch-size 64 --workers 10-12`
 
-### For Maximum Quality
+### Quality Priority
 
-1. Use `--target-fps 30` (higher quality)
-2. Keep parquet enabled for debugging
-3. Use `--batch-size 32` (more stable)
-4. Use `--workers 8` (more stable)
+- `--target-fps 30` --batch-size 32 --workers 8`
 
-### Memory Considerations
+### Memory
 
-- Larger batch sizes use more GPU memory
-- More workers use more CPU memory
-- Monitor GPU memory usage with `nvidia-smi`
+- Larger batch sizes = more GPU memory
+- More workers = more CPU memory
+- Monitor with `nvidia-smi`
 
-## Example Workflows
+## Examples
 
-### Quick Processing (Speed Priority)
+### Speed Priority
 
 ```bash
 python preprocessing/multi_preprocess.py data/raw data/processed \
@@ -133,7 +93,7 @@ python preprocessing/multi_preprocess.py data/raw data/processed \
     --workers 12 --batch-size 64 --target-fps 15 --disable-parquet
 ```
 
-### Quality Processing (Quality Priority)
+### Quality Priority
 
 ```bash
 python preprocessing/multi_preprocess.py data/raw data/processed \
@@ -141,7 +101,7 @@ python preprocessing/multi_preprocess.py data/raw data/processed \
     --workers 8 --batch-size 32 --target-fps 30
 ```
 
-### With Labels and Occlusion Detection
+### With Labels
 
 ```bash
 python preprocessing/multi_preprocess.py data/raw data/processed \
@@ -154,28 +114,23 @@ python preprocessing/multi_preprocess.py data/raw data/processed \
 
 ### Common Issues
 
-1. **Out of memory**: Reduce batch size or number of workers
-2. **CUDA errors**: Ensure proper GPU drivers and PyTorch CUDA installation
-3. **Slow processing**: Check if parquet is disabled and FPS is set to 15
-4. **Worker crashes**: Reduce number of workers or check video file integrity
+1. **Out of memory**: Reduce batch size or workers
+2. **CUDA errors**: Check GPU drivers and PyTorch CUDA installation
+3. **Slow processing**: Use `--disable-parquet --target-fps 15`
+4. **Worker crashes**: Reduce workers or check video integrity
+5. **Conflicting dependencies**: Install dedicated kernel:
+   ```bash
+   python -m ipykernel install --user --name=workspace-venv --display-name="Python (workspace-venv)"
+   ```
 
-### Performance Monitoring
+### Monitoring
 
-- Monitor GPU usage: `nvidia-smi -l 1`
-- Monitor CPU usage: `htop` or `top`
-- Monitor disk I/O: `iotop`
+- GPU: `nvidia-smi -l 1`
+- CPU: `htop` or `top`
+- Disk I/O: `iotop`
 
 ## Expected Results
 
-With ~2000 videos on your hardware:
-
-- **Sequential processing**: Days
-- **Multi-process processing**: 2-4 hours
+- **Sequential**: Days
+- **Multi-process**: 2-4 hours
 - **Speedup**: 30-50x improvement
-
-The script provides detailed progress information and final statistics including:
-
-- Processing time per video
-- Total processing time
-- Success/failure counts
-- Videos processed per hour
