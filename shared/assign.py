@@ -1,3 +1,16 @@
+"""
+Assignment Script for Gloss and Category IDs
+
+Purpose:
+- Map gloss text in labels.csv to gloss_id and cat_id using labels_reference.csv.
+- Ensure labels.csv contains the correct numeric IDs before training.
+
+Usage:
+After Preprocessing and Before Data Split
+- Assign gloss_id and cat_id to labels.csv using labels_reference.csv reference:
+    python assign.py
+"""
+
 import pandas as pd
 
 # Load reference and labels
