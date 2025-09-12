@@ -23,8 +23,6 @@ Options
 - `--out-root`       : Destination root directory (default = `processed-root`).
 - `--copy`           : Copy files instead of moving them.
 - `--train-ratio`    : Train split ratio if no `split` column is present (default = 0.8).
-
-Exit code is non-zero if any errors occur.
 """
 
 import argparse
