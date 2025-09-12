@@ -5,10 +5,8 @@ import sys
 import csv
 import random
 import hashlib
-from collections import defaultdict
 import pandas as pd
 import numpy as np
-
 """
 Dataset organizer using predefined train/val split assignments.
 
@@ -42,7 +40,6 @@ def _resolve_npz_path(processed_root: Path, file_entry: str) -> Path:
     rel = Path(fe)
     if len(rel.parts) > 1:
         candidates.append(processed_root / f"{fe}.npz")
-
     for c in candidates:
         if c.exists():
             return c
@@ -50,7 +47,6 @@ def _resolve_npz_path(processed_root: Path, file_entry: str) -> Path:
     for p in processed_root.rglob(f"{base}.npz"):
         return p
     raise FileNotFoundError(f"Could not resolve path for file entry '{file_entry}' under {processed_root}")
-
 
 def _coerce_or_encode_cat(series: pd.Series, out_map_path: Path) -> pd.Series:
     """
@@ -78,10 +74,8 @@ def _coerce_or_encode_cat(series: pd.Series, out_map_path: Path) -> pd.Series:
                 w.writerow([name, i])
         return series.map(lambda x: mapping[str(x)])
 
-
 def _stable_h8(path: Path) -> str:
     return hashlib.md5(str(path).encode("utf-8")).hexdigest()[:8]
-
 
 def _move_or_copy_unique(src_npz: Path, dst_dir: Path, do_copy: bool) -> str:
     """
@@ -95,7 +89,6 @@ def _move_or_copy_unique(src_npz: Path, dst_dir: Path, do_copy: bool) -> str:
     if dst_npz.exists():
         stem = f"{stem}-{_stable_h8(src_npz)}"
         dst_npz = dst_dir / f"{stem}.npz"
-
     if do_copy:
         shutil.copy2(src_npz, dst_npz)
     else:
@@ -105,16 +98,11 @@ def _move_or_copy_unique(src_npz: Path, dst_dir: Path, do_copy: bool) -> str:
     pq_src = src_npz.with_suffix(".parquet")
     if pq_src.exists():
         pq_dst = dst_dir / f"{stem}.parquet"
-        if pq_dst.exists():
-            # align with the npz choice; collision unlikely after stem change
-            pass
         if do_copy:
             shutil.copy2(pq_src, pq_dst)
         else:
             shutil.move(pq_src, pq_dst)
-
     return stem
-
 
 def _write_csv(path: Path, rows):
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -124,18 +112,17 @@ def _write_csv(path: Path, rows):
         for r in rows:
             writer.writerow([r["file"], r["gloss"], r["cat"], r["occluded"]])
 
-
 def main():
-    ap = argparse.ArgumentParser(description="Organize preprocessed dataset using predefined train/val splits.")
-    ap.add_argument("--processed-root", required=True, type=Path, help="Directory with preprocessed .npz files")
-    ap.add_argument("--labels", required=True, type=Path, help="Path to labels.csv (file,gloss,cat,occluded,split)")
-    ap.add_argument("--out-root", type=Path, default=None, help="Output root (defaults to --processed-root)")
-    ap.add_argument("--copy", action="store_true", help="Copy instead of move the files into split folders")
+    ap = argparse.ArgumentParser(description="Organize preprocessed dataset with optional random split.")
+    ap.add_argument("--processed-root", required=True, type=Path)
+    ap.add_argument("--labels", required=True, type=Path)
+    ap.add_argument("--out-root", type=Path, default=None)
+    ap.add_argument("--copy", action="store_true")
+    ap.add_argument("--train-ratio", type=float, default=0.8, help="Train split ratio if no split column is present")
     args = ap.parse_args()
 
     processed_root: Path = args.processed_root.resolve()
     out_root: Path = (args.out_root or args.processed_root).resolve()
-
     # Load labels
     try:
         df = pd.read_csv(args.labels)
@@ -144,21 +131,13 @@ def main():
         return 2
 
     # Validate required columns (occluded + split are mandatory)
-    required_cols = {"file", "gloss", "cat", "occluded", "split"}
+    required_cols = {"file", "gloss", "cat", "occluded"}
     missing = required_cols - set(df.columns)
     if missing:
         print(f"ERROR: labels CSV missing required columns: {sorted(missing)}", file=sys.stderr)
         return 2
 
-    # Validate split column values
-    valid_splits = {"train", "val"}
-    bad = df.loc[~df["split"].isin(valid_splits)]
-    if len(bad) > 0:
-        bad_counts = df["split"].value_counts(dropna=False).to_dict()
-        print(f"ERROR: 'split' column must contain only 'train' or 'val'. Found distribution: {bad_counts}", file=sys.stderr)
-        return 2
-
-    # Resolve full paths for each row and normalize final basenames later
+    # Resolve .npz paths
     paths = []
     for file_entry in df["file"].astype(str).tolist():
         try:
@@ -167,7 +146,6 @@ def main():
         except FileNotFoundError as e:
             print(f"ERROR: {e}", file=sys.stderr)
             return 2
-
     df = df.copy()
     df["__npz_path"] = paths
 
@@ -175,7 +153,12 @@ def main():
     cat_map_path = out_root / "cat_mapping.csv"
     df["cat"] = _coerce_or_encode_cat(df["cat"], cat_map_path)
 
-    # Split by predefined assignments
+    # Handle split
+    if "split" not in df.columns:
+        df = df.sample(frac=1, random_state=42).reset_index(drop=True)  # shuffle
+        n_train = int(len(df) * args.train_ratio)
+        df["split"] = ["train"] * n_train + ["val"] * (len(df) - n_train)
+
     df_train = df[df["split"] == "train"].reset_index(drop=True)
     df_val   = df[df["split"] == "val"].reset_index(drop=True)
 
@@ -215,7 +198,6 @@ def main():
     print(f"- Val files dir:   {d_val}")
     print(f"- Cat mapping:     {cat_map_path}")
     return 0
-
 
 if __name__ == "__main__":
     raise SystemExit(main())
