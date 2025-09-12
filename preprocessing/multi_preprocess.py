@@ -1,7 +1,7 @@
 import os, sys, glob, json, math, argparse, time
 import warnings
 from dataclasses import dataclass
-from multiprocessing import Pool, cpu_count, Manager
+from multiprocessing import Pool, cpu_count, Manager, set_start_method
 from functools import partial
 import cv2
 import numpy as np
@@ -12,6 +12,12 @@ import mediapipe as mp
 from concurrent.futures import ThreadPoolExecutor
 import queue
 import threading
+
+# Set multiprocessing start method to 'spawn' for CUDA compatibility
+try:
+    set_start_method('spawn', force=True)
+except RuntimeError:
+    pass  # Already set
 
 # Allow running both as a module (-m) and as a script (python preprocessing/multi_preprocess.py)
 if __package__ in (None, ""):
@@ -174,6 +180,9 @@ def process_video_worker(args):
         # Set CUDA device for this worker if specified
         if device_id is not None and torch.cuda.is_available():
             torch.cuda.set_device(device_id)
+            device = torch.device(f"cuda:{device_id}")
+        else:
+            device = torch.device("cpu")
         
         basename = os.path.splitext(os.path.basename(video_path))[0]
         output_npz_folder = os.path.join(out_dir)
@@ -192,7 +201,6 @@ def process_video_worker(args):
         next_t = 0.0
 
         models = create_models(seg_model=1, detection_conf=conf_thresh, tracking_conf=conf_thresh)
-        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
         X_frames = []
         M_frames = []
@@ -331,7 +339,10 @@ def process_videos_multiprocess(video_files, out_dir, target_fps=30, out_size=25
     worker_args = []
     for i, video_path in enumerate(video_files):
         # Distribute GPU devices among workers if available
-        device_id = i % torch.cuda.device_count() if torch.cuda.is_available() else None
+        if torch.cuda.is_available() and torch.cuda.device_count() > 0:
+            device_id = i % torch.cuda.device_count()
+        else:
+            device_id = None
         
         args = (video_path, out_dir, target_fps, out_size, conf_thresh, max_gap,
                 write_keypoints, write_iv3_features, feature_key, occ_vis_thresh,

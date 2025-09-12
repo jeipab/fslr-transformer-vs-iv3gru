@@ -141,6 +141,7 @@ def main():
             continue
         label, cat = id_to_cat.get(id_num)
         new_name = f"clip_{counter:0{width}d}_{label}.MOV" # Option: Change {label} to {cat} to rename with a category instead
+        dest = out_dir / new_name
         # If destination exists, increment counter until free to avoid accidental overwrite.
         while dest.exists():
             counter += 1

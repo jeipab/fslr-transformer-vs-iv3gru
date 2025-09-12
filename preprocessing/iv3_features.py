@@ -39,7 +39,7 @@ _iv3_model.eval()
 for p in _iv3_model.parameters():
     p.requires_grad = False
 
-# ImageNet normalization constants (standard values)
+# ImageNet normalization constants (standard values) - will be moved to device as needed
 _IMAGENET_MEAN = torch.tensor([0.485, 0.456, 0.406]).view(3, 1, 1)
 _IMAGENET_STD = torch.tensor([0.229, 0.224, 0.225]).view(3, 1, 1)
 
@@ -63,11 +63,17 @@ def extract_iv3_features(frame_bgr, image_size=(299, 299), device=None):
 
     # Convert to torch tensor in [0, 1] and normalize using ImageNet stats.
     tensor = torch.from_numpy(img_resized).permute(2, 0, 1).float() / 255.0
-    tensor = (tensor - _IMAGENET_MEAN) / _IMAGENET_STD
     tensor = tensor.unsqueeze(0).to(device)  # [1, 3, 299, 299]
+    
+    # Move normalization constants to the same device
+    mean = _IMAGENET_MEAN.to(device)
+    std = _IMAGENET_STD.to(device)
+    tensor = (tensor - mean) / std
 
     with torch.no_grad():
-        feats = _iv3_model.to(device)(tensor)  # [1, 2048]
+        # Ensure model is on the correct device
+        model_on_device = _iv3_model.to(device)
+        feats = model_on_device(tensor)  # [1, 2048]
     return feats.squeeze(0).cpu().numpy()
 
 def ensure_dir(p):
