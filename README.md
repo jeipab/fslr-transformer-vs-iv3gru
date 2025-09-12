@@ -35,21 +35,33 @@ Use PowerShell from the repo root:
 
 **1) (Optional) create & activate a virtual environment**
 
+````bash
+**1. (Optional) Create & activate a virtual environment**
 ```bash
 python -m venv .venv
 \.venv\Scripts\Activate.ps1
-```
+````
+
+- If you already have a terminal with (venv) active, you don’t need to reactivate.
+
+````
 
 **2) Install dependencies**
 
 ```bash
 pip install -r .\requirments.txt
-```
+````
 
 **3) Run the app**
 
 ```bash
 streamlit run run_app.py
+```
+
+**3. Run the app**
+
+```bash
+python -m streamlit run ui\app.py
 ```
 
 Alternative (from streamlit_app directory):
@@ -66,6 +78,8 @@ If the default port is busy:
 ```bash
 streamlit run run_app.py --server.port 8502
 ```
+
+## Quick start: Preprocessing
 
 ## Quick start: Preprocessing
 
@@ -100,6 +114,8 @@ data/processed/
   train_labels.csv  # file,gloss,cat (0-based)
   val_labels.csv
 ```
+
+## Quick start: Training
 
 ## Quick start: Training
 
