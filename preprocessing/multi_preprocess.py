@@ -104,6 +104,8 @@ class BatchedInceptionV3Processor:
         
         # Convert to torch tensor in [0, 1] and normalize
         tensor = torch.from_numpy(img_resized).permute(2, 0, 1).float() / 255.0
+        # Move tensor to the same device as mean/std before normalization
+        tensor = tensor.to(self.device)
         tensor = (tensor - self.mean) / self.std
         return tensor
     
@@ -174,7 +176,7 @@ def process_video_worker(args):
     (video_path, out_dir, target_fps, out_size, conf_thresh, max_gap, 
      write_keypoints, write_iv3_features, feature_key, occ_vis_thresh, 
      occ_frame_prop, occ_min_run, compute_occlusion, labels_csv_path, 
-     gloss_id, cat_id, batch_size, device_id) = args
+     gloss_id, cat_id, batch_size, device_id, disable_parquet) = args
     
     try:
         # Set CUDA device for this worker if specified
@@ -290,7 +292,7 @@ def process_video_worker(args):
             interpolation_max_gap=max_gap
         )
 
-        to_npz(npz_out_path, X_filled, M_filled, T_ms, meta, also_parquet=True)
+        to_npz(npz_out_path, X_filled, M_filled, T_ms, meta, also_parquet=not disable_parquet)
 
         # Occlusion detection and CSV update
         occluded_flag = 0
@@ -347,7 +349,7 @@ def process_videos_multiprocess(video_files, out_dir, target_fps=30, out_size=25
         args = (video_path, out_dir, target_fps, out_size, conf_thresh, max_gap,
                 write_keypoints, write_iv3_features, feature_key, occ_vis_thresh,
                 occ_frame_prop, occ_min_run, compute_occlusion, labels_csv_path,
-                gloss_id, cat_id, batch_size, device_id)
+                gloss_id, cat_id, batch_size, device_id, disable_parquet)
         worker_args.append(args)
     
     # Process videos in parallel
