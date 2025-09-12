@@ -21,7 +21,7 @@ You can generate `.npz` files directly from videos using `preprocessing/preproce
 - Install repository requirements:
 
 ```bash
-pip install -r requirments.txt
+pip install -r requirements.txt
 # Optional (recommended for inspecting outputs)
 pip install pyarrow
 ```
