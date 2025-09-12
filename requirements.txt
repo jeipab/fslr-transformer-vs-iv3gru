@@ -20,3 +20,4 @@ pyarrow
 scikit-learn
 matplotlib
 seaborn
+ipykernel
