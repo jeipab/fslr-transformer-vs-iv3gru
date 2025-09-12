@@ -1,3 +1,22 @@
+"""
+Preprocessor for raw sign-language video clips → `.npz` / `.parquet`.
+
+Purpose
+- Extract pose, hand, and face keypoints using MediaPipe.
+- Compute optional InceptionV3 (2048-D) CNN features.
+- Detect occlusions from keypoint visibility.
+- Save per-clip outputs (`X`, `mask`, `timestamps_ms`, `meta`, `X2048`) as compressed `.npz` (+ optional `.parquet`).
+- Maintain/update a `labels.csv` with columns: `file,gloss,cat,occluded`.
+
+Usage
+- Preprocess a single video:
+    python preprocessing/preprocess.py input.mp4 data/processed/keypoints_all 
+    --write-keypoints --write-iv3-features --id 12
+- Preprocess all videos in a directory (copy labels to `labels.csv`):
+    python preprocessing/preprocess.py data/raw/ data/processed/keypoints_all 
+    --write-keypoints --write-iv3-features --id 12
+"""
+
 import os, sys, glob, json, math, argparse, time
 import warnings
 from dataclasses import dataclass
