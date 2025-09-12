@@ -3,25 +3,24 @@ from pathlib import Path
 import shutil
 import sys
 import csv
-import random
-from collections import defaultdict
+import hashlib
 import pandas as pd
-import numpy as np
 
 """
-Train/Val split maker for keypoint/CNN feature datasets.
+Dataset organizer using predefined train/val split assignments.
 
-Creates an 80/20 (configurable) split from a master labels CSV and organizes files.
-
-Inputs
-- A processed root directory that already contains your preprocessed .npz files.
-- A labels CSV with columns: file,gloss,cat  (optionally 'occluded').
-
-Outputs
-- <out_root>/keypoints_train/        # .npz files (moved or copied)
-- <out_root>/keypoints_val/
-- <out_root>/train_labels.csv        # file,gloss,cat
-- <out_root>/val_labels.csv
+This script **does not calculate** splits. It expects the input labels CSV to
+contain a 'split' column with values 'train' or 'val' and will:
+- Validate required columns: file, gloss, cat, occluded, split
+- Normalize/resolve .npz paths under --processed-root
+- Map string categories in 'cat' to contiguous integer ids starting at 0
+  (if 'cat' is already integer-like, it is preserved)
+- Move/copy each .npz (and optional .parquet neighbor) into:
+    <out_root>/keypoints_train/ and <out_root>/keypoints_val/
+- Write train_labels.csv and val_labels.csv with header:
+    file,gloss,cat,occluded   (file = basename without extension)
+- Avoid filename collisions by appending a stable 8-char hash suffix derived
+  from the source path if a destination basename already exists.
 """
 
 def _resolve_npz_path(processed_root: Path, file_entry: str) -> Path:
