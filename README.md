@@ -35,22 +35,19 @@ Use PowerShell from the repo root:
 
 **1) (Optional) create & activate a virtual environment**
 
-````bash
-**1. (Optional) Create & activate a virtual environment**
 ```bash
 python -m venv .venv
 \.venv\Scripts\Activate.ps1
-````
 
 - If you already have a terminal with (venv) active, you don’t need to reactivate.
 
-````
+```
 
 **2) Install dependencies**
 
 ```bash
 pip install -r .\requirments.txt
-````
+```
 
 **3) Run the app**
 
@@ -58,17 +55,17 @@ pip install -r .\requirments.txt
 streamlit run run_app.py
 ```
 
-**3. Run the app**
+**3) Run the app**
 
 ```bash
 python -m streamlit run ui\app.py
 ```
 
-Alternative (from streamlit_app directory):
-
 ```bash
 cd streamlit_app
 streamlit run main.py
+
+- Alternative (from streamlit_app directory):
 ```
 
 The demo supports both preprocessed `.npz` files and video files. It includes animated keypoint visualization, feature analysis, and simulated predictions.
