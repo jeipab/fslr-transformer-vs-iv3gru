@@ -1,10 +1,10 @@
 """
 Validator for preprocessed `.npz`/`.parquet` datasets.
 
-Purpose
+Purpose:
 - Quickly check that extracted clips match model training requirements.
 
-Usage
+Usage:
 - Validate all `.npz` under a directory:
     python -m preprocessing.validate_npz data/processed/keypoints_val
 - Validate for both Transformer (`X`) and IV3-GRU (`X2048`):

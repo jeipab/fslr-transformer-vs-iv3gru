@@ -1,13 +1,13 @@
 """
 Keypoint preprocessing utilities using MediaPipe Holistic.
 
-What this provides
+What this provides:
 - Landmark index sets and constants used to build the 156-D vector.
 - Model lifecycle helpers (`create_models`, `close_models`).
 - Per-frame extraction of 78 keypoints → `X` (156 floats) and `mask` (78 bools).
 - Small-gap interpolation to fill missing keypoints in time.
 
-Input/Output overview
+Input/Output overview:
 - Input image is RGB (H, W, 3), float/uint8 in standard OpenCV format.
 - `extract_keypoints_from_frame` returns:
   - `vec156`: np.float32 shape (156,) with values in [0,1].

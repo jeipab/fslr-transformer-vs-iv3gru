@@ -1,11 +1,11 @@
 """
 InceptionV3 feature extraction utilities (PyTorch/torchvision).
 
-What this provides
+What this provides:
 - Single-frame feature extraction that returns a 2048-D ImageNet embedding.
 - A simple video processor that can write both keypoints (`X`) and IV3 features (`X2048`).
 
-Key facts
+Key facts:
 - Input frame format: OpenCV BGR image.
 - Output feature: NumPy array of shape (2048,) with dtype float32.
 - Matches the training stack (torchvision InceptionV3, global average pooling).

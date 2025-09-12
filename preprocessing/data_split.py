@@ -1,7 +1,7 @@
 """
 Splitter & organizer for preprocessed `.npz`/`.parquet` datasets.
 
-Purpose
+Purpose:
 - Take a `labels.csv` and corresponding preprocessed clip files.
 - Verify required columns: `file`, `gloss`, `cat`, `occluded`.
 - Encode `cat` values to zero-based integer IDs (writes `cat_mapping.csv`).
@@ -9,7 +9,7 @@ Purpose
 - Move or copy `.npz` (and matching `.parquet`) files into `keypoints_train/` and `keypoints_val/`.
 - Generate `train_labels.csv` and `val_labels.csv` containing only `file,gloss,cat,occluded`.
 
-Usage
+Usage:
 - Split with default 80/20 ratio (copy files):
     python preprocessing/data_split.py \
         --processed-root data/processed/keypoints_all \
@@ -17,7 +17,7 @@ Usage
         --out-root data/splits \
         --copy
 
-Options
+Options:
 - `--processed-root` : Path to directory of preprocessed `.npz`/`.parquet` files (required).
 - `--labels`         : Path to `labels.csv` with columns `file,gloss,cat,occluded` (required).
 - `--out-root`       : Destination root directory (default = `processed-root`).
