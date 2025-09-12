@@ -71,8 +71,6 @@ streamlit run run_app.py --server.port 8502
 
 ## Quick start: Preprocessing
 
-## Quick start: Preprocessing
-
 Generate training-ready `.npz` from videos. Use either the single-file or directory mode.
 
 Single video (writes `X` and optionally `X2048` into one `.npz`):
@@ -104,8 +102,6 @@ data/processed/
   train_labels.csv  # file,gloss,cat (0-based)
   val_labels.csv
 ```
-
-## Quick start: Training
 
 ## Quick start: Training
 
