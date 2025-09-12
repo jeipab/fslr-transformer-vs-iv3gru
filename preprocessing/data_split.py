@@ -1,3 +1,32 @@
+"""
+Splitter & organizer for preprocessed `.npz`/`.parquet` datasets.
+
+Purpose
+- Take a `labels.csv` and corresponding preprocessed clip files.
+- Verify required columns: `file`, `gloss`, `cat`, `occluded`.
+- Encode `cat` values to zero-based integer IDs (writes `cat_mapping.csv`).
+- Split into train/val sets (use provided `split` column if present, else shuffle and split by ratio).
+- Move or copy `.npz` (and matching `.parquet`) files into `keypoints_train/` and `keypoints_val/`.
+- Generate `train_labels.csv` and `val_labels.csv` containing only `file,gloss,cat,occluded`.
+
+Usage
+- Split with default 80/20 ratio (copy files):
+    python preprocessing/data_split.py \
+        --processed-root data/processed/keypoints_all \
+        --labels shared/labels.csv \
+        --out-root data/splits \
+        --copy
+
+Options
+- `--processed-root` : Path to directory of preprocessed `.npz`/`.parquet` files (required).
+- `--labels`         : Path to `labels.csv` with columns `file,gloss,cat,occluded` (required).
+- `--out-root`       : Destination root directory (default = `processed-root`).
+- `--copy`           : Copy files instead of moving them.
+- `--train-ratio`    : Train split ratio if no `split` column is present (default = 0.8).
+
+Exit code is non-zero if any errors occur.
+"""
+
 import argparse
 from pathlib import Path
 import shutil
@@ -7,22 +36,6 @@ import random
 import hashlib
 import pandas as pd
 import numpy as np
-"""
-Dataset organizer using predefined train/val split assignments.
-
-This script **does not calculate** splits. It expects the input labels CSV to
-contain a 'split' column with values 'train' or 'val' and will:
-- Validate required columns: file, gloss, cat, occluded, split
-- Normalize/resolve .npz paths under --processed-root
-- Map string categories in 'cat' to contiguous integer ids starting at 0
-  (if 'cat' is already integer-like, it is preserved)
-- Move/copy each .npz (and optional .parquet neighbor) into:
-    <out_root>/keypoints_train/ and <out_root>/keypoints_val/
-- Write train_labels.csv and val_labels.csv with header:
-    file,gloss,cat,occluded   (file = basename without extension)
-- Avoid filename collisions by appending a stable 8-char hash suffix derived
-  from the source path if a destination basename already exists.
-"""
 
 def _resolve_npz_path(processed_root: Path, file_entry: str) -> Path:
     """
