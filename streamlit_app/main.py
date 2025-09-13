@@ -13,121 +13,401 @@ from streamlit_app.components import (
     render_file_upload, render_main_header, render_predictions_section
 )
 from streamlit_app.data_processing import process_video_file
-from streamlit_app.utils import detect_file_type, TempUploadedFile
+from streamlit_app.utils import detect_file_type, TempUploadedFile, check_npz_compatibility, create_npz_bytes
 from streamlit_app.visualization import (
     render_sequence_overview, render_animated_keypoints, 
     render_feature_charts, create_video_with_keypoints
 )
 
 
+def initialize_session_state():
+    """Initialize session state for multiple file processing."""
+    if 'uploaded_files' not in st.session_state:
+        st.session_state.uploaded_files = []
+    if 'file_status' not in st.session_state:
+        st.session_state.file_status = {}
+    if 'processed_data' not in st.session_state:
+        st.session_state.processed_data = {}
+    if 'file_metadata' not in st.session_state:
+        st.session_state.file_metadata = {}
+    if 'current_tab' not in st.session_state:
+        st.session_state.current_tab = None
+    if 'selected_files' not in st.session_state:
+        st.session_state.selected_files = []
+
+
+def process_uploaded_files(uploaded_files, cfg):
+    """Process uploaded files and update session state."""
+    for uploaded_file in uploaded_files:
+        filename = uploaded_file.name
+        
+        # Skip if already processed
+        if filename in st.session_state.processed_data:
+            continue
+            
+        # Add to uploaded files list
+        if filename not in [f.name for f in st.session_state.uploaded_files]:
+            st.session_state.uploaded_files.append(uploaded_file)
+            st.session_state.file_status[filename] = 'pending'
+
+
+def render_file_queue_ui():
+    """Render file queue with status indicators and controls."""
+    if not st.session_state.uploaded_files:
+        return
+        
+    st.markdown("### File Queue")
+    
+    # File queue display
+    for i, uploaded_file in enumerate(st.session_state.uploaded_files):
+        filename = uploaded_file.name
+        status = st.session_state.file_status.get(filename, 'pending')
+        
+        col1, col2, col3, col4 = st.columns([3, 2, 2, 1])
+        
+        with col1:
+            file_type = detect_file_type(uploaded_file)
+            if file_type == 'npz':
+                st.write(f"📄 {filename}")
+            else:
+                st.write(f"🎥 {filename}")
+        
+        with col2:
+            if status == 'pending':
+                st.write("⏳ Pending")
+            elif status == 'processing':
+                st.write("🔄 Processing")
+            elif status == 'completed':
+                st.write("✅ Completed")
+            elif status == 'error':
+                st.write("❌ Error")
+        
+        with col3:
+            if status == 'pending':
+                if st.button("Process", key=f"process_{i}"):
+                    process_single_file(uploaded_file, filename)
+            elif status == 'completed':
+                if st.button("View", key=f"view_{i}"):
+                    st.session_state.current_tab = filename
+        
+        with col4:
+            if st.button("Delete", key=f"delete_{i}", help="Remove file"):
+                remove_file(filename)
+    
+    # Batch controls
+    st.markdown("#### Batch Operations")
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        if st.button("Process All Pending", type="primary"):
+            process_all_pending_files()
+    
+    with col2:
+        if st.button("Clear All"):
+            clear_all_files()
+
+
+def process_single_file(uploaded_file, filename):
+    """Process a single file."""
+    try:
+        st.session_state.file_status[filename] = 'processing'
+        
+        file_type = detect_file_type(uploaded_file)
+        file_content = uploaded_file.read()
+        
+        if file_type == 'npz':
+            # Load NPZ file
+            file_bytes = io.BytesIO(file_content)
+            npz_data = dict(np.load(file_bytes, allow_pickle=True))
+            
+            # Check compatibility
+            compatibility = check_npz_compatibility(npz_data)
+            
+            if not any(compatibility.values()):
+                st.session_state.file_status[filename] = 'error'
+                st.toast(f"{filename}: Incompatible with any model architecture", icon="❌")
+                return
+            
+            # Store processed data
+            st.session_state.processed_data[filename] = npz_data
+            st.session_state.file_metadata[filename] = {
+                'compatibility': compatibility,
+                'file_type': file_type,
+                'frame_count': npz_data['X'].shape[0] if 'X' in npz_data else npz_data['X2048'].shape[0] if 'X2048' in npz_data else 0
+            }
+            st.session_state.file_status[filename] = 'completed'
+            
+            # Show success message
+            compatible_models = []
+            if compatibility['transformer']:
+                compatible_models.append("Transformer")
+            if compatibility['iv3_gru']:
+                compatible_models.append("IV3-GRU")
+            
+            st.toast(f"{filename}: Loaded successfully", icon="✅")
+            st.toast(f"Compatible with: {', '.join(compatible_models)}", icon="🔧")
+            
+        elif file_type == 'video':
+            # For now, just mark as pending for manual processing
+            st.session_state.file_status[filename] = 'pending'
+            st.toast(f"{filename}: Video file ready for preprocessing", icon="🎥")
+            
+        else:
+            st.session_state.file_status[filename] = 'error'
+            st.toast(f"{filename}: Unsupported file type", icon="❌")
+            
+    except Exception as e:
+        st.session_state.file_status[filename] = 'error'
+        st.toast(f"{filename}: Processing failed - {str(e)}", icon="❌")
+
+
+def process_all_pending_files():
+    """Process all pending files."""
+    pending_files = [f for f in st.session_state.uploaded_files 
+                    if st.session_state.file_status.get(f.name, 'pending') == 'pending']
+    
+    if not pending_files:
+        st.toast("No pending files to process", icon="ℹ️")
+        return
+    
+    for uploaded_file in pending_files:
+        process_single_file(uploaded_file, uploaded_file.name)
+
+
+def remove_file(filename):
+    """Remove a file from the queue."""
+    # Remove from all session state
+    st.session_state.uploaded_files = [f for f in st.session_state.uploaded_files if f.name != filename]
+    
+    if filename in st.session_state.file_status:
+        del st.session_state.file_status[filename]
+    if filename in st.session_state.processed_data:
+        del st.session_state.processed_data[filename]
+    if filename in st.session_state.file_metadata:
+        del st.session_state.file_metadata[filename]
+    
+    # Reset current tab if it was the removed file
+    if st.session_state.current_tab == filename:
+        st.session_state.current_tab = None
+
+
+def clear_all_files():
+    """Clear all files from the queue."""
+    st.session_state.uploaded_files = []
+    st.session_state.file_status = {}
+    st.session_state.processed_data = {}
+    st.session_state.file_metadata = {}
+    st.session_state.current_tab = None
+    st.session_state.selected_files = []
+    st.toast("All files cleared", icon="🗑️")
+
+
+def render_visualization_tabs(cfg):
+    """Render visualization tabs for processed files."""
+    completed_files = [f for f in st.session_state.uploaded_files 
+                      if st.session_state.file_status.get(f.name) == 'completed']
+    
+    if not completed_files:
+        return
+    
+    # Create tabs
+    tab_names = []
+    for uploaded_file in completed_files:
+        filename = uploaded_file.name
+        file_type = detect_file_type(uploaded_file)
+        icon = "📄" if file_type == 'npz' else "🎥"
+        tab_names.append(f"{icon} {filename}")
+    
+    # Add batch summary tab
+    tab_names.append("📊 Batch Summary")
+    
+    # Create tabs
+    tabs = st.tabs(tab_names)
+    
+    # Individual file tabs
+    for i, uploaded_file in enumerate(completed_files):
+        with tabs[i]:
+            filename = uploaded_file.name
+            npz_data = st.session_state.processed_data[filename]
+            metadata = st.session_state.file_metadata[filename]
+            
+            # File info
+            st.markdown(f"### {filename}")
+            
+            col1, col2, col3 = st.columns(3)
+            with col1:
+                st.metric("Frames", metadata['frame_count'])
+            with col2:
+                compatibility = metadata['compatibility']
+                compatible_count = sum(compatibility.values())
+                st.metric("Compatible Models", compatible_count)
+            with col3:
+                st.metric("File Type", metadata['file_type'].upper())
+            
+            # Show compatibility info
+            compatible_models = []
+            if compatibility['transformer']:
+                compatible_models.append("Transformer")
+            if compatibility['iv3_gru']:
+                compatible_models.append("IV3-GRU")
+            
+            if compatible_models:
+                st.info(f"Compatible with: {', '.join(compatible_models)}")
+            
+            # Render visualizations
+            try:
+                X_pad, mask, meta = render_sequence_overview(npz_data, cfg["sequence_length"])
+                render_animated_keypoints(X_pad, mask if mask.size > 0 else None, key_suffix=filename)
+                render_feature_charts(X_pad, mask if mask.size > 0 else None, key_suffix=filename)
+                
+                # Generate and render predictions
+                render_predictions_section(cfg, None, None)
+                
+                # Download button
+                st.markdown("### Download")
+                npz_bytes = create_npz_bytes(npz_data)
+                st.download_button(
+                    label=f"Download {filename}",
+                    data=npz_bytes,
+                    file_name=filename,
+                    mime="application/octet-stream"
+                )
+                
+            except Exception as e:
+                st.error(f"Visualization error: {str(e)}")
+    
+    # Batch summary tab
+    with tabs[-1]:
+        render_batch_summary_tab(cfg)
+
+
+def render_batch_summary_tab(cfg):
+    """Render batch summary tab."""
+    st.markdown("### Batch Processing Summary")
+    
+    completed_files = [f for f in st.session_state.uploaded_files 
+                      if st.session_state.file_status.get(f.name) == 'completed']
+    
+    if not completed_files:
+        st.info("No completed files to summarize.")
+        return
+    
+    # Summary table with predictions
+    summary_data = []
+    for uploaded_file in completed_files:
+        filename = uploaded_file.name
+        metadata = st.session_state.file_metadata[filename]
+        compatibility = metadata['compatibility']
+        
+        # Generate predictions for this file
+        from streamlit_app.utils import simulate_predictions, topk_from_logits
+        import numpy as np
+        
+        # Use filename hash as seed for consistent predictions per file
+        file_seed = hash(filename) % (2**32)
+        rng = np.random.RandomState(file_seed)
+        gloss_logits, cat_logits = simulate_predictions(
+            rng, cfg["num_gloss_classes"], cfg["num_category_classes"]
+        )
+        
+        # Get top 1 predictions
+        g_idx, g_prob = topk_from_logits(gloss_logits, 1)
+        c_idx, c_prob = topk_from_logits(cat_logits, 1)
+        
+        # Format predictions
+        top_gloss = f"Gloss {g_idx[0]} ({g_prob[0]*100:.1f}%)"
+        top_category = f"Category {c_idx[0]} ({c_prob[0]*100:.1f}%)"
+        
+        summary_data.append({
+            'File': filename,
+            'Type': metadata['file_type'].upper(),
+            'Frames': metadata['frame_count'],
+            'Transformer': 'Yes' if compatibility['transformer'] else 'No',
+            'IV3-GRU': 'Yes' if compatibility['iv3_gru'] else 'No',
+            'Top Gloss': top_gloss,
+            'Top Category': top_category,
+            'Status': st.session_state.file_status[filename]
+        })
+    
+    st.dataframe(summary_data, use_container_width=True)
+    
+    # Statistics
+    st.markdown("### Statistics")
+    col1, col2, col3 = st.columns(3)
+    
+    with col1:
+        total_files = len(completed_files)
+        st.metric("Total Files", total_files)
+    
+    with col2:
+        transformer_compatible = sum(1 for f in completed_files 
+                                   if st.session_state.file_metadata[f.name]['compatibility']['transformer'])
+        st.metric("Transformer Compatible", transformer_compatible)
+    
+    with col3:
+        iv3_compatible = sum(1 for f in completed_files 
+                           if st.session_state.file_metadata[f.name]['compatibility']['iv3_gru'])
+        st.metric("IV3-GRU Compatible", iv3_compatible)
+    
+    # Batch download
+    st.markdown("### Batch Download")
+    if st.button("Download All as ZIP", type="primary"):
+        create_batch_download()
+
+
+def create_batch_download():
+    """Create and provide batch download as ZIP."""
+    import zipfile
+    import io
+    
+    # Create ZIP in memory
+    zip_buffer = io.BytesIO()
+    
+    with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zip_file:
+        for filename, npz_data in st.session_state.processed_data.items():
+            npz_bytes = create_npz_bytes(npz_data)
+            zip_file.writestr(filename, npz_bytes)
+    
+    zip_buffer.seek(0)
+    
+    st.download_button(
+        label="Download All Files as ZIP",
+        data=zip_buffer.getvalue(),
+        file_name="processed_files.zip",
+        mime="application/zip"
+    )
+
+
 def main() -> None:
     """Main application function."""
     set_page()
     cfg = render_sidebar()
+    initialize_session_state()
 
     # Main header
     render_main_header()
     
     # File upload
     st.markdown("### Upload Data")
-    uploaded_file = render_file_upload()
+    uploaded_files = render_file_upload()
 
-    if uploaded_file is None:
+    # Handle file limit
+    if uploaded_files and len(uploaded_files) > 10:
+        st.error("Maximum 10 files allowed. Please select fewer files.")
+        return
+
+    if not uploaded_files:
         render_welcome_screen()
         return
 
-    # Detect file type and process accordingly
-    file_type = detect_file_type(uploaded_file)
+    # Process uploaded files
+    process_uploaded_files(uploaded_files, cfg)
     
-    if file_type == 'unknown':
-        st.error(f"Unsupported file type: {uploaded_file.name}")
-        return
+    # Show file queue and processing controls
+    render_file_queue_ui()
     
-    # Store file content for potential reuse (e.g., video overlay)
-    file_content = uploaded_file.read()
-    
-    try:
-        if file_type == 'npz':
-            # Load NPZ file
-            file_bytes = io.BytesIO(file_content)
-            npz_data = dict(np.load(file_bytes, allow_pickle=True))
-        elif file_type == 'video':
-            # Process video file
-            with st.spinner(f"Processing video file: {uploaded_file.name}..."):
-                temp_file = TempUploadedFile(uploaded_file.name, file_content)
-                npz_data = process_video_file(temp_file, target_fps=30, out_size=256)
-            st.success(f"Video processed successfully: {npz_data['X'].shape[0]} frames extracted")
-        else:
-            st.error(f"Unsupported file type: {file_type}")
-            return
-            
-    except Exception as exc:
-        st.error(f"Failed to process {file_type} file: {exc}")
-        return
-
-    try:
-        X_pad, mask, meta = render_sequence_overview(npz_data, cfg["sequence_length"])
-    except Exception as exc:
-        st.error(str(exc))
-        return
-
-    # Animated keypoint visualization
-    render_animated_keypoints(X_pad, mask if mask.size > 0 else None)
-    
-    # Feature analysis
-    render_feature_charts(X_pad, mask if mask.size > 0 else None)
-
-    # Video visualization section (only for video input)
-    if file_type == 'video':
-        st.markdown("<div class='section-header'>Video Visualization</div>", unsafe_allow_html=True)
-        
-        col1, col2 = st.columns([2, 1])
-        
-        with col1:
-            show_video_overlay = st.checkbox(
-                "Create video with keypoint overlay", 
-                value=False,
-                help="Generate a new video with keypoints drawn on top of the original video"
-            )
-            
-        with col2:
-            if show_video_overlay:
-                if st.button("Generate Video Overlay"):
-                    with st.spinner("Creating video with keypoint overlay..."):
-                        try:
-                            # Create temporary file object for video processing
-                            temp_video_file = TempUploadedFile(uploaded_file.name, file_content)
-                            overlay_video_path = create_video_with_keypoints(
-                                temp_video_file, 
-                                X_pad,
-                                f"overlay_{Path(uploaded_file.name).stem}.mp4"
-                            )
-                            
-                            # Display the video
-                            st.success("Video overlay created successfully!")
-                            
-                            # Show download button
-                            with open(overlay_video_path, 'rb') as video_file:
-                                st.download_button(
-                                    label="Download Video with Keypoints",
-                                    data=video_file.read(),
-                                    file_name=f"overlay_{Path(uploaded_file.name).stem}.mp4",
-                                    mime="video/mp4"
-                                )
-                                
-                            # Display video inline
-                            st.video(overlay_video_path)
-                            
-                        except Exception as e:
-                            st.error(f"Failed to create video overlay: {str(e)}")
-
-    # Predictions section
-    from streamlit_app.utils import simulate_predictions
-    rng = np.random.RandomState(cfg["random_seed"])
-    gloss_logits, cat_logits = simulate_predictions(
-        rng, cfg["num_gloss_classes"], cfg["num_category_classes"]
-    )
-    render_predictions_section(cfg, gloss_logits, cat_logits)
+    # Show visualization tabs
+    render_visualization_tabs(cfg)
 
 
 if __name__ == "__main__":

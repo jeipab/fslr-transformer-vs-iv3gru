@@ -78,6 +78,60 @@ def detect_file_type(uploaded_file) -> str:
         return 'unknown'
 
 
+def check_npz_compatibility(npz_data: Dict[str, np.ndarray]) -> Dict[str, bool]:
+    """
+    Check if NPZ data is compatible with different model architectures.
+    
+    Args:
+        npz_data: Dictionary containing NPZ file contents
+        
+    Returns:
+        Dictionary with compatibility flags for each model architecture
+    """
+    compatibility = {
+        'transformer': False,
+        'iv3_gru': False,
+        'both': False
+    }
+    
+    # Check for transformer compatibility (needs 156-D keypoints)
+    has_keypoints = 'X' in npz_data
+    if has_keypoints:
+        X = npz_data['X']
+        if X.ndim == 2 and X.shape[1] == 156:
+            compatibility['transformer'] = True
+    
+    # Check for iv3_gru compatibility (needs 2048-D features)
+    has_iv3_features = 'X2048' in npz_data
+    if has_iv3_features:
+        X2048 = npz_data['X2048']
+        if X2048.ndim == 2 and X2048.shape[1] == 2048:
+            compatibility['iv3_gru'] = True
+    
+    # Check if both are compatible
+    if compatibility['transformer'] and compatibility['iv3_gru']:
+        compatibility['both'] = True
+    
+    return compatibility
+
+
+def create_npz_bytes(npz_data: Dict[str, np.ndarray]) -> bytes:
+    """
+    Create NPZ file bytes from dictionary data.
+    
+    Args:
+        npz_data: Dictionary containing arrays to save
+        
+    Returns:
+        Bytes of the NPZ file
+    """
+    import io
+    npz_buffer = io.BytesIO()
+    np.savez_compressed(npz_buffer, **npz_data)
+    npz_buffer.seek(0)
+    return npz_buffer.getvalue()
+
+
 class TempUploadedFile:
     """Temporary uploaded file object to handle file content reuse."""
     def __init__(self, name, content):

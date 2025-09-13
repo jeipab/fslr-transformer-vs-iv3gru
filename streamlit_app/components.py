@@ -26,20 +26,34 @@ def set_page() -> None:
     .section-header {
         font-size: 1.5rem;
         font-weight: bold;
-        color: #2c3e50;
+        color: #ffffff;
         border-bottom: 2px solid #3498db;
         padding-bottom: 0.5rem;
         margin: 1.5rem 0 1rem 0;
     }
     .metric-card {
-        background-color: #f8f9fa;
+        background-color: rgba(255, 255, 255, 0.1);
         padding: 1rem;
         border-radius: 0.5rem;
-        border-left: 4px solid #3498db;
+        backdrop-filter: blur(10px);
     }
     .status-good { color: #27ae60; }
     .status-warning { color: #f39c12; }
     .status-error { color: #e74c3c; }
+    
+    /* Hide progress bars in metrics */
+    .metric-container [data-testid="metric-container"] > div[data-testid="metric-value"] > div[style*="background"] {
+        display: none !important;
+    }
+    
+    .metric-container [data-testid="metric-container"] > div[data-testid="metric-value"] > div[style*="width"] {
+        display: none !important;
+    }
+    
+    /* Alternative approach - hide all progress bars in metrics */
+    div[data-testid="metric-container"] div[style*="background-color"] {
+        display: none !important;
+    }
     </style>
     """, unsafe_allow_html=True)
 
@@ -54,6 +68,7 @@ def render_sidebar() -> Dict:
     
     st.sidebar.markdown("### Model Configuration")
     with st.sidebar.container():
+        # Model choice will be determined dynamically based on file compatibility
         model_choice = st.selectbox(
             "Model Architecture", 
             ["SignTransformer", "IV3_GRU"], 
@@ -120,25 +135,33 @@ def render_welcome_screen() -> None:
     
     with col2:
         st.info("""
-        **What files can I upload?**
+        **Multiple File Processing (up to 10 files)**
         
         **Preprocessed data files (.npz):**
-        - Ready-to-use keypoint data from previous processing
-        - Instant analysis and visualization
+        - Ready-to-use keypoint/feature data from previous processing
+        - Compatible with Transformer (156-D keypoints) or IV3-GRU (2048-D features)
+        - Instant analysis and visualization in individual tabs
         
         **Video files:**
         - Common formats: MP4, AVI, MOV, MKV, WMV, FLV, WebM
-        - The app will automatically extract keypoints from your video
-        - Takes a bit longer to process but works with any sign language video
+        - Choose which model architectures to preprocess for
+        - Process multiple files individually or in batch
+        
+        **Features:**
+        - Tab-based visualization for each file
+        - Batch summary with comparative statistics
+        - Individual and batch download options
+        - File queue with status indicators
         """)
 
 
 def render_file_upload() -> object:
     """Render file upload component."""
     return st.file_uploader(
-        "Choose a .npz file or video file", 
+        "Choose .npz files or video files (max 10)", 
         type=["npz", "mp4", "avi", "mov", "mkv", "wmv", "flv", "webm"],
-        help="Upload a preprocessed .npz file or video file for keypoint extraction"
+        accept_multiple_files=True,
+        help="Upload preprocessed .npz files or video files for processing (up to 10 files)"
     )
 
 
@@ -152,7 +175,7 @@ def render_main_header() -> None:
     
     st.markdown("""
     <div style='text-align: center; margin-bottom: 2rem; color: #7f8c8d;'>
-        Load a preprocessed .npz file to analyze keypoint sequences and view predictions.
+        Upload a preprocessed .npz file or video to analyze sign language sequences and view predictions.
     </div>
     """, unsafe_allow_html=True)
 
@@ -169,7 +192,7 @@ def render_predictions_section(cfg: Dict, gloss_logits: object, cat_logits: obje
         st.info(f"**Input**: {'Keypoints (X)' if cfg['model_choice'] == 'SignTransformer' else 'Features (X2048)'}")
     
     # Generate predictions
-    from utils import simulate_predictions, topk_from_logits
+    from streamlit_app.utils import simulate_predictions, topk_from_logits
     import numpy as np
     
     rng = np.random.RandomState(cfg["random_seed"])  # reproducible
@@ -184,7 +207,7 @@ def render_predictions_section(cfg: Dict, gloss_logits: object, cat_logits: obje
     pred_col1, pred_col2 = st.columns(2)
     
     with pred_col1:
-        from visualization import render_topk_table
+        from streamlit_app.visualization import render_topk_table
         render_topk_table(g_idx, g_prob, "gloss", "Top Gloss Predictions")
     
     with pred_col2:
