@@ -11,7 +11,7 @@ Purpose:
 
 Usage:
 - Split with default 80/20 ratio (copy files):
-    python preprocessing/data_split.py \
+    python data/splitting/data_split.py \
         --processed-root data/processed \
         --labels data/processed/labels_updated.csv \
         --out-root data/processed \
