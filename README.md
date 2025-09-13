@@ -1,192 +1,146 @@
-# Filipino Sign Language Recognition Tool
+# Filipino Sign Language Recognition
 
-This repository contains the implementation of our thesis project:
-**Multi-Head Attention Transformer for Filipino Sign Language**.
+Multi-Head Attention Transformer for Filipino Sign Language Recognition.
 
-## Repository Structure
+## Structure
 
-- `preprocessing/` → keypoint extraction and occlusion handling
-  - `multi_preprocess.py` → Multi-process preprocessing
-  - `preprocess.py` → Original sequential preprocessing
-- `models/` → model architectures (IV3-GRU, Transformer)
-- `training/` → training scripts, utilities, evaluation
-- `streamlit_app/` → Enhanced Streamlit demo application with modular architecture
-- `notebooks/` → Jupyter notebooks for experiments
+- `preprocessing/` - Keypoint extraction and occlusion handling
+- `models/` - Transformer and IV3-GRU architectures
+- `training/` - Training scripts and evaluation
+- `streamlit_app/` - Interactive demo application
+- `notebooks/` - Jupyter notebooks for experiments
 
 ## Setup
 
-We recommend using Python **3.9–3.11**, as these versions have the most stable support for PyTorch.
-
-Clone the repository and install dependencies:
+**Requirements**: Python 3.9-3.11
 
 ```bash
 git clone https://github.com/jeipab/fslr-transformer-vs-iv3gru.git
 cd fslr-transformer-vs-iv3gru
 pip install -r requirements.txt
+pip install pyarrow  # optional, for parquet inspection
 ```
 
-If you plan to inspect `.parquet` outputs from preprocessing:
+## Demo
+
+Run the interactive Streamlit application:
 
 ```bash
-pip install pyarrow
-```
-
-## Run the Streamlit demo (UI)
-
-Use PowerShell from the repo root:
-
-**1) (Optional) create & activate a virtual environment**
-
-```bash
-python -m venv .venv
-\.venv\Scripts\Activate.ps1
-```
-
-- If you already have a terminal with (venv) active, you don’t need to reactivate.
-
-**2) Install dependencies**
-
-```bash
-pip install -r .\requirements.txt
-```
-
-**3) Run the app**
-
-```bash
+# Option 1: From root directory
 streamlit run run_app.py
-```
 
-```bash
+# Option 2: From streamlit_app directory
 cd streamlit_app
 streamlit run main.py
 ```
 
-- Alternative (from streamlit_app directory)
+**Features**:
 
-The demo supports both preprocessed `.npz` files and video files. It includes animated keypoint visualization, feature analysis, and simulated predictions.
+- Animated keypoint visualization
+- Feature analysis
+- Simulated predictions
+- Support for both `.npz` files and raw videos
 
-If the default port is busy:
+**Port conflict**: `streamlit run run_app.py --server.port 8502`
+
+## Preprocessing
+
+### Multi-Process (Recommended)
+
+**30-50x faster** for large datasets:
 
 ```bash
-streamlit run run_app.py --server.port 8502
-```
-
-## Quick start: Preprocessing
-
-### Multi-Process Preprocessing (Recommended)
-
-For processing large datasets (~2000 videos), use the optimized multi-process version:
-
-```bash
-# Fast processing with 30-50x speedup
 python preprocessing/multi_preprocess.py /path/to/videos /path/to/out_dir \
   --write-keypoints --write-iv3-features \
   --workers 10 --batch-size 64 --target-fps 15 --disable-parquet
 ```
 
-**Key features:**
+**Features**: Batched GPU inference, multi-process parallelization, configurable workers
 
-- **30-50x faster** than sequential processing
-- **Batched GPU inference** for maximum GPU utilization
-- **Multi-process parallelization** across CPU cores
-- **Configurable workers** and batch sizes
-- **Optional parquet disable** for faster I/O
+### Sequential (Original)
 
-See `preprocessing/MULTI_PREPROCESS_GUIDE.md` for detailed usage instructions.
-
-### Sequential Preprocessing (Original)
-
-For small datasets or single videos, use the original sequential version:
-
-Single video (writes `X` and optionally `X2048` into one `.npz`):
+For small datasets or single videos:
 
 ```bash
+# Single video
 python preprocessing/preprocess.py --write-keypoints --write-iv3-features \
   /path/to/video.mp4 /path/to/out_dir
-```
 
-Whole directory (recursively finds videos):
-
-```bash
+# Directory
 python -m preprocessing.preprocess /path/to/videos /path/to/out_dir \
-  --target-fps 30 --out-size 256 --conf-thresh 0.5 --max-gap 5 \
-  --write-keypoints --write-iv3-features
+  --target-fps 30 --write-keypoints --write-iv3-features
 ```
 
-Notes:
+**Output**: `.npz` files with `X [T,156]`, `X2048 [T,2048]`, `mask [T,78]`, `timestamps_ms [T]`, `meta`
 
-- Files are written to `/path/to/out_dir/0/<basename>.npz` (script uses a `0/` subfolder by default).
-- Each `.npz` contains: `X [T,156]`, optional `X2048 [T,2048]`, `mask [T,78]`, `timestamps_ms [T]`, `meta`.
-
-After extraction, split into train/val; place `.npz` directly in these folders (no nested subfolders):
+**Data Structure**:
 
 ```
 data/processed/
   keypoints_train/
   keypoints_val/
-  train_labels.csv  # file,gloss,cat (0-based)
+  train_labels.csv  # file,gloss,cat,occluded
   val_labels.csv
 ```
 
-## Quick start: Training
+## Training
 
-Transformer (uses keypoints `X [T,156]`):
+### Transformer (Keypoints)
 
 ```bash
 python -m training.train \
   --model transformer \
   --keypoints-train data/processed/keypoints_train \
-  --keypoints-val   data/processed/keypoints_val \
+  --keypoints-val data/processed/keypoints_val \
   --labels-train-csv data/processed/train_labels.csv \
-  --labels-val-csv   data/processed/val_labels.csv \
+  --labels-val-csv data/processed/val_labels.csv \
   --num-gloss 105 --num-cat 10 \
   --epochs 30 --batch-size 32 --output-dir data/processed
-# If you used a different key for keypoints: add --kp-key MyKey
 ```
 
-IV3-GRU (uses features `X2048 [T,2048]` or another key via `--feature-key`):
+### IV3-GRU (Features)
 
 ```bash
 python -m training.train \
   --model iv3_gru \
   --features-train data/processed/keypoints_train \
-  --features-val   data/processed/keypoints_val \
+  --features-val data/processed/keypoints_val \
   --labels-train-csv data/processed/train_labels.csv \
-  --labels-val-csv   data/processed/val_labels.csv \
+  --labels-val-csv data/processed/val_labels.csv \
   --feature-key X2048 \
   --num-gloss 105 --num-cat 10 \
   --epochs 30 --batch-size 32 --output-dir data/processed
-# If your features are under a different key: set --feature-key accordingly
 ```
 
-Mixed precision and performance (optional): add `--amp`, `--num-workers N`, `--pin-memory`.
+**Performance**: Add `--amp`, `--num-workers N`, `--pin-memory` for faster training
 
-## Validate your data
+## Validation
 
-Run shape/dtype/meta checks before training:
+### Data Validation
 
 ```bash
 python -m preprocessing.validate_npz data/processed/keypoints_train
 python -m preprocessing.validate_npz data/processed/keypoints_val --require-x2048
 ```
 
-## Smoke tests (no real data required)
+### Smoke Tests
 
 ```bash
 python -m training.train --model transformer --smoke-test --num-gloss 105 --num-cat 10
 python -m training.train --model iv3_gru --smoke-test --num-gloss 105 --num-cat 10 --no-pretrained-backbone
 ```
 
-## Guide
+## Guides
 
-- Preprocessing guide: [preprocessing/PREPROCESS_GUIDE.md](preprocessing/PREPROCESS_GUIDE.md)
-- Training guide: [training/TRAINING_GUIDE.md](training/TRAINING_GUIDE.md)
-- Data guide: [data/DATA_GUIDE.md](data/DATA_GUIDE.md)
-- Sharing guide: [shared/SHARING_GUIDE.md](shared/SHARING_GUIDE.md)
+- [Preprocessing Guide](preprocessing/PREPROCESS_GUIDE.md) - Video to NPZ conversion
+- [Multi-Process Guide](preprocessing/MULTI_PREPROCESS_GUIDE.md) - 30-50x faster preprocessing
+- [Model Guide](models/MODEL_GUIDE.md) - Architecture details and usage
+- [Training Guide](training/TRAINING_GUIDE.md) - Model training instructions
+- [Data Guide](data/DATA_GUIDE.md) - File formats and structures
 
 ## Troubleshooting
 
-- File not found: ensure each `file` in CSV matches a `.npz` basename in the corresponding split folder.
-- Wrong shapes: Transformer needs `X [T,156]`; IV3-GRU needs `X2048 [T,2048]` (or pass `--feature-key`).
-- Label ranges: `gloss` in `[0, num_gloss-1]`, `cat` in `[0, num_cat-1]`.
-- CPU vs GPU: the code auto-detects CUDA; you can still train on CPU for small tests.
+- **File not found**: CSV `file` values must match `.npz` basenames
+- **Wrong shapes**: Transformer needs `X [T,156]`; IV3-GRU needs `X2048 [T,2048]`
+- **Label ranges**: `gloss` in `[0, num_gloss-1]`, `cat` in `[0, num_cat-1]`
+- **CPU vs GPU**: Auto-detects CUDA, CPU fallback available
