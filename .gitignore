@@ -5,12 +5,19 @@ __pycache__/
 env/
 raw/
 
-#User Specific Folders
+# User Specific Folders
 venv311/
 venv/
 raw/
 
-# Data
+# Data (ignore everything inside data/)
+data/*
+
+# But allow tracking of data/splitting/
+!data/splitting/
+!data/splitting/**
+
+# Other Data Formats
 *.npy
 *.csv
 *.mp4
