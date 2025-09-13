@@ -14,7 +14,7 @@ After Preprocessing and Before Data Split
 import pandas as pd
 
 # Load reference and labels
-gloss_cat = pd.read_csv("shared/labels_reference.csv")   # the file with gloss_id, label, cat_id, category
+gloss_cat = pd.read_csv("data/splitting/labels_reference.csv")   # the file with gloss_id, label, cat_id, category
 labels = pd.read_csv("data/processed/labels.csv")   # CHANGE THIS to the actual location of the labels.csv file
 
 # Create mapping dictionaries
