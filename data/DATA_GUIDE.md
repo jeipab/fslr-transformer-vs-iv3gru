@@ -6,8 +6,9 @@ File formats and structures for the FSLR (Filipino Sign Language Recognition) pi
 
 ```
 data/
-  raw/           # Original videos and metadata
-  processed/     # Preprocessed artifacts ready for training
+├── raw/           # Original videos and metadata
+├── processed/     # Preprocessed artifacts ready for training
+└── splitting/     # Data splitting utilities and configurations
 ```
 
 ## File Types
@@ -24,14 +25,15 @@ data/raw/
 ├── videos/
 │   ├── sample_0001.mp4
 │   └── sample_0002.mp4
-├── annotations.csv    # Optional: file,gloss,category mapping
-└── metadata.json     # Optional: dataset information
+├── labels.csv     # Main label file
+└── metadata.json  # Optional: dataset information
 ```
 
 ### Requirements
 
 - Video files: `.mp4`, `.avi`, `.mov` (OpenCV-supported)
-- Metadata: `.json`, `.csv` with labels
+- Labels: `.csv` with required columns
+- Metadata: `.json` with dataset information (optional)
 
 ## Preprocessed Data (.npz)
 
@@ -54,9 +56,35 @@ Each `.npz` contains both keypoint and feature data for both models.
 - Right hand (21 points): 42 dims
 - Face mesh (11 points): 22 dims
 
-## Data Splits
+### Occlusion Detection
 
-### Structure
+- Frame occluded if visible keypoints/78 < 0.6 (default)
+- Clip marked occluded if:
+  - Occluded frames ≥ 40%, or
+  - Consecutive occluded run ≥ 15 frames
+
+## Data Splitting
+
+### Overview
+
+Data splitting is performed to create train/validation/test sets for model training and evaluation. The splitting process ensures proper distribution of classes and categories across splits.
+
+### Splitting Strategy
+
+- **Train**: 80% of data (default)
+- **Validation**: 20% of data (default)
+- **Test**: X% of data (default)
+
+### Configuration
+
+Splitting parameters are configured in the data splitting utilities located in `data/splitting/`:
+
+- Stratified splitting by gloss and category
+- Random seed for reproducibility
+- Customizable split ratios
+- Handling of occluded samples
+
+### Output Structure
 
 ```
 data/processed/
@@ -86,13 +114,6 @@ sample_0002,15,1,1
 - `gloss`: 0-based class ID (0 to num_gloss-1)
 - `cat`: 0-based category ID (0 to num_cat-1)
 - `occluded`: 0/1 flag (auto-generated during preprocessing)
-
-### Occlusion Detection
-
-- Frame occluded if visible keypoints/78 < 0.6 (default)
-- Clip marked occluded if:
-  - Occluded frames ≥ 40%, or
-  - Consecutive occluded run ≥ 15 frames
 
 ## Model Training
 
@@ -176,25 +197,28 @@ epoch,train_loss,val_loss,gloss_acc,cat_acc,lr
 
 ```
 data/
-  raw/
-    videos/
-      gesture_001.mp4
-      gesture_002.mp4
-  processed/
-    all/                        # Preprocessing output
-      gesture_001.npz           # X: [45,156], X2048: [45,2048]
-      gesture_002.npz
-    train/                      # After data splitting
-      gesture_001.npz
-      gesture_002.npz
-    val/
-      gesture_101.npz
-    train_labels.csv            # gesture_001,12,2,0
-    val_labels.csv              # gesture_101,5,1,1
-    SignTransformer_best.pt     # Uses X key
-    InceptionV3GRU_best.pt      # Uses X2048 key
-    training_log.csv
-    evaluation_results_20240101_120000/
-      summary_metrics.csv
-      predictions.csv
+├── raw/
+│   ├── videos/
+│   │   ├── gesture_001.mp4
+│   │   └── gesture_002.mp4
+│   └── labels.csv
+├── processed/
+│   ├── all/                        # Preprocessing output
+│   │   ├── gesture_001.npz         # X: [45,156], X2048: [45,2048]
+│   │   └── gesture_002.npz
+│   ├── train/                      # After data splitting
+│   │   ├── gesture_001.npz
+│   │   └── gesture_002.npz
+│   ├── val/
+│   │   └── gesture_101.npz
+│   ├── train_labels.csv            # gesture_001,12,2,0
+│   ├── val_labels.csv              # gesture_101,5,1,1
+│   ├── SignTransformer_best.pt     # Uses X key
+│   ├── InceptionV3GRU_best.pt      # Uses X2048 key
+│   ├── training_log.csv
+│   └── evaluation_results_20240101_120000/
+│       ├── summary_metrics.csv
+│       └── predictions.csv
+└── splitting/                      # Data splitting utilities
+    └── split_config.json
 ```
