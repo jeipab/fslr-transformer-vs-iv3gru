@@ -211,7 +211,7 @@ data/
 │   │   └── clip_0002_<label>.npz
 │   ├── keypoints_val/
 │   │   ├── clip_0001_<label>.npz
-│   │   └── clip_0001_<label>.npz
+│   │   └── clip_0002_<label>.npz
 │   ├── train_labels.csv            # gesture_001,12,2,0
 │   ├── val_labels.csv              # gesture_101,5,1,1
 │   ├── SignTransformer_best.pt     # Uses X key
