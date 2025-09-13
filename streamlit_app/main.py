@@ -8,13 +8,13 @@ from typing import Dict
 import numpy as np
 import streamlit as st
 
-from components import (
+from streamlit_app.components import (
     set_page, render_sidebar, render_welcome_screen, 
     render_file_upload, render_main_header, render_predictions_section
 )
-from data_processing import process_video_file
-from utils import detect_file_type, TempUploadedFile
-from visualization import (
+from streamlit_app.data_processing import process_video_file
+from streamlit_app.utils import detect_file_type, TempUploadedFile
+from streamlit_app.visualization import (
     render_sequence_overview, render_animated_keypoints, 
     render_feature_charts, create_video_with_keypoints
 )
@@ -122,7 +122,7 @@ def main() -> None:
                             st.error(f"Failed to create video overlay: {str(e)}")
 
     # Predictions section
-    from utils import simulate_predictions
+    from streamlit_app.utils import simulate_predictions
     rng = np.random.RandomState(cfg["random_seed"])
     gloss_logits, cat_logits = simulate_predictions(
         rng, cfg["num_gloss_classes"], cfg["num_category_classes"]
