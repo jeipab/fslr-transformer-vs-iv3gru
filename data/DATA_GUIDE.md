@@ -204,13 +204,14 @@ data/
 │   └── labels.csv
 ├── processed/
 │   ├── all/                        # Preprocessing output
-│   │   ├── gesture_001.npz         # X: [45,156], X2048: [45,2048]
-│   │   └── gesture_002.npz
-│   ├── train/                      # After data splitting
-│   │   ├── gesture_001.npz
-│   │   └── gesture_002.npz
-│   ├── val/
-│   │   └── gesture_101.npz
+│   │   ├── clip_0001_<label>.npz         # X: [45,156], X2048: [45,2048]
+│   │   └── clip_0002_<label>.npz
+│   ├── keypoints_train/                      # After data splitting
+│   │   ├── clip_0001_<label>.npz
+│   │   └── clip_0002_<label>.npz
+│   ├── keypoints_val/
+│   │   ├── clip_0001_<label>.npz
+│   │   └── clip_0001_<label>.npz
 │   ├── train_labels.csv            # gesture_001,12,2,0
 │   ├── val_labels.csv              # gesture_101,5,1,1
 │   ├── SignTransformer_best.pt     # Uses X key
@@ -220,5 +221,7 @@ data/
 │       ├── summary_metrics.csv
 │       └── predictions.csv
 └── splitting/                      # Data splitting utilities
-    └── split_config.json
+    ├── assign.py
+    ├── data_split.py
+    └── labels_reference.csv
 ```

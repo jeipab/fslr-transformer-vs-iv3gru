@@ -15,7 +15,7 @@ import pandas as pd
 
 # Load reference and labels
 gloss_cat = pd.read_csv("shared/labels_reference.csv")   # the file with gloss_id, label, cat_id, category
-labels = pd.read_csv("shared/sample_processed/labels.csv")   # CHANGE THIS to the actual location of the labels.csv file
+labels = pd.read_csv("data/processed/labels.csv")   # CHANGE THIS to the actual location of the labels.csv file
 
 # Create mapping dictionaries
 gloss_map = dict(zip(gloss_cat["label"].str.lower(), gloss_cat["gloss_id"]))
@@ -36,6 +36,6 @@ labels["cat"]   = labels["gloss_text"].map(cat_map)
 labels = labels.drop(columns=["gloss_text"])
 
 # Save updated labels.csv in shared folder
-labels.to_csv("shared/labels_updated.csv", index=False)
+labels.to_csv("data/processed/labels_updated.csv", index=False)     # CHANGE THIS to the desired location of the labels_updated.csv file
 
 print(" labels_updated.csv has been created in the shared folder using the new reference table.")
