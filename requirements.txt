@@ -1,4 +1,4 @@
-## Minimal, runnable requirements
+## Minimal, runnable requirements for Python 3.12
 
 # Development environment
 virtualenv
@@ -6,7 +6,7 @@ virtualenv
 # Core training
 torch
 torchvision
-numpy
+numpy>=2.0.0,<2.3.0
 
 # Optional: UI demo
 streamlit
@@ -14,7 +14,7 @@ pandas
 plotly
 
 # Optional: preprocessing pipeline
-opencv-python
+opencv-python>=4.8.0,<4.12.0
 mediapipe
 tqdm
 pyarrow
