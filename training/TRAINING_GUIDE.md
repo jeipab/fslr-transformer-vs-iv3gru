@@ -1,167 +1,169 @@
-## Training Guide
+# Training Guide
 
-### Prerequisites
-
-- Install dependencies:
+## Prerequisites
 
 ```bash
 pip install -r requirements.txt
 ```
 
-- Prepare label CSVs with columns: `file,gloss,cat` (0-based class ids).
-
-Data layout expected by the loaders (typical):
+## Data Structure
 
 ```
 data/processed/
   keypoints_train/        # or features_train/ for IV3-GRU
   keypoints_val/          # or features_val/ for IV3-GRU
-  train_labels.csv        # file,gloss,cat (0-based)
-  val_labels.csv          # file,gloss,cat (0-based)
+  train_labels.csv        # file,gloss,cat,occluded
+  val_labels.csv          # file,gloss,cat,occluded
 ```
 
-Each `.npz` file must live directly inside the split folder (no nested subfolders).
+**Requirements**:
 
-### Quick start
+- Label CSVs with columns: `file,gloss,cat,occluded` (0-based class IDs)
+- `.npz` files directly in split folders (no nested subfolders)
 
-- Transformer (keypoints `[T,156]` in `.npz` key `X`):
+## Quick Start
+
+### Transformer (Keypoints)
 
 ```bash
 python -m training.train \
   --model transformer \
-  --keypoints-train path\to\keypoints_train \
-  --keypoints-val   path\to\keypoints_val \
-  --labels-train-csv path\to\train_labels.csv \
-  --labels-val-csv   path\to\val_labels.csv \
+  --keypoints-train path/to/keypoints_train \
+  --keypoints-val path/to/keypoints_val \
+  --labels-train-csv path/to/train_labels.csv \
+  --labels-val-csv path/to/val_labels.csv \
   --num-gloss 105 --num-cat 10 \
-  --epochs 30 --batch-size 32 --output-dir data\processed
-# If your keypoints are stored under a different key, add: --kp-key MyKey
+  --epochs 30 --batch-size 32 --output-dir data/processed
 ```
 
-- IV3-GRU (features `[T,2048]` in `.npz` key `X2048` or `X`):
+### IV3-GRU (Features)
 
 ```bash
 python -m training.train \
   --model iv3_gru \
-  --features-train path\to\features_train \
-  --features-val   path\to\features_val \
-  --labels-train-csv path\to\train_labels.csv \
-  --labels-val-csv   path\to\val_labels.csv \
+  --features-train path/to/features_train \
+  --features-val path/to/features_val \
+  --labels-train-csv path/to/train_labels.csv \
+  --labels-val-csv path/to/val_labels.csv \
   --feature-key X2048 \
   --num-gloss 105 --num-cat 10 \
-  --epochs 30 --batch-size 32 --output-dir data\processed
-# If your features are stored under a different key, add: --feature-key MyKey
+  --epochs 30 --batch-size 32 --output-dir data/processed
 ```
 
-### Data requirements
+## Data Requirements
 
-- **Transformer**: `.npz` key `X` shaped `[T,156]` (use `--kp-key` to change); variable lengths supported.
-- **IV3-GRU**: `.npz` key `X2048` (or `X`) shaped `[T,2048]`.
-- **Labels CSV**: `file,gloss,cat` where `file` matches the `.npz` basename.
+- **Transformer**: `.npz` key `X` shaped `[T,156]` (variable lengths supported)
+- **IV3-GRU**: `.npz` key `X2048` (or `X`) shaped `[T,2048]`
+- **Labels CSV**: `file,gloss,cat,occluded` where `file` matches `.npz` basename
 
-Notes:
+**Notes**:
 
-- Variable-length sequences are padded in the DataLoader; true lengths are used to build attention masks (Transformer) or packed sequences (IV3-GRU).
-- Defaults: `--kp-key X`, `--feature-key X2048`.
+- Variable-length sequences are padded automatically
+- True lengths used for attention masks (Transformer) or packed sequences (IV3-GRU)
+- Defaults: `--kp-key X`, `--feature-key X2048`
 
-### Tips
+## Tips
 
-- Use module mode: `python -m training.train`.
-- GPU is auto-detected. CPU fallback works.
-- **AMP (Mixed Precision)**: Only enabled on CUDA devices for safety. Use `--amp` for faster training on GPU.
-- **DataLoader Safety**: `prefetch_factor` is automatically set only when `num_workers > 0`.
-- For Transformer, an attention mask from lengths is applied automatically.
-- Ensure `--num-gloss/--num-cat` match your dataset.
-- Put `.npz` files directly under the train/val folders (no nested class directories).
-- **CSV Logging**: Metrics are flushed after each epoch to prevent data loss.
+- Use module mode: `python -m training.train`
+- GPU auto-detected, CPU fallback available
+- **AMP**: Mixed precision (CUDA only) - use `--amp` for faster GPU training
+- **DataLoader**: `prefetch_factor` auto-set when `num_workers > 0`
+- Ensure `--num-gloss/--num-cat` match your dataset
+- CSV metrics flushed after each epoch
 
-### Smoke tests
+## Smoke Tests
 
 Quick sanity checks without real data:
 
-- Transformer:
+### Transformer
 
 ```bash
 python -m training.train --model transformer --smoke-test --num-gloss 105 --num-cat 10
 ```
 
-- IV3-GRU (no weights download):
+### IV3-GRU
 
 ```bash
 python -m training.train --model iv3_gru --smoke-test --num-gloss 105 --num-cat 10 --no-pretrained-backbone
 ```
 
-Outputs saved to `data/processed` by default (override with `--output-dir`).
-
-Integrity checks for your data (optional but recommended):
+## Data Validation
 
 ```bash
-# Validate key shapes/dtypes and meta; both checks enabled by default
-python -m preprocessing.validate_npz path\to\keypoints_train
+# Validate NPZ files
+python -m preprocessing.validate_npz path/to/keypoints_train
 
-# Require X2048 for IV3-GRU data
-python -m preprocessing.validate_npz path\to\features_train --require-x2048
+# Require X2048 for IV3-GRU
+python -m preprocessing.validate_npz path/to/features_train --require-x2048
 ```
 
-### Advanced training options
+## Advanced Options
 
-- **Learning**: `--lr`, `--weight-decay`
-- **Precision**: `--amp` (mixed precision, CUDA only)
-- **Stability**: `--grad-clip N`
-- **Scheduling**: `--scheduler [plateau|cosine]`, `--scheduler-patience K`
-- **Early stop**: `--early-stop K`
-- **Checkpoints**: `--resume path\to\{ModelName}_last.pt`
-- **Logging**: `--log-csv logs\train.csv` (epoch, losses, accs, lr)
-- **DataLoader**: `--num-workers N`, `--pin-memory`, `--prefetch-factor K` (auto-handled)
-- **Reproducibility**: `--seed S`, `--deterministic`
+### Learning
 
-Notes:
+- `--lr`, `--weight-decay`, `--grad-clip N`
 
-- Best and last checkpoints are saved in `--output-dir` as `{ModelName}_best.pt` and `{ModelName}_last.pt`.
-- Early stopping and scheduler use validation gloss accuracy.
-- **Scheduler CLI**: Use `--scheduler plateau` or `--scheduler cosine` (no `None` option needed).
-- **AMP Safety**: Mixed precision is automatically disabled on CPU to prevent errors.
+### Scheduling
 
-Common errors and fixes:
+- `--scheduler [plateau|cosine]`, `--scheduler-patience K`
+- `--early-stop K`
 
-- **File not found**: ensure `file` values in CSVs match `.npz` basenames and live in the right split folder.
-- **Wrong shapes**: Transformer expects `[T,156]` under key `X`; IV3-GRU expects `[T,2048]` under key `X2048` (or pass `--feature-key`).
-- **Label ranges**: `gloss` in `[0, num_gloss-1]`, `cat` in `[0, num_cat-1]`.
-- **Empty training data**: Check that your dataset directories contain `.npz` files and CSV has matching entries.
-- **DataLoader errors**: `prefetch_factor` is now auto-handled; only set when `num_workers > 0`.
-- **AMP on CPU**: Mixed precision is automatically disabled on CPU devices for safety.
+### Checkpoints
 
-### Examples
+- `--resume path/to/{ModelName}_last.pt`
+- Saved as `{ModelName}_best.pt` and `{ModelName}_last.pt`
 
-- **Transformer + keypoints** (with improved safety features):
+### Logging
+
+- `--log-csv logs/train.csv` (epoch, losses, accs, lr)
+
+### DataLoader
+
+- `--num-workers N`, `--pin-memory`, `--prefetch-factor K` (auto-handled)
+
+### Reproducibility
+
+- `--seed S`, `--deterministic`
+
+## Common Issues
+
+- **File not found**: CSV `file` values must match `.npz` basenames
+- **Wrong shapes**: Transformer needs `[T,156]` in key `X`; IV3-GRU needs `[T,2048]` in key `X2048`
+- **Label ranges**: `gloss` in `[0, num_gloss-1]`, `cat` in `[0, num_cat-1]`
+- **Empty data**: Check directories contain `.npz` files with matching CSV entries
+- **AMP on CPU**: Mixed precision auto-disabled on CPU for safety
+
+## Examples
+
+### Transformer (Advanced)
 
 ```bash
 python -m training.train --model transformer \
-  --keypoints-train path\to\kp_train --keypoints-val path\to\kp_val \
-  --labels-train-csv path\to\train.csv --labels-val-csv path\to\val.csv \
+  --keypoints-train path/to/kp_train --keypoints-val path/to/kp_val \
+  --labels-train-csv path/to/train.csv --labels-val-csv path/to/val.csv \
   --num-gloss 105 --num-cat 10 --epochs 50 --batch-size 64 \
   --lr 3e-4 --weight-decay 1e-4 --amp --grad-clip 1.0 \
-  --scheduler cosine --early-stop 10 --log-csv logs\transformer_train.csv \
-  --num-workers 4 --pin-memory --prefetch-factor 2
+  --scheduler cosine --early-stop 10 --log-csv logs/transformer_train.csv \
+  --num-workers 4 --pin-memory
 ```
 
-- **IV3-GRU + features** (with improved safety features):
+### IV3-GRU (Advanced)
 
 ```bash
 python -m training.train --model iv3_gru \
-  --features-train path\to\feat_train --features-val path\to\feat_val \
-  --labels-train-csv path\to\train.csv --labels-val-csv path\to\val.csv \
+  --features-train path/to/feat_train --features-val path/to/feat_val \
+  --labels-train-csv path/to/train.csv --labels-val-csv path/to/val.csv \
   --feature-key X2048 --num-gloss 105 --num-cat 10 --epochs 40 --batch-size 32 \
   --lr 1e-4 --scheduler plateau --scheduler-patience 3 --early-stop 8 \
-  --log-csv logs\iv3_gru_train.csv --num-workers 4 --pin-memory --prefetch-factor 2
+  --log-csv logs/iv3_gru_train.csv --num-workers 4 --pin-memory
 ```
 
-- **CPU-only training** (AMP automatically disabled):
+### CPU Training
 
 ```bash
 python -m training.train --model transformer \
-  --keypoints-train path\to\kp_train --keypoints-val path\to\kp_val \
-  --labels-train-csv path\to\train.csv --labels-val-csv path\to\val.csv \
+  --keypoints-train path/to/kp_train --keypoints-val path/to/kp_val \
+  --labels-train-csv path/to/train.csv --labels-val-csv path/to/val.csv \
   --num-gloss 105 --num-cat 10 --epochs 20 --batch-size 16 \
-  --lr 1e-4 --scheduler plateau --log-csv logs\cpu_train.csv
+  --lr 1e-4 --scheduler plateau --log-csv logs/cpu_train.csv
 ```
