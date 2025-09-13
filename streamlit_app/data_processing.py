@@ -27,21 +27,24 @@ except ImportError:
     st.warning("Preprocessing module not available. Video processing will use dummy data.")
 
 
-def process_video_file(uploaded_file, target_fps: int = 30, out_size: int = 256) -> Dict[str, np.ndarray]:
+def process_video_file(uploaded_file, target_fps: int = 30, out_size: int = 256, 
+                      write_keypoints: bool = True, write_iv3_features: bool = False) -> Dict[str, np.ndarray]:
     """
-    Process uploaded video file to extract keypoints.
+    Process uploaded video file to extract keypoints and/or features.
     
     Args:
         uploaded_file: Streamlit uploaded file object
         target_fps: Target FPS for processing
         out_size: Target frame size for processing
+        write_keypoints: Whether to extract 156-D keypoint features
+        write_iv3_features: Whether to extract 2048-D InceptionV3 features
         
     Returns:
-        Dictionary with keypoint data similar to NPZ format
+        Dictionary with keypoint/feature data similar to NPZ format
     """
     if not PREPROCESSING_AVAILABLE:
         # Fallback to dummy data generation
-        return generate_dummy_keypoints_from_video(uploaded_file)
+        return generate_dummy_keypoints_from_video(uploaded_file, write_keypoints, write_iv3_features)
     
     # Save uploaded file temporarily
     with tempfile.NamedTemporaryFile(delete=False, suffix=Path(uploaded_file.name).suffix) as tmp_file:
@@ -59,8 +62,8 @@ def process_video_file(uploaded_file, target_fps: int = 30, out_size: int = 256)
                 out_size=out_size,
                 conf_thresh=0.5,
                 max_gap=5,
-                write_keypoints=True,
-                write_iv3_features=False  # Skip IV3 features for demo
+                write_keypoints=write_keypoints,
+                write_iv3_features=write_iv3_features
             )
             
             # Load the generated NPZ file
@@ -83,15 +86,17 @@ def process_video_file(uploaded_file, target_fps: int = 30, out_size: int = 256)
                 os.unlink(tmp_video_path)
 
 
-def generate_dummy_keypoints_from_video(uploaded_file) -> Dict[str, np.ndarray]:
+def generate_dummy_keypoints_from_video(uploaded_file, write_keypoints: bool = True, write_iv3_features: bool = False) -> Dict[str, np.ndarray]:
     """
-    Generate dummy keypoint data for video files when preprocessing is unavailable.
+    Generate dummy keypoint/feature data for video files when preprocessing is unavailable.
     
     Args:
         uploaded_file: Streamlit uploaded file object
+        write_keypoints: Whether to generate dummy keypoint data
+        write_iv3_features: Whether to generate dummy feature data
         
     Returns:
-        Dictionary with dummy keypoint data
+        Dictionary with dummy keypoint/feature data
     """
     # Get basic video properties
     with tempfile.NamedTemporaryFile(delete=False, suffix=Path(uploaded_file.name).suffix) as tmp_file:
@@ -120,14 +125,25 @@ def generate_dummy_keypoints_from_video(uploaded_file) -> Dict[str, np.ndarray]:
     num_output_frames = min(max(30, total_frames // 5), 150)  # Reasonable range
     
     np.random.seed(42)  # Reproducible dummy data
-    keypoints = np.random.rand(num_output_frames, 156).astype(np.float32)
+    result_data = {}
     
-    # Add temporal smoothness
-    for i in range(1, num_output_frames):
-        keypoints[i] = 0.7 * keypoints[i-1] + 0.3 * keypoints[i]
+    if write_keypoints:
+        keypoints = np.random.rand(num_output_frames, 156).astype(np.float32)
+        
+        # Add temporal smoothness
+        for i in range(1, num_output_frames):
+            keypoints[i] = 0.7 * keypoints[i-1] + 0.3 * keypoints[i]
+        
+        mask = np.random.rand(num_output_frames, 78) > 0.2  # 80% visibility
+        result_data['X'] = keypoints
+        result_data['mask'] = mask
     
-    mask = np.random.rand(num_output_frames, 78) > 0.2  # 80% visibility
+    if write_iv3_features:
+        features = np.random.rand(num_output_frames, 2048).astype(np.float32)
+        result_data['X2048'] = features
+    
     timestamps_ms = np.linspace(0, duration_ms, num_output_frames).astype(np.int64)
+    result_data['timestamps_ms'] = timestamps_ms
     
     meta = {
         "source_video": uploaded_file.name,
@@ -135,12 +151,14 @@ def generate_dummy_keypoints_from_video(uploaded_file) -> Dict[str, np.ndarray]:
         "original_frames": total_frames,
         "processed_frames": num_output_frames,
         "processing_method": "dummy_extraction_streamlit",
-        "keypoint_format": "mediapipe_holistic_156d"
+        "features_extracted": []
     }
     
-    return {
-        'X': keypoints,
-        'mask': mask,
-        'timestamps_ms': timestamps_ms,
-        'meta': json.dumps(meta)
-    }
+    if write_keypoints:
+        meta["features_extracted"].append("keypoints_156d")
+    if write_iv3_features:
+        meta["features_extracted"].append("inceptionv3_2048d")
+    
+    result_data['meta'] = json.dumps(meta)
+    
+    return result_data

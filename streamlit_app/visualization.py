@@ -50,21 +50,17 @@ def render_sequence_overview(npz_dict: Dict, sequence_length: int) -> Tuple[np.n
     col1, col2, col3, col4, col5 = st.columns(5)
     
     with col1:
-        st.markdown("<div class='metric-card'>", unsafe_allow_html=True)
-        st.metric("Frames", f"{raw_length}")
-        st.markdown("</div>", unsafe_allow_html=True)
+        st.metric("Frames", str(raw_length), delta=None)
     
     with col2:
-        st.markdown("<div class='metric-card'>", unsafe_allow_html=True)
-        st.metric("Features", f"{raw_features}")
+        st.metric("Features", str(raw_features), delta=None)
         if raw_features == 156:
             st.markdown("<span class='status-good'>✓ Valid keypoints</span>", unsafe_allow_html=True)
+            st.markdown("<span class='status-good'>✓ Transformer ready</span>", unsafe_allow_html=True)
         else:
             st.markdown("<span class='status-warning'>⚠ Unexpected shape</span>", unsafe_allow_html=True)
-        st.markdown("</div>", unsafe_allow_html=True)
     
     with col3:
-        st.markdown("<div class='metric-card'>", unsafe_allow_html=True)
         if timestamps_ms.size > 0:
             duration_s = (timestamps_ms[-1] - timestamps_ms[0]) / 1000.0 if timestamps_ms.size > 1 else 0.0
             st.metric("Duration", f"{duration_s:.2f}s")
@@ -73,28 +69,23 @@ def render_sequence_overview(npz_dict: Dict, sequence_length: int) -> Tuple[np.n
                 st.caption(f"~{fps:.1f} FPS")
         else:
             st.metric("Duration", "N/A")
-        st.markdown("</div>", unsafe_allow_html=True)
     
     with col4:
-        st.markdown("<div class='metric-card'>", unsafe_allow_html=True)
-        st.metric("Target Length", f"{sequence_length}")
+        st.metric("Target Length", str(sequence_length), delta=None)
         if raw_length > sequence_length:
             st.caption("Will trim")
         elif raw_length < sequence_length:
             st.caption("Will pad")
         else:
             st.caption("Perfect fit")
-        st.markdown("</div>", unsafe_allow_html=True)
     
     with col5:
-        st.markdown("<div class='metric-card'>", unsafe_allow_html=True)
         if X2048 is not None and isinstance(X2048, np.ndarray) and X2048.size > 0:
             st.metric("X2048 Features", "Present")
             st.markdown("<span class='status-good'>✓ IV3-GRU ready</span>", unsafe_allow_html=True)
         else:
             st.metric("X2048 Features", "Missing")
             st.markdown("<span class='status-warning'>⚠ Transformer only</span>", unsafe_allow_html=True)
-        st.markdown("</div>", unsafe_allow_html=True)
 
     meta_raw = npz_dict.get("meta")
     meta_parsed: Dict = {}
@@ -131,12 +122,12 @@ def render_sequence_overview(npz_dict: Dict, sequence_length: int) -> Tuple[np.n
         if issues:
             st.warning("\n".join(f"- {m}" for m in issues))
 
-    from utils import pad_or_trim
+    from streamlit_app.utils import pad_or_trim
     X_pad = pad_or_trim(X_raw, sequence_length)
     return X_pad, mask, meta_parsed
 
 
-def render_animated_keypoints(sequence: np.ndarray, mask: Optional[np.ndarray] = None) -> None:
+def render_animated_keypoints(sequence: np.ndarray, mask: Optional[np.ndarray] = None, key_suffix: str = "") -> None:
     """Render animated keypoint visualization with skeleton overlay."""
     st.markdown("<div class='section-header'>Animated Keypoint Visualization</div>", unsafe_allow_html=True)
     
@@ -190,14 +181,15 @@ def render_animated_keypoints(sequence: np.ndarray, mask: Optional[np.ndarray] =
             max_value=time_steps-1, 
             value=0, 
             step=1,
-            help="Drag to see keypoints at different time steps"
+            help="Drag to see keypoints at different time steps",
+            key=f"frame_slider_{key_suffix}"
         )
     
     with col2:
-        show_skeleton = st.checkbox("Show Skeleton", value=True, help="Display skeleton connections")
+        show_skeleton = st.checkbox("Show Skeleton", value=True, help="Display skeleton connections", key=f"skeleton_checkbox_{key_suffix}")
     
     with col3:
-        show_visibility = st.checkbox("Show Visibility", value=True, help="Color points by visibility")
+        show_visibility = st.checkbox("Show Visibility", value=True, help="Color points by visibility", key=f"visibility_checkbox_{key_suffix}")
     
     # Get current frame keypoints
     current_keypoints = keypoints_2d[frame_idx]  # [78, 2]
@@ -302,7 +294,7 @@ def render_animated_keypoints(sequence: np.ndarray, mask: Optional[np.ndarray] =
             st.metric("Center", f"({avg_x:.3f}, {avg_y:.3f})")
 
 
-def render_feature_charts(sequence: np.ndarray, mask: Optional[np.ndarray] = None) -> None:
+def render_feature_charts(sequence: np.ndarray, mask: Optional[np.ndarray] = None, key_suffix: str = "") -> None:
     """Render interactive feature visualization."""
     st.markdown("<div class='section-header'>Feature Analysis</div>", unsafe_allow_html=True)
     
@@ -323,7 +315,8 @@ def render_feature_charts(sequence: np.ndarray, mask: Optional[np.ndarray] = Non
         selected_group = st.selectbox(
             "Keypoint Group",
             list(keypoint_groups.keys()),
-            help="Select which body part to visualize"
+            help="Select which body part to visualize",
+            key=f"keypoint_group_{key_suffix}"
         )
         
         start_idx, end_idx = keypoint_groups[selected_group]
@@ -332,14 +325,16 @@ def render_feature_charts(sequence: np.ndarray, mask: Optional[np.ndarray] = Non
         coord_type = st.selectbox(
             "Coordinate",
             ["Both X&Y", "X only", "Y only"],
-            help="Choose coordinate type to display"
+            help="Choose coordinate type to display",
+            key=f"coordinate_type_{key_suffix}"
         )
     
     with col3:
         chart_type = st.selectbox(
             "Chart Type",
             ["Line", "Heatmap"],
-            help="Visualization style"
+            help="Visualization style",
+            key=f"chart_type_{key_suffix}"
         )
     
     # Prepare data based on selection
@@ -532,6 +527,3 @@ def render_topk_table(indices: np.ndarray, probs: np.ndarray, label_prefix: str,
             progress_val = row['Probability']
             st.progress(progress_val)
     
-    # Show detailed table in expander
-    with st.expander(f"Detailed {title} Table"):
-        st.dataframe(df, hide_index=True, use_container_width=True)
