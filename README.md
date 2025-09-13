@@ -23,7 +23,17 @@ pip install pyarrow  # optional, for parquet inspection
 
 ## Demo
 
-Run the interactive Streamlit application:
+### Virtual Environment (Optional)
+
+```bash
+# Create and activate virtual environment
+python -m venv .venv
+.venv\Scripts\Activate.ps1  # Windows PowerShell
+# or
+source .venv/bin/activate   # Linux/Mac
+```
+
+### Run Application
 
 ```bash
 # Option 1: From root directory
@@ -137,6 +147,7 @@ python -m training.train --model iv3_gru --smoke-test --num-gloss 105 --num-cat 
 - [Model Guide](models/MODEL_GUIDE.md) - Architecture details and usage
 - [Training Guide](training/TRAINING_GUIDE.md) - Model training instructions
 - [Data Guide](data/DATA_GUIDE.md) - File formats and structures
+- [Tool Guide](streamlit_app/TOOL_GUIDE.md) - Interactive visualization app
 
 ## Troubleshooting
 
