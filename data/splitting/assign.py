@@ -8,7 +8,7 @@ Purpose:
 Usage:
 After Preprocessing and Before Data Split
 - Assign gloss_id and cat_id to labels.csv using labels_reference.csv reference:
-    python assign.py
+    python data/splitting/assign.py
 """
 
 import pandas as pd
