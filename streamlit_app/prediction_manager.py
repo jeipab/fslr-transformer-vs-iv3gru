@@ -18,18 +18,34 @@ from streamlit_app.upload_manager import remove_file_from_stage
 def render_predictions_stage(cfg: Dict):
     """Render the predictions stage with NPZ files and visualization."""
     # Navigation header
-    col1, col2, col3 = st.columns([1, 2, 1])
+    col1, col2, col3, col4 = st.columns([2, 6, 1, 1])
     with col1:
-        if st.button("← Back", help="Return to previous stage", type="secondary"):
+        # Determine back button text and destination
+        back_destination = get_back_destination()
+        back_text = f"← Back to {back_destination.title()}"
+        back_help = f"Return to {back_destination} stage"
+        
+        if st.button(back_text, help=back_help, type="secondary"):
             if st.session_state.get("confirm_back_predictions", False):
                 navigate_back_from_predictions()
             else:
                 st.session_state["confirm_back_predictions"] = True
-                st.toast("Click '← Back' again to confirm", icon="⚠️", duration=5000)
+                st.toast(f"Click '{back_text}' again to confirm", icon="⚠️", duration=5000)
     with col2:
         st.markdown("")  # Empty space
     with col3:
         st.markdown("")  # Empty space
+    with col4:
+        # Show Upload New button only if coming from preprocessing (not from upload)
+        if back_destination == "preprocessing":
+            if st.button("Upload New", help="Upload new files", type="primary"):
+                # Clear all current files and go to upload
+                from streamlit_app.upload_manager import clear_all_files
+                clear_all_files()
+                st.session_state.workflow_stage = 'upload'
+                st.rerun()
+        else:
+            st.markdown("")  # Empty space
     
     st.markdown("### Ready for Inference")
     
@@ -45,6 +61,15 @@ def render_predictions_stage(cfg: Dict):
     
     # Show visualization tabs
     render_visualization_tabs(cfg)
+
+
+def get_back_destination() -> str:
+    """Determine the appropriate back destination based on current state."""
+    # Check if we have video files in preprocessing stage
+    if st.session_state.video_files or st.session_state.preprocessed_files:
+        return "preprocessing"
+    else:
+        return "upload"
 
 
 def get_all_npz_files() -> List:
@@ -528,31 +553,126 @@ def reset_processed_files():
     """Reset all processed files back to pending status."""
     reset_count = 0
     
-    # Reset all completed and error files back to pending
-    for filename in st.session_state.file_status:
-        if st.session_state.file_status[filename] in ['completed', 'error']:
+    # Initialize original_file_data if it doesn't exist
+    if 'original_file_data' not in st.session_state:
+        st.session_state.original_file_data = {}
+    
+    # Collect all filenames that need to be reset
+    files_to_reset = set()
+    
+    # Add all preprocessed files (these are video files that were processed)
+    for preprocessed_file in st.session_state.preprocessed_files:
+        files_to_reset.add(preprocessed_file.name)
+    
+    # Add all NPZ files that have been processed
+    for npz_file in st.session_state.npz_files:
+        filename = npz_file.name
+        if st.session_state.file_status.get(filename) in ['completed', 'error']:
+            files_to_reset.add(filename)
+    
+    # Reset each file
+    for filename in files_to_reset:
+        # Check if this is a video file (from preprocessed_files)
+        is_video_file = any(f.name == filename for f in st.session_state.preprocessed_files)
+        
+        if is_video_file:
+            # Handle video files - restore original data and move back to video_files
+            if filename in st.session_state.original_file_data:
+                # Recreate the original file object from stored data
+                from streamlit_app.utils import TempUploadedFile
+                original_data = st.session_state.original_file_data[filename]
+                
+                # Create a new file object with the original data
+                file_obj = TempUploadedFile(
+                    name=original_data['name'],
+                    data=original_data['data'],
+                    type=original_data['type'],
+                    size=original_data['size']
+                )
+                
+                # Add to video_files if not already there
+                if not any(f.name == filename for f in st.session_state.video_files):
+                    st.session_state.video_files.append(file_obj)
+                
+                # Reset status and clear processed data
+                st.session_state.file_status[filename] = 'pending'
+                if filename in st.session_state.processed_data:
+                    del st.session_state.processed_data[filename]
+                
+                # Reset metadata to only keep file size info
+                if filename in st.session_state.file_metadata:
+                    metadata = st.session_state.file_metadata[filename]
+                    if 'file_size' in metadata:
+                        file_size = metadata['file_size']
+                        file_size_formatted = metadata['file_size_formatted']
+                        st.session_state.file_metadata[filename] = {
+                            'file_size': file_size,
+                            'file_size_formatted': file_size_formatted
+                        }
+                    else:
+                        # If no file size info, remove the metadata entry
+                        del st.session_state.file_metadata[filename]
+                
+                reset_count += 1
+            else:
+                # Fallback: try to find the file object from preprocessed_files
+                file_obj = None
+                for preprocessed_file in st.session_state.preprocessed_files:
+                    if preprocessed_file.name == filename:
+                        file_obj = preprocessed_file
+                        break
+                
+                if file_obj:
+                    # Add to video_files if not already there
+                    if not any(f.name == filename for f in st.session_state.video_files):
+                        st.session_state.video_files.append(file_obj)
+                    
+                    # Reset status and clear processed data
+                    st.session_state.file_status[filename] = 'pending'
+                    if filename in st.session_state.processed_data:
+                        del st.session_state.processed_data[filename]
+                    
+                    # Reset metadata to only keep file size info
+                    if filename in st.session_state.file_metadata:
+                        metadata = st.session_state.file_metadata[filename]
+                        if 'file_size' in metadata:
+                            file_size = metadata['file_size']
+                            file_size_formatted = metadata['file_size_formatted']
+                            st.session_state.file_metadata[filename] = {
+                                'file_size': file_size,
+                                'file_size_formatted': file_size_formatted
+                            }
+                        else:
+                            # If no file size info, remove the metadata entry
+                            del st.session_state.file_metadata[filename]
+                    
+                    reset_count += 1
+        else:
+            # Handle NPZ files - just reset status and clear processed data
             st.session_state.file_status[filename] = 'pending'
+            if filename in st.session_state.processed_data:
+                del st.session_state.processed_data[filename]
+            
+            # Reset metadata to only keep file size and file type
+            if filename in st.session_state.file_metadata:
+                if 'file_size' in st.session_state.file_metadata[filename]:
+                    file_size = st.session_state.file_metadata[filename]['file_size']
+                    file_size_formatted = st.session_state.file_metadata[filename]['file_size_formatted']
+                    # Keep file type if available
+                    file_type = st.session_state.file_metadata[filename].get('file_type', 'npz')
+                    st.session_state.file_metadata[filename] = {
+                        'file_size': file_size,
+                        'file_size_formatted': file_size_formatted,
+                        'file_type': file_type
+                    }
+                else:
+                    # If no file size info, keep minimal metadata to avoid errors
+                    st.session_state.file_metadata[filename] = {'file_type': 'npz'}
+            
             reset_count += 1
     
-    # Clear processed data
-    for filename in list(st.session_state.processed_data.keys()):
-        del st.session_state.processed_data[filename]
-    
-    # Reset metadata to only keep file size and file type
-    for filename in st.session_state.file_metadata:
-        if 'file_size' in st.session_state.file_metadata[filename]:
-            file_size = st.session_state.file_metadata[filename]['file_size']
-            file_size_formatted = st.session_state.file_metadata[filename]['file_size_formatted']
-            # Keep file type if available
-            file_type = st.session_state.file_metadata[filename].get('file_type', 'npz')
-            st.session_state.file_metadata[filename] = {
-                'file_size': file_size,
-                'file_size_formatted': file_size_formatted,
-                'file_type': file_type
-            }
-        else:
-            # If no file size info, keep minimal metadata to avoid errors
-            st.session_state.file_metadata[filename] = {'file_type': 'npz'}
+    # Clear preprocessed files list (video files have been moved back to video_files)
+    st.session_state.preprocessed_files = []
     
     # Clear current tab
     st.session_state.current_tab = None

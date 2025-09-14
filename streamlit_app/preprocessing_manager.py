@@ -7,10 +7,34 @@ from streamlit_app.data_processing import process_video_file
 from streamlit_app.upload_manager import remove_file_from_stage
 
 
+def get_all_files_to_show():
+    """Get all files to show in the preprocessing stage."""
+    all_files_to_show = []
+    video_files = st.session_state.video_files
+    
+    # Add video files that are still pending
+    for video_file in video_files:
+        filename = video_file.name
+        status = st.session_state.file_status.get(filename, 'pending')
+        if status == 'pending':
+            all_files_to_show.append(('video', video_file, status))
+        else:
+            # Show completed/error files from video_files as well
+            all_files_to_show.append(('video', video_file, status))
+    
+    # Add preprocessed files
+    for preprocessed_file in st.session_state.preprocessed_files:
+        filename = preprocessed_file.name
+        status = st.session_state.file_status.get(filename, 'completed')
+        all_files_to_show.append(('preprocessed', preprocessed_file, status))
+    
+    return all_files_to_show
+
+
 def render_preprocessing_stage():
     """Render the preprocessing stage with video files and preprocessing controls."""
     # Navigation header
-    col1, col2, col3 = st.columns([1, 2, 1])
+    col1, col2, col3, col4 = st.columns([2, 6, 1, 1])
     with col1:
         if st.button("← Back to Upload", help="Return to upload stage", type="secondary"):
             if st.session_state.get("confirm_back_preprocessing", False):
@@ -31,29 +55,32 @@ def render_preprocessing_stage():
         st.markdown("")  # Empty space
     with col3:
         st.markdown("")  # Empty space
+    with col4:
+        # Check if we can show Go to Inference button
+        all_files_to_show = get_all_files_to_show()
+        if all_files_to_show:
+            # Check if all video files are completed
+            all_completed = True
+            for (file_type, uploaded_file, status) in all_files_to_show:
+                if status not in ['completed']:
+                    all_completed = False
+                    break
+            
+            button_disabled = not all_completed
+            button_help = "Proceed to inference with all processed files" if all_completed else "Complete all video preprocessing first"
+            
+            if st.button("Go to Inference →", type="primary", help=button_help, disabled=button_disabled):
+                st.session_state.workflow_stage = 'predictions'
+                st.rerun()
+        else:
+            st.markdown("")  # Empty space
     
     st.markdown("### Ready for Preprocessing")
     
     video_files = st.session_state.video_files
     
     # Show all files (both pending videos and completed preprocessing)
-    all_files_to_show = []
-    
-    # Add video files that are still pending
-    for video_file in video_files:
-        filename = video_file.name
-        status = st.session_state.file_status.get(filename, 'pending')
-        if status == 'pending':
-            all_files_to_show.append(('video', video_file, status))
-        else:
-            # Show completed/error files from video_files as well
-            all_files_to_show.append(('video', video_file, status))
-    
-    # Add preprocessed files
-    for preprocessed_file in st.session_state.preprocessed_files:
-        filename = preprocessed_file.name
-        status = st.session_state.file_status.get(filename, 'completed')
-        all_files_to_show.append(('preprocessed', preprocessed_file, status))
+    all_files_to_show = get_all_files_to_show()
     
     if not all_files_to_show:
         st.info("No video files to preprocess.")
@@ -88,6 +115,10 @@ def render_video_files_list(all_files_to_show: List):
     """Render list of video files with individual preprocessing options."""
     st.markdown("**Video Files Ready for Preprocessing:**")
     
+    # Check if any files are currently being processed
+    is_processing = any(st.session_state.file_status.get(f.name, 'pending') == 'processing' for f in st.session_state.video_files)
+    is_processing = is_processing or any(st.session_state.file_status.get(f.name, 'completed') == 'processing' for f in st.session_state.preprocessed_files)
+    
     for i, (file_type, uploaded_file, status) in enumerate(all_files_to_show):
         filename = uploaded_file.name
         metadata = st.session_state.file_metadata.get(filename, {})
@@ -114,23 +145,23 @@ def render_video_files_list(all_files_to_show: List):
         # Action buttons based on status
         with col4:
             if status == 'pending':
-                if st.button("Preprocess", key=f"preprocess_{filename}", help="Preprocess this video file", type="primary"):
+                if st.button("Preprocess", key=f"preprocess_{filename}", help="Preprocess this video file", type="primary", disabled=is_processing):
                     preprocess_single_video(uploaded_file, filename)
                     st.rerun()
             elif status == 'completed':
-                if st.button("View", key=f"view_{filename}", help="View preprocessed file", type="secondary"):
+                if st.button("View", key=f"view_{filename}", help="View preprocessed file", type="secondary", disabled=is_processing):
                     # Move to predictions stage and set as current tab
                     st.session_state.workflow_stage = 'predictions'
                     st.session_state.current_tab = filename
                     st.rerun()
             elif status == 'error':
-                if st.button("Retry", key=f"retry_{filename}", help="Retry preprocessing", type="primary"):
+                if st.button("Retry", key=f"retry_{filename}", help="Retry preprocessing", type="primary", disabled=is_processing):
                     preprocess_single_video(uploaded_file, filename)
                     st.rerun()
         
         # Remove button with confirmation
         with col5:
-            if st.button("Remove", key=f"remove_{filename}", help="Remove this file", type="secondary"):
+            if st.button("Remove", key=f"remove_{filename}", help="Remove this file", type="secondary", disabled=is_processing):
                 if st.session_state.get(f"confirm_remove_{filename}", False):
                     if file_type == 'video':
                         remove_file_from_stage(filename, 'video')
@@ -150,6 +181,10 @@ def render_preprocessing_controls(video_files: List):
     """Render batch preprocessing controls and options."""
     st.markdown("---")
     
+    # Check if any files are currently being processed
+    is_processing = any(st.session_state.file_status.get(f.name, 'pending') == 'processing' for f in video_files)
+    is_processing = is_processing or any(st.session_state.file_status.get(f.name, 'completed') == 'processing' for f in st.session_state.preprocessed_files)
+    
     # Preprocessing options
     with st.expander("Preprocessing Options", expanded=False):
         col1, col2 = st.columns(2)
@@ -158,24 +193,28 @@ def render_preprocessing_controls(video_files: List):
             target_fps = st.slider(
                 "Target FPS", 
                 min_value=15, max_value=60, value=30, step=5,
-                help="Frames per second for processing"
+                help="Frames per second for processing",
+                disabled=is_processing
             )
             out_size = st.slider(
                 "Output Size", 
                 min_value=128, max_value=512, value=256, step=32,
-                help="Frame size for processing"
+                help="Frame size for processing",
+                disabled=is_processing
             )
         
         with col2:
             write_keypoints = st.checkbox(
                 "Extract Keypoints (156-D)", 
                 value=True,
-                help="Extract pose keypoint features for Transformer model"
+                help="Extract pose keypoint features for Transformer model",
+                disabled=is_processing
             )
             write_iv3_features = st.checkbox(
                 "Extract IV3 Features (2048-D)", 
                 value=True,
-                help="Extract InceptionV3 features for IV3-GRU model"
+                help="Extract InceptionV3 features for IV3-GRU model",
+                disabled=is_processing
             )
         
         # Store options in session state
@@ -190,10 +229,19 @@ def render_preprocessing_controls(video_files: List):
     col1, col2, col3, col4 = st.columns([4, 1, 1, 1])
     
     with col1:
-        pending_count = sum(1 for f in video_files 
-                          if st.session_state.file_status.get(f.name, 'pending') == 'pending')
+        # Count pending files from both video_files and preprocessed_files
+        pending_count = 0
+        for f in video_files:
+            if st.session_state.file_status.get(f.name, 'pending') == 'pending':
+                pending_count += 1
+        
+        # Also check preprocessed_files for any that might be pending (after reset)
+        for f in st.session_state.preprocessed_files:
+            if st.session_state.file_status.get(f.name, 'completed') == 'pending':
+                pending_count += 1
+        
         if pending_count > 0:
-            if st.button(f"Preprocess All Pending ({pending_count})", type="primary", help="Preprocess all pending video files"):
+            if st.button(f"Preprocess All Pending ({pending_count})", type="primary", help="Preprocess all pending video files", disabled=is_processing):
                 preprocess_all_pending_videos()
                 st.rerun()
         else:
@@ -203,12 +251,12 @@ def render_preprocessing_controls(video_files: List):
         st.markdown("")  # Empty space for alignment
     
     with col3:
-        if st.button("Reset All", help="Reset all processed videos back to pending", type="primary"):
+        if st.button("Reset All", help="Reset all processed videos back to pending", type="primary", disabled=is_processing):
             reset_preprocessed_videos()
             st.rerun()
     
     with col4:
-        if st.button("Clear All", help="Clear all video files", type="primary"):
+        if st.button("Clear All", help="Clear all video files", type="primary", disabled=is_processing):
             if st.session_state.get("confirm_clear_videos", False):
                 clear_all_video_files()
                 st.rerun()
@@ -244,22 +292,7 @@ def render_preprocessed_files_summary(all_files_to_show: List):
                            if st.session_state.file_metadata.get(f.name, {}).get('compatibility', {}).get('iv3_gru', False))
         st.metric("IV3-GRU Compatible", iv3_compatible)
     
-    # Proceed to predictions button - only enable if all files are completed
-    col1, col2, col3 = st.columns([4, 1, 1])
-    with col3:
-        # Check if all video files are completed
-        all_completed = True
-        for (file_type, uploaded_file, status) in all_files_to_show:
-            if status not in ['completed']:
-                all_completed = False
-                break
-        
-        button_disabled = not all_completed
-        button_help = "Proceed to inference with all processed files" if all_completed else "Complete all video preprocessing first"
-        
-        if st.button("Go to Inference", type="primary", help=button_help, disabled=button_disabled):
-            st.session_state.workflow_stage = 'predictions'
-            st.rerun()
+    # Note: Go to Inference button is now in the navigation header
 
 
 def preprocess_single_video(uploaded_file, filename: str):
@@ -296,6 +329,14 @@ def preprocess_single_video(uploaded_file, filename: str):
         
         # Store processed data
         st.session_state.processed_data[filename] = npz_data
+        
+        # Store original file data for reset functionality
+        st.session_state.original_file_data[filename] = {
+            'name': uploaded_file.name,
+            'data': uploaded_file.getvalue(),
+            'type': uploaded_file.type,
+            'size': uploaded_file.size
+        }
         
         # Update metadata
         existing_metadata = st.session_state.file_metadata.get(filename, {})
@@ -334,8 +375,17 @@ def preprocess_single_video(uploaded_file, filename: str):
 
 def preprocess_all_pending_videos():
     """Preprocess all pending video files."""
-    pending_files = [f for f in st.session_state.video_files 
-                    if st.session_state.file_status.get(f.name, 'pending') == 'pending']
+    pending_files = []
+    
+    # Get pending files from video_files
+    for f in st.session_state.video_files:
+        if st.session_state.file_status.get(f.name, 'pending') == 'pending':
+            pending_files.append(f)
+    
+    # Get pending files from preprocessed_files (after reset)
+    for f in st.session_state.preprocessed_files:
+        if st.session_state.file_status.get(f.name, 'completed') == 'pending':
+            pending_files.append(f)
     
     if not pending_files:
         st.toast("No pending video files to preprocess", icon="ℹ️", duration=5000)
@@ -361,6 +411,16 @@ def reset_preprocessed_videos():
     """Reset all preprocessed videos back to pending status."""
     reset_count = 0
     
+    # Initialize original_file_data if it doesn't exist
+    if 'original_file_data' not in st.session_state:
+        st.session_state.original_file_data = {}
+    
+    # Debug logging
+    st.write("🔍 **Reset Debug Info:**")
+    st.write(f"- original_file_data keys: {list(st.session_state.original_file_data.keys())}")
+    st.write(f"- preprocessed_files: {[f.name for f in st.session_state.preprocessed_files]}")
+    st.write(f"- video_files: {[f.name for f in st.session_state.video_files]}")
+    
     # Collect all filenames that need to be reset
     files_to_reset = set()
     
@@ -376,30 +436,29 @@ def reset_preprocessed_videos():
     
     # Reset each file
     for filename in files_to_reset:
-        # Find the file object from any of the lists
-        file_obj = None
+        st.write(f"🔄 **Resetting file: {filename}**")
         
-        # Check in preprocessed_files first
-        for preprocessed_file in st.session_state.preprocessed_files:
-            if preprocessed_file.name == filename:
-                file_obj = preprocessed_file
-                break
-        
-        # If not found, check in video_files
-        if file_obj is None:
-            for video_file in st.session_state.video_files:
-                if video_file.name == filename:
-                    file_obj = video_file
-                    break
-        
-        # If not found, check in uploaded_files
-        if file_obj is None:
-            for uploaded_file in st.session_state.uploaded_files:
-                if uploaded_file.name == filename:
-                    file_obj = uploaded_file
-                    break
-        
-        if file_obj:
+        # Check if we have original file data stored
+        if filename in st.session_state.original_file_data:
+            st.write(f"✅ Found original data for {filename}")
+            # Recreate the original file object from stored data
+            from streamlit_app.utils import TempUploadedFile
+            original_data = st.session_state.original_file_data[filename]
+            
+            st.write(f"- Original data type: {type(original_data.get('data', 'No data'))}")
+            st.write(f"- Original data size: {len(original_data.get('data', b''))} bytes")
+            
+            # Create a new file object with the original data
+            file_obj = TempUploadedFile(
+                name=original_data['name'],
+                data=original_data['data'],
+                type=original_data['type'],
+                size=original_data['size']
+            )
+            
+            st.write(f"- Created file object: {type(file_obj)}")
+            st.write(f"- File object data size: {len(file_obj.getvalue())} bytes")
+            
             # Add to video_files if not already there
             if not any(f.name == filename for f in st.session_state.video_files):
                 st.session_state.video_files.append(file_obj)
@@ -424,6 +483,61 @@ def reset_preprocessed_videos():
                     del st.session_state.file_metadata[filename]
             
             reset_count += 1
+        else:
+            st.write(f"❌ No original data found for {filename}, using fallback")
+            # Fallback: try to find the file object from any of the lists
+            file_obj = None
+            
+            # Check in preprocessed_files first
+            for preprocessed_file in st.session_state.preprocessed_files:
+                if preprocessed_file.name == filename:
+                    file_obj = preprocessed_file
+                    st.write(f"- Found in preprocessed_files: {type(file_obj)}")
+                    break
+            
+            # If not found, check in video_files
+            if file_obj is None:
+                for video_file in st.session_state.video_files:
+                    if video_file.name == filename:
+                        file_obj = video_file
+                        st.write(f"- Found in video_files: {type(file_obj)}")
+                        break
+            
+            # If not found, check in uploaded_files
+            if file_obj is None:
+                for uploaded_file in st.session_state.uploaded_files:
+                    if uploaded_file.name == filename:
+                        file_obj = uploaded_file
+                        st.write(f"- Found in uploaded_files: {type(file_obj)}")
+                        break
+            
+            if file_obj:
+                st.write(f"- Using fallback file object: {type(file_obj)}")
+                st.write(f"- Fallback data size: {len(file_obj.getvalue())} bytes")
+                # Add to video_files if not already there
+                if not any(f.name == filename for f in st.session_state.video_files):
+                    st.session_state.video_files.append(file_obj)
+                
+                # Reset status and clear processed data
+                st.session_state.file_status[filename] = 'pending'
+                if filename in st.session_state.processed_data:
+                    del st.session_state.processed_data[filename]
+                
+                # Reset metadata to only keep file size info
+                if filename in st.session_state.file_metadata:
+                    metadata = st.session_state.file_metadata[filename]
+                    if 'file_size' in metadata:
+                        file_size = metadata['file_size']
+                        file_size_formatted = metadata['file_size_formatted']
+                        st.session_state.file_metadata[filename] = {
+                            'file_size': file_size,
+                            'file_size_formatted': file_size_formatted
+                        }
+                    else:
+                        # If no file size info, remove the metadata entry
+                        del st.session_state.file_metadata[filename]
+                
+                reset_count += 1
     
     # Clear preprocessed files list
     st.session_state.preprocessed_files = []
