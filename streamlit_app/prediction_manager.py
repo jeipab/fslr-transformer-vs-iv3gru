@@ -331,7 +331,8 @@ def render_visualization_tabs(cfg: Dict):
                 st.metric("Frames", metadata['frame_count'])
             with col2:
                 compatibility = metadata['compatibility']
-                compatible_count = sum(compatibility.values())
+                # Count only individual model compatibility, not 'both' flag
+                compatible_count = sum(compatibility[key] for key in ['transformer', 'iv3_gru'])
                 st.metric("Compatible Models", compatible_count)
             with col3:
                 st.metric("File Type", metadata['file_type'].upper())

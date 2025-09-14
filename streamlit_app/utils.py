@@ -138,20 +138,28 @@ def extract_occlusion_flag(npz_data: Dict[str, np.ndarray]) -> int:
         Integer occlusion flag: 0 = not occluded, 1 = occluded, -1 = unknown
     """
     try:
-        if 'meta' in npz_data:
-            meta = npz_data['meta']
-            # Handle both string and dict metadata
-            if isinstance(meta, str):
-                meta_dict = json.loads(meta)
-            else:
-                meta_dict = meta
+        if 'meta' not in npz_data:
+            return -1
             
-            if 'occluded_flag' in meta_dict:
-                return int(meta_dict['occluded_flag'])
+        meta = npz_data['meta']
         
-        # If no occlusion flag found in metadata
+        # Convert metadata to string format for consistent parsing
+        if isinstance(meta, str):
+            meta_str = meta
+        else:
+            meta_str = str(meta)
+        
+        # Parse JSON metadata
+        meta_dict = json.loads(meta_str)
+        
+        # Extract occlusion flag if present
+        if 'occluded_flag' in meta_dict:
+            return int(meta_dict['occluded_flag'])
+        
+        # No occlusion flag found
         return -1
-    except (json.JSONDecodeError, KeyError, TypeError, ValueError):
+        
+    except (json.JSONDecodeError, KeyError, TypeError, ValueError, AttributeError):
         return -1
 
 
