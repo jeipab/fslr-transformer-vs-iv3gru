@@ -46,12 +46,21 @@ def initialize_session_state():
         st.session_state.current_tab = None
     if 'selected_files' not in st.session_state:
         st.session_state.selected_files = []
+    if 'removed_files' not in st.session_state:
+        st.session_state.removed_files = set()
 
 
 def process_uploaded_files(uploaded_files, cfg):
     """Process uploaded files and update session state."""
-    # Get current filenames in upload area
+    # Filter out files that have been explicitly removed by user
+    if uploaded_files:
+        uploaded_files = [f for f in uploaded_files if f.name not in st.session_state.removed_files]
+    
+    # Get current filenames in upload area (after filtering)
     current_filenames = {f.name for f in uploaded_files} if uploaded_files else set()
+    
+    # Get current filenames in our uploaded files list
+    existing_filenames = {f.name for f in st.session_state.uploaded_files}
     
     # Remove files that are no longer in upload area
     files_to_remove = []
@@ -63,25 +72,28 @@ def process_uploaded_files(uploaded_files, cfg):
     for filename in files_to_remove:
         remove_file(filename, show_toast=False)
     
-    # Add new files from upload area
+    # Add new files from upload area (only if not already in our list)
     for uploaded_file in uploaded_files:
         filename = uploaded_file.name
         
+        # Skip if already in our uploaded files list
+        if filename in existing_filenames:
+            continue
+            
         # Skip if already processed
         if filename in st.session_state.processed_data:
             continue
             
         # Add to uploaded files list
-        if filename not in [f.name for f in st.session_state.uploaded_files]:
-            st.session_state.uploaded_files.append(uploaded_file)
-            st.session_state.file_status[filename] = 'pending'
-            
-            # Calculate and store file size
-            file_size = len(uploaded_file.getvalue())
-            st.session_state.file_metadata[filename] = {
-                'file_size': file_size,
-                'file_size_formatted': format_file_size(file_size)
-            }
+        st.session_state.uploaded_files.append(uploaded_file)
+        st.session_state.file_status[filename] = 'pending'
+        
+        # Calculate and store file size
+        file_size = len(uploaded_file.getvalue())
+        st.session_state.file_metadata[filename] = {
+            'file_size': file_size,
+            'file_size_formatted': format_file_size(file_size)
+        }
 
 
 def render_file_management_ui():
@@ -124,26 +136,26 @@ def render_file_management_ui():
         # Action buttons based on status
         with col4:
             if status == 'pending':
-                if st.button("Process", key=f"process_{i}", help="Process this file", type="primary"):
+                if st.button("Process", key=f"process_{filename}", help="Process this file", type="primary"):
                     process_single_file(uploaded_file, filename)
                     st.rerun()
             elif status == 'completed':
-                if st.button("View", key=f"view_{i}", help="View this file", type="primary"):
+                if st.button("View", key=f"view_{filename}", help="View this file", type="primary"):
                     st.session_state.current_tab = filename
                     st.rerun()
             elif status == 'error':
-                if st.button("Retry", key=f"retry_{i}", help="Retry processing", type="primary"):
+                if st.button("Retry", key=f"retry_{filename}", help="Retry processing", type="primary"):
                     process_single_file(uploaded_file, filename)
                     st.rerun()
         
         # Remove button with confirmation
         with col5:
-            if st.button("Remove", key=f"remove_{i}", help="Remove this file", type="secondary"):
-                if st.session_state.get(f"confirm_remove_{i}", False):
+            if st.button("Remove", key=f"remove_{filename}", help="Remove this file", type="secondary"):
+                if st.session_state.get(f"confirm_remove_{filename}", False):
                     remove_file(filename)
                     st.rerun()
                 else:
-                    st.session_state[f"confirm_remove_{i}"] = True
+                    st.session_state[f"confirm_remove_{filename}"] = True
                     st.toast(f"Click 'Remove' again to confirm removal of {filename}", icon="⚠️")
         
         # Add separator line only if not the last file
@@ -249,6 +261,9 @@ def process_all_pending_files():
 
 def remove_file(filename, show_toast=True):
     """Remove a file from the queue and clean up session state."""
+    # Add to removed files set to prevent re-adding from file uploader
+    st.session_state.removed_files.add(filename)
+    
     # Remove from all session state
     st.session_state.uploaded_files = [f for f in st.session_state.uploaded_files if f.name != filename]
     
@@ -280,6 +295,7 @@ def clear_all_files():
     st.session_state.file_metadata = {}
     st.session_state.current_tab = None
     st.session_state.selected_files = []
+    st.session_state.removed_files = set()
     
     # Clear all confirmation states
     keys_to_remove = [key for key in st.session_state.keys() if key.startswith("confirm_")]
