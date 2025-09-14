@@ -63,7 +63,11 @@ def process_video_file(uploaded_file, target_fps: int = 30, out_size: int = 256,
                 conf_thresh=0.5,
                 max_gap=5,
                 write_keypoints=write_keypoints,
-                write_iv3_features=write_iv3_features
+                write_iv3_features=write_iv3_features,
+                compute_occlusion=True,  # Enable occlusion detection
+                occ_vis_thresh=0.6,     # Default occlusion parameters
+                occ_frame_prop=0.4,
+                occ_min_run=15
             )
             
             # Load the generated NPZ file
@@ -151,7 +155,8 @@ def generate_dummy_keypoints_from_video(uploaded_file, write_keypoints: bool = T
         "original_frames": total_frames,
         "processed_frames": num_output_frames,
         "processing_method": "dummy_extraction_streamlit",
-        "features_extracted": []
+        "features_extracted": [],
+        "occluded_flag": 0  # Default to not occluded for dummy data
     }
     
     if write_keypoints:

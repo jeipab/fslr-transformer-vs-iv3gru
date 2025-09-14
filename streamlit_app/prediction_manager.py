@@ -1,0 +1,574 @@
+"""Prediction manager for handling NPZ file predictions and visualization."""
+
+import io
+import streamlit as st
+import streamlit.components.v1 as components
+from typing import List, Dict
+import numpy as np
+
+from streamlit_app.utils import detect_file_type, check_npz_compatibility, create_npz_bytes, extract_occlusion_flag, interpret_occlusion_flag
+from streamlit_app.visualization import (
+    render_sequence_overview, render_animated_keypoints, 
+    render_feature_charts, render_topk_table
+)
+from streamlit_app.components import render_predictions_section
+from streamlit_app.upload_manager import remove_file_from_stage
+
+
+def render_predictions_stage(cfg: Dict):
+    """Render the predictions stage with NPZ files and visualization."""
+    # Navigation header
+    col1, col2, col3 = st.columns([1, 2, 1])
+    with col1:
+        if st.button("← Back", help="Return to previous stage", type="secondary"):
+            if st.session_state.get("confirm_back_predictions", False):
+                navigate_back_from_predictions()
+            else:
+                st.session_state["confirm_back_predictions"] = True
+                st.toast("Click '← Back' again to confirm", icon="⚠️", duration=5000)
+    with col2:
+        st.markdown("")  # Empty space
+    with col3:
+        st.markdown("")  # Empty space
+    
+    st.markdown("### Ready for Inference")
+    
+    # Get all NPZ files (original + preprocessed)
+    all_npz_files = get_all_npz_files()
+    
+    if not all_npz_files:
+        st.info("No NPZ files available for predictions.")
+        return
+    
+    # Show file management
+    render_npz_files_management(all_npz_files)
+    
+    # Show visualization tabs
+    render_visualization_tabs(cfg)
+
+
+def get_all_npz_files() -> List:
+    """Get all NPZ files from both original uploads and preprocessed videos."""
+    all_files = []
+    
+    # Add original NPZ files (regardless of status)
+    all_files.extend(st.session_state.npz_files)
+    
+    # Add preprocessed files
+    all_files.extend(st.session_state.preprocessed_files)
+    
+    return all_files
+
+
+def render_npz_files_management(all_npz_files: List):
+    """Render NPZ files management interface."""
+    if not all_npz_files:
+        return
+        
+    st.markdown("**NPZ Files Ready for Inference:**")
+    
+    # Add small space at top
+    st.markdown("<div style='height: 8px;'></div>", unsafe_allow_html=True)
+    
+    # File rows
+    for i, uploaded_file in enumerate(all_npz_files):
+        filename = uploaded_file.name
+        status = st.session_state.file_status.get(filename, 'completed')
+        file_type = detect_file_type(uploaded_file)
+        metadata = st.session_state.file_metadata.get(filename, {})
+        file_size = metadata.get('file_size_formatted', 'Unknown')
+        
+        # Status and type emojis
+        status_emoji = {
+            'pending': '⏳',
+            'processing': '🔄', 
+            'completed': '✅',
+            'error': '❌'
+        }
+        type_emoji = '📄' if file_type == 'npz' else '🎥'
+        
+        # Source indicator
+        source_type = metadata.get('source_type', 'original')
+        source_emoji = '🎥' if source_type == 'video' else '📄'
+        
+        # Create compact file row
+        col1, col2, col3, col4, col5 = st.columns([3, 1, 1, 1, 1])
+        
+        with col1:
+            st.markdown(f"**{type_emoji} {filename}** {source_emoji}")
+        with col2:
+            st.markdown(f"**Size:** {file_size}")
+        with col3:
+            st.markdown(f"**Status:** {status_emoji.get(status, '❓')} {status.title()}")
+        
+        # Action buttons
+        with col4:
+            if status == 'completed':
+                if st.button("View", key=f"view_{filename}", help="View this file", type="secondary"):
+                    st.session_state.current_tab = filename
+                    st.rerun()
+            elif status == 'pending':
+                if st.button("Process", key=f"process_{filename}", help="Process this file", type="primary"):
+                    process_single_npz_file(uploaded_file, filename)
+                    st.rerun()
+            elif status == 'error':
+                if st.button("Retry", key=f"retry_{filename}", help="Retry processing", type="primary"):
+                    process_single_npz_file(uploaded_file, filename)
+                    st.rerun()
+        
+        # Remove button with confirmation
+        with col5:
+            if st.button("Remove", key=f"remove_{filename}", help="Remove this file", type="secondary"):
+                if st.session_state.get(f"confirm_remove_{filename}", False):
+                    remove_file_from_predictions(filename)
+                    st.rerun()
+                else:
+                    st.session_state[f"confirm_remove_{filename}"] = True
+                    st.toast(f"Click 'Remove' again to confirm removal of {filename}", icon="⚠️", duration=5000)
+        
+        # Add separator line only if not the last file
+        if i < len(all_npz_files) - 1:
+            st.markdown("---")
+    
+    # Batch operations
+    st.markdown("---")
+    col1, col2, col3, col4, col5 = st.columns([3, 1, 1, 1, 1])
+    
+    with col1:
+        st.markdown("")  # Empty space to align with file names
+    
+    with col2:
+        st.markdown("")  # Empty space to align with size column
+    
+    with col3:
+        if st.button("Process All Pending", type="primary", help="Process all pending files"):
+            process_all_pending_npz_files(all_npz_files)
+            st.rerun()
+    
+    with col4:
+        if st.button("Reset", help="Reset processed files back to pending", type="primary"):
+            reset_processed_files()
+            st.rerun()
+    
+    with col5:
+        if st.button("Clear All", help="Clear all files", type="primary"):
+            if st.session_state.get("confirm_clear_all", False):
+                clear_all_predictions_files()
+                st.rerun()
+            else:
+                st.session_state["confirm_clear_all"] = True
+                st.toast("Click 'Clear All' again to confirm clearing all files", icon="⚠️", duration=5000)
+
+
+def process_single_npz_file(uploaded_file, filename: str):
+    """Process a single NPZ file and update session state."""
+    try:
+        st.session_state.file_status[filename] = 'processing'
+        
+        # Reset file pointer to beginning and load NPZ file
+        uploaded_file.seek(0)
+        file_content = uploaded_file.read()
+        file_bytes = io.BytesIO(file_content)
+        npz_data = dict(np.load(file_bytes, allow_pickle=True))
+        
+        # Check compatibility
+        compatibility = check_npz_compatibility(npz_data)
+        
+        if not any(compatibility.values()):
+            st.session_state.file_status[filename] = 'error'
+            st.toast(f"{filename}: Incompatible with any model architecture", icon="❌", duration=5000)
+            return
+        
+        # Store processed data
+        st.session_state.processed_data[filename] = npz_data
+        
+        # Update metadata while preserving file size
+        existing_metadata = st.session_state.file_metadata.get(filename, {})
+        st.session_state.file_metadata[filename] = {
+            **existing_metadata,
+            'compatibility': compatibility,
+            'file_type': 'npz',
+            'frame_count': npz_data['X'].shape[0] if 'X' in npz_data else npz_data['X2048'].shape[0] if 'X2048' in npz_data else 0
+        }
+        st.session_state.file_status[filename] = 'completed'
+        
+    except Exception as e:
+        st.session_state.file_status[filename] = 'error'
+        st.toast(f"Processing failed for {filename}: {str(e)}", icon="❌", duration=5000)
+
+
+def process_all_pending_npz_files(all_npz_files: List):
+    """Process all pending NPZ files."""
+    pending_files = [f for f in all_npz_files 
+                    if st.session_state.file_status.get(f.name, 'pending') == 'pending']
+    
+    if not pending_files:
+        st.toast("No pending NPZ files to process", icon="ℹ️", duration=5000)
+        return
+    
+    # Process all files
+    for uploaded_file in pending_files:
+        process_single_npz_file(uploaded_file, uploaded_file.name)
+    
+    # Show consolidated summary
+    completed_files = [f for f in all_npz_files 
+                      if st.session_state.file_status.get(f.name) == 'completed']
+    error_files = [f for f in all_npz_files 
+                  if st.session_state.file_status.get(f.name) == 'error']
+    
+    if completed_files:
+        # Count compatibility
+        transformer_compatible = sum(1 for f in completed_files 
+                                   if st.session_state.file_metadata[f.name]['compatibility']['transformer'])
+        iv3_compatible = sum(1 for f in completed_files 
+                           if st.session_state.file_metadata[f.name]['compatibility']['iv3_gru'])
+        
+        st.toast(f"{len(completed_files)} files have been loaded successfully", icon="✅", duration=5000)
+        
+        if transformer_compatible > 0 and iv3_compatible > 0:
+            st.toast(f"{transformer_compatible} files are compatible with Transformer, {iv3_compatible} files are compatible with IV3-GRU", icon="🔧", duration=5000)
+        elif transformer_compatible > 0:
+            st.toast(f"{transformer_compatible} files are compatible with Transformer", icon="🔧", duration=5000)
+        elif iv3_compatible > 0:
+            st.toast(f"{iv3_compatible} files are compatible with IV3-GRU", icon="🔧", duration=5000)
+    
+    if error_files:
+        st.toast(f"{len(error_files)} files failed to process", icon="❌", duration=5000)
+
+
+def render_visualization_tabs(cfg: Dict):
+    """Render visualization tabs for processed files."""
+    all_npz_files = get_all_npz_files()
+    completed_files = [f for f in all_npz_files 
+                      if st.session_state.file_status.get(f.name) == 'completed']
+    
+    if not completed_files:
+        return
+    
+    # Create tabs
+    tab_names = []
+    for uploaded_file in completed_files:
+        filename = uploaded_file.name
+        file_type = detect_file_type(uploaded_file)
+        icon = "📄" if file_type == 'npz' else "🎥"
+        
+        # Add source indicator
+        metadata = st.session_state.file_metadata.get(filename, {})
+        source_type = metadata.get('source_type', 'original')
+        source_emoji = '🎥' if source_type == 'video' else '📄'
+        
+        tab_names.append(f"{icon} {filename} {source_emoji}")
+    
+    # Add batch summary tab
+    tab_names.append("📊 Summary")
+    
+    # Create tabs
+    tabs = st.tabs(tab_names)
+    
+    # Handle programmatic tab switching
+    if st.session_state.current_tab:
+        # Find the index of the current tab
+        target_tab_index = None
+        for i, uploaded_file in enumerate(completed_files):
+            if uploaded_file.name == st.session_state.current_tab:
+                target_tab_index = i
+                break
+        
+        if target_tab_index is not None:
+            # Use JavaScript to switch to the target tab
+            switch_tab_script = f"""
+            <script>
+                setTimeout(function() {{
+                    var tabs = window.parent.document.querySelectorAll('button[data-baseweb="tab"]');
+                    if (tabs.length > {target_tab_index}) {{
+                        tabs[{target_tab_index}].click();
+                    }}
+                }}, 100);
+            </script>
+            """
+            components.html(switch_tab_script, height=0)
+            
+            # Clear the current_tab after switching
+            st.session_state.current_tab = None
+    
+    # Individual file tabs
+    for i, uploaded_file in enumerate(completed_files):
+        with tabs[i]:
+            filename = uploaded_file.name
+            npz_data = st.session_state.processed_data[filename]
+            metadata = st.session_state.file_metadata[filename]
+            
+            # File info
+            st.markdown(f"### {filename}")
+            
+            col1, col2, col3, col4, col5 = st.columns(5)
+            with col1:
+                st.metric("Frames", metadata['frame_count'])
+            with col2:
+                compatibility = metadata['compatibility']
+                compatible_count = sum(compatibility.values())
+                st.metric("Compatible Models", compatible_count)
+            with col3:
+                st.metric("File Type", metadata['file_type'].upper())
+            with col4:
+                source_type = metadata.get('source_type', 'original')
+                st.metric("Source", source_type.title())
+            with col5:
+                # Extract and display occlusion status
+                occlusion_flag = extract_occlusion_flag(npz_data)
+                occlusion_status = interpret_occlusion_flag(occlusion_flag)
+                st.metric("Occluded", occlusion_status)
+            
+            # Show compatibility info
+            compatible_models = []
+            if compatibility['transformer']:
+                compatible_models.append("Transformer")
+            if compatibility['iv3_gru']:
+                compatible_models.append("IV3-GRU")
+            
+            if compatible_models:
+                st.info(f"Compatible with: {', '.join(compatible_models)}")
+            
+            # Render visualizations
+            try:
+                X_pad, mask, meta = render_sequence_overview(npz_data, cfg["sequence_length"])
+                
+                # Side-by-side layout for Keypoint Visualization and Feature Analysis
+                st.markdown('<div class="viz-side-by-side">', unsafe_allow_html=True)
+                viz_col1, viz_col2 = st.columns([1, 1])
+                
+                with viz_col1:
+                    render_animated_keypoints(X_pad, mask if mask.size > 0 else None, key_suffix=filename)
+                
+                with viz_col2:
+                    render_feature_charts(X_pad, mask if mask.size > 0 else None, key_suffix=filename)
+                
+                st.markdown('</div>', unsafe_allow_html=True)
+                
+                # Generate and render predictions
+                render_predictions_section(cfg, None, None)
+                
+                # Download button
+                st.markdown("### Download")
+                npz_bytes = create_npz_bytes(npz_data)
+                st.download_button(
+                    label=f"Download {filename}",
+                    data=npz_bytes,
+                    file_name=filename,
+                    mime="application/octet-stream"
+                )
+                
+            except Exception as e:
+                st.error(f"Visualization error: {str(e)}")
+    
+    # Batch summary tab
+    with tabs[-1]:
+        render_batch_summary_tab(cfg)
+
+
+def render_batch_summary_tab(cfg: Dict):
+    """Render batch summary tab with statistics and predictions."""
+    st.markdown("### Summary")
+    
+    all_npz_files = get_all_npz_files()
+    completed_files = [f for f in all_npz_files 
+                      if st.session_state.file_status.get(f.name) == 'completed']
+    
+    if not completed_files:
+        st.info("No completed files to summarize.")
+        return
+    
+    # Summary table with predictions
+    summary_data = []
+    for uploaded_file in completed_files:
+        filename = uploaded_file.name
+        metadata = st.session_state.file_metadata[filename]
+        compatibility = metadata['compatibility']
+        source_type = metadata.get('source_type', 'original')
+        
+        # Generate predictions for this file
+        from streamlit_app.utils import simulate_predictions, topk_from_logits
+        
+        # Use filename hash as seed for consistent predictions per file
+        file_seed = hash(filename) % (2**32)
+        rng = np.random.RandomState(file_seed)
+        gloss_logits, cat_logits = simulate_predictions(
+            rng, cfg["num_gloss_classes"], cfg["num_category_classes"]
+        )
+        
+        # Get top 1 predictions
+        g_idx, g_prob = topk_from_logits(gloss_logits, 1)
+        c_idx, c_prob = topk_from_logits(cat_logits, 1)
+        
+        # Format predictions
+        top_gloss = f"Gloss {g_idx[0]} ({g_prob[0]*100:.1f}%)"
+        top_category = f"Category {c_idx[0]} ({c_prob[0]*100:.1f}%)"
+        
+        # Extract occlusion status for summary table
+        npz_data = st.session_state.processed_data[filename]
+        occlusion_flag = extract_occlusion_flag(npz_data)
+        occlusion_status = interpret_occlusion_flag(occlusion_flag)
+        
+        summary_data.append({
+            'File': filename,
+            'Type': metadata['file_type'].upper(),
+            'Source': source_type.title(),
+            'Frames': metadata['frame_count'],
+            'Transformer': 'Yes' if compatibility['transformer'] else 'No',
+            'IV3-GRU': 'Yes' if compatibility['iv3_gru'] else 'No',
+            'Top Gloss': top_gloss,
+            'Top Category': top_category,
+            'Occluded': occlusion_status,
+            'Status': st.session_state.file_status[filename]
+        })
+    
+    st.dataframe(summary_data, use_container_width=True)
+    
+    # Statistics
+    st.markdown("### Statistics")
+    col1, col2, col3, col4, col5, col6 = st.columns(6)
+    
+    with col1:
+        total_files = len(completed_files)
+        st.metric("Total Files", total_files)
+    
+    with col2:
+        original_files = sum(1 for f in completed_files 
+                           if st.session_state.file_metadata[f.name].get('source_type', 'original') == 'original')
+        st.metric("Original NPZ", original_files)
+    
+    with col3:
+        preprocessed_files = sum(1 for f in completed_files 
+                               if st.session_state.file_metadata[f.name].get('source_type') == 'video')
+        st.metric("Preprocessed Videos", preprocessed_files)
+    
+    with col4:
+        transformer_compatible = sum(1 for f in completed_files 
+                                   if st.session_state.file_metadata[f.name]['compatibility']['transformer'])
+        st.metric("Transformer Compatible", transformer_compatible)
+    
+    with col5:
+        iv3_compatible = sum(1 for f in completed_files 
+                           if st.session_state.file_metadata[f.name]['compatibility']['iv3_gru'])
+        st.metric("IV3-GRU Compatible", iv3_compatible)
+    
+    with col6:
+        # Count occluded files
+        occluded_count = 0
+        for f in completed_files:
+            npz_data = st.session_state.processed_data[f.name]
+            occlusion_flag = extract_occlusion_flag(npz_data)
+            if occlusion_flag == 1:  # Only count explicitly occluded files
+                occluded_count += 1
+        st.metric("Occluded", occluded_count)
+    
+    # Batch download
+    st.markdown("### Batch Download")
+    create_batch_download(summary_data)
+
+
+def create_batch_download(summary_data):
+    """Create and provide batch download as ZIP with NPZ files and summary CSV."""
+    import zipfile
+    import io
+    import pandas as pd
+    
+    # Create ZIP in memory
+    zip_buffer = io.BytesIO()
+    
+    with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zip_file:
+        # Add all NPZ files
+        for filename, npz_data in st.session_state.processed_data.items():
+            npz_bytes = create_npz_bytes(npz_data)
+            zip_file.writestr(filename, npz_bytes)
+        
+        # Add summary table as CSV
+        if summary_data:
+            summary_df = pd.DataFrame(summary_data)
+            csv_buffer = io.StringIO()
+            summary_df.to_csv(csv_buffer, index=False)
+            csv_content = csv_buffer.getvalue()
+            zip_file.writestr("summary_table.csv", csv_content)
+    
+    zip_buffer.seek(0)
+    
+    st.download_button(
+        label="Download All as ZIP",
+        data=zip_buffer.getvalue(),
+        file_name="processed_files_with_summary.zip",
+        mime="application/zip",
+        type="primary"
+    )
+
+
+def navigate_back_from_predictions():
+    """Navigate back from predictions stage."""
+    # Clear confirmation state
+    if "confirm_back_predictions" in st.session_state:
+        del st.session_state["confirm_back_predictions"]
+    
+    # Check if we have video files in preprocessing
+    if st.session_state.video_files or st.session_state.preprocessed_files:
+        st.session_state.workflow_stage = 'preprocessing'
+    else:
+        st.session_state.workflow_stage = 'upload'
+    st.rerun()
+
+
+def remove_file_from_predictions(filename: str):
+    """Remove a file from predictions stage."""
+    # Determine which stage the file came from
+    if filename in [f.name for f in st.session_state.npz_files]:
+        remove_file_from_stage(filename, 'npz')
+    elif filename in [f.name for f in st.session_state.preprocessed_files]:
+        remove_file_from_stage(filename, 'preprocessed')
+
+
+def reset_processed_files():
+    """Reset all processed files back to pending status."""
+    reset_count = 0
+    
+    # Reset all completed and error files back to pending
+    for filename in st.session_state.file_status:
+        if st.session_state.file_status[filename] in ['completed', 'error']:
+            st.session_state.file_status[filename] = 'pending'
+            reset_count += 1
+    
+    # Clear processed data
+    for filename in list(st.session_state.processed_data.keys()):
+        del st.session_state.processed_data[filename]
+    
+    # Reset metadata to only keep file size and file type
+    for filename in st.session_state.file_metadata:
+        if 'file_size' in st.session_state.file_metadata[filename]:
+            file_size = st.session_state.file_metadata[filename]['file_size']
+            file_size_formatted = st.session_state.file_metadata[filename]['file_size_formatted']
+            # Keep file type if available
+            file_type = st.session_state.file_metadata[filename].get('file_type', 'npz')
+            st.session_state.file_metadata[filename] = {
+                'file_size': file_size,
+                'file_size_formatted': file_size_formatted,
+                'file_type': file_type
+            }
+        else:
+            # If no file size info, keep minimal metadata to avoid errors
+            st.session_state.file_metadata[filename] = {'file_type': 'npz'}
+    
+    # Clear current tab
+    st.session_state.current_tab = None
+    
+    if reset_count > 0:
+        st.toast(f"Reset {reset_count} files back to pending status", icon="🔄", duration=5000)
+    else:
+        st.toast("No processed files to reset", icon="ℹ️", duration=5000)
+
+
+def clear_all_predictions_files():
+    """Clear all files from predictions stage."""
+    # Clear all files from all stages
+    from streamlit_app.upload_manager import clear_all_files
+    clear_all_files()
+    
+    # Return to upload stage
+    st.session_state.workflow_stage = 'upload'
+    st.rerun()

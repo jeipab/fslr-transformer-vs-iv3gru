@@ -10,6 +10,18 @@ from typing import Dict, Tuple, Optional, Union
 import numpy as np
 
 
+def format_file_size(size_bytes):
+    """Format file size in human readable format."""
+    if size_bytes == 0:
+        return "0 B"
+    size_names = ["B", "KB", "MB", "GB"]
+    i = 0
+    while size_bytes >= 1024 and i < len(size_names) - 1:
+        size_bytes /= 1024.0
+        i += 1
+    return f"{size_bytes:.1f} {size_names[i]}"
+
+
 def pad_or_trim(sequence: np.ndarray, target_length: int) -> np.ndarray:
     """Pad with zeros or trim sequence to target_length along time axis.
 
@@ -113,6 +125,52 @@ def check_npz_compatibility(npz_data: Dict[str, np.ndarray]) -> Dict[str, bool]:
         compatibility['both'] = True
     
     return compatibility
+
+
+def extract_occlusion_flag(npz_data: Dict[str, np.ndarray]) -> int:
+    """
+    Extract occlusion flag from NPZ metadata.
+    
+    Args:
+        npz_data: Dictionary containing NPZ file contents
+        
+    Returns:
+        Integer occlusion flag: 0 = not occluded, 1 = occluded, -1 = unknown
+    """
+    try:
+        if 'meta' in npz_data:
+            meta = npz_data['meta']
+            # Handle both string and dict metadata
+            if isinstance(meta, str):
+                meta_dict = json.loads(meta)
+            else:
+                meta_dict = meta
+            
+            if 'occluded_flag' in meta_dict:
+                return int(meta_dict['occluded_flag'])
+        
+        # If no occlusion flag found in metadata
+        return -1
+    except (json.JSONDecodeError, KeyError, TypeError, ValueError):
+        return -1
+
+
+def interpret_occlusion_flag(occlusion_flag: int) -> str:
+    """
+    Interpret occlusion flag as human-readable string.
+    
+    Args:
+        occlusion_flag: Integer occlusion flag (0, 1, or -1)
+        
+    Returns:
+        String interpretation: "No", "Yes", or "Unknown"
+    """
+    if occlusion_flag == 0:
+        return "No"
+    elif occlusion_flag == 1:
+        return "Yes"
+    else:
+        return "Unknown"
 
 
 def create_npz_bytes(npz_data: Dict[str, np.ndarray]) -> bytes:

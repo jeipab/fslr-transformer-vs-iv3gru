@@ -360,26 +360,6 @@ def render_sidebar() -> Dict:
     )
 
 
-def render_welcome_screen() -> None:
-    """Render welcome screen when no file is uploaded."""
-    st.markdown("---")
-    col1, col2, col3 = st.columns([1, 2, 1])
-    
-    with col2:
-        st.info("""
-        **Upload files to get started (up to 10 files)**
-        
-        **Supported file types:**
-        - **Preprocessed .npz files**: Ready-to-use keypoint/feature data
-        - **Video files**: MP4, AVI, MOV, MKV, WMV, FLV, WebM
-        
-        **Features:**
-        - File queue with status tracking and file size display
-        - Individual file processing and batch operations
-        - Tab-based visualization for each processed file
-        - Batch summary with comparative statistics
-        - Individual and batch download options
-        """)
 
 
 def render_file_upload() -> object:
