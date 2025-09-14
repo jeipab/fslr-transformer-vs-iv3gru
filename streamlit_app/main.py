@@ -58,6 +58,9 @@ def initialize_session_state():
 def render_file_management_ui():
     """Render file management with compact layout using native Streamlit components."""
     if not st.session_state.uploaded_files:
+        # If no files left, automatically return to upload stage
+        st.session_state.workflow_stage = 'upload'
+        st.rerun()
         return
         
     st.markdown("### Uploaded Files")
@@ -99,7 +102,7 @@ def render_file_management_ui():
                     process_single_file(uploaded_file, filename)
                     st.rerun()
             elif status == 'completed':
-                if st.button("View", key=f"view_{filename}", help="View this file", type="primary"):
+                if st.button("View", key=f"view_{filename}", help="View this file", type="secondary"):
                     st.session_state.current_tab = filename
                     st.rerun()
             elif status == 'error':
@@ -123,8 +126,7 @@ def render_file_management_ui():
     
     # Batch operations
     st.markdown("---")
-    st.markdown("#### Begin Processing")
-    col1, col2, col3 = st.columns(3)
+    col1, col2, col3, col4 = st.columns([4, 1, 1, 1])
     
     with col1:
         if st.button("Process All Pending", type="primary", help="Process all pending files"):
@@ -132,6 +134,14 @@ def render_file_management_ui():
             st.rerun()
     
     with col2:
+        st.markdown("")  # Empty space for alignment
+    
+    with col3:
+        if st.button("Reset", help="Reset processed files back to pending", type="secondary"):
+            reset_processed_files()
+            st.rerun()
+    
+    with col4:
         if st.button("Clear All", help="Clear all files", type="secondary"):
             if st.session_state.get("confirm_clear_all", False):
                 clear_all_files()
@@ -139,12 +149,6 @@ def render_file_management_ui():
             else:
                 st.session_state["confirm_clear_all"] = True
                 st.toast("Click 'Clear All' again to confirm clearing all files", icon="⚠️", duration=5000)
-    
-    with col3:
-        if st.button("Reset", help="Reset confirmation"):
-            if "confirm_clear_all" in st.session_state:
-                del st.session_state["confirm_clear_all"]
-                st.rerun()
 
 
 def process_single_file(uploaded_file, filename):
@@ -153,6 +157,8 @@ def process_single_file(uploaded_file, filename):
         st.session_state.file_status[filename] = 'processing'
         
         file_type = detect_file_type(uploaded_file)
+        # Reset file pointer to beginning in case file was read before
+        uploaded_file.seek(0)
         file_content = uploaded_file.read()
         
         if file_type == 'npz':
@@ -286,6 +292,42 @@ def clear_all_files():
     st.toast("All files cleared", icon="🗑️", duration=5000)
 
 
+def reset_processed_files():
+    """Reset all processed files back to pending status."""
+    reset_count = 0
+    
+    # Reset all completed and error files back to pending
+    for filename in st.session_state.file_status:
+        if st.session_state.file_status[filename] in ['completed', 'error']:
+            st.session_state.file_status[filename] = 'pending'
+            reset_count += 1
+    
+    # Clear processed data and metadata (except file size info)
+    for filename in list(st.session_state.processed_data.keys()):
+        del st.session_state.processed_data[filename]
+    
+    # Reset metadata to only keep file size
+    for filename in st.session_state.file_metadata:
+        if 'file_size' in st.session_state.file_metadata[filename]:
+            file_size = st.session_state.file_metadata[filename]['file_size']
+            file_size_formatted = st.session_state.file_metadata[filename]['file_size_formatted']
+            st.session_state.file_metadata[filename] = {
+                'file_size': file_size,
+                'file_size_formatted': file_size_formatted
+            }
+        else:
+            # If no file size info, keep minimal metadata to avoid errors
+            st.session_state.file_metadata[filename] = {}
+    
+    # Clear current tab
+    st.session_state.current_tab = None
+    
+    if reset_count > 0:
+        st.toast(f"Reset {reset_count} files back to pending status", icon="🔄", duration=5000)
+    else:
+        st.toast("No processed files to reset", icon="ℹ️", duration=5000)
+
+
 def cancel_processing():
     """Cancel processing and return to upload stage with confirmation."""
     if st.session_state.get("confirm_cancel", False):
@@ -295,7 +337,7 @@ def cancel_processing():
         st.rerun()
     else:
         st.session_state["confirm_cancel"] = True
-        st.toast("Click 'Cancel' again to confirm clearing all files and returning to upload", icon="⚠️", duration=5000)
+        st.toast("Click '← Back' again to confirm clearing all files and returning to upload", icon="⚠️", duration=5000)
 
 
 
@@ -352,7 +394,7 @@ def render_processing_stage(cfg):
     # Navigation header
     col1, col2, col3 = st.columns([1, 2, 1])
     with col1:
-        if st.button("Cancel", help="Clear all files and return to upload", type="secondary"):
+        if st.button("← Back", help="Return to upload stage", type="secondary"):
             cancel_processing()
     with col2:
         st.markdown("")  # Empty space
