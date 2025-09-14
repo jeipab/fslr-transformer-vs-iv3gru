@@ -20,6 +20,18 @@ from streamlit_app.visualization import (
 )
 
 
+def format_file_size(size_bytes):
+    """Format file size in human readable format."""
+    if size_bytes == 0:
+        return "0 B"
+    size_names = ["B", "KB", "MB", "GB"]
+    i = 0
+    while size_bytes >= 1024 and i < len(size_names) - 1:
+        size_bytes /= 1024.0
+        i += 1
+    return f"{size_bytes:.1f} {size_names[i]}"
+
+
 def initialize_session_state():
     """Initialize session state for multiple file processing."""
     if 'uploaded_files' not in st.session_state:
@@ -49,66 +61,109 @@ def process_uploaded_files(uploaded_files, cfg):
         if filename not in [f.name for f in st.session_state.uploaded_files]:
             st.session_state.uploaded_files.append(uploaded_file)
             st.session_state.file_status[filename] = 'pending'
+            
+            # Calculate and store file size
+            file_size = len(uploaded_file.getvalue())
+            st.session_state.file_metadata[filename] = {
+                'file_size': file_size,
+                'file_size_formatted': format_file_size(file_size)
+            }
 
 
-def render_file_queue_ui():
-    """Render file queue with status indicators and controls."""
+def render_file_management_ui():
+    """Render file management with compact layout using native Streamlit components."""
     if not st.session_state.uploaded_files:
         return
         
-    st.markdown("### File Queue")
+    st.markdown("### Uploaded Files")
     
-    # File queue display
+    # Add small space at top
+    st.markdown("<div style='height: 8px;'></div>", unsafe_allow_html=True)
+    
+    # File rows with native Streamlit components
     for i, uploaded_file in enumerate(st.session_state.uploaded_files):
         filename = uploaded_file.name
         status = st.session_state.file_status.get(filename, 'pending')
+        file_type = detect_file_type(uploaded_file)
+        metadata = st.session_state.file_metadata.get(filename, {})
+        file_size = metadata.get('file_size_formatted', 'Unknown')
         
-        col1, col2, col3, col4 = st.columns([3, 2, 2, 1])
+        # Status and type emojis
+        status_emoji = {
+            'pending': '⏳',
+            'processing': '🔄', 
+            'completed': '✅',
+            'error': '❌'
+        }
+        type_emoji = '📄' if file_type == 'npz' else '🎥'
+        
+        # Create compact file row using Streamlit columns
+        col1, col2, col3, col4, col5 = st.columns([3, 1, 1, 1, 1])
         
         with col1:
-            file_type = detect_file_type(uploaded_file)
-            if file_type == 'npz':
-                st.write(f"📄 {filename}")
-            else:
-                st.write(f"🎥 {filename}")
-        
+            st.markdown(f"**{type_emoji} {filename}**")
         with col2:
-            if status == 'pending':
-                st.write("⏳ Pending")
-            elif status == 'processing':
-                st.write("🔄 Processing")
-            elif status == 'completed':
-                st.write("✅ Completed")
-            elif status == 'error':
-                st.write("❌ Error")
-        
+            st.markdown(f"**Size:** {file_size}")
         with col3:
-            if status == 'pending':
-                if st.button("Process", key=f"process_{i}"):
-                    process_single_file(uploaded_file, filename)
-            elif status == 'completed':
-                if st.button("View", key=f"view_{i}"):
-                    st.session_state.current_tab = filename
+            st.markdown(f"**Status:** {status_emoji.get(status, '❓')} {status.title()}")
         
+        # Action buttons based on status
         with col4:
-            if st.button("Delete", key=f"delete_{i}", help="Remove file"):
-                remove_file(filename)
+            if status == 'pending':
+                if st.button("Process", key=f"process_{i}", help="Process this file", type="primary"):
+                    process_single_file(uploaded_file, filename)
+                    st.rerun()
+            elif status == 'completed':
+                if st.button("View", key=f"view_{i}", help="View this file", type="primary"):
+                    st.session_state.current_tab = filename
+                    st.rerun()
+            elif status == 'error':
+                if st.button("Retry", key=f"retry_{i}", help="Retry processing", type="primary"):
+                    process_single_file(uploaded_file, filename)
+                    st.rerun()
+        
+        # Remove button with confirmation
+        with col5:
+            if st.button("Remove", key=f"remove_{i}", help="Remove this file", type="secondary"):
+                if st.session_state.get(f"confirm_remove_{i}", False):
+                    remove_file(filename)
+                    st.rerun()
+                else:
+                    st.session_state[f"confirm_remove_{i}"] = True
+                    st.toast(f"Click 'Remove' again to confirm removal of {filename}", icon="⚠️")
+        
+        # Add separator line only if not the last file
+        if i < len(st.session_state.uploaded_files) - 1:
+            st.markdown("---")
     
-    # Batch controls
+    # Batch operations
+    st.markdown("---")
     st.markdown("#### Batch Operations")
-    col1, col2 = st.columns(2)
+    col1, col2, col3 = st.columns(3)
     
     with col1:
-        if st.button("Process All Pending", type="primary"):
+        if st.button("Process All Pending", type="primary", help="Process all pending files"):
             process_all_pending_files()
+            st.rerun()
     
     with col2:
-        if st.button("Clear All"):
-            clear_all_files()
+        if st.button("Clear All", help="Clear all files", type="secondary"):
+            if st.session_state.get("confirm_clear_all", False):
+                clear_all_files()
+                st.rerun()
+            else:
+                st.session_state["confirm_clear_all"] = True
+                st.toast("Click 'Clear All' again to confirm clearing all files", icon="⚠️")
+    
+    with col3:
+        if st.button("Reset", help="Reset confirmation"):
+            if "confirm_clear_all" in st.session_state:
+                del st.session_state["confirm_clear_all"]
+                st.rerun()
 
 
 def process_single_file(uploaded_file, filename):
-    """Process a single file."""
+    """Process a single file and update session state."""
     try:
         st.session_state.file_status[filename] = 'processing'
         
@@ -130,7 +185,11 @@ def process_single_file(uploaded_file, filename):
             
             # Store processed data
             st.session_state.processed_data[filename] = npz_data
+            
+            # Update metadata while preserving file size
+            existing_metadata = st.session_state.file_metadata.get(filename, {})
             st.session_state.file_metadata[filename] = {
+                **existing_metadata,
                 'compatibility': compatibility,
                 'file_type': file_type,
                 'frame_count': npz_data['X'].shape[0] if 'X' in npz_data else npz_data['X2048'].shape[0] if 'X2048' in npz_data else 0
@@ -162,7 +221,7 @@ def process_single_file(uploaded_file, filename):
 
 
 def process_all_pending_files():
-    """Process all pending files."""
+    """Process all pending files in the queue."""
     pending_files = [f for f in st.session_state.uploaded_files 
                     if st.session_state.file_status.get(f.name, 'pending') == 'pending']
     
@@ -175,7 +234,7 @@ def process_all_pending_files():
 
 
 def remove_file(filename):
-    """Remove a file from the queue."""
+    """Remove a file from the queue and clean up session state."""
     # Remove from all session state
     st.session_state.uploaded_files = [f for f in st.session_state.uploaded_files if f.name != filename]
     
@@ -189,16 +248,29 @@ def remove_file(filename):
     # Reset current tab if it was the removed file
     if st.session_state.current_tab == filename:
         st.session_state.current_tab = None
+    
+    # Clear any confirmation states for this file
+    for key in list(st.session_state.keys()):
+        if key.startswith(f"confirm_remove_{filename}"):
+            del st.session_state[key]
+    
+    st.toast(f"Removed {filename}", icon="🗑️")
 
 
 def clear_all_files():
-    """Clear all files from the queue."""
+    """Clear all files from the queue and reset session state."""
     st.session_state.uploaded_files = []
     st.session_state.file_status = {}
     st.session_state.processed_data = {}
     st.session_state.file_metadata = {}
     st.session_state.current_tab = None
     st.session_state.selected_files = []
+    
+    # Clear all confirmation states
+    keys_to_remove = [key for key in st.session_state.keys() if key.startswith("confirm_")]
+    for key in keys_to_remove:
+        del st.session_state[key]
+    
     st.toast("All files cleared", icon="🗑️")
 
 
@@ -282,7 +354,7 @@ def render_visualization_tabs(cfg):
 
 
 def render_batch_summary_tab(cfg):
-    """Render batch summary tab."""
+    """Render batch summary tab with statistics and predictions."""
     st.markdown("### Batch Processing Summary")
     
     completed_files = [f for f in st.session_state.uploaded_files 
@@ -403,8 +475,8 @@ def main() -> None:
     # Process uploaded files
     process_uploaded_files(uploaded_files, cfg)
     
-    # Show file queue and processing controls
-    render_file_queue_ui()
+    # Show file management
+    render_file_management_ui()
     
     # Show visualization tabs
     render_visualization_tabs(cfg)
