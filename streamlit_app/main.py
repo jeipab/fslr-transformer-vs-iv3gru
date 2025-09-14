@@ -50,6 +50,20 @@ def initialize_session_state():
 
 def process_uploaded_files(uploaded_files, cfg):
     """Process uploaded files and update session state."""
+    # Get current filenames in upload area
+    current_filenames = {f.name for f in uploaded_files} if uploaded_files else set()
+    
+    # Remove files that are no longer in upload area
+    files_to_remove = []
+    for uploaded_file in st.session_state.uploaded_files:
+        if uploaded_file.name not in current_filenames:
+            files_to_remove.append(uploaded_file.name)
+    
+    # Remove files that are no longer in upload area
+    for filename in files_to_remove:
+        remove_file(filename, show_toast=False)
+    
+    # Add new files from upload area
     for uploaded_file in uploaded_files:
         filename = uploaded_file.name
         
@@ -233,7 +247,7 @@ def process_all_pending_files():
         process_single_file(uploaded_file, uploaded_file.name)
 
 
-def remove_file(filename):
+def remove_file(filename, show_toast=True):
     """Remove a file from the queue and clean up session state."""
     # Remove from all session state
     st.session_state.uploaded_files = [f for f in st.session_state.uploaded_files if f.name != filename]
@@ -254,7 +268,8 @@ def remove_file(filename):
         if key.startswith(f"confirm_remove_{filename}"):
             del st.session_state[key]
     
-    st.toast(f"Removed {filename}", icon="🗑️")
+    if show_toast:
+        st.toast(f"Removed {filename}", icon="🗑️")
 
 
 def clear_all_files():
