@@ -13,9 +13,10 @@ def set_page() -> None:
         initial_sidebar_state="expanded",
     )
     
-    # Custom CSS for better styling
+    # Consolidated CSS for better styling and layout
     st.markdown("""
     <style>
+    /* ===== HEADER STYLES ===== */
     .main-header {
         font-size: 2.5rem;
         font-weight: bold;
@@ -31,6 +32,8 @@ def set_page() -> None:
         padding-bottom: 0.5rem;
         margin: 1.5rem 0 1rem 0;
     }
+    
+    /* ===== METRIC CARDS ===== */
     .metric-card {
         background-color: rgba(255, 255, 255, 0.1);
         padding: 1rem;
@@ -42,19 +45,165 @@ def set_page() -> None:
     .status-error { color: #e74c3c; }
     
     /* Hide progress bars in metrics */
-    .metric-container [data-testid="metric-container"] > div[data-testid="metric-value"] > div[style*="background"] {
-        display: none !important;
-    }
-    
-    .metric-container [data-testid="metric-container"] > div[data-testid="metric-value"] > div[style*="width"] {
-        display: none !important;
-    }
-    
-    /* Alternative approach - hide all progress bars in metrics */
     div[data-testid="metric-container"] div[style*="background-color"] {
         display: none !important;
     }
+    
+    /* ===== FILE UPLOADER STYLING ===== */
+    /* Hide Streamlit's default file listing under upload area */
+    .stFileUploader > div > div > div > div:not([data-testid="stFileUploaderDropzone"]) {
+        display: none !important;
+    }
+    div[data-testid="stFileUploaderStatus"] {
+        display: none !important;
+    }
+    div[data-testid="stFileUploaderDropzone"] ~ * {
+        display: none !important;
+    }
+    .stFileUploader > div > div > div > div:not([data-testid="stFileUploaderDropzone"]):not([data-testid="stFileUploaderStatus"]) {
+        display: none !important;
+    }
+    .stFileUploader div[data-testid="stFileUploaderDropzone"] + div {
+        display: none !important;
+    }
+    .stFileUploader div:has(span[title*="."]) {
+        display: none !important;
+    }
+    .stFileUploader > div > div > div > *:not([data-testid="stFileUploaderDropzone"]) {
+        display: none !important;
+    }
+    
+    /* ===== FILE MANAGEMENT LAYOUT ===== */
+    /* Compact file management rows */
+    .stContainer > div {
+        margin: 0 !important;
+        padding: 1px 0 !important;
+    }
+    .stContainer {
+        margin-bottom: 0 !important;
+    }
+    
+    /* Compact spacing for markdown containers */
+    div[data-testid="stMarkdownContainer"] p {
+        margin: 0.1rem 0 !important;
+    }
+    .stMarkdownContainer {
+        margin: 0 !important;
+        padding: 0 !important;
+    }
+    .stMarkdownContainer p {
+        margin: 0 !important;
+        padding: 0 !important;
+    }
+    div[data-testid="stMarkdownContainer"] {
+        margin: 0 !important;
+        padding: 0 !important;
+    }
+    
+    /* Compact button spacing */
+    .stButton > button {
+        margin: 1px !important;
+        padding: 0.2rem 0.4rem !important;
+    }
+    
+    /* Compact column layout */
+    .stColumns > div {
+        padding: 2px 4px !important;
+        margin: 0 !important;
+    }
+    .stColumns {
+        margin: 0 !important;
+        padding: 0 !important;
+    }
+    
+    /* Compact separators */
+    .stMarkdown hr {
+        margin: 4px 0 !important;
+        border: none !important;
+        border-top: 1px solid #333 !important;
+    }
+    
+    /* ===== TOOLTIP FIXES ===== */
+    .stTooltip,
+    div[data-testid="stTooltip"],
+    [data-testid="stTooltip"] {
+        z-index: 99999 !important;
+        position: fixed !important;
+        pointer-events: none !important;
+    }
+    div[title]:hover::after,
+    button[title]:hover::after {
+        content: attr(title);
+        position: fixed !important;
+        z-index: 99999 !important;
+        background: rgba(0, 0, 0, 0.8) !important;
+        color: white !important;
+        padding: 4px 8px !important;
+        border-radius: 4px !important;
+        font-size: 12px !important;
+        pointer-events: none !important;
+        white-space: nowrap !important;
+    }
+    .stContainer,
+    .stMarkdownContainer,
+    div[data-testid="stMarkdownContainer"] {
+        overflow: visible !important;
+    }
+    .stButton,
+    button {
+        position: relative !important;
+        z-index: 1 !important;
+    }
+    
+    /* ===== EMPTY CONTAINER HIDING ===== */
+    .stMarkdownContainer:empty,
+    div[data-testid="stMarkdownContainer"]:empty {
+        display: none !important;
+    }
+    .stMarkdownContainer script,
+    div[data-testid="stMarkdownContainer"] script {
+        display: none !important;
+    }
+    .stAlert:empty,
+    div[data-testid="stAlert"]:empty {
+        display: none !important;
+    }
+    .stMarkdownContainer:has(> div:empty),
+    div[data-testid="stMarkdownContainer"]:has(> div:empty) {
+        display: none !important;
+    }
+    .stMarkdownContainer:not(:has(*)) {
+        display: none !important;
+    }
     </style>
+    
+    <script>
+    // JavaScript fallback to hide file listing
+    function hideFileListing() {
+        const fileUploader = document.querySelector('div[data-testid="stFileUploader"]');
+        if (fileUploader) {
+            const dropzone = fileUploader.querySelector('div[data-testid="stFileUploaderDropzone"]');
+            if (dropzone) {
+                let nextSibling = dropzone.nextElementSibling;
+                while (nextSibling) {
+                    nextSibling.style.display = 'none';
+                    nextSibling = nextSibling.nextElementSibling;
+                }
+            }
+        }
+    }
+    
+    // Run on page load and DOM changes
+    window.addEventListener('load', hideFileListing);
+    const observer = new MutationObserver(function(mutations) {
+        mutations.forEach(function(mutation) {
+            if (mutation.type === 'childList') {
+                hideFileListing();
+            }
+        });
+    });
+    observer.observe(document.body, { childList: true, subtree: true });
+    </script>
     """, unsafe_allow_html=True)
 
 
@@ -63,12 +212,13 @@ def render_sidebar() -> Dict:
     st.sidebar.markdown("<h1 style='color: #1f77b4;'>FSLR Demo</h1>", unsafe_allow_html=True)
     st.sidebar.markdown("---")
     
+    # Data Input Section
     st.sidebar.markdown("### Data Input")
     st.sidebar.info("Upload a preprocessed .npz file or video file for processing.")
     
+    # Model Configuration Section
     st.sidebar.markdown("### Model Configuration")
     with st.sidebar.container():
-        # Model choice will be determined dynamically based on file compatibility
         model_choice = st.selectbox(
             "Model Architecture", 
             ["SignTransformer", "IV3_GRU"], 
@@ -90,6 +240,7 @@ def render_sidebar() -> Dict:
                 help="Number of semantic categories"
             )
     
+    # Processing Options Section
     st.sidebar.markdown("### Processing Options")
     with st.sidebar.container():
         sequence_length = st.slider(
@@ -108,6 +259,7 @@ def render_sidebar() -> Dict:
             help="Seed for reproducible simulation"
         )
     
+    # About Section
     st.sidebar.markdown("---")
     st.sidebar.markdown("### About")
     st.sidebar.markdown("""
@@ -135,28 +287,23 @@ def render_welcome_screen() -> None:
     
     with col2:
         st.info("""
-        **Multiple File Processing (up to 10 files)**
+        **Upload files to get started (up to 10 files)**
         
-        **Preprocessed data files (.npz):**
-        - Ready-to-use keypoint/feature data from previous processing
-        - Compatible with Transformer (156-D keypoints) or IV3-GRU (2048-D features)
-        - Instant analysis and visualization in individual tabs
-        
-        **Video files:**
-        - Common formats: MP4, AVI, MOV, MKV, WMV, FLV, WebM
-        - Choose which model architectures to preprocess for
-        - Process multiple files individually or in batch
+        **Supported file types:**
+        - **Preprocessed .npz files**: Ready-to-use keypoint/feature data
+        - **Video files**: MP4, AVI, MOV, MKV, WMV, FLV, WebM
         
         **Features:**
-        - Tab-based visualization for each file
+        - File queue with status tracking and file size display
+        - Individual file processing and batch operations
+        - Tab-based visualization for each processed file
         - Batch summary with comparative statistics
         - Individual and batch download options
-        - File queue with status indicators
         """)
 
 
 def render_file_upload() -> object:
-    """Render file upload component."""
+    """Render file upload component with native Streamlit design."""
     return st.file_uploader(
         "Choose .npz files or video files (max 10)", 
         type=["npz", "mp4", "avi", "mov", "mkv", "wmv", "flv", "webm"],
@@ -195,7 +342,7 @@ def render_predictions_section(cfg: Dict, gloss_logits: object, cat_logits: obje
     from streamlit_app.utils import simulate_predictions, topk_from_logits
     import numpy as np
     
-    rng = np.random.RandomState(cfg["random_seed"])  # reproducible
+    rng = np.random.RandomState(cfg["random_seed"])
     gloss_logits, cat_logits = simulate_predictions(
         rng, cfg["num_gloss_classes"], cfg["num_category_classes"]
     )
