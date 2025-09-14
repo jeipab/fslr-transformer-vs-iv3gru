@@ -129,7 +129,7 @@ def render_sequence_overview(npz_dict: Dict, sequence_length: int) -> Tuple[np.n
 
 def render_animated_keypoints(sequence: np.ndarray, mask: Optional[np.ndarray] = None, key_suffix: str = "") -> None:
     """Render animated keypoint visualization with skeleton overlay."""
-    st.markdown("<div class='section-header'>Animated Keypoint Visualization</div>", unsafe_allow_html=True)
+    st.markdown("<div class='section-header'>Keypoint Visualization</div>", unsafe_allow_html=True)
     
     if not PLOTLY_AVAILABLE:
         st.warning("Plotly not available. Please install plotly to see animated keypoint visualization.")
@@ -374,7 +374,7 @@ def render_feature_charts(sequence: np.ndarray, mask: Optional[np.ndarray] = Non
             xaxis_title="Frame",
             yaxis_title="Normalized Coordinate",
             hovermode='x unified',
-            height=400
+            height=600
         )
         
         st.plotly_chart(fig, use_container_width=True)
@@ -388,7 +388,7 @@ def render_feature_charts(sequence: np.ndarray, mask: Optional[np.ndarray] = Non
             labels={'x': 'Frame', 'y': 'Feature Index', 'color': 'Value'},
             title=f"{selected_group} - {coord_type} Heatmap"
         )
-        fig.update_layout(height=400)
+        fig.update_layout(height=600)
         st.plotly_chart(fig, use_container_width=True)
     
     # Statistics summary

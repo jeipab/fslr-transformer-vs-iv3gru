@@ -137,12 +137,12 @@ def render_file_management_ui():
         st.markdown("")  # Empty space for alignment
     
     with col3:
-        if st.button("Reset", help="Reset processed files back to pending", type="secondary"):
+        if st.button("Reset", help="Reset processed files back to pending", type="primary"):
             reset_processed_files()
             st.rerun()
     
     with col4:
-        if st.button("Clear All", help="Clear all files", type="secondary"):
+        if st.button("Clear All", help="Clear all files", type="primary"):
             if st.session_state.get("confirm_clear_all", False):
                 clear_all_files()
                 st.rerun()
@@ -360,19 +360,38 @@ def render_upload_stage():
     if uploaded_files:
         st.session_state.pending_upload_files = uploaded_files
         
-        # Display selected files
+        # Display selected files in multiple columns
         st.markdown("**Selected Files:**")
-        for uploaded_file in uploaded_files:
+        
+        # Calculate number of columns based on number of files
+        num_files = len(uploaded_files)
+        if num_files <= 3:
+            num_cols = num_files
+        elif num_files <= 6:
+            num_cols = 3
+        else:
+            num_cols = 4
+        
+        # Create columns for file display
+        cols = st.columns(num_cols)
+        
+        for i, uploaded_file in enumerate(uploaded_files):
             file_type = uploaded_file.name.split('.')[-1].lower()
             icon = "📄" if file_type == "npz" else "🎥"
             file_size = len(uploaded_file.getvalue())
             size_mb = file_size / (1024 * 1024)
-            st.markdown(f"{icon} **{uploaded_file.name}** ({size_mb:.1f} MB)")
+            
+            # Use modulo to cycle through columns
+            col_index = i % num_cols
+            with cols[col_index]:
+                st.markdown(f"{icon} **{uploaded_file.name}**")
+                st.markdown(f"({size_mb:.1f} MB)")
         
-        # Proceed button
-        col1, col2, col3 = st.columns([1, 1, 1])
+        # Centered proceed button
+        st.markdown("<br>", unsafe_allow_html=True)  # Add some spacing
+        col1, col2, col3 = st.columns([2, 1, 2])
         with col2:
-            if st.button("Proceed to Processing", type="primary", help="Move to processing stage"):
+            if st.button("Proceed to Processing", type="primary", help="Move to processing stage", use_container_width=True):
                 # Move files to uploaded_files and switch to processing stage
                 st.session_state.uploaded_files = uploaded_files
                 for uploaded_file in uploaded_files:
@@ -491,8 +510,19 @@ def render_visualization_tabs(cfg):
             # Render visualizations
             try:
                 X_pad, mask, meta = render_sequence_overview(npz_data, cfg["sequence_length"])
-                render_animated_keypoints(X_pad, mask if mask.size > 0 else None, key_suffix=filename)
-                render_feature_charts(X_pad, mask if mask.size > 0 else None, key_suffix=filename)
+                
+                # Side-by-side layout for Keypoint Visualization and Feature Analysis
+                # Add custom CSS class for responsive behavior at 50% breakpoint
+                st.markdown('<div class="viz-side-by-side">', unsafe_allow_html=True)
+                viz_col1, viz_col2 = st.columns([1, 1])
+                
+                with viz_col1:
+                    render_animated_keypoints(X_pad, mask if mask.size > 0 else None, key_suffix=filename)
+                
+                with viz_col2:
+                    render_feature_charts(X_pad, mask if mask.size > 0 else None, key_suffix=filename)
+                
+                st.markdown('</div>', unsafe_allow_html=True)
                 
                 # Generate and render predictions
                 render_predictions_section(cfg, None, None)
