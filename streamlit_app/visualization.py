@@ -143,29 +143,48 @@ def render_animated_keypoints(sequence: np.ndarray, mask: Optional[np.ndarray] =
     # Reshape keypoints to [T, 78, 2] for easier handling
     keypoints_2d = sequence.reshape(time_steps, 78, 2)
     
-    # Define skeleton connections for MediaPipe Holistic
+    # Define skeleton connections for MediaPipe Holistic based on actual preprocessing layout
+    # Layout: Pose(0-24), Left Hand(25-45), Right Hand(46-66), Face(67-77)
     skeleton_connections = {
         "pose": [
-            # Pose landmarks (0-32)
-            (11, 12), (11, 13), (13, 15), (15, 17), (15, 19), (15, 21), (17, 19),
-            (12, 14), (14, 16), (16, 18), (16, 20), (16, 22), (18, 20),
-            (11, 23), (12, 24), (23, 24), (23, 25), (24, 26), (25, 27), (26, 28),
-            (27, 29), (28, 30), (29, 31), (30, 32), (27, 31), (28, 32)
+            # Upper body pose connections (indices 0-24)
+            # Shoulder connections
+            (11, 12), (11, 13), (12, 14), (13, 15), (14, 16),
+            # Arm connections  
+            (15, 17), (15, 19), (15, 21), (17, 19),
+            (16, 18), (16, 20), (16, 22), (18, 20),
+            # Torso connections
+            (11, 23), (12, 24), (23, 24)
         ],
         "left_hand": [
-            # Left hand landmarks (0-20, offset by 33)
-            (0, 1), (1, 2), (2, 3), (3, 4), (0, 5), (5, 6), (6, 7), (7, 8),
-            (0, 9), (9, 10), (10, 11), (11, 12), (0, 13), (13, 14), (14, 15), (15, 16),
+            # Left hand connections (indices 25-45, relative to 0-20)
+            # Thumb
+            (0, 1), (1, 2), (2, 3), (3, 4),
+            # Index finger
+            (0, 5), (5, 6), (6, 7), (7, 8),
+            # Middle finger
+            (0, 9), (9, 10), (10, 11), (11, 12),
+            # Ring finger
+            (0, 13), (13, 14), (14, 15), (15, 16),
+            # Pinky
             (0, 17), (17, 18), (18, 19), (19, 20)
         ],
         "right_hand": [
-            # Right hand landmarks (0-20, offset by 54)
-            (0, 1), (1, 2), (2, 3), (3, 4), (0, 5), (5, 6), (6, 7), (7, 8),
-            (0, 9), (9, 10), (10, 11), (11, 12), (0, 13), (13, 14), (14, 15), (15, 16),
+            # Right hand connections (indices 46-66, relative to 0-20)
+            # Thumb
+            (0, 1), (1, 2), (2, 3), (3, 4),
+            # Index finger
+            (0, 5), (5, 6), (6, 7), (7, 8),
+            # Middle finger
+            (0, 9), (9, 10), (10, 11), (11, 12),
+            # Ring finger
+            (0, 13), (13, 14), (14, 15), (15, 16),
+            # Pinky
             (0, 17), (17, 18), (18, 19), (19, 20)
         ],
         "face": [
-            # Face landmarks (0-10, offset by 75)
+            # Face connections (indices 67-77, relative to 0-10)
+            # Basic face outline connections
             (0, 1), (1, 2), (2, 3), (3, 4), (4, 5), (5, 6), (6, 7), (7, 8),
             (8, 9), (9, 10), (10, 0)
         ]
@@ -208,44 +227,58 @@ def render_animated_keypoints(sequence: np.ndarray, mask: Optional[np.ndarray] =
     # Plot keypoints for each body part
     for part_name, connections in skeleton_connections.items():
         if part_name == "pose":
-            start_idx, end_idx = 0, 33
+            start_idx, end_idx = 0, 25  # 25 pose landmarks (POSE_UPPER_25)
         elif part_name == "left_hand":
-            start_idx, end_idx = 33, 54
+            start_idx, end_idx = 25, 46  # 21 hand landmarks
         elif part_name == "right_hand":
-            start_idx, end_idx = 54, 75
+            start_idx, end_idx = 46, 67  # 21 hand landmarks
         elif part_name == "face":
-            start_idx, end_idx = 75, 78
+            start_idx, end_idx = 67, 78  # 11 face landmarks (FACEMESH_11)
         
         part_keypoints = current_keypoints[start_idx:end_idx]
         
-        # Plot individual points
-        if show_visibility and mask is not None and mask.size > 0:
-            # Use visibility mask for coloring
-            visibility = mask[frame_idx, start_idx:end_idx] if mask.shape[1] >= end_idx else np.ones(end_idx - start_idx, dtype=bool)
-            point_colors = ['rgba(255,0,0,1)' if v else 'rgba(255,0,0,0.3)' for v in visibility]
-        else:
-            point_colors = [colors[part_name]] * len(part_keypoints)
+        # Filter out keypoints at (0,0) coordinates
+        valid_mask = ~((part_keypoints[:, 0] == 0) & (part_keypoints[:, 1] == 0))
+        valid_keypoints = part_keypoints[valid_mask]
         
-        fig.add_trace(go.Scatter(
-            x=part_keypoints[:, 0],
-            y=part_keypoints[:, 1],
-            mode='markers',
-            marker=dict(
-                size=8,
-                color=point_colors,
-                line=dict(width=2, color='white')
-            ),
-            name=f"{part_name.title()} Points",
-            showlegend=True
-        ))
+        if len(valid_keypoints) > 0:  # Only plot if there are valid keypoints
+            # Plot individual points
+            if show_visibility and mask is not None and mask.size > 0:
+                # Use visibility mask for coloring, filtered for valid points
+                visibility = mask[frame_idx, start_idx:end_idx] if mask.shape[1] >= end_idx else np.ones(end_idx - start_idx, dtype=bool)
+                valid_visibility = visibility[valid_mask]
+                point_colors = ['rgba(255,0,0,1)' if v else 'rgba(255,0,0,0.3)' for v in valid_visibility]
+            else:
+                point_colors = [colors[part_name]] * len(valid_keypoints)
+            
+            fig.add_trace(go.Scatter(
+                x=valid_keypoints[:, 0],
+                y=valid_keypoints[:, 1],
+                mode='markers',
+                marker=dict(
+                    size=8,
+                    color=point_colors,
+                    line=dict(width=2, color='white')
+                ),
+                name=f"{part_name.title()} Points",
+                showlegend=True
+            ))
         
         # Plot skeleton connections
-        if show_skeleton:
+        if show_skeleton and len(valid_keypoints) > 0:
+            # Create mapping from original indices to valid indices
+            valid_indices = np.where(valid_mask)[0]
+            original_to_valid = {orig_idx: valid_idx for valid_idx, orig_idx in enumerate(valid_indices)}
+            
             for start_conn, end_conn in connections:
-                if start_conn < len(part_keypoints) and end_conn < len(part_keypoints):
+                if (start_conn < len(part_keypoints) and end_conn < len(part_keypoints) and
+                    start_conn in original_to_valid and end_conn in original_to_valid):
+                    # Only draw line if both endpoints are valid (not at 0,0)
+                    valid_start = original_to_valid[start_conn]
+                    valid_end = original_to_valid[end_conn]
                     fig.add_trace(go.Scatter(
-                        x=[part_keypoints[start_conn, 0], part_keypoints[end_conn, 0]],
-                        y=[part_keypoints[start_conn, 1], part_keypoints[end_conn, 1]],
+                        x=[valid_keypoints[valid_start, 0], valid_keypoints[valid_end, 0]],
+                        y=[valid_keypoints[valid_start, 1], valid_keypoints[valid_end, 1]],
                         mode='lines',
                         line=dict(color=colors[part_name], width=2),
                         showlegend=False,
@@ -280,7 +313,7 @@ def render_animated_keypoints(sequence: np.ndarray, mask: Optional[np.ndarray] =
     st.plotly_chart(fig, use_container_width=True)
     
     # Add frame information
-    col1, col2, col3 = st.columns(3)
+    col1, col2, col3, col4 = st.columns(4)
     with col1:
         st.metric("Current Frame", f"{frame_idx + 1}/{time_steps}")
     with col2:
@@ -292,6 +325,13 @@ def render_animated_keypoints(sequence: np.ndarray, mask: Optional[np.ndarray] =
             avg_x = np.mean(current_keypoints[:, 0])
             avg_y = np.mean(current_keypoints[:, 1])
             st.metric("Center", f"({avg_x:.3f}, {avg_y:.3f})")
+    with col4:
+        # Show keypoint counts per body part
+        pose_count = np.sum(~((current_keypoints[0:25, 0] == 0) & (current_keypoints[0:25, 1] == 0)))
+        left_hand_count = np.sum(~((current_keypoints[25:46, 0] == 0) & (current_keypoints[25:46, 1] == 0)))
+        right_hand_count = np.sum(~((current_keypoints[46:67, 0] == 0) & (current_keypoints[46:67, 1] == 0)))
+        face_count = np.sum(~((current_keypoints[67:78, 0] == 0) & (current_keypoints[67:78, 1] == 0)))
+        st.metric("Valid Keypoints", f"P:{pose_count} L:{left_hand_count} R:{right_hand_count} F:{face_count}")
 
 
 def render_feature_charts(sequence: np.ndarray, mask: Optional[np.ndarray] = None, key_suffix: str = "") -> None:
@@ -304,12 +344,12 @@ def render_feature_charts(sequence: np.ndarray, mask: Optional[np.ndarray] = Non
     col1, col2, col3 = st.columns([2, 1, 1])
     
     with col1:
-        # Keypoint group selection
+        # Keypoint group selection - Updated to match actual preprocessing layout
         keypoint_groups = {
-            "Pose (upper body)": (0, 50),
-            "Left hand": (50, 92),
-            "Right hand": (92, 134),
-            "Face landmarks": (134, 156)
+            "Pose (upper body)": (0, 50),    # 25 landmarks * 2 coordinates = 50 features
+            "Left hand": (50, 92),           # 21 landmarks * 2 coordinates = 42 features  
+            "Right hand": (92, 134),         # 21 landmarks * 2 coordinates = 42 features
+            "Face landmarks": (134, 156)     # 11 landmarks * 2 coordinates = 22 features
         }
         
         selected_group = st.selectbox(
@@ -463,21 +503,28 @@ def create_video_with_keypoints(uploaded_video_file, keypoints: np.ndarray,
                 pixel_points = pixel_points.astype(np.int32)
                 
                 # Draw keypoints with different colors for different groups
-                # Pose points (red)
+                # Filter out keypoints at (0,0) coordinates
+                valid_mask = ~((pixel_points[:, 0] == 0) & (pixel_points[:, 1] == 0))
+                
+                # Pose points (red) - 25 landmarks (0-24)
                 for i in range(min(25, len(pixel_points))):
-                    cv2.circle(frame, tuple(pixel_points[i]), 4, (0, 0, 255), -1)
+                    if valid_mask[i]:
+                        cv2.circle(frame, tuple(pixel_points[i]), 4, (0, 0, 255), -1)
                         
-                # Left hand (blue) 
+                # Left hand (blue) - 21 landmarks (25-45)
                 for i in range(25, min(46, len(pixel_points))):
-                    cv2.circle(frame, tuple(pixel_points[i]), 2, (255, 0, 0), -1)
+                    if valid_mask[i]:
+                        cv2.circle(frame, tuple(pixel_points[i]), 2, (255, 0, 0), -1)
                         
-                # Right hand (green)
+                # Right hand (green) - 21 landmarks (46-66)
                 for i in range(46, min(67, len(pixel_points))):
-                    cv2.circle(frame, tuple(pixel_points[i]), 2, (0, 255, 0), -1)
+                    if valid_mask[i]:
+                        cv2.circle(frame, tuple(pixel_points[i]), 2, (0, 255, 0), -1)
                         
-                # Face (orange/yellow)
+                # Face (orange/yellow) - 11 landmarks (67-77)
                 for i in range(67, min(78, len(pixel_points))):
-                    cv2.circle(frame, tuple(pixel_points[i]), 1, (0, 165, 255), -1)
+                    if valid_mask[i]:
+                        cv2.circle(frame, tuple(pixel_points[i]), 1, (0, 165, 255), -1)
                         
             out.write(frame)
             frame_idx += 1
