@@ -175,6 +175,86 @@ def set_page() -> None:
     .stMarkdownContainer:not(:has(*)) {
         display: none !important;
     }
+    
+    /* ===== CUSTOM RESPONSIVE LAYOUT ===== */
+    /* Force side-by-side layout for visualization columns at 50%+ screen width */
+    @media (min-width: 50vw) {
+        .viz-side-by-side .stColumns > div {
+            flex: 0 0 50% !important;
+            max-width: 50% !important;
+            display: flex !important;
+            flex-direction: column !important;
+            align-items: stretch !important;
+        }
+        
+        /* Ensure equal height for visualization sections */
+        .viz-side-by-side .stColumns {
+            align-items: stretch !important;
+        }
+        
+        /* Make content fill available height */
+        .viz-side-by-side .stColumns > div > div {
+            flex: 1 !important;
+            display: flex !important;
+            flex-direction: column !important;
+        }
+        
+        /* Ensure minimum height for better visual balance */
+        .viz-side-by-side .stColumns > div {
+            min-height: 500px !important;
+        }
+        
+        /* Add gap between sections for better visual separation */
+        .viz-side-by-side .stColumns > div:first-child {
+            padding-right: 2rem !important;
+        }
+        
+        .viz-side-by-side .stColumns > div:last-child {
+            padding-left: 2rem !important;
+        }
+    }
+    
+    /* ===== CUSTOM BUTTON COLORS ===== */
+    /* Reset button - Warning/Orange color */
+    .stButton > button[kind="primary"]:has-text("Reset") {
+        background-color: #f39c12 !important;
+        border-color: #e67e22 !important;
+        color: white !important;
+    }
+    
+    .stButton > button[kind="primary"]:has-text("Reset"):hover {
+        background-color: #e67e22 !important;
+        border-color: #d35400 !important;
+    }
+    
+    /* Clear All button - Danger/Red color */
+    .stButton > button[kind="primary"]:has-text("Clear All") {
+        background-color: #e74c3c !important;
+        border-color: #c0392b !important;
+        color: white !important;
+    }
+    
+    .stButton > button[kind="primary"]:has-text("Clear All"):hover {
+        background-color: #c0392b !important;
+        border-color: #a93226 !important;
+    }
+    
+    /* Force stacked layout for visualization columns below 50% screen width */
+    @media (max-width: 49.99vw) {
+        .viz-side-by-side .stColumns > div {
+            flex: 0 0 100% !important;
+            max-width: 100% !important;
+        }
+        
+        /* Remove gap when stacked */
+        .viz-side-by-side .stColumns > div:first-child {
+            padding-right: 0 !important;
+        }
+        
+        .viz-side-by-side .stColumns > div:last-child {
+            padding-left: 0 !important;
+        }
+    }
     </style>
     
     <script>
