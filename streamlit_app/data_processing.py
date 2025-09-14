@@ -27,7 +27,7 @@ except ImportError:
 
 
 def process_video_file(uploaded_file, target_fps: int = 30, out_size: int = 256, 
-                      write_keypoints: bool = True, write_iv3_features: bool = False) -> Dict[str, np.ndarray]:
+                      write_keypoints: bool = True, write_iv3_features: bool = True) -> Dict[str, np.ndarray]:
     """
     Process uploaded video file to extract keypoints and/or features.
     
@@ -50,42 +50,56 @@ def process_video_file(uploaded_file, target_fps: int = 30, out_size: int = 256,
         tmp_file.write(uploaded_file.read())
         tmp_video_path = tmp_file.name
     
-    # Create temporary output directory
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        try:
-            # Process video using existing preprocessing function
-            process_video(
-                video_path=tmp_video_path,
-                out_dir=tmp_dir,
-                target_fps=target_fps,
-                out_size=out_size,
-                conf_thresh=0.5,
-                max_gap=5,
-                write_keypoints=write_keypoints,
-                write_iv3_features=write_iv3_features,
-                compute_occlusion=True,  # Enable occlusion detection
-                occ_vis_thresh=0.6,     # Default occlusion parameters
-                occ_frame_prop=0.4,
-                occ_min_run=15
-            )
+    # Create persistent output directory in temp folder
+    tmp_dir = tempfile.mkdtemp()
+    
+    try:
+        # Process video using existing preprocessing function
+        process_video(
+            video_path=tmp_video_path,
+            out_dir=tmp_dir,
+            target_fps=target_fps,
+            out_size=out_size,
+            conf_thresh=0.5,
+            max_gap=5,
+            write_keypoints=write_keypoints,
+            write_iv3_features=write_iv3_features,
+            compute_occlusion=True,  # Enable occlusion detection
+            occ_vis_thresh=0.6,     # Default occlusion parameters
+            occ_frame_prop=0.4,
+            occ_min_run=15
+        )
+        
+        # Load the generated NPZ file
+        # Use the basename of the temporary video file (which is what preprocessing creates)
+        temp_basename = Path(tmp_video_path).stem
+        npz_path = os.path.join(tmp_dir, f"{temp_basename}.npz")
+        
+        if os.path.exists(npz_path):
+            data = dict(np.load(npz_path, allow_pickle=True))
             
-            # Load the generated NPZ file
-            basename = Path(uploaded_file.name).stem
-            npz_path = os.path.join(tmp_dir, f"{basename}.npz")
+            # Clean up the temporary directory after loading
+            import shutil
+            shutil.rmtree(tmp_dir)
             
-            if os.path.exists(npz_path):
-                data = dict(np.load(npz_path, allow_pickle=True))
-                return data
-            else:
-                st.error(f"Failed to process video: {uploaded_file.name}")
-                return {}
-                
-        except Exception as e:
-            st.error(f"Error processing video: {str(e)}")
+            return data
+        else:
+            st.error(f"Failed to process video: {uploaded_file.name}")
+            # Clean up directory even if file not found
+            import shutil
+            shutil.rmtree(tmp_dir)
             return {}
-        finally:
-            # Clean up temporary video file
-            if os.path.exists(tmp_video_path):
-                os.unlink(tmp_video_path)
+            
+    except Exception as e:
+        st.error(f"Error processing video: {str(e)}")
+        # Clean up directory on error
+        import shutil
+        if os.path.exists(tmp_dir):
+            shutil.rmtree(tmp_dir)
+        return {}
+    finally:
+        # Clean up temporary video file
+        if os.path.exists(tmp_video_path):
+            os.unlink(tmp_video_path)
 
 
