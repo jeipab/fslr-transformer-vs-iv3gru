@@ -7,6 +7,7 @@ from typing import Dict
 
 import numpy as np
 import streamlit as st
+import streamlit.components.v1 as components
 
 from streamlit_app.components import (
     set_page, render_sidebar, render_welcome_screen, 
@@ -46,54 +47,12 @@ def initialize_session_state():
         st.session_state.current_tab = None
     if 'selected_files' not in st.session_state:
         st.session_state.selected_files = []
-    if 'removed_files' not in st.session_state:
-        st.session_state.removed_files = set()
+    if 'workflow_stage' not in st.session_state:
+        st.session_state.workflow_stage = 'upload'  # 'upload' or 'processing'
+    if 'pending_upload_files' not in st.session_state:
+        st.session_state.pending_upload_files = []
 
 
-def process_uploaded_files(uploaded_files, cfg):
-    """Process uploaded files and update session state."""
-    # Filter out files that have been explicitly removed by user
-    if uploaded_files:
-        uploaded_files = [f for f in uploaded_files if f.name not in st.session_state.removed_files]
-    
-    # Get current filenames in upload area (after filtering)
-    current_filenames = {f.name for f in uploaded_files} if uploaded_files else set()
-    
-    # Get current filenames in our uploaded files list
-    existing_filenames = {f.name for f in st.session_state.uploaded_files}
-    
-    # Remove files that are no longer in upload area
-    files_to_remove = []
-    for uploaded_file in st.session_state.uploaded_files:
-        if uploaded_file.name not in current_filenames:
-            files_to_remove.append(uploaded_file.name)
-    
-    # Remove files that are no longer in upload area
-    for filename in files_to_remove:
-        remove_file(filename, show_toast=False)
-    
-    # Add new files from upload area (only if not already in our list)
-    for uploaded_file in uploaded_files:
-        filename = uploaded_file.name
-        
-        # Skip if already in our uploaded files list
-        if filename in existing_filenames:
-            continue
-            
-        # Skip if already processed
-        if filename in st.session_state.processed_data:
-            continue
-            
-        # Add to uploaded files list
-        st.session_state.uploaded_files.append(uploaded_file)
-        st.session_state.file_status[filename] = 'pending'
-        
-        # Calculate and store file size
-        file_size = len(uploaded_file.getvalue())
-        st.session_state.file_metadata[filename] = {
-            'file_size': file_size,
-            'file_size_formatted': format_file_size(file_size)
-        }
 
 
 def render_file_management_ui():
@@ -156,7 +115,7 @@ def render_file_management_ui():
                     st.rerun()
                 else:
                     st.session_state[f"confirm_remove_{filename}"] = True
-                    st.toast(f"Click 'Remove' again to confirm removal of {filename}", icon="⚠️")
+                    st.toast(f"Click 'Remove' again to confirm removal of {filename}", icon="⚠️", duration=5000)
         
         # Add separator line only if not the last file
         if i < len(st.session_state.uploaded_files) - 1:
@@ -164,7 +123,7 @@ def render_file_management_ui():
     
     # Batch operations
     st.markdown("---")
-    st.markdown("#### Batch Operations")
+    st.markdown("#### Begin Processing")
     col1, col2, col3 = st.columns(3)
     
     with col1:
@@ -179,7 +138,7 @@ def render_file_management_ui():
                 st.rerun()
             else:
                 st.session_state["confirm_clear_all"] = True
-                st.toast("Click 'Clear All' again to confirm clearing all files", icon="⚠️")
+                st.toast("Click 'Clear All' again to confirm clearing all files", icon="⚠️", duration=5000)
     
     with col3:
         if st.button("Reset", help="Reset confirmation"):
@@ -206,7 +165,7 @@ def process_single_file(uploaded_file, filename):
             
             if not any(compatibility.values()):
                 st.session_state.file_status[filename] = 'error'
-                st.toast(f"{filename}: Incompatible with any model architecture", icon="❌")
+                st.toast(f"{filename}: Incompatible with any model architecture", icon="❌", duration=5000)
                 return
             
             # Store processed data
@@ -229,21 +188,20 @@ def process_single_file(uploaded_file, filename):
             if compatibility['iv3_gru']:
                 compatible_models.append("IV3-GRU")
             
-            st.toast(f"{filename}: Loaded successfully", icon="✅")
-            st.toast(f"Compatible with: {', '.join(compatible_models)}", icon="🔧")
+            # Don't show individual toasts for each file - will show batch summary
             
         elif file_type == 'video':
             # For now, just mark as pending for manual processing
             st.session_state.file_status[filename] = 'pending'
-            st.toast(f"{filename}: Video file ready for preprocessing", icon="🎥")
+            st.toast(f"Video file ready for preprocessing", icon="🎥", duration=5000)
             
         else:
             st.session_state.file_status[filename] = 'error'
-            st.toast(f"{filename}: Unsupported file type", icon="❌")
+            st.toast(f"Unsupported file type", icon="❌", duration=5000)
             
     except Exception as e:
         st.session_state.file_status[filename] = 'error'
-        st.toast(f"{filename}: Processing failed - {str(e)}", icon="❌")
+        st.toast(f"Processing failed - {str(e)}", icon="❌", duration=5000)
 
 
 def process_all_pending_files():
@@ -252,18 +210,41 @@ def process_all_pending_files():
                     if st.session_state.file_status.get(f.name, 'pending') == 'pending']
     
     if not pending_files:
-        st.toast("No pending files to process", icon="ℹ️")
+        st.toast("No pending files to process", icon="ℹ️", duration=5000)
         return
     
+    # Process all files
     for uploaded_file in pending_files:
         process_single_file(uploaded_file, uploaded_file.name)
+    
+    # Show consolidated summary
+    completed_files = [f for f in st.session_state.uploaded_files 
+                      if st.session_state.file_status.get(f.name) == 'completed']
+    error_files = [f for f in st.session_state.uploaded_files 
+                  if st.session_state.file_status.get(f.name) == 'error']
+    
+    if completed_files:
+        # Count compatibility
+        transformer_compatible = sum(1 for f in completed_files 
+                                   if st.session_state.file_metadata[f.name]['compatibility']['transformer'])
+        iv3_compatible = sum(1 for f in completed_files 
+                           if st.session_state.file_metadata[f.name]['compatibility']['iv3_gru'])
+        
+        st.toast(f"{len(completed_files)} files have been loaded successfully", icon="✅", duration=5000)
+        
+        if transformer_compatible > 0 and iv3_compatible > 0:
+            st.toast(f"{transformer_compatible} files are compatible with Transformer, {iv3_compatible} files are compatible with IV3-GRU", icon="🔧", duration=5000)
+        elif transformer_compatible > 0:
+            st.toast(f"{transformer_compatible} files are compatible with Transformer", icon="🔧", duration=5000)
+        elif iv3_compatible > 0:
+            st.toast(f"{iv3_compatible} files are compatible with IV3-GRU", icon="🔧", duration=5000)
+    
+    if error_files:
+        st.toast(f"{len(error_files)} files failed to process", icon="❌", duration=5000)
 
 
 def remove_file(filename, show_toast=True):
     """Remove a file from the queue and clean up session state."""
-    # Add to removed files set to prevent re-adding from file uploader
-    st.session_state.removed_files.add(filename)
-    
     # Remove from all session state
     st.session_state.uploaded_files = [f for f in st.session_state.uploaded_files if f.name != filename]
     
@@ -284,7 +265,7 @@ def remove_file(filename, show_toast=True):
             del st.session_state[key]
     
     if show_toast:
-        st.toast(f"Removed {filename}", icon="🗑️")
+        st.toast(f"Removed {filename}", icon="🗑️", duration=5000)
 
 
 def clear_all_files():
@@ -295,14 +276,96 @@ def clear_all_files():
     st.session_state.file_metadata = {}
     st.session_state.current_tab = None
     st.session_state.selected_files = []
-    st.session_state.removed_files = set()
+    st.session_state.pending_upload_files = []
     
     # Clear all confirmation states
     keys_to_remove = [key for key in st.session_state.keys() if key.startswith("confirm_")]
     for key in keys_to_remove:
         del st.session_state[key]
     
-    st.toast("All files cleared", icon="🗑️")
+    st.toast("All files cleared", icon="🗑️", duration=5000)
+
+
+def cancel_processing():
+    """Cancel processing and return to upload stage with confirmation."""
+    if st.session_state.get("confirm_cancel", False):
+        # Clear everything and return to upload
+        clear_all_files()
+        st.session_state.workflow_stage = 'upload'
+        st.rerun()
+    else:
+        st.session_state["confirm_cancel"] = True
+        st.toast("Click 'Cancel' again to confirm clearing all files and returning to upload", icon="⚠️", duration=5000)
+
+
+
+
+
+
+def render_upload_stage():
+    """Render the upload stage with file uploader and proceed button."""
+    st.markdown("### Upload Data")
+    
+    # File uploader
+    uploaded_files = render_file_upload()
+    
+    # Handle file limit
+    if uploaded_files and len(uploaded_files) > 10:
+        st.error("Maximum 10 files allowed. Please select fewer files.")
+        return
+    
+    # Store pending files
+    if uploaded_files:
+        st.session_state.pending_upload_files = uploaded_files
+        
+        # Display selected files
+        st.markdown("**Selected Files:**")
+        for uploaded_file in uploaded_files:
+            file_type = uploaded_file.name.split('.')[-1].lower()
+            icon = "📄" if file_type == "npz" else "🎥"
+            file_size = len(uploaded_file.getvalue())
+            size_mb = file_size / (1024 * 1024)
+            st.markdown(f"{icon} **{uploaded_file.name}** ({size_mb:.1f} MB)")
+        
+        # Proceed button
+        col1, col2, col3 = st.columns([1, 1, 1])
+        with col2:
+            if st.button("Proceed to Processing", type="primary", help="Move to processing stage"):
+                # Move files to uploaded_files and switch to processing stage
+                st.session_state.uploaded_files = uploaded_files
+                for uploaded_file in uploaded_files:
+                    filename = uploaded_file.name
+                    st.session_state.file_status[filename] = 'pending'
+                    file_size = len(uploaded_file.getvalue())
+                    st.session_state.file_metadata[filename] = {
+                        'file_size': file_size,
+                        'file_size_formatted': format_file_size(file_size)
+                    }
+                st.session_state.workflow_stage = 'processing'
+                st.rerun()
+    else:
+        render_welcome_screen()
+
+
+def render_processing_stage(cfg):
+    """Render the processing stage with uploaded files and batch operations."""
+    # Navigation header
+    col1, col2, col3 = st.columns([1, 2, 1])
+    with col1:
+        if st.button("Cancel", help="Clear all files and return to upload", type="secondary"):
+            cancel_processing()
+    with col2:
+        st.markdown("")  # Empty space
+    with col3:
+        st.markdown("")  # Empty space
+    
+    # Show file management
+    render_file_management_ui()
+    
+    # Show visualization tabs
+    render_visualization_tabs(cfg)
+
+
 
 
 def render_visualization_tabs(cfg):
@@ -326,6 +389,32 @@ def render_visualization_tabs(cfg):
     
     # Create tabs
     tabs = st.tabs(tab_names)
+    
+    # Handle programmatic tab switching
+    if st.session_state.current_tab:
+        # Find the index of the current tab
+        target_tab_index = None
+        for i, uploaded_file in enumerate(completed_files):
+            if uploaded_file.name == st.session_state.current_tab:
+                target_tab_index = i
+                break
+        
+        if target_tab_index is not None:
+            # Use JavaScript to switch to the target tab
+            switch_tab_script = f"""
+            <script>
+                setTimeout(function() {{
+                    var tabs = window.parent.document.querySelectorAll('button[data-baseweb="tab"]');
+                    if (tabs.length > {target_tab_index}) {{
+                        tabs[{target_tab_index}].click();
+                    }}
+                }}, 100);
+            </script>
+            """
+            components.html(switch_tab_script, height=0)
+            
+            # Clear the current_tab after switching
+            st.session_state.current_tab = None
     
     # Individual file tabs
     for i, uploaded_file in enumerate(completed_files):
@@ -490,27 +579,11 @@ def main() -> None:
     # Main header
     render_main_header()
     
-    # File upload
-    st.markdown("### Upload Data")
-    uploaded_files = render_file_upload()
-
-    # Handle file limit
-    if uploaded_files and len(uploaded_files) > 10:
-        st.error("Maximum 10 files allowed. Please select fewer files.")
-        return
-
-    if not uploaded_files:
-        render_welcome_screen()
-        return
-
-    # Process uploaded files
-    process_uploaded_files(uploaded_files, cfg)
-    
-    # Show file management
-    render_file_management_ui()
-    
-    # Show visualization tabs
-    render_visualization_tabs(cfg)
+    # Two-stage workflow
+    if st.session_state.workflow_stage == 'upload':
+        render_upload_stage()
+    else:  # processing stage
+        render_processing_stage(cfg)
 
 
 if __name__ == "__main__":
