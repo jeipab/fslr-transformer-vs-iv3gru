@@ -44,6 +44,8 @@ def initialize_upload_session_state():
         st.session_state.processed_data = {}
     if 'file_metadata' not in st.session_state:
         st.session_state.file_metadata = {}
+    if 'original_file_data' not in st.session_state:
+        st.session_state.original_file_data = {}
     if 'current_tab' not in st.session_state:
         st.session_state.current_tab = None
     if 'selected_files' not in st.session_state:
@@ -117,12 +119,23 @@ def render_upload_stage():
         st.markdown("<br>", unsafe_allow_html=True)  # Add some spacing
         col1, col2, col3 = st.columns([2, 1, 2])
         with col2:
-            if st.button("Proceed to Processing", type="primary", help="Move to appropriate processing stage", use_container_width=True):
+            # Determine button text based on file types
+            if video_count > 0:
+                button_text = "Proceed to Preprocessing"
+                button_help = "Move to preprocessing stage for video files"
+            elif npz_count > 0:
+                button_text = "Proceed to Inference"
+                button_help = "Move to inference stage for NPZ files"
+            else:
+                button_text = "Proceed to Processing"
+                button_help = "Move to appropriate processing stage"
+            
+            if st.button(button_text, type="primary", help=button_help, use_container_width=True):
                 if st.session_state.get("confirm_proceed", False):
                     proceed_to_next_stage()
                 else:
                     st.session_state["confirm_proceed"] = True
-                    st.toast("Click 'Proceed to Processing' again to confirm", icon="⚠️", duration=5000)
+                    st.toast(f"Click '{button_text}' again to confirm", icon="⚠️", duration=5000)
     else:
         render_welcome_screen()
 
@@ -211,6 +224,7 @@ def clear_all_files():
     st.session_state.file_status = {}
     st.session_state.processed_data = {}
     st.session_state.file_metadata = {}
+    st.session_state.original_file_data = {}
     st.session_state.current_tab = None
     st.session_state.selected_files = []
     st.session_state.pending_upload_files = []
@@ -243,6 +257,8 @@ def remove_file_from_stage(filename: str, stage: str):
         del st.session_state.processed_data[filename]
     if filename in st.session_state.file_metadata:
         del st.session_state.file_metadata[filename]
+    if filename in st.session_state.original_file_data:
+        del st.session_state.original_file_data[filename]
     
     # Reset current tab if it was the removed file
     if st.session_state.current_tab == filename:

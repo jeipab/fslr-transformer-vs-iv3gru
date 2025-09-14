@@ -192,10 +192,19 @@ def create_npz_bytes(npz_data: Dict[str, np.ndarray]) -> bytes:
 
 class TempUploadedFile:
     """Temporary uploaded file object to handle file content reuse."""
-    def __init__(self, name, content):
+    def __init__(self, name, data, type=None, size=None):
         self.name = name
-        self.content = content
+        self.content = data
+        self.data = data
+        self.type = type
+        self.size = size
+    
     def read(self):
         return self.content
+    
     def getvalue(self):
         return self.content
+    
+    def seek(self, position):
+        # For compatibility with file-like objects
+        pass
