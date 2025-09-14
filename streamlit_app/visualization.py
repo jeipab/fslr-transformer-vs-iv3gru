@@ -127,6 +127,82 @@ def render_sequence_overview(npz_dict: Dict, sequence_length: int) -> Tuple[np.n
     return X_pad, mask, meta_parsed
 
 
+def render_keypoint_video(sequence: np.ndarray, mask: Optional[np.ndarray] = None, key_suffix: str = "") -> None:
+    """Generate and display a video with keypoint animation."""
+    time_steps, feature_dim = sequence.shape
+    keypoints_2d = sequence.reshape(time_steps, 78, 2)
+    
+    # Video settings
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        fps = st.slider("FPS", 5, 30, 15, help="Frames per second for video", key=f"video_fps_{key_suffix}")
+    with col2:
+        show_skeleton = st.checkbox("Show Skeleton", value=True, help="Display skeleton connections", key=f"video_skeleton_{key_suffix}")
+    with col3:
+        show_visibility = st.checkbox("Show Visibility", value=True, help="Color points by visibility", key=f"video_visibility_{key_suffix}")
+    
+    # Background options
+    col4, col5 = st.columns(2)
+    with col4:
+        bg_type = st.selectbox("Background", ["White", "Black", "Grid"], key=f"bg_type_{key_suffix}")
+    with col5:
+        video_size = st.selectbox("Video Size", ["512x512", "768x768", "1024x1024"], key=f"video_size_{key_suffix}")
+    
+    width, height = map(int, video_size.split('x'))
+    
+    # Video control buttons in a row
+    col_gen, col_download = st.columns([2, 1])
+    
+    with col_gen:
+        if st.button("Generate Video", key=f"generate_video_{key_suffix}"):
+            with st.spinner("Generating keypoint video..."):
+                video_path = create_keypoint_animation_video(
+                    keypoints_2d, mask, fps, width, height, 
+                    show_skeleton, show_visibility, bg_type, key_suffix
+                )
+                
+                if video_path and os.path.exists(video_path):
+                    # Store video path in session state
+                    st.session_state[f"video_path_{key_suffix}"] = video_path
+                    st.toast("Video generated successfully!", icon="✅")
+                else:
+                    st.toast("Failed to generate video", icon="❌")
+    
+    # Display video if it exists in session state
+    if f"video_path_{key_suffix}" in st.session_state:
+        video_path = st.session_state[f"video_path_{key_suffix}"]
+        if os.path.exists(video_path):
+            # Display video with smaller size
+            with open(video_path, "rb") as video_file:
+                video_bytes = video_file.read()
+            
+            # Create a container with fixed width for smaller video preview
+            video_container = st.container()
+            with video_container:
+                st.video(video_bytes, format="video/mp4")
+            
+            # Add custom CSS to make video smaller and centered
+            st.markdown("""
+            <style>
+            .stVideo {
+                max-width: 400px !important;
+                margin: 0 auto !important;
+                display: block !important;
+            }
+            </style>
+            """, unsafe_allow_html=True)
+            
+            # Download button
+            with col_download:
+                st.download_button(
+                    label="Download Video",
+                    data=video_bytes,
+                    file_name=f"keypoint_animation_{key_suffix}.mp4",
+                    mime="video/mp4",
+                    key=f"download_btn_{key_suffix}"
+                )
+
+
 def render_animated_keypoints(sequence: np.ndarray, mask: Optional[np.ndarray] = None, key_suffix: str = "") -> None:
     """Render animated keypoint visualization with skeleton overlay."""
     st.markdown("<div class='section-header'>Keypoint Visualization</div>", unsafe_allow_html=True)
@@ -142,6 +218,17 @@ def render_animated_keypoints(sequence: np.ndarray, mask: Optional[np.ndarray] =
     
     # Reshape keypoints to [T, 78, 2] for easier handling
     keypoints_2d = sequence.reshape(time_steps, 78, 2)
+    
+    # Video generation option
+    col1, col2 = st.columns([3, 1])
+    with col1:
+        st.markdown("**Choose visualization method:**")
+    with col2:
+        use_video = st.checkbox("Generate Video", value=False, help="Create an MP4 video with keypoint animation", key=f"use_video_{key_suffix}")
+    
+    if use_video:
+        render_keypoint_video(sequence, mask, key_suffix)
+        return
     
     # Define skeleton connections for MediaPipe Holistic based on actual preprocessing layout
     # Layout: Pose(0-24), Left Hand(25-45), Right Hand(46-66), Face(67-77)
@@ -190,7 +277,7 @@ def render_animated_keypoints(sequence: np.ndarray, mask: Optional[np.ndarray] =
         ]
     }
     
-    # Animation controls
+    # Simple frame selection
     col1, col2, col3 = st.columns([2, 1, 1])
     
     with col1:
@@ -313,7 +400,7 @@ def render_animated_keypoints(sequence: np.ndarray, mask: Optional[np.ndarray] =
     st.plotly_chart(fig, use_container_width=True)
     
     # Add frame information
-    col1, col2, col3, col4 = st.columns(4)
+    col1, col2, col3 = st.columns(3)
     with col1:
         st.metric("Current Frame", f"{frame_idx + 1}/{time_steps}")
     with col2:
@@ -325,13 +412,6 @@ def render_animated_keypoints(sequence: np.ndarray, mask: Optional[np.ndarray] =
             avg_x = np.mean(current_keypoints[:, 0])
             avg_y = np.mean(current_keypoints[:, 1])
             st.metric("Center", f"({avg_x:.3f}, {avg_y:.3f})")
-    with col4:
-        # Show keypoint counts per body part
-        pose_count = np.sum(~((current_keypoints[0:25, 0] == 0) & (current_keypoints[0:25, 1] == 0)))
-        left_hand_count = np.sum(~((current_keypoints[25:46, 0] == 0) & (current_keypoints[25:46, 1] == 0)))
-        right_hand_count = np.sum(~((current_keypoints[46:67, 0] == 0) & (current_keypoints[46:67, 1] == 0)))
-        face_count = np.sum(~((current_keypoints[67:78, 0] == 0) & (current_keypoints[67:78, 1] == 0)))
-        st.metric("Valid Keypoints", f"P:{pose_count} L:{left_hand_count} R:{right_hand_count} F:{face_count}")
 
 
 def render_feature_charts(sequence: np.ndarray, mask: Optional[np.ndarray] = None, key_suffix: str = "") -> None:
@@ -442,6 +522,146 @@ def render_feature_charts(sequence: np.ndarray, mask: Optional[np.ndarray] = Non
         }).round(4)
         
         st.dataframe(stats_df, use_container_width=True)
+
+
+def create_keypoint_animation_video(keypoints_2d: np.ndarray, mask: Optional[np.ndarray], 
+                                   fps: int, width: int, height: int, show_skeleton: bool, 
+                                   show_visibility: bool, bg_type: str, key_suffix: str) -> str:
+    """Create an animated video with keypoint visualization."""
+    if not CV2_AVAILABLE:
+        st.error("OpenCV not available. Cannot create video.")
+        return None
+    
+    # Create output path
+    output_path = os.path.join(tempfile.gettempdir(), f"keypoint_animation_{key_suffix}.mp4")
+    
+    # Video writer setup - use H.264 codec for better compatibility
+    fourcc = cv2.VideoWriter_fourcc(*'H264')
+    out = cv2.VideoWriter(output_path, fourcc, fps, (width, height))
+    
+    # Alternative fallback if H264 doesn't work
+    if not out.isOpened():
+        fourcc = cv2.VideoWriter_fourcc(*'mp4v')
+        out = cv2.VideoWriter(output_path, fourcc, fps, (width, height))
+    
+    # Define skeleton connections
+    skeleton_connections = {
+        "pose": [
+            (11, 12), (11, 13), (12, 14), (13, 15), (14, 16),
+            (15, 17), (15, 19), (15, 21), (17, 19),
+            (16, 18), (16, 20), (16, 22), (18, 20),
+            (11, 23), (12, 24), (23, 24)
+        ],
+        "left_hand": [
+            (0, 1), (1, 2), (2, 3), (3, 4), (0, 5), (5, 6), (6, 7), (7, 8),
+            (0, 9), (9, 10), (10, 11), (11, 12), (0, 13), (13, 14), (14, 15), (15, 16),
+            (0, 17), (17, 18), (18, 19), (19, 20)
+        ],
+        "right_hand": [
+            (0, 1), (1, 2), (2, 3), (3, 4), (0, 5), (5, 6), (6, 7), (7, 8),
+            (0, 9), (9, 10), (10, 11), (11, 12), (0, 13), (13, 14), (14, 15), (15, 16),
+            (0, 17), (17, 18), (18, 19), (19, 20)
+        ],
+        "face": [
+            (0, 1), (1, 2), (2, 3), (3, 4), (4, 5), (5, 6), (6, 7), (7, 8),
+            (8, 9), (9, 10), (10, 0)
+        ]
+    }
+    
+    # Colors for different body parts
+    colors = {
+        "pose": (0, 0, 255),      # Red
+        "left_hand": (255, 0, 0), # Blue
+        "right_hand": (0, 255, 0), # Green
+        "face": (0, 165, 255)     # Orange
+    }
+    
+    try:
+        for frame_idx in range(len(keypoints_2d)):
+            # Create background
+            if bg_type == "White":
+                frame = np.ones((height, width, 3), dtype=np.uint8) * 255
+            elif bg_type == "Black":
+                frame = np.zeros((height, width, 3), dtype=np.uint8)
+            else:  # Grid
+                frame = np.ones((height, width, 3), dtype=np.uint8) * 240
+                # Draw grid
+                for i in range(0, width, 50):
+                    cv2.line(frame, (i, 0), (i, height), (200, 200, 200), 1)
+                for i in range(0, height, 50):
+                    cv2.line(frame, (0, i), (width, i), (200, 200, 200), 1)
+            
+            current_keypoints = keypoints_2d[frame_idx]
+            
+            # Convert normalized coordinates to pixel coordinates
+            pixel_points = current_keypoints.copy()
+            pixel_points[:, 0] *= width
+            pixel_points[:, 1] *= height
+            pixel_points = pixel_points.astype(np.int32)
+            
+            # Filter out keypoints at (0,0)
+            valid_mask = ~((pixel_points[:, 0] == 0) & (pixel_points[:, 1] == 0))
+            
+            # Draw keypoints and skeleton for each body part
+            for part_name, connections in skeleton_connections.items():
+                if part_name == "pose":
+                    start_idx, end_idx = 0, 25
+                elif part_name == "left_hand":
+                    start_idx, end_idx = 25, 46
+                elif part_name == "right_hand":
+                    start_idx, end_idx = 46, 67
+                elif part_name == "face":
+                    start_idx, end_idx = 67, 78
+                
+                part_keypoints = pixel_points[start_idx:end_idx]
+                part_valid = valid_mask[start_idx:end_idx]
+                
+                # Draw skeleton connections
+                if show_skeleton:
+                    for start_conn, end_conn in connections:
+                        if (start_conn < len(part_keypoints) and end_conn < len(part_keypoints) and
+                            part_valid[start_conn] and part_valid[end_conn]):
+                            cv2.line(frame, 
+                                   tuple(part_keypoints[start_conn]), 
+                                   tuple(part_keypoints[end_conn]), 
+                                   colors[part_name], 2)
+                
+                # Draw keypoints
+                for i, (point, is_valid) in enumerate(zip(part_keypoints, part_valid)):
+                    if is_valid:
+                        # Determine point color based on visibility
+                        if show_visibility and mask is not None and frame_idx < mask.shape[0]:
+                            visibility = mask[frame_idx, start_idx + i] if start_idx + i < mask.shape[1] else True
+                            point_color = colors[part_name] if visibility else tuple(c // 2 for c in colors[part_name])
+                        else:
+                            point_color = colors[part_name]
+                        
+                        # Different sizes for different body parts
+                        if part_name == "pose":
+                            cv2.circle(frame, tuple(point), 6, point_color, -1)
+                        elif part_name in ["left_hand", "right_hand"]:
+                            cv2.circle(frame, tuple(point), 4, point_color, -1)
+                        else:  # face
+                            cv2.circle(frame, tuple(point), 3, point_color, -1)
+            
+            # Add frame number
+            cv2.putText(frame, f"Frame {frame_idx + 1}/{len(keypoints_2d)}", 
+                       (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 0), 2)
+            
+            out.write(frame)
+        
+        out.release()
+        
+        # Verify video was created successfully
+        if os.path.exists(output_path) and os.path.getsize(output_path) > 0:
+            return output_path
+        else:
+            st.error("Video file was not created properly")
+            return None
+        
+    except Exception as e:
+        st.error(f"Error creating video: {str(e)}")
+        return None
 
 
 def create_video_with_keypoints(uploaded_video_file, keypoints: np.ndarray, 
