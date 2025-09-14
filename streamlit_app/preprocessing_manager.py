@@ -100,11 +100,11 @@ def render_preprocessing_stage():
             st.rerun()
         return
     
+    # Batch preprocessing controls (needed first to update session state)
+    render_preprocessing_controls(video_files)
+    
     # Show video files with preprocessing options
     render_video_files_list(all_files_to_show)
-    
-    # Batch preprocessing controls
-    render_preprocessing_controls(video_files)
     
     # Show progress and completed files
     if st.session_state.preprocessed_files:
@@ -118,6 +118,13 @@ def render_video_files_list(all_files_to_show: List):
     # Check if any files are currently being processed
     is_processing = any(st.session_state.file_status.get(f.name, 'pending') == 'processing' for f in st.session_state.video_files)
     is_processing = is_processing or any(st.session_state.file_status.get(f.name, 'completed') == 'processing' for f in st.session_state.preprocessed_files)
+    
+    # Get current extraction options from session state (will be updated by checkboxes)
+    options = st.session_state.get('preprocessing_options', {
+        'write_keypoints': True,
+        'write_iv3_features': True
+    })
+    has_extraction_options = options.get('write_keypoints', True) or options.get('write_iv3_features', True)
     
     for i, (file_type, uploaded_file, status) in enumerate(all_files_to_show):
         filename = uploaded_file.name
@@ -145,7 +152,10 @@ def render_video_files_list(all_files_to_show: List):
         # Action buttons based on status
         with col4:
             if status == 'pending':
-                if st.button("Preprocess", key=f"preprocess_{filename}", help="Preprocess this video file", type="primary", disabled=is_processing):
+                button_disabled = is_processing or not has_extraction_options
+                button_help = "Preprocess this video file" if has_extraction_options else "Select at least one extraction option to enable preprocessing"
+                
+                if st.button("Preprocess", key=f"preprocess_{filename}", help=button_help, type="primary", disabled=button_disabled):
                     preprocess_single_video(uploaded_file, filename)
                     st.rerun()
             elif status == 'completed':
@@ -155,7 +165,10 @@ def render_video_files_list(all_files_to_show: List):
                     st.session_state.current_tab = filename
                     st.rerun()
             elif status == 'error':
-                if st.button("Retry", key=f"retry_{filename}", help="Retry preprocessing", type="primary", disabled=is_processing):
+                button_disabled = is_processing or not has_extraction_options
+                button_help = "Retry preprocessing" if has_extraction_options else "Select at least one extraction option to enable preprocessing"
+                
+                if st.button("Retry", key=f"retry_{filename}", help=button_help, type="primary", disabled=button_disabled):
                     preprocess_single_video(uploaded_file, filename)
                     st.rerun()
         
@@ -224,6 +237,11 @@ def render_preprocessing_controls(video_files: List):
             'write_keypoints': write_keypoints,
             'write_iv3_features': write_iv3_features
         }
+        
+        # Validate that at least one extraction option is selected
+        has_extraction_options = write_keypoints or write_iv3_features
+        if not has_extraction_options:
+            st.warning("⚠️ Please select at least one extraction option (Keypoints or IV3 Features) to enable preprocessing.")
     
     # Batch operations
     col1, col2, col3, col4 = st.columns([4, 1, 1, 1])
@@ -241,7 +259,14 @@ def render_preprocessing_controls(video_files: List):
                 pending_count += 1
         
         if pending_count > 0:
-            if st.button(f"Preprocess All Pending ({pending_count})", type="primary", help="Preprocess all pending video files", disabled=is_processing):
+            # Check if at least one extraction option is selected
+            options = st.session_state.get('preprocessing_options', {})
+            has_extraction_options = options.get('write_keypoints', True) or options.get('write_iv3_features', True)
+            
+            button_disabled = is_processing or not has_extraction_options
+            button_help = "Preprocess all pending video files" if has_extraction_options else "Select at least one extraction option to enable preprocessing"
+            
+            if st.button(f"Preprocess All Pending ({pending_count})", type="primary", help=button_help, disabled=button_disabled):
                 preprocess_all_pending_videos()
                 st.rerun()
         else:

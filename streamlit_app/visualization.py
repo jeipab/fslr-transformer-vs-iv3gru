@@ -43,6 +43,18 @@ def render_sequence_overview(npz_dict: Dict, sequence_length: int) -> Tuple[np.n
     X2048 = np.array(npz_dict.get("X2048", [])) if "X2048" in npz_dict else None
 
     raw_length, raw_features = X_raw.shape[0], X_raw.shape[1] if X_raw.ndim == 2 else (0, 0)
+    
+    # Parse metadata early so it's available for display logic
+    meta_raw = npz_dict.get("meta")
+    meta_parsed: Dict = {}
+    if meta_raw is not None:
+        try:
+            if isinstance(meta_raw, (str, bytes)):
+                meta_parsed = json.loads(meta_raw)
+            else:
+                meta_parsed = json.loads(str(meta_raw))
+        except Exception:
+            meta_parsed = {"info": "Unparsed meta"}
 
     st.markdown("<div class='section-header'>Sequence Overview</div>", unsafe_allow_html=True)
     
@@ -56,7 +68,14 @@ def render_sequence_overview(npz_dict: Dict, sequence_length: int) -> Tuple[np.n
         st.metric("Features", str(raw_features), delta=None)
         if raw_features == 156:
             st.markdown("<span class='status-good'>✓ Valid keypoints</span>", unsafe_allow_html=True)
-            st.markdown("<span class='status-good'>✓ Transformer ready</span>", unsafe_allow_html=True)
+            # Check model_type to determine what to display
+            model_type = meta_parsed.get('model_type') if meta_parsed else None
+            if model_type == 'I':
+                # IV3-GRU only - just show valid keypoints, no transformer ready
+                pass
+            elif model_type in ['T', 'B'] or model_type is None:
+                # Transformer or Both or legacy - show transformer ready
+                st.markdown("<span class='status-good'>✓ Transformer ready</span>", unsafe_allow_html=True)
         else:
             st.markdown("<span class='status-warning'>⚠ Unexpected shape</span>", unsafe_allow_html=True)
     
@@ -86,17 +105,6 @@ def render_sequence_overview(npz_dict: Dict, sequence_length: int) -> Tuple[np.n
         else:
             st.metric("X2048 Features", "Missing")
             st.markdown("<span class='status-warning'>⚠ Transformer only</span>", unsafe_allow_html=True)
-
-    meta_raw = npz_dict.get("meta")
-    meta_parsed: Dict = {}
-    if meta_raw is not None:
-        try:
-            if isinstance(meta_raw, (str, bytes)):
-                meta_parsed = json.loads(meta_raw)
-            else:
-                meta_parsed = json.loads(str(meta_raw))
-        except Exception:
-            meta_parsed = {"info": "Unparsed meta"}
 
     if meta_parsed:
         with st.expander("Metadata", expanded=False):
