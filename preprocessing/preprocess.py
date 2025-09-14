@@ -194,10 +194,10 @@ def process_video(video_path, out_dir, target_fps=30, out_size=256, conf_thresh=
             black_bg = np.zeros_like(frame_rgb, dtype=np.uint8)
             comp_rgb = (frame_rgb * fg_mask + black_bg * (1 - fg_mask)).astype(np.uint8)
 
-            if write_keypoints:
-                vec156, mask78 = extract_keypoints_from_frame(comp_rgb, models, conf_thresh=conf_thresh)
-                X_frames.append(vec156)
-                M_frames.append(mask78)
+            # Always extract keypoints for visualization purposes
+            vec156, mask78 = extract_keypoints_from_frame(comp_rgb, models, conf_thresh=conf_thresh)
+            X_frames.append(vec156)
+            M_frames.append(mask78)
 
             if write_iv3_features:
                 # 2048-D InceptionV3 features from the original BGR frame
@@ -210,23 +210,37 @@ def process_video(video_path, out_dir, target_fps=30, out_size=256, conf_thresh=
         cap.release()
         close_models(models)
 
-    if len(X_frames) == 0:
+    if len(T_ms) == 0:
         print(f"[WARN] No frames written for {video_path}")
         return
 
+    T_ms = np.array(T_ms, dtype=np.int64)
+    
+    # Always process keypoints (for visualization), conditionally process IV3 features
+    X_filled, M_filled = None, None
+    X2048_filled = None
+    
+    # Keypoints are always extracted for visualization
+    if len(X_frames) == 0:
+        print(f"[WARN] No keypoint frames written for {video_path}")
+        return
     X = np.stack(X_frames, axis=0)
     M = np.stack(M_frames, axis=0)
-    X2048 = np.stack(X2048_frames, axis=0)
-    T_ms = np.array(T_ms, dtype=np.int64)
-
-    assert X.shape[0] == X2048.shape[0], f"Mismatch in T (frames) between X and X2048: {X.shape[0]} vs {X2048.shape[0]}"
-
     X_filled, M_filled = interpolate_gaps(X, M, max_gap=max_gap)
     # Ensure coordinate bounds
     X_filled = np.clip(X_filled, 0.0, 1.0).astype(np.float32)
-    # Do not interpolate CNN features using keypoint visibility mask; keep raw temporal values
-    X2048_filled = X2048
+    
+    if write_iv3_features:
+        if len(X2048_frames) == 0:
+            print(f"[WARN] No IV3 feature frames written for {video_path}")
+            return
+        X2048 = np.stack(X2048_frames, axis=0)
+        # Do not interpolate CNN features using keypoint visibility mask; keep raw temporal values
+        X2048_filled = X2048
 
+    # Determine model type based on what's being saved
+    model_type = "B" if (write_keypoints and write_iv3_features) else ("T" if write_keypoints else "I")
+    
     meta = dict(
         video=os.path.basename(video_path),
         target_fps=target_fps,
@@ -238,10 +252,16 @@ def process_video(video_path, out_dir, target_fps=30, out_size=256, conf_thresh=
         face_indices=FACEMESH_11,
         conf_thresh=conf_thresh,
         interpolation_max_gap=max_gap,
+        model_type=model_type,  # T=Transformer, I=IV3-GRU, B=Both
         occluded_flag=0  # Will be updated after occlusion computation
     )
 
-    to_npz(npz_out_path, X_filled, M_filled, T_ms, meta, also_parquet=True)
+    # Always save keypoints (for visualization), conditionally save IV3 features
+    if write_keypoints:
+        to_npz(npz_out_path, X_filled, M_filled, T_ms, meta, also_parquet=True)
+    else:
+        # Save NPZ with keypoints for visualization but mark as IV3-GRU only
+        np.savez_compressed(npz_out_path + ".npz", X=X_filled, mask=M_filled, timestamps_ms=T_ms, meta=json.dumps(meta))
 
     # Occlusion detection and CSV update
     occluded_flag = 0
@@ -264,10 +284,15 @@ def process_video(video_path, out_dir, target_fps=30, out_size=256, conf_thresh=
         rel_npz_path = os.path.relpath(npz_out_path + ".npz", start=out_dir)
         _append_label_row(labels_csv_path, rel_npz_path, gloss_id, final_cat, occluded_flag)
 
-    # Save X2048 features and updated metadata into the same .npz
-    np.savez_compressed(npz_out_path + ".npz", X=X_filled, X2048=X2048_filled, mask=M_filled, timestamps_ms=T_ms, meta=json.dumps(meta))
+    # Save all processed features and updated metadata into the same .npz
+    save_dict = {'X': X_filled, 'mask': M_filled, 'timestamps_ms': T_ms, 'meta': json.dumps(meta)}
+    if write_iv3_features and X2048_filled is not None:
+        save_dict.update({'X2048': X2048_filled})
+    
+    np.savez_compressed(npz_out_path + ".npz", **save_dict)
 
-    print(f"[OK] {basename}: frames={len(X_frames)} saved: {npz_out_path}.npz (+ .parquet)")
+    frame_count = len(T_ms)
+    print(f"[OK] {basename}: frames={frame_count} saved: {npz_out_path}.npz (+ .parquet)")
 
 # ----------------------------
 # Command-line interface
