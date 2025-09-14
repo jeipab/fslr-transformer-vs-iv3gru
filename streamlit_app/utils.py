@@ -106,23 +106,48 @@ def check_npz_compatibility(npz_data: Dict[str, np.ndarray]) -> Dict[str, bool]:
         'both': False
     }
     
-    # Check for transformer compatibility (needs 156-D keypoints)
-    has_keypoints = 'X' in npz_data
-    if has_keypoints:
-        X = npz_data['X']
-        if X.ndim == 2 and X.shape[1] == 156:
+    # Try to get model_type from metadata first
+    model_type = None
+    if 'meta' in npz_data:
+        try:
+            meta = npz_data['meta']
+            if isinstance(meta, str):
+                meta_dict = json.loads(meta)
+            else:
+                meta_dict = json.loads(str(meta))
+            model_type = meta_dict.get('model_type')
+        except (json.JSONDecodeError, KeyError, TypeError, ValueError, AttributeError):
+            pass
+    
+    # Use model_type as the final authority for compatibility
+    if model_type:
+        if model_type == 'T':
             compatibility['transformer'] = True
-    
-    # Check for iv3_gru compatibility (needs 2048-D features)
-    has_iv3_features = 'X2048' in npz_data
-    if has_iv3_features:
-        X2048 = npz_data['X2048']
-        if X2048.ndim == 2 and X2048.shape[1] == 2048:
+        elif model_type == 'I':
             compatibility['iv3_gru'] = True
-    
-    # Check if both are compatible
-    if compatibility['transformer'] and compatibility['iv3_gru']:
-        compatibility['both'] = True
+        elif model_type == 'B':
+            compatibility['transformer'] = True
+            compatibility['iv3_gru'] = True
+            compatibility['both'] = True
+    else:
+        # Fallback to legacy compatibility checking for old files without model_type
+        # Check for transformer compatibility (needs 156-D keypoints)
+        has_keypoints = 'X' in npz_data
+        if has_keypoints:
+            X = npz_data['X']
+            if X.ndim == 2 and X.shape[1] == 156:
+                compatibility['transformer'] = True
+        
+        # Check for iv3_gru compatibility (needs 2048-D features)
+        has_iv3_features = 'X2048' in npz_data
+        if has_iv3_features:
+            X2048 = npz_data['X2048']
+            if X2048.ndim == 2 and X2048.shape[1] == 2048:
+                compatibility['iv3_gru'] = True
+        
+        # Check if both are compatible
+        if compatibility['transformer'] and compatibility['iv3_gru']:
+            compatibility['both'] = True
     
     return compatibility
 
