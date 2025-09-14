@@ -237,7 +237,8 @@ def process_video(video_path, out_dir, target_fps=30, out_size=256, conf_thresh=
         pose_indices=POSE_UPPER_25,
         face_indices=FACEMESH_11,
         conf_thresh=conf_thresh,
-        interpolation_max_gap=max_gap
+        interpolation_max_gap=max_gap,
+        occluded_flag=0  # Will be updated after occlusion computation
     )
 
     to_npz(npz_out_path, X_filled, M_filled, T_ms, meta, also_parquet=True)
@@ -252,6 +253,10 @@ def process_video(video_path, out_dir, target_fps=30, out_size=256, conf_thresh=
             min_consecutive_occ_frames=occ_min_run,
             visibility_fallback_threshold=occ_vis_thresh,
         )
+    
+    # Update metadata with computed occlusion flag
+    meta['occluded_flag'] = occluded_flag
+    
     # Append to labels CSV if requested and ids are provided
     if labels_csv_path is not None and gloss_id is not None:
         final_cat = cat_id if cat_id is not None else gloss_id
@@ -259,10 +264,8 @@ def process_video(video_path, out_dir, target_fps=30, out_size=256, conf_thresh=
         rel_npz_path = os.path.relpath(npz_out_path + ".npz", start=out_dir)
         _append_label_row(labels_csv_path, rel_npz_path, gloss_id, final_cat, occluded_flag)
 
-    # Save X2048 features into the same .npz
-    with np.load(npz_out_path + ".npz", allow_pickle=True) as data:
-        meta_data = data['meta']
-        np.savez_compressed(npz_out_path + ".npz", X=X_filled, X2048=X2048_filled, mask=M_filled, timestamps_ms=T_ms, meta=meta_data)
+    # Save X2048 features and updated metadata into the same .npz
+    np.savez_compressed(npz_out_path + ".npz", X=X_filled, X2048=X2048_filled, mask=M_filled, timestamps_ms=T_ms, meta=json.dumps(meta))
 
     print(f"[OK] {basename}: frames={len(X_frames)} saved: {npz_out_path}.npz (+ .parquet)")
 
