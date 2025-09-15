@@ -4,7 +4,7 @@ import json
 import os
 import tempfile
 from pathlib import Path
-from typing import Dict, Optional, Tuple
+from typing import Dict, Optional, Tuple, List
 
 import numpy as np
 import pandas as pd
@@ -800,5 +800,40 @@ def render_topk_table(indices: np.ndarray, probs: np.ndarray, label_prefix: str,
         with col4:
             # Progress bar visualization
             progress_val = row['Probability']
+            st.progress(progress_val)
+
+
+def render_topk_table_with_labels(predictions: List[Tuple[str, float]], prediction_type: str, title: str) -> None:
+    """Render top-k predictions table with human-readable labels."""
+    st.markdown(f"**{title}**")
+    
+    # Create DataFrame
+    data = []
+    for i, (label, prob) in enumerate(predictions):
+        data.append({
+            "Rank": i + 1,
+            "Label": label,
+            "Probability": f"{prob:.3f}",
+            "Confidence": f"{prob*100:.1f}%"
+        })
+    
+    df = pd.DataFrame(data)
+    
+    # Create a more visual representation
+    for idx, row in df.iterrows():
+        col1, col2, col3, col4 = st.columns([1, 3, 1, 2])
+        
+        with col1:
+            st.markdown(f"**#{row['Rank']}**")
+        
+        with col2:
+            st.markdown(f"**{row['Label']}**")
+        
+        with col3:
+            st.markdown(f"**{row['Confidence']}**")
+        
+        with col4:
+            # Progress bar visualization
+            progress_val = float(row['Probability'])
             st.progress(progress_val)
     

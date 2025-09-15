@@ -387,7 +387,7 @@ def render_main_header() -> None:
     """, unsafe_allow_html=True)
 
 
-def render_predictions_section(cfg: Dict, gloss_logits: object, cat_logits: object) -> None:
+def render_predictions_section(cfg: Dict, npz_data: Dict = None, filename: str = None) -> None:
     """Render predictions section with enhanced layout."""
     st.markdown("<div class='section-header'>Predictions</div>", unsafe_allow_html=True)
     
@@ -398,45 +398,109 @@ def render_predictions_section(cfg: Dict, gloss_logits: object, cat_logits: obje
     with model_info_col2:
         st.info(f"**Input**: {'Keypoints (X)' if cfg['model_choice'] == 'SignTransformer' else 'Features (X2048)'}")
     
-    # Generate predictions
-    from streamlit_app.utils import simulate_predictions, topk_from_logits
-    import numpy as np
-    
-    rng = np.random.RandomState(cfg["random_seed"])
-    gloss_logits, cat_logits = simulate_predictions(
-        rng, cfg["num_gloss_classes"], cfg["num_category_classes"]
-    )
+    # Generate real predictions if NPZ data is available
+    if npz_data is not None:
+        from streamlit_app.prediction_manager import make_real_prediction, get_model_manager
+        
+        model_name = 'transformer' if cfg['model_choice'] == 'SignTransformer' else 'iv3_gru'
+        
+        with st.spinner("Making prediction..."):
+            prediction_results = make_real_prediction(npz_data, model_name)
+        
+        # Get label mappings
+        model_manager = get_model_manager()
+        gloss_mapping, category_mapping = model_manager.get_label_mappings()
+        
+        # Format predictions with human-readable labels
+        gloss_top5 = []
+        for gloss_id, prob in prediction_results['gloss_top5']:
+            gloss_label = gloss_mapping.get(gloss_id, f'Unknown ({gloss_id})')
+            gloss_top5.append((gloss_label, prob))
+        
+        category_top3 = []
+        for cat_id, prob in prediction_results['category_top3']:
+            cat_label = category_mapping.get(cat_id, f'Unknown ({cat_id})')
+            category_top3.append((cat_label, prob))
+        
+        # Enhanced predictions display
+        pred_col1, pred_col2 = st.columns(2)
+        
+        with pred_col1:
+            from streamlit_app.visualization import render_topk_table_with_labels
+            render_topk_table_with_labels(gloss_top5, "gloss", "Top Gloss Predictions")
+        
+        with pred_col2:
+            render_topk_table_with_labels(category_top3, "category", "Top Category Predictions")
+        
+        # Additional insights
+        st.markdown("---")
+        with st.expander("Prediction Insights", expanded=False):
+            col1, col2, col3 = st.columns(3)
+            
+            with col1:
+                st.metric("Top Gloss Confidence", f"{prediction_results['gloss_probability']*100:.1f}%")
+                # Calculate entropy for gloss predictions
+                import numpy as np
+                gloss_probs = np.array([prob for _, prob in gloss_top5])
+                gloss_entropy = -np.sum(gloss_probs * np.log(gloss_probs + 1e-10))
+                st.metric("Gloss Entropy", f"{gloss_entropy:.3f}")
+            
+            with col2:
+                st.metric("Top Category Confidence", f"{prediction_results['category_probability']*100:.1f}%")
+                # Calculate entropy for category predictions
+                cat_probs = np.array([prob for _, prob in category_top3])
+                cat_entropy = -np.sum(cat_probs * np.log(cat_probs + 1e-10))
+                st.metric("Category Entropy", f"{cat_entropy:.3f}")
+            
+            with col3:
+                st.metric("Model", cfg['model_choice'])
+                if 'frames_extracted' in prediction_results:
+                    st.metric("Frames Processed", prediction_results['frames_extracted'])
+                else:
+                    st.metric("Sequence Length", f"{cfg['sequence_length']} frames")
+        
+        # Prediction completed successfully - no need to show message
+        
+    else:
+        # Fallback to simulated predictions when no NPZ data is available
+        from streamlit_app.utils import simulate_predictions, topk_from_logits
+        import numpy as np
+        
+        rng = np.random.RandomState(cfg["random_seed"])
+        gloss_logits, cat_logits = simulate_predictions(
+            rng, cfg["num_gloss_classes"], cfg["num_category_classes"]
+        )
 
-    g_idx, g_prob = topk_from_logits(gloss_logits, cfg["topk"]) 
-    c_idx, c_prob = topk_from_logits(cat_logits, cfg["topk"]) 
+        g_idx, g_prob = topk_from_logits(gloss_logits, cfg["topk"]) 
+        c_idx, c_prob = topk_from_logits(cat_logits, cfg["topk"]) 
 
-    # Enhanced predictions display
-    pred_col1, pred_col2 = st.columns(2)
-    
-    with pred_col1:
-        from streamlit_app.visualization import render_topk_table
-        render_topk_table(g_idx, g_prob, "gloss", "Top Gloss Predictions")
-    
-    with pred_col2:
-        render_topk_table(c_idx, c_prob, "category", "Top Category Predictions")
-    
-    # Additional insights
-    st.markdown("---")
-    with st.expander("Prediction Insights", expanded=False):
-        col1, col2, col3 = st.columns(3)
+        # Enhanced predictions display
+        pred_col1, pred_col2 = st.columns(2)
         
-        with col1:
-            st.metric("Top Gloss Confidence", f"{g_prob[0]*100:.1f}%")
-            st.metric("Gloss Entropy", f"{-np.sum(g_prob * np.log(g_prob + 1e-10)):.3f}")
+        with pred_col1:
+            from streamlit_app.visualization import render_topk_table
+            render_topk_table(g_idx, g_prob, "gloss", "Top Gloss Predictions (Simulated)")
         
-        with col2:
-            st.metric("Top Category Confidence", f"{c_prob[0]*100:.1f}%")
-            st.metric("Category Entropy", f"{-np.sum(c_prob * np.log(c_prob + 1e-10)):.3f}")
+        with pred_col2:
+            render_topk_table(c_idx, c_prob, "category", "Top Category Predictions (Simulated)")
         
-        with col3:
-            st.metric("Model", cfg['model_choice'])
-            st.metric("Sequence Length", f"{cfg['sequence_length']} frames")
-    
-    # Disclaimer
-    st.markdown("---")
-    st.info("Note: This demo uses simulated predictions. To run real inference, load trained model weights and compute predictions.")
+        # Additional insights
+        st.markdown("---")
+        with st.expander("Prediction Insights", expanded=False):
+            col1, col2, col3 = st.columns(3)
+            
+            with col1:
+                st.metric("Top Gloss Confidence", f"{g_prob[0]*100:.1f}%")
+                st.metric("Gloss Entropy", f"{-np.sum(g_prob * np.log(g_prob + 1e-10)):.3f}")
+            
+            with col2:
+                st.metric("Top Category Confidence", f"{c_prob[0]*100:.1f}%")
+                st.metric("Category Entropy", f"{-np.sum(c_prob * np.log(c_prob + 1e-10)):.3f}")
+            
+            with col3:
+                st.metric("Model", cfg['model_choice'])
+                st.metric("Sequence Length", f"{cfg['sequence_length']} frames")
+        
+        # Disclaimer
+        st.markdown("---")
+        st.info("Note: Using simulated predictions. Upload an NPZ file to see real model predictions.")
