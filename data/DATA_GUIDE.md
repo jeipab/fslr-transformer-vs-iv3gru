@@ -10,6 +10,10 @@ data/
 ├── processed/     # Preprocessed artifacts ready for training
 ├── reports/       # Validation outputs and audit reports
 └── splitting/     # Data splitting utilities and configurations
+
+trained_models/    # Trained model checkpoints and artifacts
+├── transformer/   # Transformer model checkpoints
+└── iv3_gru/      # InceptionV3-GRU model checkpoints
 ```
 
 ## File Types
@@ -140,6 +144,7 @@ data/reports/
 ```
 
 ### File Types
+
 - **CSV**: compact overview of key metrics
 - **JSONL**: detailed per-file audit information (machine-readable)
 - **MD**: summary report with counts of issues
@@ -150,6 +155,8 @@ data/reports/
 ## Model Training
 
 ### Checkpoints (.pt)
+
+**Location**: `trained_models/{model_type}/`
 
 **Format**: PyTorch checkpoint with keys:
 
@@ -164,6 +171,22 @@ data/reports/
 - `SignTransformer_best.pt`
 - `InceptionV3GRU_best.pt`
 - `SignTransformer_epoch_X.pt`
+
+**Directory Structure**:
+
+```
+trained_models/
+├── transformer/
+│   ├── transformer_low-acc_09-15/
+│   │   ├── SignTransformer_best.pt
+│   │   ├── SignTransformer_last.pt
+│   │   └── transformers_log.txt
+│   └── [future transformer models]
+└── iv3_gru/
+    └── [future IV3-GRU models]
+```
+
+**For detailed model management**: See [Trained Model Guide](../trained_models/TRAINED_MODEL_GUIDE.md)
 
 ### Training Logs (.csv)
 
@@ -185,6 +208,7 @@ epoch,train_loss,val_loss,gloss_acc,cat_acc,lr
   "num_epochs": 100
 }
 ```
+
 ---
 
 ## Model Results
@@ -253,15 +277,12 @@ data/
 │   │   └── clip_0002_<label>.npz
 │   ├── train_labels.csv            # gesture_001,12,2,0
 │   ├── val_labels.csv              # gesture_101,5,1,1
-│   ├── SignTransformer_best.pt     # Uses X key
-│   ├── InceptionV3GRU_best.pt      # Uses X2048 key
-│   ├── training_log.csv
 │   └── evaluation_results_20240101_120000/
 │       ├── summary_metrics.csv
 │       └── predictions.csv
 ├── reports/
 │   ├── logs/
-│   │   ├── clip_000*_<label>_npz.log         # If log per file is enabled  
+│   │   ├── clip_000*_<label>_npz.log         # If log per file is enabled
 │   ├── sample animations/
 │   │   ├── clip_000*_<label>.mp4             # If animation download is enabled
 │   ├── npz_audit_report.csv/
@@ -271,4 +292,14 @@ data/
     ├── assign.py
     ├── data_split.py
     └── labels_reference.csv
+
+trained_models/                     # Trained model artifacts
+├── transformer/
+│   ├── transformer_low-acc_09-15/
+│   │   ├── SignTransformer_best.pt
+│   │   ├── SignTransformer_last.pt
+│   │   └── transformers_log.txt
+│   └── [future transformer models]
+└── iv3_gru/
+    └── [future IV3-GRU models]
 ```
