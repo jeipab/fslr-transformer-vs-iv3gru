@@ -9,6 +9,7 @@ Multi-Head Attention Transformer for Filipino Sign Language Recognition.
 - `training/` - Training scripts and evaluation
 - `streamlit_app/` - Interactive demo application
 - `notebooks/` - Jupyter notebooks for experiments
+- `trained_models/` - Model checkpoints and prediction tools
 
 ## Setup
 
@@ -20,6 +21,33 @@ cd fslr-transformer-vs-iv3gru
 pip install -r requirements.txt
 pip install pyarrow  # optional, for parquet inspection
 ```
+
+## Using Trained Models
+
+### Quick Prediction
+
+```bash
+# Activate virtual environment
+.venv\Scripts\Activate.ps1
+
+# Navigate to trained_models directory
+cd trained_models
+
+# Predict from NPZ file
+python predict.py --model transformer --checkpoint transformer/transformer_low-acc_09-15/SignTransformer_best.pt --input "../data/processed/transformer_only/clip_0089_how are you.npz"
+
+# Predict from video file
+python predict.py --model transformer --checkpoint transformer/transformer_low-acc_09-15/SignTransformer_best.pt --input "../data/raw/videos/new_sign.mp4"
+```
+
+**Output Example:**
+
+```
+Gloss: HOW ARE YOU (4) (confidence: 0.882)
+Category: GREETING (0) (confidence: 0.774)
+```
+
+For detailed instructions, see the [Prediction Guide](trained_models/PREDICTION_GUIDE.md).
 
 ## Demo
 
@@ -141,6 +169,13 @@ python -m training.train --model iv3_gru --smoke-test --num-gloss 105 --num-cat 
 ```
 
 ## Guides
+
+### Prediction & Usage
+
+- [Prediction Guide](trained_models/PREDICTION_GUIDE.md) - How to use trained models for predictions
+- [Label Mapping Table](trained_models/LABEL_MAPPING_TABLE.md) - Complete list of signs and categories
+
+### Development & Training
 
 - [Preprocessing Guide](preprocessing/PREPROCESS_GUIDE.md) - Video to NPZ conversion
 - [Multi-Process Guide](preprocessing/MULTI_PREPROCESS_GUIDE.md) - 30-50x faster preprocessing
