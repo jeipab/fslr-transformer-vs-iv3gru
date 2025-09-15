@@ -3,8 +3,15 @@
 import io
 import streamlit as st
 import streamlit.components.v1 as components
-from typing import List, Dict
+from typing import List, Dict, Optional, Tuple
 import numpy as np
+import torch
+from pathlib import Path
+import sys
+
+# Add project root to path for model imports
+project_root = Path(__file__).parent.parent
+sys.path.insert(0, str(project_root))
 
 from streamlit_app.utils import detect_file_type, check_npz_compatibility, create_npz_bytes, extract_occlusion_flag, interpret_occlusion_flag
 from streamlit_app.visualization import (
@@ -13,6 +20,201 @@ from streamlit_app.visualization import (
 )
 from streamlit_app.components import render_predictions_section
 from streamlit_app.upload_manager import remove_file_from_stage
+
+# ===== MODEL CONFIGURATION =====
+# Configure which models to use for predictions
+MODEL_CONFIG = {
+    'transformer': {
+        'enabled': True,
+        'checkpoint_path': 'trained_models/transformer/transformer_low-acc_09-15/SignTransformer_last.pt',
+        'model_type': 'transformer'
+    },
+    'iv3_gru': {
+        'enabled': False,  # Set to True when IV3-GRU model is available
+        'checkpoint_path': 'trained_models/iv3_gru/model.pt',  # Placeholder path
+        'model_type': 'iv3_gru'
+    }
+}
+
+# Dummy prediction data for IV3-GRU when model is not available
+IV3_GRU_DUMMY_DATA = {
+    'gloss_prediction': 4,  # HOW ARE YOU
+    'category_prediction': 0,  # GREETING
+    'gloss_probability': 0.882,
+    'category_probability': 0.774,
+    'gloss_top5': [(4, 0.882), (18, 0.074), (17, 0.013), (85, 0.007), (6, 0.006)],
+    'category_top3': [(0, 0.774), (8, 0.160), (1, 0.061)]
+}
+
+
+class ModelManager:
+    """Singleton model manager for loading and caching prediction models."""
+    
+    _instance = None
+    _models = {}
+    _label_mappings = None
+    
+    def __new__(cls):
+        if cls._instance is None:
+            cls._instance = super().__new__(cls)
+        return cls._instance
+    
+    def get_model(self, model_name: str):
+        """Get a loaded model, loading it if necessary."""
+        if model_name not in self._models:
+            self._load_model(model_name)
+        return self._models.get(model_name)
+    
+    def _load_model(self, model_name: str):
+        """Load a model and cache it."""
+        config = MODEL_CONFIG.get(model_name)
+        if not config or not config['enabled']:
+            return None
+            
+        try:
+            # Import ModelPredictor from predict.py
+            import sys
+            from pathlib import Path
+            
+            # Set up paths correctly
+            project_root = Path(__file__).parent.parent
+            trained_models_path = project_root / "trained_models"
+            
+            # Add trained_models to path if not already there
+            if str(trained_models_path) not in sys.path:
+                sys.path.insert(0, str(trained_models_path))
+            
+            # Import using the full module path
+            from predict import ModelPredictor
+            
+            # Determine device
+            device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+            
+            # Load the model
+            predictor = ModelPredictor(
+                model_type=config['model_type'],
+                checkpoint_path=config['checkpoint_path'],
+                device=device
+            )
+            
+            self._models[model_name] = predictor
+            # Model loaded successfully - no need to show message
+            
+        except Exception as e:
+            st.toast(f"Failed to load {model_name.upper()} model: {str(e)}", icon="⚠️", duration=5000)
+            self._models[model_name] = None
+    
+    def get_label_mappings(self):
+        """Get label mappings, loading them if necessary."""
+        if self._label_mappings is None:
+            try:
+                # Add project root to path for label_mapping import
+                import sys
+                from pathlib import Path
+                project_root = Path(__file__).parent.parent
+                if str(project_root) not in sys.path:
+                    sys.path.insert(0, str(project_root))
+                
+                from trained_models.label_mapping import load_label_mappings
+                self._label_mappings = load_label_mappings()
+            except Exception as e:
+                st.toast(f"Could not load label mappings: {str(e)}", icon="⚠️", duration=3000)
+                # Fallback to basic mappings
+                self._label_mappings = ({}, {})
+        return self._label_mappings
+    
+    def cleanup(self):
+        """Clean up all loaded models."""
+        for model in self._models.values():
+            if model is not None:
+                try:
+                    model.cleanup()
+                except:
+                    pass
+        self._models.clear()
+
+
+def get_model_manager():
+    """Get the singleton model manager instance."""
+    return ModelManager()
+
+
+def make_real_prediction(npz_data: Dict[str, np.ndarray], model_name: str) -> Dict:
+    """
+    Make real prediction using the specified model.
+    
+    Args:
+        npz_data: NPZ data dictionary
+        model_name: Name of the model to use ('transformer' or 'iv3_gru')
+        
+    Returns:
+        Dictionary with prediction results
+    """
+    model_manager = get_model_manager()
+    
+    # Handle IV3-GRU dummy data when model is not available
+    if model_name == 'iv3_gru' and not MODEL_CONFIG['iv3_gru']['enabled']:
+        return IV3_GRU_DUMMY_DATA.copy()
+    
+    # Get the model
+    predictor = model_manager.get_model(model_name)
+    if predictor is None:
+        # Fallback to dummy data if model loading failed
+        if model_name == 'iv3_gru':
+            return IV3_GRU_DUMMY_DATA.copy()
+        else:
+            # For transformer, try to use simulation as fallback
+            from streamlit_app.utils import simulate_predictions, topk_from_logits
+            rng = np.random.RandomState(42)
+            gloss_logits, cat_logits = simulate_predictions(rng, 105, 10)
+            
+            g_idx, g_prob = topk_from_logits(gloss_logits, 5)
+            c_idx, c_prob = topk_from_logits(cat_logits, 3)
+            
+            return {
+                'gloss_prediction': int(g_idx[0]),
+                'category_prediction': int(c_idx[0]),
+                'gloss_probability': float(g_prob[0]),
+                'category_probability': float(c_prob[0]),
+                'gloss_top5': [(int(g_idx[i]), float(g_prob[i])) for i in range(len(g_idx))],
+                'category_top3': [(int(c_idx[i]), float(c_prob[i])) for i in range(len(c_idx))]
+            }
+    
+    try:
+        # Create temporary NPZ file for prediction
+        import tempfile
+        import os
+        import time
+        
+        # Use a more robust temporary file approach
+        with tempfile.NamedTemporaryFile(suffix='.npz', delete=False) as tmp_file:
+            tmp_path = tmp_file.name
+            np.savez_compressed(tmp_path, **npz_data)
+        
+        try:
+            # Make prediction
+            results = predictor.predict_from_npz(tmp_path)
+            return results
+        finally:
+            # Clean up temporary file with retry mechanism
+            max_retries = 3
+            for attempt in range(max_retries):
+                try:
+                    if os.path.exists(tmp_path):
+                        os.unlink(tmp_path)
+                    break
+                except PermissionError:
+                    if attempt < max_retries - 1:
+                        time.sleep(0.1)  # Wait 100ms before retry
+                    else:
+                        # If all retries fail, just leave the file
+                        pass
+            
+    except Exception as e:
+        # Show error as toast instead of st.error
+        st.toast(f"Prediction failed: {str(e)}", icon="⚠️", duration=5000)
+        # Return dummy data as fallback
+        return IV3_GRU_DUMMY_DATA.copy()
 
 
 def render_predictions_stage(cfg: Dict):
@@ -355,6 +557,9 @@ def render_visualization_tabs(cfg: Dict):
             if compatible_models:
                 st.info(f"Compatible with: {', '.join(compatible_models)}")
             
+            # Generate and render predictions first
+            render_predictions_section(cfg, npz_data, filename)
+            
             # Render visualizations
             try:
                 X_pad, mask, meta = render_sequence_overview(npz_data, cfg["sequence_length"])
@@ -371,9 +576,6 @@ def render_visualization_tabs(cfg: Dict):
                 
                 st.markdown('</div>', unsafe_allow_html=True)
                 
-                # Generate and render predictions
-                render_predictions_section(cfg, None, None)
-                
                 # Download button
                 st.markdown("### Download")
                 npz_bytes = create_npz_bytes(npz_data)
@@ -385,7 +587,7 @@ def render_visualization_tabs(cfg: Dict):
                 )
                 
             except Exception as e:
-                st.error(f"Visualization error: {str(e)}")
+                st.toast(f"Visualization error: {str(e)}", icon="⚠️", duration=5000)
     
     # Batch summary tab
     with tabs[-1]:
@@ -412,26 +614,27 @@ def render_batch_summary_tab(cfg: Dict):
         compatibility = metadata['compatibility']
         source_type = metadata.get('source_type', 'original')
         
-        # Generate predictions for this file
-        from streamlit_app.utils import simulate_predictions, topk_from_logits
+        # Generate real predictions for this file
+        model_name = 'transformer' if cfg['model_choice'] == 'SignTransformer' else 'iv3_gru'
+        npz_data = st.session_state.processed_data[filename]
+        prediction_results = make_real_prediction(npz_data, model_name)
         
-        # Use filename hash as seed for consistent predictions per file
-        file_seed = hash(filename) % (2**32)
-        rng = np.random.RandomState(file_seed)
-        gloss_logits, cat_logits = simulate_predictions(
-            rng, cfg["num_gloss_classes"], cfg["num_category_classes"]
-        )
+        # Format predictions with human-readable labels
+        model_manager = get_model_manager()
+        gloss_mapping, category_mapping = model_manager.get_label_mappings()
         
-        # Get top 1 predictions
-        g_idx, g_prob = topk_from_logits(gloss_logits, 1)
-        c_idx, c_prob = topk_from_logits(cat_logits, 1)
+        gloss_id = prediction_results['gloss_prediction']
+        cat_id = prediction_results['category_prediction']
+        gloss_prob = prediction_results['gloss_probability']
+        cat_prob = prediction_results['category_probability']
         
-        # Format predictions
-        top_gloss = f"Gloss {g_idx[0]} ({g_prob[0]*100:.1f}%)"
-        top_category = f"Category {c_idx[0]} ({c_prob[0]*100:.1f}%)"
+        gloss_label = gloss_mapping.get(gloss_id, f'Unknown ({gloss_id})')
+        cat_label = category_mapping.get(cat_id, f'Unknown ({cat_id})')
+        
+        top_gloss = f"{gloss_label} ({gloss_prob*100:.1f}%)"
+        top_category = f"{cat_label} ({cat_prob*100:.1f}%)"
         
         # Extract occlusion status for summary table
-        npz_data = st.session_state.processed_data[filename]
         occlusion_flag = extract_occlusion_flag(npz_data)
         occlusion_status = interpret_occlusion_flag(occlusion_flag)
         
@@ -690,6 +893,19 @@ def clear_all_predictions_files():
     from streamlit_app.upload_manager import clear_all_files
     clear_all_files()
     
+    # Clean up models
+    model_manager = get_model_manager()
+    model_manager.cleanup()
+    
     # Return to upload stage
     st.session_state.workflow_stage = 'upload'
     st.rerun()
+
+
+def cleanup_on_app_exit():
+    """Clean up resources when the app exits."""
+    try:
+        model_manager = get_model_manager()
+        model_manager.cleanup()
+    except:
+        pass

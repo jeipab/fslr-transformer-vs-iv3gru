@@ -6,7 +6,7 @@ import streamlit as st
 from streamlit_app.components import set_page, render_sidebar, render_main_header
 from streamlit_app.upload_manager import initialize_upload_session_state, render_upload_stage
 from streamlit_app.preprocessing_manager import render_preprocessing_stage
-from streamlit_app.prediction_manager import render_predictions_stage
+from streamlit_app.prediction_manager import render_predictions_stage, cleanup_on_app_exit
 
 
 def main() -> None:
@@ -28,4 +28,8 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    finally:
+        # Clean up resources when app exits
+        cleanup_on_app_exit()
