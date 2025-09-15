@@ -1,0 +1,42 @@
+{
+  "gloss_prediction": "DAUGHTER (55)",
+  "category_prediction": "SURVIVAL (1)",
+  "gloss_probability": 0.4512413740158081,
+  "category_probability": 0.6340445876121521,
+  "gloss_top5": [
+    [
+      "DAUGHTER (55)",
+      0.4512413740158081
+    ],
+    [
+      "CORRECT (17)",
+      0.15556751191616058
+    ],
+    [
+      "RICE (91)",
+      0.06891803443431854
+    ],
+    [
+      "UNDERSTAND (10)",
+      0.05927488952875137
+    ],
+    [
+      "HOW ARE YOU (4)",
+      0.052597444504499435
+    ]
+  ],
+  "category_top3": [
+    [
+      "SURVIVAL (1)",
+      0.6340445876121521
+    ],
+    [
+      "GREETING (0)",
+      0.18412192165851593
+    ],
+    [
+      "FAMILY (5)",
+      0.07016456872224808
+    ]
+  ]
+}
