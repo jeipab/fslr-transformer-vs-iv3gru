@@ -1,0 +1,42 @@
+{
+  "gloss_prediction": "DON\u2019T UNDERSTAND (11)",
+  "category_prediction": "SURVIVAL (1)",
+  "gloss_probability": 0.2308700978755951,
+  "category_probability": 0.5233748555183411,
+  "gloss_top5": [
+    [
+      "DON\u2019T UNDERSTAND (11)",
+      0.2308700978755951
+    ],
+    [
+      "UNDERSTAND (10)",
+      0.200762540102005
+    ],
+    [
+      "EIGHT (27)",
+      0.15295347571372986
+    ],
+    [
+      "DON\u2019T KNOW (13)",
+      0.14983800053596497
+    ],
+    [
+      "YES (15)",
+      0.044398028403520584
+    ]
+  ],
+  "category_top3": [
+    [
+      "SURVIVAL (1)",
+      0.5233748555183411
+    ],
+    [
+      "NUMBER (2)",
+      0.2921769917011261
+    ],
+    [
+      "GREETING (0)",
+      0.17235586047172546
+    ]
+  ]
+}

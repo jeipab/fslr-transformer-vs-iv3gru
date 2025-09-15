@@ -1,0 +1,42 @@
+{
+  "gloss_prediction": "CRAB (94)",
+  "category_prediction": "GREETING (0)",
+  "gloss_probability": 0.5746592283248901,
+  "category_probability": 0.434724897146225,
+  "gloss_top5": [
+    [
+      "CRAB (94)",
+      0.5746592283248901
+    ],
+    [
+      "LONGANISA (92)",
+      0.06400825828313828
+    ],
+    [
+      "WEELCHAIR PERSON (68)",
+      0.058160461485385895
+    ],
+    [
+      "HOW ARE YOU (4)",
+      0.04837964102625847
+    ],
+    [
+      "SLOW (18)",
+      0.047851745039224625
+    ]
+  ],
+  "category_top3": [
+    [
+      "GREETING (0)",
+      0.434724897146225
+    ],
+    [
+      "SURVIVAL (1)",
+      0.24106642603874207
+    ],
+    [
+      "DAYS (4)",
+      0.20801307260990143
+    ]
+  ]
+}
