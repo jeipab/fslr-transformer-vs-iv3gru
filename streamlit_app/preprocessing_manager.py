@@ -100,11 +100,14 @@ def render_preprocessing_stage():
             st.rerun()
         return
     
-    # Batch preprocessing controls (needed first to update session state)
-    render_preprocessing_controls(video_files)
+    # Preprocessing options (needed first to update session state)
+    render_preprocessing_options(video_files)
     
     # Show video files with preprocessing options
     render_video_files_list(all_files_to_show)
+    
+    # Batch operations
+    render_batch_operations(video_files)
     
     # Show progress and completed files
     if st.session_state.preprocessed_files:
@@ -190,8 +193,8 @@ def render_video_files_list(all_files_to_show: List):
             st.markdown("---")
 
 
-def render_preprocessing_controls(video_files: List):
-    """Render batch preprocessing controls and options."""
+def render_preprocessing_options(video_files: List):
+    """Render preprocessing options."""
     st.markdown("---")
     
     # Check if any files are currently being processed
@@ -242,6 +245,15 @@ def render_preprocessing_controls(video_files: List):
         has_extraction_options = write_keypoints or write_iv3_features
         if not has_extraction_options:
             st.warning("⚠️ Please select at least one extraction option (Keypoints or IV3 Features) to enable preprocessing.")
+
+
+def render_batch_operations(video_files: List):
+    """Render batch operation buttons."""
+    st.markdown("---")
+    
+    # Check if any files are currently being processed
+    is_processing = any(st.session_state.file_status.get(f.name, 'pending') == 'processing' for f in video_files)
+    is_processing = is_processing or any(st.session_state.file_status.get(f.name, 'completed') == 'processing' for f in st.session_state.preprocessed_files)
     
     # Batch operations
     col1, col2, col3, col4 = st.columns([4, 1, 1, 1])
