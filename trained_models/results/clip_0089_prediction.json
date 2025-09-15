@@ -1,0 +1,42 @@
+{
+  "gloss_prediction": "HOW ARE YOU (4)",
+  "category_prediction": "GREETING (0)",
+  "gloss_probability": 0.881818413734436,
+  "category_probability": 0.7738339900970459,
+  "gloss_top5": [
+    [
+      "HOW ARE YOU (4)",
+      0.881818413734436
+    ],
+    [
+      "SLOW (18)",
+      0.07414934784173965
+    ],
+    [
+      "CORRECT (17)",
+      0.012616343796253204
+    ],
+    [
+      "BREAD (85)",
+      0.007467971183359623
+    ],
+    [
+      "NICE TO MEET YOU (6)",
+      0.006474523339420557
+    ]
+  ],
+  "category_top3": [
+    [
+      "GREETING (0)",
+      0.7738339900970459
+    ],
+    [
+      "FOOD (8)",
+      0.16038605570793152
+    ],
+    [
+      "SURVIVAL (1)",
+      0.06056083366274834
+    ]
+  ]
+}
