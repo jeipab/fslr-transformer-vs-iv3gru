@@ -2,6 +2,7 @@
 
 import streamlit as st
 from typing import List, Dict
+from pathlib import Path
 from streamlit_app.utils import detect_file_type, format_file_size
 from streamlit_app.data_processing import process_video_file
 from streamlit_app.upload_manager import remove_file_from_stage
@@ -142,8 +143,8 @@ def render_video_files_list(all_files_to_show: List):
             'error': '❌'
         }
         
-        # Create compact file row
-        col1, col2, col3, col4, col5 = st.columns([3, 1, 1, 1, 1])
+        # Create compact file row with download button
+        col1, col2, col3, col4, col5, col6 = st.columns([3, 1, 1, 1, 1, 1])
         
         with col1:
             st.markdown(f"**🎥 {filename}**")
@@ -152,8 +153,30 @@ def render_video_files_list(all_files_to_show: List):
         with col3:
             st.markdown(f"**Status:** {status_emoji.get(status, '❓')} {status.title()}")
         
-        # Action buttons based on status
+        # Download button (for completed files)
         with col4:
+            if status == 'completed':
+                npz_data = st.session_state.processed_data.get(filename)
+                if npz_data:
+                    from streamlit_app.utils import create_npz_bytes
+                    npz_bytes = create_npz_bytes(npz_data)
+                    # Create descriptive filename with timestamp
+                    import datetime
+                    base_name = Path(filename).stem  # Remove original extension
+                    timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+                    download_filename = f"{base_name}_preprocessed_{timestamp}.npz"
+                    st.download_button(
+                        label="Download",
+                        data=npz_bytes,
+                        file_name=download_filename,
+                        mime="application/octet-stream",
+                        key=f"download_{filename}",
+                        help="Download NPZ file",
+                        disabled=is_processing
+                    )
+        
+        # Action buttons based on status
+        with col5:
             if status == 'pending':
                 button_disabled = is_processing or not has_extraction_options
                 button_help = "Preprocess this video file" if has_extraction_options else "Select at least one extraction option to enable preprocessing"
@@ -176,7 +199,7 @@ def render_video_files_list(all_files_to_show: List):
                     st.rerun()
         
         # Remove button with confirmation
-        with col5:
+        with col6:
             if st.button("Remove", key=f"remove_{filename}", help="Remove this file", type="secondary", disabled=is_processing):
                 if st.session_state.get(f"confirm_remove_{filename}", False):
                     if file_type == 'video':
@@ -195,7 +218,6 @@ def render_video_files_list(all_files_to_show: List):
 
 def render_preprocessing_options(video_files: List):
     """Render preprocessing options."""
-    st.markdown("---")
     
     # Check if any files are currently being processed
     is_processing = any(st.session_state.file_status.get(f.name, 'pending') == 'processing' for f in video_files)
@@ -256,7 +278,7 @@ def render_batch_operations(video_files: List):
     is_processing = is_processing or any(st.session_state.file_status.get(f.name, 'completed') == 'processing' for f in st.session_state.preprocessed_files)
     
     # Batch operations
-    col1, col2, col3, col4 = st.columns([4, 1, 1, 1])
+    col1, col2, col3, col4 = st.columns([5, 1, 1, 1])
     
     with col1:
         # Count pending files from both video_files and preprocessed_files
@@ -328,6 +350,12 @@ def render_preprocessed_files_summary(all_files_to_show: List):
         iv3_compatible = sum(1 for f in preprocessed_files 
                            if st.session_state.file_metadata.get(f.name, {}).get('compatibility', {}).get('iv3_gru', False))
         st.metric("IV3-GRU Compatible", iv3_compatible)
+    
+    # Bulk download button
+    if preprocessed_files:
+        st.markdown("---")
+        
+        create_bulk_download_button(preprocessed_files)
     
     # Note: Go to Inference button is now in the navigation header
 
@@ -606,3 +634,58 @@ def clear_all_video_files():
     if not st.session_state.npz_files:
         st.session_state.workflow_stage = 'upload'
         st.rerun()
+
+
+def create_bulk_download_button(preprocessed_files: List):
+    """Create bulk download button for all preprocessed NPZ files."""
+    import zipfile
+    import io
+    from streamlit_app.utils import create_npz_bytes
+    
+    # Check if any files are currently being processed
+    is_processing = any(st.session_state.file_status.get(f.name, 'completed') == 'processing' for f in preprocessed_files)
+    
+    if is_processing:
+        st.info("⏳ Please wait for all files to finish processing before downloading.")
+        return
+    
+    # Create ZIP in memory
+    zip_buffer = io.BytesIO()
+    
+    with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zip_file:
+        # Add all preprocessed NPZ files
+        files_added = 0
+        for preprocessed_file in preprocessed_files:
+            filename = preprocessed_file.name
+            npz_data = st.session_state.processed_data.get(filename)
+            if npz_data:
+                npz_bytes = create_npz_bytes(npz_data)
+                # Create descriptive filename for ZIP contents
+                base_name = Path(filename).stem  # Remove original extension
+                npz_filename = f"{base_name}_preprocessed.npz"
+                zip_file.writestr(npz_filename, npz_bytes)
+                files_added += 1
+            else:
+                st.warning(f"⚠️ No NPZ data found for {filename}")
+        
+        if files_added == 0:
+            st.error("No NPZ files available for download")
+            return
+    
+    zip_buffer.seek(0)
+    
+    # Create descriptive ZIP filename with timestamp
+    import datetime
+    timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+    zip_filename = f"preprocessed_files_{timestamp}.zip"
+    
+    # Download button
+    st.download_button(
+        label="Download All NPZ Files as ZIP",
+        data=zip_buffer.getvalue(),
+        file_name=zip_filename,
+        mime="application/zip",
+        type="primary",
+        help="Download all preprocessed NPZ files as a ZIP archive",
+        disabled=is_processing
+    )
