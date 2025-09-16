@@ -15,6 +15,8 @@ import os
 import csv
 import random
 import argparse
+import time
+import psutil
 from typing import Optional, Tuple, Callable
 
 import numpy as np
@@ -194,22 +196,44 @@ def collate_keypoints_with_padding(batch):
 
 def _make_dataloader(dataset, batch_size, shuffle, args, collate_fn=None):
     """
-    Internal helper to build a DataLoader without passing invalid kwargs.
-
-    Only sets `prefetch_factor` when `num_workers > 0` and a positive int is provided.
+    Internal helper to build an optimized DataLoader with performance enhancements.
     """
+    # Auto-detect optimal number of workers if not specified
+    num_workers = args.num_workers
+    if args.auto_workers or num_workers == 0:
+        # Use CPU count for optimal performance
+        num_workers = min(4, psutil.cpu_count(logical=False))
+        if args.auto_workers:
+            print(f"Auto-detected {num_workers} DataLoader workers")
+    
+    # Optimize pin_memory based on device
+    pin_memory = args.pin_memory
+    if not hasattr(args, 'pin_memory') or args.pin_memory is None:
+        pin_memory = torch.cuda.is_available()
+    
     kwargs = {
         'batch_size': batch_size,
         'shuffle': shuffle,
-        'num_workers': args.num_workers,
-        'pin_memory': args.pin_memory,
+        'num_workers': num_workers,
+        'pin_memory': pin_memory,
+        'persistent_workers': num_workers > 0,  # Keep workers alive between epochs
     }
+    
     if collate_fn is not None:
         kwargs['collate_fn'] = collate_fn
-    if (hasattr(args, 'prefetch_factor') and args.prefetch_factor is not None and 
-        isinstance(args.num_workers, int) and args.num_workers > 0 and 
-        isinstance(args.prefetch_factor, int) and args.prefetch_factor > 0):
-        kwargs['prefetch_factor'] = args.prefetch_factor
+    
+    # Set prefetch_factor for better data loading performance
+    if num_workers > 0:
+        prefetch_factor = getattr(args, 'prefetch_factor', None)
+        if prefetch_factor is None:
+            # Auto-set prefetch factor based on available memory
+            if torch.cuda.is_available():
+                kwargs['prefetch_factor'] = 2  # Conservative for GPU
+            else:
+                kwargs['prefetch_factor'] = 4  # More aggressive for CPU
+        elif isinstance(prefetch_factor, int) and prefetch_factor > 0:
+            kwargs['prefetch_factor'] = prefetch_factor
+    
     return DataLoader(dataset, **kwargs)
 
 def save_checkpoint(state: dict, is_best: bool, output_dir: str, model_name: str) -> None:
@@ -227,6 +251,46 @@ def save_checkpoint(state: dict, is_best: bool, output_dir: str, model_name: str
     if is_best:
         best_path = os.path.join(output_dir, f"{model_name}_best.pt")
         torch.save(state, best_path)
+
+def get_optimal_device() -> torch.device:
+    """Get the optimal device for training with comprehensive CUDA optimization."""
+    if torch.cuda.is_available():
+        device = torch.device("cuda")
+        # Enable CUDA optimizations
+        torch.backends.cudnn.benchmark = True
+        torch.backends.cudnn.enabled = True
+        # Set memory allocation strategy for better memory management
+        os.environ['PYTORCH_CUDA_ALLOC_CONF'] = 'max_split_size_mb:512'
+        return device
+    elif hasattr(torch.backends, 'mps') and torch.backends.mps.is_available():
+        return torch.device("mps")
+    else:
+        return torch.device("cpu")
+
+def print_device_info(device: torch.device) -> None:
+    """Print comprehensive device information."""
+    print(f"Using device: {device}")
+    
+    if device.type == 'cuda':
+        print(f"CUDA device: {torch.cuda.get_device_name(0)}")
+        props = torch.cuda.get_device_properties(0)
+        print(f"CUDA memory: {props.total_memory / 1e9:.1f} GB")
+        print(f"CUDA compute capability: {props.major}.{props.minor}")
+        print(f"CUDA multiprocessors: {props.multi_processor_count}")
+        print(f"CUDA memory allocated: {torch.cuda.memory_allocated(0) / 1e9:.2f} GB")
+        print(f"CUDA memory cached: {torch.cuda.memory_reserved(0) / 1e9:.2f} GB")
+    elif device.type == 'mps':
+        print("Using Apple Metal Performance Shaders (MPS)")
+    else:
+        print("Using CPU")
+        print(f"CPU cores: {psutil.cpu_count(logical=False)} physical, {psutil.cpu_count(logical=True)} logical")
+        print(f"Available RAM: {psutil.virtual_memory().total / 1e9:.1f} GB")
+
+def clear_gpu_memory():
+    """Clear GPU memory cache."""
+    if torch.cuda.is_available():
+        torch.cuda.empty_cache()
+        torch.cuda.synchronize()
 
 def set_global_seed(seed: int, deterministic: bool = False) -> None:
     """Set global RNG seeds across Python, NumPy, and PyTorch.
@@ -263,6 +327,8 @@ def train_model(
     early_stop_patience=None,
     resume_path=None,
     log_csv_path=None,
+    gradient_accumulation_steps=1,
+    compile_model=False,
 ):
     """
     Train a model with multi-task loss on gloss and category predictions.
@@ -286,6 +352,8 @@ def train_model(
         early_stop_patience: Stop if no improvement for this many epochs.
         resume_path: Path to checkpoint to resume from.
         log_csv_path: Path to append per-epoch metrics as CSV.
+        gradient_accumulation_steps: Number of steps to accumulate gradients.
+        compile_model: Whether to compile the model for better performance.
 
     Returns:
         None
@@ -295,11 +363,31 @@ def train_model(
         and `{ModelName}_best.pt` (best validation metric). Appends metrics to
         `log_csv_path` if provided.
     """
+    # Clear GPU memory before training
+    clear_gpu_memory()
+    
+    # Compile model for better performance if supported
+    if compile_model and hasattr(torch, 'compile'):
+        try:
+            model = torch.compile(model)
+            print("✓ Model compiled for better performance")
+        except Exception as e:
+            print(f"⚠ Model compilation failed: {e}")
+    
     criterion = nn.CrossEntropyLoss()
     optimizer = optim.Adam(model.parameters(), lr=lr, weight_decay=weight_decay)
+    
     # Enable AMP only when running on CUDA to avoid CPU-only issues
     amp_enabled = bool(use_amp and getattr(device, "type", "cpu") == "cuda")
     scaler = torch.amp.GradScaler(enabled=amp_enabled)
+    
+    # Print training configuration
+    print(f"Training Configuration:")
+    print(f"  - Gradient accumulation steps: {gradient_accumulation_steps}")
+    print(f"  - AMP enabled: {amp_enabled}")
+    print(f"  - Model compiled: {compile_model}")
+    if device.type == 'cuda':
+        print(f"  - CUDA memory before training: {torch.cuda.memory_allocated(0) / 1e9:.2f} GB")
 
     if scheduler_type == "plateau":
         scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='max', factor=0.5, patience=scheduler_patience)
@@ -331,7 +419,7 @@ def train_model(
         csv_fh = open(log_csv_path, 'a', newline='')
         csv_writer = csv.writer(csv_fh)
         if new_file:
-            csv_writer.writerow(["epoch", "train_loss", "val_loss", "val_gloss_acc", "val_cat_acc", "lr"]) 
+            csv_writer.writerow(["epoch", "train_loss", "val_loss", "val_gloss_acc", "val_cat_acc", "lr", "epoch_time", "gpu_memory_allocated", "gpu_memory_reserved"]) 
 
     print(f"Training for {epochs} epochs...")
     print(f"Loss weights - Gloss: {alpha}, Category: {beta}")
@@ -344,32 +432,51 @@ def train_model(
         model.train()
         total_loss = 0
         num_batches = 0
+        epoch_start_time = time.time()
 
-        # Training phase
-        for batch in train_loader:
+        # Training phase with gradient accumulation
+        optimizer.zero_grad(set_to_none=True)
+        
+        for batch_idx, batch in enumerate(train_loader):
             if len(batch) == 4:
                 X, gloss, cat, lengths = batch
-                lengths = lengths.to(device)
+                lengths = lengths.to(device, non_blocking=True)
             else:
                 X, gloss, cat = batch
                 lengths = None
-            X, gloss, cat = X.to(device), gloss.to(device), cat.to(device)
-            optimizer.zero_grad(set_to_none=True)
+            
+            # Move tensors to device with non_blocking for better performance
+            X = X.to(device, non_blocking=True)
+            gloss = gloss.to(device, non_blocking=True)
+            cat = cat.to(device, non_blocking=True)
 
             with torch.amp.autocast(device_type=getattr(device, "type", "cpu"), enabled=amp_enabled):
                 gloss_pred, cat_pred = forward_fn(model, X, lengths)
                 loss_gloss = criterion(gloss_pred, gloss)
                 loss_cat = criterion(cat_pred, cat)
                 loss = alpha * loss_gloss + beta * loss_cat
+                
+                # Scale loss by accumulation steps
+                loss = loss / gradient_accumulation_steps
 
             scaler.scale(loss).backward()
-            if grad_clip is not None and grad_clip > 0:
-                scaler.unscale_(optimizer)
-                torch.nn.utils.clip_grad_norm_(model.parameters(), grad_clip)
-            scaler.step(optimizer)
-            scaler.update()
-            total_loss += loss.item()
+            
+            # Only step optimizer after accumulating gradients
+            if (batch_idx + 1) % gradient_accumulation_steps == 0:
+                if grad_clip is not None and grad_clip > 0:
+                    scaler.unscale_(optimizer)
+                    torch.nn.utils.clip_grad_norm_(model.parameters(), grad_clip)
+                scaler.step(optimizer)
+                scaler.update()
+                optimizer.zero_grad(set_to_none=True)
+            
+            total_loss += loss.item() * gradient_accumulation_steps
             num_batches += 1
+            
+            # Clear intermediate variables to save memory
+            del X, gloss, cat, gloss_pred, cat_pred, loss, loss_gloss, loss_cat
+            if lengths is not None:
+                del lengths
 
         # Handle case where training dataloader yields zero batches
         if num_batches == 0:
@@ -378,15 +485,30 @@ def train_model(
                 csv_fh.close()
             return
 
+        # Clear memory before validation
+        clear_gpu_memory()
+        
         # Validation
+        val_start_time = time.time()
         val_loss, val_gloss_acc, val_cat_acc = evaluate_with_forward(model, val_loader, criterion, device, forward_fn, alpha=alpha, beta=beta)
+        val_time = time.time() - val_start_time
         
         avg_train_loss = total_loss / num_batches
+        epoch_time = time.time() - epoch_start_time
+        
+        # Print epoch results with performance metrics
         print(f"Epoch {epoch+1:2d}/{epochs} | "
               f"Train Loss: {avg_train_loss:.4f} | "
               f"Val Loss: {val_loss:.4f} | "
               f"Val Gloss Acc: {val_gloss_acc:.3f} | "
-              f"Val Cat Acc: {val_cat_acc:.3f}")
+              f"Val Cat Acc: {val_cat_acc:.3f} | "
+              f"Time: {epoch_time:.1f}s")
+        
+        # Print GPU memory usage if available
+        if device.type == 'cuda':
+            memory_allocated = torch.cuda.memory_allocated(0) / 1e9
+            memory_reserved = torch.cuda.memory_reserved(0) / 1e9
+            print(f"  GPU Memory: {memory_allocated:.2f}GB allocated, {memory_reserved:.2f}GB reserved")
 
         # Scheduler step (and then read the effective LR)
         if scheduler is not None:
@@ -396,9 +518,11 @@ def train_model(
                 scheduler.step()
         current_lr = optimizer.param_groups[0]['lr']
 
-        # CSV log
+        # CSV log with performance metrics
         if csv_fh is not None:
-            csv_writer.writerow([epoch + 1, avg_train_loss, val_loss, val_gloss_acc, val_cat_acc, current_lr])
+            gpu_mem_alloc = torch.cuda.memory_allocated(0) / 1e9 if device.type == 'cuda' else 0.0
+            gpu_mem_reserved = torch.cuda.memory_reserved(0) / 1e9 if device.type == 'cuda' else 0.0
+            csv_writer.writerow([epoch + 1, avg_train_loss, val_loss, val_gloss_acc, val_cat_acc, current_lr, epoch_time, gpu_mem_alloc, gpu_mem_reserved])
             csv_fh.flush()
 
         # Checkpointing on best metric (gloss accuracy)
@@ -575,17 +699,19 @@ def parse_args():
     parser.add_argument("--smoke-batch-size", type=int, default=4, help="Smoke test batch size")
     parser.add_argument("--smoke-T", type=int, default=30, help="Smoke test sequence length T")
     parser.add_argument("--output-dir", type=str, default="data/processed", help="Directory to save model checkpoints")
+    # Performance optimization arguments
+    parser.add_argument("--gradient-accumulation-steps", type=int, default=1, help="Number of steps to accumulate gradients")
+    parser.add_argument("--compile-model", action="store_true", help="Compile model for better performance (PyTorch 2.0+)")
+    parser.add_argument("--auto-workers", action="store_true", help="Auto-detect optimal number of DataLoader workers")
     return parser.parse_args()
 
 if __name__ == "__main__":
     args = parse_args()
     set_global_seed(args.seed, deterministic=args.deterministic)
-    # Device setup
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    print(f"Using device: {device}")
-    if device.type == 'cuda':
-        print(f"CUDA device: {torch.cuda.get_device_name(0)}")
-        print(f"CUDA memory: {torch.cuda.get_device_properties(0).total_memory / 1e9:.1f} GB")
+    
+    # Optimized device setup
+    device = get_optimal_device()
+    print_device_info(device)
 
     # Optional smoke test (only if comparable path exists for Transformer already)
     if args.smoke_test:
@@ -803,4 +929,6 @@ if __name__ == "__main__":
         early_stop_patience=args.early_stop,
         resume_path=args.resume,
         log_csv_path=args.log_csv,
+        gradient_accumulation_steps=args.gradient_accumulation_steps,
+        compile_model=args.compile_model,
     )
