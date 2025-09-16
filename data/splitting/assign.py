@@ -15,7 +15,7 @@ import pandas as pd
 
 # Load reference and labels
 gloss_cat = pd.read_csv("data/splitting/labels_reference.csv")   # the file with gloss_id, label, cat_id, category
-labels = pd.read_csv("data/processed/labels.csv")   # CHANGE THIS to the actual location of the labels.csv file
+labels = pd.read_csv("data\processed\seq prepro_30 fps_09-13\labels.csv")   # CHANGE THIS to the actual location of the labels.csv file
 
 # Create mapping dictionaries
 gloss_map = dict(zip(gloss_cat["label"].str.lower(), gloss_cat["gloss_id"]))
