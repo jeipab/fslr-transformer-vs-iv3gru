@@ -427,8 +427,8 @@ def train_model(
     device,
     forward_fn,
     epochs=20,
-    alpha=0.5,
-    beta=0.5,
+    alpha=0.7,
+    beta=0.3,
     output_dir="data/processed",
     lr=1e-4,
     weight_decay=0.0,
@@ -772,8 +772,8 @@ def parse_args():
     parser.add_argument("--model", choices=["transformer", "iv3_gru"], default="transformer", help="Model to train")
     parser.add_argument("--epochs", type=int, default=20, help="Number of training epochs")
     parser.add_argument("--batch-size", type=int, default=32, help="Batch size")
-    parser.add_argument("--alpha", type=float, default=0.5, help="Weight for gloss loss")
-    parser.add_argument("--beta", type=float, default=0.5, help="Weight for category loss")
+    parser.add_argument("--alpha", type=float, default=0.7, help="Weight for gloss loss")
+    parser.add_argument("--beta", type=float, default=0.3, help="Weight for category loss")
     # Class counts
     parser.add_argument("--num-gloss", type=int, default=105, help="Number of gloss classes")
     parser.add_argument("--num-cat", type=int, default=10, help="Number of category classes")
