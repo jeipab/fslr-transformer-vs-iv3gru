@@ -1,0 +1,71 @@
+============================================================
+DATA LOADING
+============================================================
+✓ Loaded data successfully
+  - Gloss classes: 105
+  - Category classes: 10
+
+============================================================
+DATASET PREPARATION
+============================================================
+✓ Created datasets and data loaders
+  - Batch size: 32
+  - Training batches: 54
+  - Validation batches: 14
+
+============================================================
+MODEL SELECTION
+============================================================
+Available models:
+- transformer: Multi-head attention transformer
+- iv3_gru: InceptionV3 + GRU hybrid
+✓ Using InceptionV3GRU model
+
+Model Information:
+  - Model type: InceptionV3GRU
+  - Total parameters: 25,214,007
+  - Trainable parameters: 101,743
+  - Model size: 96.2 MB
+
+============================================================
+TRAINING START
+============================================================
+Training Configuration:
+  - Gradient accumulation steps: 1
+  - AMP enabled: False
+  - Model compiled: False
+Training for 30 epochs...
+Loss weights - Gloss: 0.5, Category: 0.5
+------------------------------------------------------------
+Epoch  1/30 | Train Loss: 3.5010 | Val Loss: 3.4792 | Val Gloss Acc: 0.007 | Val Cat Acc: 0.155 | Time: 4.5s
+Epoch  2/30 | Train Loss: 3.4626 | Val Loss: 3.4424 | Val Gloss Acc: 0.007 | Val Cat Acc: 0.232 | Time: 4.9s
+Epoch  3/30 | Train Loss: 3.4301 | Val Loss: 3.4107 | Val Gloss Acc: 0.009 | Val Cat Acc: 0.225 | Time: 4.8s
+Epoch  4/30 | Train Loss: 3.4048 | Val Loss: 3.3852 | Val Gloss Acc: 0.009 | Val Cat Acc: 0.277 | Time: 4.5s
+Epoch  5/30 | Train Loss: 3.3817 | Val Loss: 3.3577 | Val Gloss Acc: 0.012 | Val Cat Acc: 0.282 | Time: 4.1s
+Epoch  6/30 | Train Loss: 3.3605 | Val Loss: 3.3341 | Val Gloss Acc: 0.026 | Val Cat Acc: 0.343 | Time: 4.9s
+Epoch  7/30 | Train Loss: 3.3362 | Val Loss: 3.3122 | Val Gloss Acc: 0.021 | Val Cat Acc: 0.347 | Time: 4.1s
+Epoch  8/30 | Train Loss: 3.3203 | Val Loss: 3.2972 | Val Gloss Acc: 0.023 | Val Cat Acc: 0.347 | Time: 4.2s
+Epoch  9/30 | Train Loss: 3.2968 | Val Loss: 3.2710 | Val Gloss Acc: 0.035 | Val Cat Acc: 0.392 | Time: 4.0s
+Epoch 10/30 | Train Loss: 3.2729 | Val Loss: 3.2438 | Val Gloss Acc: 0.042 | Val Cat Acc: 0.465 | Time: 4.2s
+Epoch 11/30 | Train Loss: 3.2594 | Val Loss: 3.2222 | Val Gloss Acc: 0.047 | Val Cat Acc: 0.474 | Time: 4.1s
+Epoch 12/30 | Train Loss: 3.2254 | Val Loss: 3.1928 | Val Gloss Acc: 0.049 | Val Cat Acc: 0.533 | Time: 4.1s
+Epoch 13/30 | Train Loss: 3.2057 | Val Loss: 3.1722 | Val Gloss Acc: 0.045 | Val Cat Acc: 0.505 | Time: 4.1s
+Epoch 14/30 | Train Loss: 3.1768 | Val Loss: 3.1386 | Val Gloss Acc: 0.052 | Val Cat Acc: 0.561 | Time: 4.0s
+Epoch 15/30 | Train Loss: 3.1556 | Val Loss: 3.1126 | Val Gloss Acc: 0.047 | Val Cat Acc: 0.535 | Time: 4.4s
+Epoch 16/30 | Train Loss: 3.1237 | Val Loss: 3.0891 | Val Gloss Acc: 0.042 | Val Cat Acc: 0.561 | Time: 4.1s
+Epoch 17/30 | Train Loss: 3.0928 | Val Loss: 3.0588 | Val Gloss Acc: 0.047 | Val Cat Acc: 0.627 | Time: 3.9s
+Epoch 18/30 | Train Loss: 3.0727 | Val Loss: 3.0454 | Val Gloss Acc: 0.047 | Val Cat Acc: 0.603 | Time: 4.1s
+Epoch 19/30 | Train Loss: 3.0484 | Val Loss: 3.0028 | Val Gloss Acc: 0.052 | Val Cat Acc: 0.634 | Time: 3.9s
+Epoch 20/30 | Train Loss: 3.0247 | Val Loss: 2.9719 | Val Gloss Acc: 0.054 | Val Cat Acc: 0.681 | Time: 4.0s
+Epoch 21/30 | Train Loss: 2.9993 | Val Loss: 2.9426 | Val Gloss Acc: 0.054 | Val Cat Acc: 0.758 | Time: 3.9s
+Epoch 22/30 | Train Loss: 2.9681 | Val Loss: 2.9268 | Val Gloss Acc: 0.047 | Val Cat Acc: 0.789 | Time: 3.9s
+Epoch 23/30 | Train Loss: 2.9415 | Val Loss: 2.8883 | Val Gloss Acc: 0.056 | Val Cat Acc: 0.791 | Time: 4.0s
+Epoch 24/30 | Train Loss: 2.9178 | Val Loss: 2.8599 | Val Gloss Acc: 0.052 | Val Cat Acc: 0.836 | Time: 4.1s
+Epoch 25/30 | Train Loss: 2.8876 | Val Loss: 2.8527 | Val Gloss Acc: 0.049 | Val Cat Acc: 0.772 | Time: 4.3s
+Epoch 26/30 | Train Loss: 2.8734 | Val Loss: 2.8076 | Val Gloss Acc: 0.056 | Val Cat Acc: 0.862 | Time: 4.2s
+Epoch 27/30 | Train Loss: 2.8394 | Val Loss: 2.7821 | Val Gloss Acc: 0.061 | Val Cat Acc: 0.857 | Time: 4.2s
+Epoch 28/30 | Train Loss: 2.8247 | Val Loss: 2.7635 | Val Gloss Acc: 0.063 | Val Cat Acc: 0.878 | Time: 4.0s
+Epoch 29/30 | Train Loss: 2.7876 | Val Loss: 2.7339 | Val Gloss Acc: 0.068 | Val Cat Acc: 0.885 | Time: 4.2s
+Epoch 30/30 | Train Loss: 2.7719 | Val Loss: 2.7129 | Val Gloss Acc: 0.063 | Val Cat Acc: 0.876 | Time: 3.9s
+------------------------------------------------------------
+Training completed!
