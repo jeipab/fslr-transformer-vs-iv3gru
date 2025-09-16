@@ -13,9 +13,11 @@ raw/
 # Data (ignore everything inside data/)
 data/*
 
-# But allow tracking of data/splitting/
+# Allow tracking in data
 !data/splitting/
 !data/splitting/**
+!data/labels/
+!data/labels/**
 
 # Other Data Formats
 *.npy
