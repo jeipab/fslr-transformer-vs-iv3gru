@@ -18,6 +18,7 @@ data/*
 !data/splitting/**
 !data/labels/
 !data/labels/**
+!data/__init__.py
 
 # Other Data Formats
 *.npy
@@ -35,4 +36,3 @@ data/*
 # Allow shared/ to be tracked despite global ignores
 !shared/
 !shared/**
-!data/splitting/** 
