@@ -55,24 +55,7 @@ def softmax(logits: np.ndarray, axis: int = -1) -> np.ndarray:
     return exp_logits / np.sum(exp_logits, axis=axis, keepdims=True)
 
 
-def simulate_predictions(
-    random_state: np.random.RandomState,
-    num_gloss_classes: int,
-    num_category_classes: int,
-) -> Tuple[np.ndarray, np.ndarray]:
-    """Generate simulated logits for gloss and category heads."""
-    gloss_logits = random_state.randn(num_gloss_classes).astype(np.float32)
-    cat_logits = random_state.randn(num_category_classes).astype(np.float32)
-    return gloss_logits, cat_logits
-
-
-def topk_from_logits(logits: np.ndarray, k: int) -> Tuple[np.ndarray, np.ndarray]:
-    """Return top-k indices and probabilities from logits vector."""
-    k = max(1, min(k, logits.shape[-1]))
-    probs = softmax(logits)
-    topk_idx = np.argpartition(-probs, kth=k - 1)[:k]
-    topk_sorted = topk_idx[np.argsort(-probs[topk_idx])]
-    return topk_sorted, probs[topk_sorted]
+# Simulation functions removed - using real model predictions only
 
 
 def detect_file_type(uploaded_file) -> str:

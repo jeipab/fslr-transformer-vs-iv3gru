@@ -27,12 +27,16 @@ MODEL_CONFIG = {
     'transformer': {
         'enabled': True,
         'checkpoint_path': 'trained_models/transformer/transformer_low-acc_09-15/SignTransformer_last.pt',
-        'model_type': 'transformer'
+        'model_type': 'transformer',
+        'num_gloss_classes': 105,  # From actual model configuration
+        'num_category_classes': 10  # From actual model configuration
     },
     'iv3_gru': {
-        'enabled': False,  # Set to True when IV3-GRU model is available
+        'enabled': False,  # No actual model available - only dummy.txt exists
         'checkpoint_path': 'trained_models/iv3_gru/model.pt',  # Placeholder path
-        'model_type': 'iv3_gru'
+        'model_type': 'iv3_gru',
+        'num_gloss_classes': 105,  # Would be from actual model if available
+        'num_category_classes': 10  # Would be from actual model if available
     }
 }
 
@@ -85,7 +89,7 @@ class ModelManager:
                 sys.path.insert(0, str(trained_models_path))
             
             # Import using the full module path
-            from predict import ModelPredictor
+            from trained_models.predict import ModelPredictor
             
             # Determine device
             device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -150,35 +154,22 @@ def make_real_prediction(npz_data: Dict[str, np.ndarray], model_name: str) -> Di
     Returns:
         Dictionary with prediction results
     """
-    model_manager = get_model_manager()
+    # Check if model is available
+    if not MODEL_CONFIG[model_name]['enabled']:
+        if model_name == 'iv3_gru':
+            st.toast("IV3-GRU model is not available. Using placeholder data.", icon="⚠️", duration=3000)
+            return IV3_GRU_DUMMY_DATA.copy()
+        else:
+            st.error(f"Model {model_name} is not available.")
+            return None
     
-    # Handle IV3-GRU dummy data when model is not available
-    if model_name == 'iv3_gru' and not MODEL_CONFIG['iv3_gru']['enabled']:
-        return IV3_GRU_DUMMY_DATA.copy()
+    model_manager = get_model_manager()
     
     # Get the model
     predictor = model_manager.get_model(model_name)
     if predictor is None:
-        # Fallback to dummy data if model loading failed
-        if model_name == 'iv3_gru':
-            return IV3_GRU_DUMMY_DATA.copy()
-        else:
-            # For transformer, try to use simulation as fallback
-            from streamlit_app.utils import simulate_predictions, topk_from_logits
-            rng = np.random.RandomState(42)
-            gloss_logits, cat_logits = simulate_predictions(rng, 105, 10)
-            
-            g_idx, g_prob = topk_from_logits(gloss_logits, 5)
-            c_idx, c_prob = topk_from_logits(cat_logits, 3)
-            
-            return {
-                'gloss_prediction': int(g_idx[0]),
-                'category_prediction': int(c_idx[0]),
-                'gloss_probability': float(g_prob[0]),
-                'category_probability': float(c_prob[0]),
-                'gloss_top5': [(int(g_idx[i]), float(g_prob[i])) for i in range(len(g_idx))],
-                'category_top3': [(int(c_idx[i]), float(c_prob[i])) for i in range(len(c_idx))]
-            }
+        st.error(f"Failed to load {model_name} model. Please check model files.")
+        return None
     
     try:
         # Create temporary NPZ file for prediction
@@ -213,8 +204,7 @@ def make_real_prediction(npz_data: Dict[str, np.ndarray], model_name: str) -> Di
     except Exception as e:
         # Show error as toast instead of st.error
         st.toast(f"Prediction failed: {str(e)}", icon="⚠️", duration=5000)
-        # Return dummy data as fallback
-        return IV3_GRU_DUMMY_DATA.copy()
+        return None
 
 
 def render_predictions_stage(cfg: Dict):
@@ -368,13 +358,13 @@ def render_npz_files_management(all_npz_files: List):
         st.markdown("")  # Empty space to align with size column
     
     with col3:
-        if st.button("Process All Pending", type="primary", help="Process all pending files"):
-            process_all_pending_npz_files(all_npz_files)
+        if st.button("Reset", help="Reset processed files back to pending", type="primary"):
+            reset_processed_files()
             st.rerun()
     
     with col4:
-        if st.button("Reset", help="Reset processed files back to pending", type="primary"):
-            reset_processed_files()
+        if st.button("Process All Pending", type="primary", help="Process all pending files"):
+            process_all_pending_npz_files(all_npz_files)
             st.rerun()
     
     with col5:
@@ -619,20 +609,24 @@ def render_batch_summary_tab(cfg: Dict):
         npz_data = st.session_state.processed_data[filename]
         prediction_results = make_real_prediction(npz_data, model_name)
         
-        # Format predictions with human-readable labels
-        model_manager = get_model_manager()
-        gloss_mapping, category_mapping = model_manager.get_label_mappings()
-        
-        gloss_id = prediction_results['gloss_prediction']
-        cat_id = prediction_results['category_prediction']
-        gloss_prob = prediction_results['gloss_probability']
-        cat_prob = prediction_results['category_probability']
-        
-        gloss_label = gloss_mapping.get(gloss_id, f'Unknown ({gloss_id})')
-        cat_label = category_mapping.get(cat_id, f'Unknown ({cat_id})')
-        
-        top_gloss = f"{gloss_label} ({gloss_prob*100:.1f}%)"
-        top_category = f"{cat_label} ({cat_prob*100:.1f}%)"
+        if prediction_results is None:
+            top_gloss = "Prediction Failed"
+            top_category = "Prediction Failed"
+        else:
+            # Format predictions with human-readable labels
+            model_manager = get_model_manager()
+            gloss_mapping, category_mapping = model_manager.get_label_mappings()
+            
+            gloss_id = prediction_results['gloss_prediction']
+            cat_id = prediction_results['category_prediction']
+            gloss_prob = prediction_results['gloss_probability']
+            cat_prob = prediction_results['category_probability']
+            
+            gloss_label = gloss_mapping.get(gloss_id, f'Unknown ({gloss_id})')
+            cat_label = category_mapping.get(cat_id, f'Unknown ({cat_id})')
+            
+            top_gloss = f"{gloss_label} ({gloss_prob*100:.1f}%)"
+            top_category = f"{cat_label} ({cat_prob*100:.1f}%)"
         
         # Extract occlusion status for summary table
         occlusion_flag = extract_occlusion_flag(npz_data)
