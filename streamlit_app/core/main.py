@@ -3,10 +3,10 @@
 from typing import Dict
 import streamlit as st
 
-from streamlit_app.components import set_page, render_sidebar, render_main_header
-from streamlit_app.upload_manager import initialize_upload_session_state, render_upload_stage
-from streamlit_app.preprocessing_manager import render_preprocessing_stage
-from streamlit_app.prediction_manager import render_predictions_stage, cleanup_on_app_exit
+from ..components import set_page, render_sidebar, render_main_header
+from ..manager.upload_manager import initialize_upload_session_state, render_upload_stage
+from ..manager.preprocessing_manager import render_preprocessing_stage
+from ..manager.prediction_manager import render_predictions_stage, cleanup_on_app_exit
 
 
 def main() -> None:

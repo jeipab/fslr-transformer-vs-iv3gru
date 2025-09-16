@@ -130,7 +130,7 @@ def render_sequence_overview(npz_dict: Dict, sequence_length: int) -> Tuple[np.n
         if issues:
             st.warning("\n".join(f"- {m}" for m in issues))
 
-    from streamlit_app.utils import pad_or_trim
+    from .utils import pad_or_trim
     X_pad = pad_or_trim(X_raw, sequence_length)
     return X_pad, mask, meta_parsed
 

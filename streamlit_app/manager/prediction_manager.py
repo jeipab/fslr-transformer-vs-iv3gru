@@ -13,42 +13,16 @@ import sys
 project_root = Path(__file__).parent.parent
 sys.path.insert(0, str(project_root))
 
-from streamlit_app.utils import detect_file_type, check_npz_compatibility, create_npz_bytes, extract_occlusion_flag, interpret_occlusion_flag
-from streamlit_app.visualization import (
+from ..components.utils import detect_file_type, check_npz_compatibility, create_npz_bytes, extract_occlusion_flag, interpret_occlusion_flag
+from ..components.visualization import (
     render_sequence_overview, render_animated_keypoints, 
     render_feature_charts, render_topk_table
 )
-from streamlit_app.components import render_predictions_section
-from streamlit_app.upload_manager import remove_file_from_stage
+from ..components.components import render_predictions_section
+from .upload_manager import remove_file_from_stage
 
-# ===== MODEL CONFIGURATION =====
-# Configure which models to use for predictions
-MODEL_CONFIG = {
-    'transformer': {
-        'enabled': True,
-        'checkpoint_path': 'trained_models/transformer/transformer_100_epoch/SignTransformer_best.pt',
-        'model_type': 'transformer',
-        'num_gloss_classes': 105,  # From actual model configuration
-        'num_category_classes': 10  # From actual model configuration
-    },
-    'iv3_gru': {
-        'enabled': True,
-        'checkpoint_path': 'trained_models/iv3_gru/iv3gru_100_epochs_09-16/InceptionV3GRU_best.pt',
-        'model_type': 'iv3_gru',
-        'num_gloss_classes': 105,  # From actual model configuration
-        'num_category_classes': 10  # From actual model configuration
-    }
-}
-
-# Dummy prediction data for IV3-GRU when model is not available
-IV3_GRU_DUMMY_DATA = {
-    'gloss_prediction': 4,  # HOW ARE YOU
-    'category_prediction': 0,  # GREETING
-    'gloss_probability': 0.882,
-    'category_probability': 0.774,
-    'gloss_top5': [(4, 0.882), (18, 0.074), (17, 0.013), (85, 0.007), (6, 0.006)],
-    'category_top3': [(0, 0.774), (8, 0.160), (1, 0.061)]
-}
+# Import configuration from core module
+from ..core.config import MODEL_CONFIG, DUMMY_DATA
 
 
 class ModelManager:
@@ -89,7 +63,7 @@ class ModelManager:
                 sys.path.insert(0, str(trained_models_path))
             
             # Import using the full module path
-            from evaluation.prediction.predict import ModelPredictor
+            from evaluation import ModelPredictor
             
             # Determine device
             device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -119,7 +93,7 @@ class ModelManager:
                 if str(project_root) not in sys.path:
                     sys.path.insert(0, str(project_root))
                 
-                from data.labels.label_mapping import load_label_mappings
+                from data import load_label_mappings
                 self._label_mappings = load_label_mappings()
             except Exception as e:
                 st.toast(f"Could not load label mappings: {str(e)}", icon="⚠️", duration=3000)
@@ -158,7 +132,7 @@ def make_real_prediction(npz_data: Dict[str, np.ndarray], model_name: str) -> Di
     if not MODEL_CONFIG[model_name]['enabled']:
         if model_name == 'iv3_gru':
             st.toast("IV3-GRU model is not available. Using placeholder data.", icon="⚠️", duration=3000)
-            return IV3_GRU_DUMMY_DATA.copy()
+            return DUMMY_DATA['iv3_gru'].copy()
         else:
             st.error(f"Model {model_name} is not available.")
             return None
@@ -232,7 +206,7 @@ def render_predictions_stage(cfg: Dict):
         if back_destination == "preprocessing":
             if st.button("Upload New", help="Upload new files", type="primary"):
                 # Clear all current files and go to upload
-                from streamlit_app.upload_manager import clear_all_files
+                from .upload_manager import clear_all_files
                 clear_all_files()
                 st.session_state.workflow_stage = 'upload'
                 st.rerun()
@@ -777,7 +751,7 @@ def reset_processed_files():
             # Handle video files - restore original data and move back to video_files
             if filename in st.session_state.original_file_data:
                 # Recreate the original file object from stored data
-                from streamlit_app.utils import TempUploadedFile
+                from ..components.utils import TempUploadedFile
                 original_data = st.session_state.original_file_data[filename]
                 
                 # Create a new file object with the original data
@@ -884,7 +858,7 @@ def reset_processed_files():
 def clear_all_predictions_files():
     """Clear all files from predictions stage."""
     # Clear all files from all stages
-    from streamlit_app.upload_manager import clear_all_files
+    from .upload_manager import clear_all_files
     clear_all_files()
     
     # Clean up models

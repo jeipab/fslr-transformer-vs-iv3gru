@@ -6,12 +6,8 @@ from typing import Dict
 
 def set_page() -> None:
     """Configure Streamlit page settings and global styles."""
-    st.set_page_config(
-        page_title="FSLR Demo",
-        page_icon=None,
-        layout="wide",
-        initial_sidebar_state="expanded",
-    )
+    from ..core.config import PAGE_CONFIG
+    st.set_page_config(**PAGE_CONFIG)
     
     # Consolidated CSS for better styling and layout
     st.markdown("""
@@ -346,7 +342,7 @@ def render_sidebar() -> Dict:
 
 def render_model_status():
     """Render model availability status in sidebar."""
-    from streamlit_app.prediction_manager import MODEL_CONFIG
+    from ..manager.prediction_manager import MODEL_CONFIG
     
     # Show warning if IV3-GRU model is unavailable
     if not MODEL_CONFIG['iv3_gru']['enabled']:
@@ -355,7 +351,7 @@ def render_model_status():
 
 def get_available_models():
     """Get list of available models for selection."""
-    from streamlit_app.prediction_manager import MODEL_CONFIG
+    from ..manager.prediction_manager import MODEL_CONFIG
     
     available_models = []
     if MODEL_CONFIG['transformer']['enabled']:
@@ -407,7 +403,7 @@ def render_predictions_section(cfg: Dict, npz_data: Dict = None, filename: str =
     
     # Generate real predictions if NPZ data is available
     if npz_data is not None:
-        from streamlit_app.prediction_manager import make_real_prediction, get_model_manager
+        from ..manager.prediction_manager import make_real_prediction, get_model_manager
         
         model_name = 'transformer' if cfg['model_choice'] == 'SignTransformer' else 'iv3_gru'
         
@@ -437,7 +433,7 @@ def render_predictions_section(cfg: Dict, npz_data: Dict = None, filename: str =
         pred_col1, pred_col2 = st.columns(2)
         
         with pred_col1:
-            from streamlit_app.visualization import render_topk_table_with_labels
+            from .visualization import render_topk_table_with_labels
             render_topk_table_with_labels(gloss_top5, "gloss", "Top Gloss Predictions")
         
         with pred_col2:
