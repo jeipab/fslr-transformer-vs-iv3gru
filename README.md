@@ -1,43 +1,61 @@
-# Filipino Sign Language Recognition
+# Filipino Sign Language Recognition (FSLR)
 
 Multi-Head Attention Transformer for Filipino Sign Language Recognition.
 
-## Structure
+## 🚀 Quick Start
 
-- `preprocessing/` - Keypoint extraction and occlusion handling
-- `models/` - Transformer and IV3-GRU architectures
-- `training/` - Training scripts and evaluation
-- `streamlit_app/` - Interactive demo application
-- `notebooks/` - Jupyter notebooks for experiments
-- `trained_models/` - Model checkpoints and prediction tools
-
-## Setup
+### Setup
 
 **Requirements**: Python 3.9-3.11
 
 ```bash
+# Clone the repository
 git clone https://github.com/jeipab/fslr-transformer-vs-iv3gru.git
 cd fslr-transformer-vs-iv3gru
+
+# Create and activate virtual environment
+python -m venv .venv
+
+# Windows PowerShell
+.venv\Scripts\Activate.ps1
+
+# Windows Command Prompt
+.venv\Scripts\activate.bat
+
+# Linux/Mac
+source .venv/bin/activate
+
+# Install dependencies
 pip install -r requirements.txt
 pip install pyarrow  # optional, for parquet inspection
 ```
 
-## Using Trained Models
+### Interactive Demo
+
+```bash
+# Run the Streamlit application
+streamlit run run_app.py
+
+# Alternative: Run from streamlit_app directory
+cd streamlit_app && streamlit run main.py
+```
+
+**Features**: Animated keypoint visualization, feature analysis, real-time predictions, support for both `.npz` files and raw videos.
 
 ### Quick Prediction
 
 ```bash
-# Activate virtual environment
-.venv\Scripts\Activate.ps1
-
-# Navigate to trained_models directory
-cd trained_models
-
 # Predict from NPZ file
-python predict.py --model transformer --checkpoint transformer/transformer_low-acc_09-15/SignTransformer_best.pt --input "../data/processed/transformer_only/clip_0089_how are you.npz"
+python -m evaluation.prediction.predict \
+  --model transformer \
+  --checkpoint trained_models/transformer/transformer_100_epoch/SignTransformer_best.pt \
+  --input data/processed/transformer_only/clip_0089_how\ are\ you.npz
 
 # Predict from video file
-python predict.py --model transformer --checkpoint transformer/transformer_low-acc_09-15/SignTransformer_best.pt --input "../data/raw/videos/new_sign.mp4"
+python -m evaluation.prediction.predict \
+  --model transformer \
+  --checkpoint trained_models/transformer/transformer_100_epoch/SignTransformer_best.pt \
+  --input data/raw/videos/new_sign.mp4
 ```
 
 **Output Example:**
@@ -47,83 +65,48 @@ Gloss: HOW ARE YOU (4) (confidence: 0.882)
 Category: GREETING (0) (confidence: 0.774)
 ```
 
-For detailed instructions, see the [Prediction Guide](trained_models/PREDICTION_GUIDE.md).
+## 📁 Project Structure
 
-## Demo
-
-### Virtual Environment (Optional)
-
-```bash
-# Create and activate virtual environment
-python -m venv .venv
-.venv\Scripts\Activate.ps1  # Windows PowerShell
-# or
-source .venv/bin/activate   # Linux/Mac
+```
+fslr-transformer-vs-iv3gru/
+├── 📊 data/                    # Data management and label mapping
+├── 🔧 preprocessing/           # Video preprocessing and feature extraction
+├── 🧠 models/                  # Neural network architectures
+├── 🏋️ training/               # Model training and evaluation
+├── 📈 evaluation/              # Model validation and prediction
+├── 🖥️ streamlit_app/          # Interactive web application
+├── 📓 notebooks/               # Jupyter notebooks for experiments
+├── 💾 trained_models/          # Model checkpoints and weights
+└── 📚 shared/                  # Shared resources and documentation
 ```
 
-### Run Application
+## 🔄 Workflow
+
+### 1. Preprocessing
+
+**Multi-Process (Recommended - 30-50x faster):**
 
 ```bash
-# Option 1: From root directory
-streamlit run run_app.py
-
-# Option 2: From streamlit_app directory
-cd streamlit_app
-streamlit run main.py
-```
-
-**Features**:
-
-- Animated keypoint visualization
-- Feature analysis
-- Simulated predictions
-- Support for both `.npz` files and raw videos
-
-**Port conflict**: `streamlit run run_app.py --server.port 8502`
-
-## Preprocessing
-
-### Multi-Process (Recommended)
-
-**30-50x faster** for large datasets:
-
-```bash
-python preprocessing/multi_preprocess.py /path/to/videos /path/to/out_dir \
+python -m preprocessing.core.multi_preprocess \
+  data/raw/videos data/processed \
   --write-keypoints --write-iv3-features \
   --workers 10 --batch-size 64 --target-fps 15 --disable-parquet
 ```
 
-**Features**: Batched GPU inference, multi-process parallelization, configurable workers
-
-### Sequential (Original)
-
-For small datasets or single videos:
+**Sequential (For small datasets):**
 
 ```bash
-# Single video
-python preprocessing/preprocess.py --write-keypoints --write-iv3-features \
-  /path/to/video.mp4 /path/to/out_dir
-
-# Directory
-python -m preprocessing.preprocess /path/to/videos /path/to/out_dir \
-  --target-fps 30 --write-keypoints --write-iv3-features
+python -m preprocessing.core.preprocess \
+  data/raw/videos data/processed \
+  --write-keypoints --write-iv3-features \
+  --target-fps 30
 ```
 
-**Output**: `.npz` files with `X [T,156]`, `X2048 [T,2048]`, `mask [T,78]`, `timestamps_ms [T]`, `meta`
+**Output**: `.npz` files with keypoints `X [T,156]`, features `X2048 [T,2048]`, visibility `mask [T,78]`, timestamps, and metadata.
 
-**Data Structure**:
+### 2. Training
 
-```
-data/processed/
-  keypoints_train/
-  keypoints_val/
-  train_labels.csv  # file,gloss,cat,occluded
-  val_labels.csv
-```
-
-## Training
-
-### Transformer (Keypoints)
+**Transformer Model (Keypoints):**
 
 ```bash
 python -m training.train \
@@ -133,10 +116,10 @@ python -m training.train \
   --labels-train-csv data/processed/train_labels.csv \
   --labels-val-csv data/processed/val_labels.csv \
   --num-gloss 105 --num-cat 10 \
-  --epochs 30 --batch-size 32 --output-dir data/processed
+  --epochs 30 --batch-size 32 --amp
 ```
 
-### IV3-GRU (Features)
+**IV3-GRU Model (Features):**
 
 ```bash
 python -m training.train \
@@ -147,46 +130,74 @@ python -m training.train \
   --labels-val-csv data/processed/val_labels.csv \
   --feature-key X2048 \
   --num-gloss 105 --num-cat 10 \
-  --epochs 30 --batch-size 32 --output-dir data/processed
+  --epochs 30 --batch-size 32 --amp
 ```
 
-**Performance**: Add `--amp`, `--num-workers N`, `--pin-memory` for faster training
+### 3. Validation
 
-## Validation
-
-### Data Validation
+**Data Validation:**
 
 ```bash
-python -m preprocessing.validate_npz data/processed/keypoints_train
-python -m preprocessing.validate_npz data/processed/keypoints_val --require-x2048
+python -m preprocessing.utils.validate_npz data/processed/keypoints_train
+python -m preprocessing.utils.validate_npz data/processed/keypoints_val --require-x2048
 ```
 
-### Smoke Tests
+**Model Validation:**
+
+```bash
+python -m evaluation.validation.validate \
+  --model transformer \
+  --checkpoint trained_models/transformer/transformer_100_epoch/SignTransformer_best.pt \
+  --data-dir data/processed
+```
+
+**Smoke Tests:**
 
 ```bash
 python -m training.train --model transformer --smoke-test --num-gloss 105 --num-cat 10
-python -m training.train --model iv3_gru --smoke-test --num-gloss 105 --num-cat 10 --no-pretrained-backbone
+python -m training.train --model iv3_gru --smoke-test --num-gloss 105 --num-cat 10
 ```
 
-## Guides
+## 📖 Documentation
 
-### Prediction & Usage
+### 🎯 Prediction & Usage
 
-- [Prediction Guide](trained_models/PREDICTION_GUIDE.md) - How to use trained models for predictions
-- [Label Mapping Table](trained_models/LABEL_MAPPING_TABLE.md) - Complete list of signs and categories
+- **[Prediction Guide](evaluation/prediction/PREDICTION_GUIDE.md)** - Using trained models for predictions
+- **[Validation Guide](evaluation/validation/VALIDATION_GUIDE.md)** - Model validation and evaluation
+- **[Label Mapping Table](data/labels/LABEL_MAPPING_TABLE.md)** - Complete list of signs and categories
+- **[Trained Models Guide](trained_models/TRAINED_MODEL_GUIDE.md)** - Model checkpoints and usage
 
-### Development & Training
+### 🔧 Development & Training
 
-- [Preprocessing Guide](preprocessing/PREPROCESS_GUIDE.md) - Video to NPZ conversion
-- [Multi-Process Guide](preprocessing/MULTI_PREPROCESS_GUIDE.md) - 30-50x faster preprocessing
-- [Model Guide](models/MODEL_GUIDE.md) - Architecture details and usage
-- [Training Guide](training/TRAINING_GUIDE.md) - Model training instructions
-- [Data Guide](data/DATA_GUIDE.md) - File formats and structures
-- [Tool Guide](streamlit_app/TOOL_GUIDE.md) - Interactive visualization app
+- **[Data Guide](data/DATA_GUIDE.md)** - File formats and data structures
+- **[Preprocessing Guide](preprocessing/docs/PREPROCESS_GUIDE.MD)** - Video to NPZ conversion
+- **[Multi-Process Guide](preprocessing/docs/MULTI_PREPROCESS_GUIDE.md)** - 30-50x faster preprocessing
+- **[Model Guide](models/MODEL_GUIDE.md)** - Architecture details and usage
+- **[Training Guide](training/TRAINING_GUIDE.md)** - Model training instructions
+- **[Tool Guide](streamlit_app/TOOL_GUIDE.md)** - Interactive visualization app
+- **[Sharing Guide](shared/SHARING_GUIDE.md)** - Collaboration and sharing resources
 
-## Troubleshooting
+## 🛠️ Troubleshooting
 
-- **File not found**: CSV `file` values must match `.npz` basenames
+### Common Issues
+
+- **File not found**: CSV `file` values must match `.npz` basenames exactly
 - **Wrong shapes**: Transformer needs `X [T,156]`; IV3-GRU needs `X2048 [T,2048]`
 - **Label ranges**: `gloss` in `[0, num_gloss-1]`, `cat` in `[0, num_cat-1]`
-- **CPU vs GPU**: Auto-detects CUDA, CPU fallback available
+- **Port conflicts**: Use `streamlit run run_app.py --server.port 8502`
+- **CUDA issues**: Auto-detects CUDA, CPU fallback available
+
+### Performance Tips
+
+- Use `--amp` for automatic mixed precision training
+- Add `--num-workers N` for faster data loading
+- Use `--pin-memory` for GPU training
+- Enable `--disable-parquet` for faster preprocessing
+
+## 🤝 Contributing
+
+This project supports Filipino Sign Language Recognition research. For collaboration guidelines, see the [Sharing Guide](shared/SHARING_GUIDE.md).
+
+## 📄 License
+
+This project is part of academic research in Filipino Sign Language Recognition.
