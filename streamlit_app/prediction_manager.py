@@ -89,7 +89,7 @@ class ModelManager:
                 sys.path.insert(0, str(trained_models_path))
             
             # Import using the full module path
-            from trained_models.predict import ModelPredictor
+            from evaluation.prediction.predict import ModelPredictor
             
             # Determine device
             device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
