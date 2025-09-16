@@ -176,8 +176,8 @@ python training/train.py \
 
 | Parameter | Description          | Default | Notes                               |
 | --------- | -------------------- | ------- | ----------------------------------- |
-| `--alpha` | Gloss loss weight    | `0.7`   | Higher = focus on gloss accuracy    |
-| `--beta`  | Category loss weight | `0.3`   | Higher = focus on category accuracy |
+| `--alpha` | Gloss loss weight    | `0.5`   | Higher = focus on gloss accuracy    |
+| `--beta`  | Category loss weight | `0.5`   | Higher = focus on category accuracy |
 
 ## Advanced Training Examples
 
