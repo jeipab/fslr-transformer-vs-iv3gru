@@ -20,7 +20,7 @@ import os
 import pandas as pd
 import json
 
-from preprocessing.keypoints_features import (
+from ..extractors.keypoints_features import (
     extract_keypoints_from_frame,
     interpolate_gaps,
     POSE_UPPER_25,

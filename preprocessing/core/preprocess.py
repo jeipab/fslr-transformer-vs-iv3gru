@@ -31,9 +31,9 @@ import mediapipe as mp
 if __package__ in (None, ""):
     sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 
-from preprocessing.iv3_features import extract_iv3_features  # InceptionV3 (torchvision) feature extractor
-from preprocessing.occlusion_detection import compute_occlusion_flag_from_keypoints
-from preprocessing.keypoints_features import (
+from ..extractors.iv3_features import extract_iv3_features  # InceptionV3 (torchvision) feature extractor
+from ..core.occlusion_detection import compute_occlusion_flag_from_keypoints
+from ..extractors.keypoints_features import (
     POSE_UPPER_25,
     N_HAND,
     FACEMESH_11,
