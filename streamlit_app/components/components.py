@@ -172,6 +172,63 @@ def set_page() -> None:
         display: none !important;
     }
     
+    /* ===== SIDEBAR STYLING ===== */
+    /* Clean sidebar styling */
+    .css-1d391kg {
+        background-color: #ffffff !important;
+    }
+    
+    /* Sidebar selectbox styling */
+    .stSelectbox > div > div {
+        background-color: #ffffff !important;
+        border: 1px solid #e1e5e9 !important;
+        border-radius: 6px !important;
+    }
+    
+    .stSelectbox > div > div:hover {
+        border-color: #3498db !important;
+    }
+    
+    .stSelectbox > div > div:focus-within {
+        border-color: #3498db !important;
+        box-shadow: 0 0 0 2px rgba(52, 152, 219, 0.1) !important;
+    }
+    
+    /* Fix dropdown text visibility - make it black */
+    .stSelectbox > div > div > div {
+        color: #000000 !important;
+    }
+    
+    .stSelectbox > div > div > div > div {
+        color: #000000 !important;
+    }
+    
+    /* Fix selected option text - make it black */
+    .stSelectbox [data-baseweb="select"] {
+        color: #000000 !important;
+    }
+    
+    .stSelectbox [data-baseweb="select"] > div {
+        color: #000000 !important;
+    }
+    
+    /* Additional selectors for dropdown text */
+    .stSelectbox div[data-baseweb="select"] {
+        color: #000000 !important;
+    }
+    
+    .stSelectbox div[data-baseweb="select"] span {
+        color: #000000 !important;
+    }
+    
+    /* Sidebar label styling */
+    .stSelectbox label {
+        color: #e2e8f0 !important;
+        font-weight: 500 !important;
+        font-size: 1rem !important;
+        margin-bottom: 0.5rem !important;
+    }
+    
     /* ===== CUSTOM RESPONSIVE LAYOUT ===== */
     /* Force side-by-side layout for visualization columns at 50%+ screen width */
     @media (min-width: 50vw) {
@@ -285,34 +342,26 @@ def set_page() -> None:
 
 def render_sidebar() -> Dict:
     """Render sidebar controls and return configuration dict."""
-    # Enhanced header with better styling
+    # Clean, elegant header
     st.sidebar.markdown("""
-    <div style='text-align: center; padding: 1rem 0; border-bottom: 2px solid #1f77b4; margin-bottom: 1.5rem;'>
-        <h1 style='color: #1f77b4; font-size: 2rem; font-weight: bold; margin: 0;'>FSLR Demo</h1>
-        <p style='color: #666; font-size: 0.9rem; margin: 0.5rem 0 0 0;'>Filipino Sign Language Recognition</p>
+    <div style='text-align: center; padding: 1rem 0 1rem 0; border-bottom: 1px solid #4a5568; margin-bottom: 1rem;'>
+        <h1 style='color: #1f77b4; font-size: 2.8rem; font-weight: bold; margin: 0;'>FSLR Demo</h1>
+        <p style='color: #a0aec0; font-size: 1rem; margin: 0.5rem 0 0 0; font-weight: 400;'>Filipino Sign Language Recognition</p>
     </div>
     """, unsafe_allow_html=True)
     
-    # Data Input Section with enhanced styling
+    # Model Status Section - Clean and minimal
     st.sidebar.markdown("""
-    <div style='background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 1rem; border-radius: 8px; margin-bottom: 1.5rem;'>
-        <h3 style='color: white; margin: 0 0 0.5rem 0; font-size: 1.1rem;'>📁 Data Input</h3>
-        <p style='color: rgba(255,255,255,0.9); margin: 0; font-size: 0.9rem;'>Upload NPZ files or video files for processing</p>
-    </div>
-    """, unsafe_allow_html=True)
-    
-    # Model Status Section with enhanced styling
-    st.sidebar.markdown("""
-    <div style='background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%); padding: 1rem; border-radius: 8px; margin-bottom: 1.5rem;'>
-        <h3 style='color: white; margin: 0 0 0.5rem 0; font-size: 1.1rem;'>🤖 Model Status</h3>
+    <div style='margin-bottom: 0.1rem;'>
+        <h3 style='color: #e2e8f0; margin: 0 0 0.1rem 0; font-size: 1.1rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px;'>Model Status</h3>
     </div>
     """, unsafe_allow_html=True)
     render_model_status()
     
-    # Model Configuration Section with enhanced styling
+    # Model Configuration Section - Clean and minimal
     st.sidebar.markdown("""
-    <div style='background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%); padding: 1rem; border-radius: 8px; margin-bottom: 1.5rem;'>
-        <h3 style='color: white; margin: 0 0 0.5rem 0; font-size: 1.1rem;'>⚙️ Model Configuration</h3>
+    <div style='margin: 1.5rem 0 0.1rem 0;'>
+        <h3 style='color: #e2e8f0; margin: 0 0 0.1rem 0; font-size: 1.1rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px;'>Configuration</h3>
     </div>
     """, unsafe_allow_html=True)
     
@@ -325,22 +374,19 @@ def render_sidebar() -> Dict:
             key="model_architecture_select"
         )
     
-    # Add some spacing
-    st.sidebar.markdown("<br>", unsafe_allow_html=True)
-    
-    # About Section with enhanced styling
+    # About Section - Clean and minimal
     st.sidebar.markdown("""
-    <div style='background: linear-gradient(135deg, #fa709a 0%, #fee140 100%); padding: 1rem; border-radius: 8px; margin-top: 1rem;'>
-        <h3 style='color: white; margin: 0 0 0.5rem 0; font-size: 1.1rem;'>ℹ️ About</h3>
+    <div style='margin: 1.5rem 0 0.1rem 0;'>
+        <h3 style='color: #e2e8f0; margin: 0 0 0.1rem 0; font-size: 1.1rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px;'>About</h3>
     </div>
     """, unsafe_allow_html=True)
     
     st.sidebar.markdown("""
-    <div style='background: rgba(255,255,255,0.1); padding: 1rem; border-radius: 8px; margin-top: 0.5rem;'>
-        <p style='color: #333; margin: 0; font-size: 0.9rem; line-height: 1.4;'>
+    <div style='background: rgba(255, 255, 255, 0.05); padding: 1.25rem; border-radius: 6px; border-left: 3px solid #3498db; margin-bottom: 1rem;'>
+        <p style='color: #e2e8f0; margin: 0 0 0.75rem 0; font-size: 1rem; line-height: 1.5; font-weight: 400;'>
         This demo processes Filipino Sign Language sequences and provides:
         </p>
-        <ul style='color: #333; font-size: 0.85rem; margin: 0.5rem 0 0 0; padding-left: 1rem;'>
+        <ul style='color: #a0aec0; font-size: 0.95rem; margin: 0; padding-left: 1.25rem; line-height: 1.6;'>
             <li>Automatic file processing</li>
             <li>Data validation & visualization</li>
             <li>Feature analysis over time</li>
@@ -366,51 +412,51 @@ def render_model_status():
     transformer_available = MODEL_CONFIG['transformer']['enabled']
     iv3_gru_available = MODEL_CONFIG['iv3_gru']['enabled']
     
-    # Create styled status display
+    # Create clean, elegant status display
     if transformer_available and iv3_gru_available:
         st.sidebar.markdown("""
-        <div style='background: rgba(46, 160, 67, 0.1); border: 1px solid #2ea043; border-radius: 6px; padding: 0.75rem; margin-bottom: 0.5rem;'>
-            <div style='display: flex; align-items: center; color: #2ea043; font-weight: 500;'>
-                <span style='font-size: 1.2rem; margin-right: 0.5rem;'>✅</span>
-                <span>Both models available</span>
+        <div style='background: rgba(16, 185, 129, 0.1); border: 1px solid #10b981; border-radius: 8px; padding: 1rem; margin-bottom: 0.25rem;'>
+            <div style='display: flex; align-items: center; color: #ffffff; font-weight: 500; margin-bottom: 0.5rem;'>
+                <div style='width: 8px; height: 8px; background: #10b981; border-radius: 50%; margin-right: 0.75rem;'></div>
+                <span style='font-size: 1rem;'>All Models Ready</span>
             </div>
-            <div style='font-size: 0.8rem; color: #666; margin-top: 0.25rem;'>
+            <div style='font-size: 0.9rem; color: #a0aec0; line-height: 1.4;'>
                 SignTransformer & InceptionV3+GRU
             </div>
         </div>
         """, unsafe_allow_html=True)
     elif transformer_available:
         st.sidebar.markdown("""
-        <div style='background: rgba(255, 193, 7, 0.1); border: 1px solid #ffc107; border-radius: 6px; padding: 0.75rem; margin-bottom: 0.5rem;'>
-            <div style='display: flex; align-items: center; color: #856404; font-weight: 500;'>
-                <span style='font-size: 1.2rem; margin-right: 0.5rem;'>⚠️</span>
-                <span>Only Transformer available</span>
+        <div style='background: rgba(245, 158, 11, 0.1); border: 1px solid #f59e0b; border-radius: 8px; padding: 1rem; margin-bottom: 0.25rem;'>
+            <div style='display: flex; align-items: center; color: #ffffff; font-weight: 500; margin-bottom: 0.5rem;'>
+                <div style='width: 8px; height: 8px; background: #f59e0b; border-radius: 50%; margin-right: 0.75rem;'></div>
+                <span style='font-size: 1rem;'>Partial Availability</span>
             </div>
-            <div style='font-size: 0.8rem; color: #666; margin-top: 0.25rem;'>
+            <div style='font-size: 0.9rem; color: #a0aec0; line-height: 1.4;'>
                 SignTransformer model only
             </div>
         </div>
         """, unsafe_allow_html=True)
     elif iv3_gru_available:
         st.sidebar.markdown("""
-        <div style='background: rgba(255, 193, 7, 0.1); border: 1px solid #ffc107; border-radius: 6px; padding: 0.75rem; margin-bottom: 0.5rem;'>
-            <div style='display: flex; align-items: center; color: #856404; font-weight: 500;'>
-                <span style='font-size: 1.2rem; margin-right: 0.5rem;'>⚠️</span>
-                <span>Only IV3-GRU available</span>
+        <div style='background: rgba(245, 158, 11, 0.1); border: 1px solid #f59e0b; border-radius: 8px; padding: 1rem; margin-bottom: 0.25rem;'>
+            <div style='display: flex; align-items: center; color: #ffffff; font-weight: 500; margin-bottom: 0.5rem;'>
+                <div style='width: 8px; height: 8px; background: #f59e0b; border-radius: 50%; margin-right: 0.75rem;'></div>
+                <span style='font-size: 1rem;'>Partial Availability</span>
             </div>
-            <div style='font-size: 0.8rem; color: #666; margin-top: 0.25rem;'>
+            <div style='font-size: 0.9rem; color: #a0aec0; line-height: 1.4;'>
                 InceptionV3+GRU model only
             </div>
         </div>
         """, unsafe_allow_html=True)
     else:
         st.sidebar.markdown("""
-        <div style='background: rgba(220, 53, 69, 0.1); border: 1px solid #dc3545; border-radius: 6px; padding: 0.75rem; margin-bottom: 0.5rem;'>
-            <div style='display: flex; align-items: center; color: #dc3545; font-weight: 500;'>
-                <span style='font-size: 1.2rem; margin-right: 0.5rem;'>❌</span>
-                <span>No models available</span>
+        <div style='background: rgba(239, 68, 68, 0.1); border: 1px solid #ef4444; border-radius: 8px; padding: 1rem; margin-bottom: 0.25rem;'>
+            <div style='display: flex; align-items: center; color: #ffffff; font-weight: 500; margin-bottom: 0.5rem;'>
+                <div style='width: 8px; height: 8px; background: #ef4444; border-radius: 50%; margin-right: 0.75rem;'></div>
+                <span style='font-size: 1rem;'>No Models Available</span>
             </div>
-            <div style='font-size: 0.8rem; color: #666; margin-top: 0.25rem;'>
+            <div style='font-size: 0.9rem; color: #a0aec0; line-height: 1.4;'>
                 Please check model configuration
             </div>
         </div>
