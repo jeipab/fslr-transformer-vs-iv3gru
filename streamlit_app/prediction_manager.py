@@ -32,11 +32,11 @@ MODEL_CONFIG = {
         'num_category_classes': 10  # From actual model configuration
     },
     'iv3_gru': {
-        'enabled': False,  # No actual model available - only dummy.txt exists
-        'checkpoint_path': 'trained_models/iv3_gru/model.pt',  # Placeholder path
+        'enabled': True,
+        'checkpoint_path': 'trained_models/iv3_gru/iv3gru_100_epochs_09-16/InceptionV3GRU_best.pt',
         'model_type': 'iv3_gru',
-        'num_gloss_classes': 105,  # Would be from actual model if available
-        'num_category_classes': 10  # Would be from actual model if available
+        'num_gloss_classes': 105,  # From actual model configuration
+        'num_category_classes': 10  # From actual model configuration
     }
 }
 
