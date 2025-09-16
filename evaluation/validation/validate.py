@@ -38,8 +38,7 @@ from tqdm import tqdm
 project_root = Path(__file__).parent.parent
 sys.path.insert(0, str(project_root))
 
-from models.transformer import SignTransformer
-from models.iv3_gru import InceptionV3GRU
+from models import SignTransformer, InceptionV3GRU
 from label_mapping import load_label_mappings, format_prediction_results
 
 # Suppress warnings for cleaner output

@@ -53,12 +53,13 @@ from pathlib import Path
 project_root = Path(__file__).parent.parent
 sys.path.insert(0, str(project_root))
 
-from models.transformer import SignTransformer
-from models.iv3_gru import InceptionV3GRU
-from data.labels.label_mapping import format_prediction_results, print_prediction_summary
+from models import SignTransformer, InceptionV3GRU
+from data import format_prediction_results, print_prediction_summary
 try:
-    from preprocessing.keypoints_features import create_models, close_models, extract_keypoints_from_frame, interpolate_gaps
-    from preprocessing.iv3_features import extract_iv3_features
+    from preprocessing import (
+        create_models, close_models, extract_keypoints_from_frame, 
+        interpolate_gaps, extract_iv3_features
+    )
     PREPROCESSING_AVAILABLE = True
 except ImportError as e:
     print(f"Warning: Preprocessing modules not available: {e}")
