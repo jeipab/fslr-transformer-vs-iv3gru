@@ -17,8 +17,13 @@ data/*
 !data/splitting/
 !data/splitting/**
 !data/labels/
-!data/labels/**
 !data/__init__.py
+
+# Exclude specific files/directories within allowed data directories
+data/labels/__pycache__/
+data/labels/**/*.pyc
+data/splitting/__pycache__/
+data/splitting/**/*.pyc
 
 # Other Data Formats
 *.npy
