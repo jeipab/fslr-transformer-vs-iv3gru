@@ -2,8 +2,8 @@
 
 import streamlit as st
 from typing import List, Tuple, Dict
-from streamlit_app.utils import detect_file_type, format_file_size
-from streamlit_app.components import render_file_upload
+from ..components.utils import detect_file_type, format_file_size
+from ..components.components import render_file_upload
 
 
 def render_welcome_screen() -> None:

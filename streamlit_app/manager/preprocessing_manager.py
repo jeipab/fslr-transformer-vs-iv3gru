@@ -3,9 +3,10 @@
 import streamlit as st
 from typing import List, Dict
 from pathlib import Path
-from streamlit_app.utils import detect_file_type, format_file_size
-from streamlit_app.data_processing import process_video_file
-from streamlit_app.upload_manager import remove_file_from_stage
+from ..components.utils import detect_file_type, format_file_size
+from ..components.data_processing import process_video_file
+from .upload_manager import remove_file_from_stage
+from ..core.config import PROCESSING_CONFIG
 
 
 def get_all_files_to_show():
@@ -158,7 +159,7 @@ def render_video_files_list(all_files_to_show: List):
             if status == 'completed':
                 npz_data = st.session_state.processed_data.get(filename)
                 if npz_data:
-                    from streamlit_app.utils import create_npz_bytes
+                    from ..components.utils import create_npz_bytes
                     npz_bytes = create_npz_bytes(npz_data)
                     # Create descriptive filename with timestamp
                     import datetime
@@ -228,15 +229,16 @@ def render_preprocessing_options(video_files: List):
         col1, col2 = st.columns(2)
         
         with col1:
+            video_config = PROCESSING_CONFIG['video']
             target_fps = st.slider(
                 "Target FPS", 
-                min_value=15, max_value=60, value=30, step=5,
+                min_value=15, max_value=60, value=video_config['target_fps'], step=5,
                 help="Frames per second for processing",
                 disabled=is_processing
             )
             out_size = st.slider(
                 "Output Size", 
-                min_value=128, max_value=512, value=256, step=32,
+                min_value=128, max_value=512, value=video_config['out_size'], step=32,
                 help="Frame size for processing",
                 disabled=is_processing
             )
@@ -244,13 +246,13 @@ def render_preprocessing_options(video_files: List):
         with col2:
             write_keypoints = st.checkbox(
                 "Extract Keypoints (156-D)", 
-                value=True,
+                value=video_config['write_keypoints'],
                 help="Extract pose keypoint features for Transformer model",
                 disabled=is_processing
             )
             write_iv3_features = st.checkbox(
                 "Extract IV3 Features (2048-D)", 
-                value=True,
+                value=video_config['write_iv3_features'],
                 help="Extract InceptionV3 features for IV3-GRU model",
                 disabled=is_processing
             )
@@ -366,11 +368,12 @@ def preprocess_single_video(uploaded_file, filename: str):
         st.session_state.file_status[filename] = 'processing'
         
         # Get preprocessing options
+        video_config = PROCESSING_CONFIG['video']
         options = st.session_state.get('preprocessing_options', {
-            'target_fps': 30,
-            'out_size': 256,
-            'write_keypoints': True,
-            'write_iv3_features': True
+            'target_fps': video_config['target_fps'],
+            'out_size': video_config['out_size'],
+            'write_keypoints': video_config['write_keypoints'],
+            'write_iv3_features': video_config['write_iv3_features']
         })
         
         # Process video file
@@ -384,7 +387,7 @@ def preprocess_single_video(uploaded_file, filename: str):
             )
         
         # Check compatibility
-        from streamlit_app.utils import check_npz_compatibility
+        from ..components.utils import check_npz_compatibility
         compatibility = check_npz_compatibility(npz_data)
         
         if not any(compatibility.values()):
@@ -418,7 +421,7 @@ def preprocess_single_video(uploaded_file, filename: str):
         st.session_state.video_files = [f for f in st.session_state.video_files if f.name != filename]
         
         # Create a mock uploaded file object for the preprocessed file
-        from streamlit_app.utils import TempUploadedFile
+        from ..components.utils import TempUploadedFile
         preprocessed_file = TempUploadedFile(filename, b"")  # Empty content since data is in processed_data
         st.session_state.preprocessed_files.append(preprocessed_file)
         
@@ -507,7 +510,7 @@ def reset_preprocessed_videos():
         if filename in st.session_state.original_file_data:
             st.write(f"✅ Found original data for {filename}")
             # Recreate the original file object from stored data
-            from streamlit_app.utils import TempUploadedFile
+            from ..components.utils import TempUploadedFile
             original_data = st.session_state.original_file_data[filename]
             
             st.write(f"- Original data type: {type(original_data.get('data', 'No data'))}")
@@ -640,7 +643,7 @@ def create_bulk_download_button(preprocessed_files: List):
     """Create bulk download button for all preprocessed NPZ files."""
     import zipfile
     import io
-    from streamlit_app.utils import create_npz_bytes
+    from ..components.utils import create_npz_bytes
     
     # Check if any files are currently being processed
     is_processing = any(st.session_state.file_status.get(f.name, 'completed') == 'processing' for f in preprocessed_files)
