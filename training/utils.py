@@ -14,7 +14,7 @@ Features:
 - Error handling and validation
 
 Usage:
-    from training.utils import FSLDataset, evaluate
+    from training import FSLDataset, evaluate
 """
 
 import torch
