@@ -1,0 +1,108 @@
+============================================================
+DATA LOADING
+============================================================
+✓ Loaded data successfully
+  - Gloss classes: 105
+  - Category classes: 10
+
+============================================================
+DATASET PREPARATION
+============================================================
+✓ Created datasets and data loaders
+  - Batch size: 32
+  - Training batches: 54
+  - Validation batches: 14
+
+============================================================
+MODEL SELECTION
+============================================================
+Available models:
+- transformer: Multi-head attention transformer
+- iv3_gru: InceptionV3 + GRU hybrid
+✓ Using SignTransformer model
+
+Model Information:
+  - Model type: SignTransformer
+  - Total parameters: 3,280,627
+  - Trainable parameters: 3,280,627
+  - Model size: 12.5 MB
+
+============================================================
+TRAINING START
+============================================================
+Resumed from shared/transformer_low-acc_09-15/SignTransformer_last.pt at epoch 30 (best_metric=0.2887)
+Training for 70 epochs...
+Loss weights - Gloss: 0.5, Category: 0.5
+------------------------------------------------------------
+Epoch 31/100 | Train Loss: 1.4829 | Val Loss: 1.7995 | Val Gloss Acc: 0.265 | Val Cat Acc: 0.613
+Epoch 32/100 | Train Loss: 1.4589 | Val Loss: 1.6252 | Val Gloss Acc: 0.300 | Val Cat Acc: 0.662
+Epoch 33/100 | Train Loss: 1.4077 | Val Loss: 1.6005 | Val Gloss Acc: 0.326 | Val Cat Acc: 0.667
+Epoch 34/100 | Train Loss: 1.3521 | Val Loss: 1.6459 | Val Gloss Acc: 0.322 | Val Cat Acc: 0.662
+Epoch 35/100 | Train Loss: 1.3405 | Val Loss: 1.6276 | Val Gloss Acc: 0.326 | Val Cat Acc: 0.643
+Epoch 36/100 | Train Loss: 1.3363 | Val Loss: 1.4712 | Val Gloss Acc: 0.343 | Val Cat Acc: 0.690
+Epoch 37/100 | Train Loss: 1.2317 | Val Loss: 1.5183 | Val Gloss Acc: 0.336 | Val Cat Acc: 0.657
+Epoch 38/100 | Train Loss: 1.2322 | Val Loss: 1.6175 | Val Gloss Acc: 0.331 | Val Cat Acc: 0.653
+Epoch 39/100 | Train Loss: 1.2298 | Val Loss: 1.5119 | Val Gloss Acc: 0.366 | Val Cat Acc: 0.685
+Epoch 40/100 | Train Loss: 1.2058 | Val Loss: 1.5398 | Val Gloss Acc: 0.350 | Val Cat Acc: 0.674
+Epoch 41/100 | Train Loss: 1.1657 | Val Loss: 1.5158 | Val Gloss Acc: 0.380 | Val Cat Acc: 0.692
+Epoch 42/100 | Train Loss: 1.1303 | Val Loss: 1.4754 | Val Gloss Acc: 0.362 | Val Cat Acc: 0.692
+Epoch 43/100 | Train Loss: 1.1107 | Val Loss: 1.3947 | Val Gloss Acc: 0.378 | Val Cat Acc: 0.725
+Epoch 44/100 | Train Loss: 1.0721 | Val Loss: 1.4190 | Val Gloss Acc: 0.385 | Val Cat Acc: 0.704
+Epoch 45/100 | Train Loss: 1.0736 | Val Loss: 1.3982 | Val Gloss Acc: 0.380 | Val Cat Acc: 0.711
+Epoch 46/100 | Train Loss: 1.0517 | Val Loss: 1.4731 | Val Gloss Acc: 0.352 | Val Cat Acc: 0.690
+Epoch 47/100 | Train Loss: 1.0467 | Val Loss: 1.3367 | Val Gloss Acc: 0.397 | Val Cat Acc: 0.716
+Epoch 48/100 | Train Loss: 0.9842 | Val Loss: 1.3331 | Val Gloss Acc: 0.408 | Val Cat Acc: 0.718
+Epoch 49/100 | Train Loss: 0.9808 | Val Loss: 1.3615 | Val Gloss Acc: 0.380 | Val Cat Acc: 0.728
+Epoch 50/100 | Train Loss: 0.9389 | Val Loss: 1.4119 | Val Gloss Acc: 0.385 | Val Cat Acc: 0.714
+Epoch 51/100 | Train Loss: 0.9246 | Val Loss: 1.3283 | Val Gloss Acc: 0.411 | Val Cat Acc: 0.735
+Epoch 52/100 | Train Loss: 0.9211 | Val Loss: 1.2875 | Val Gloss Acc: 0.441 | Val Cat Acc: 0.754
+Epoch 53/100 | Train Loss: 0.9066 | Val Loss: 1.5951 | Val Gloss Acc: 0.359 | Val Cat Acc: 0.681
+Epoch 54/100 | Train Loss: 0.9033 | Val Loss: 1.3197 | Val Gloss Acc: 0.441 | Val Cat Acc: 0.739
+Epoch 55/100 | Train Loss: 0.8478 | Val Loss: 1.4391 | Val Gloss Acc: 0.408 | Val Cat Acc: 0.721
+Epoch 56/100 | Train Loss: 0.8664 | Val Loss: 1.3547 | Val Gloss Acc: 0.411 | Val Cat Acc: 0.732
+Epoch 57/100 | Train Loss: 0.7903 | Val Loss: 1.3373 | Val Gloss Acc: 0.420 | Val Cat Acc: 0.725
+Epoch 58/100 | Train Loss: 0.7883 | Val Loss: 1.4107 | Val Gloss Acc: 0.408 | Val Cat Acc: 0.730
+Epoch 59/100 | Train Loss: 0.7801 | Val Loss: 1.3650 | Val Gloss Acc: 0.413 | Val Cat Acc: 0.732
+Epoch 60/100 | Train Loss: 0.7701 | Val Loss: 1.5076 | Val Gloss Acc: 0.383 | Val Cat Acc: 0.728
+Epoch 61/100 | Train Loss: 0.7528 | Val Loss: 1.3523 | Val Gloss Acc: 0.415 | Val Cat Acc: 0.744
+Epoch 62/100 | Train Loss: 0.8356 | Val Loss: 1.3753 | Val Gloss Acc: 0.420 | Val Cat Acc: 0.746
+Epoch 63/100 | Train Loss: 0.6980 | Val Loss: 1.3213 | Val Gloss Acc: 0.439 | Val Cat Acc: 0.761
+Epoch 64/100 | Train Loss: 0.7108 | Val Loss: 1.3269 | Val Gloss Acc: 0.425 | Val Cat Acc: 0.749
+Epoch 65/100 | Train Loss: 0.7436 | Val Loss: 1.3961 | Val Gloss Acc: 0.439 | Val Cat Acc: 0.737
+Epoch 66/100 | Train Loss: 0.7064 | Val Loss: 1.3412 | Val Gloss Acc: 0.451 | Val Cat Acc: 0.746
+Epoch 67/100 | Train Loss: 0.6892 | Val Loss: 1.3357 | Val Gloss Acc: 0.467 | Val Cat Acc: 0.758
+Epoch 68/100 | Train Loss: 0.6687 | Val Loss: 1.2932 | Val Gloss Acc: 0.462 | Val Cat Acc: 0.763
+Epoch 69/100 | Train Loss: 0.6635 | Val Loss: 1.3873 | Val Gloss Acc: 0.439 | Val Cat Acc: 0.775
+Epoch 70/100 | Train Loss: 0.6564 | Val Loss: 1.3137 | Val Gloss Acc: 0.460 | Val Cat Acc: 0.749
+Epoch 71/100 | Train Loss: 0.6442 | Val Loss: 1.3077 | Val Gloss Acc: 0.462 | Val Cat Acc: 0.770
+Epoch 72/100 | Train Loss: 0.5819 | Val Loss: 1.3359 | Val Gloss Acc: 0.486 | Val Cat Acc: 0.772
+Epoch 73/100 | Train Loss: 0.5721 | Val Loss: 1.4117 | Val Gloss Acc: 0.437 | Val Cat Acc: 0.751
+Epoch 74/100 | Train Loss: 0.5515 | Val Loss: 1.3819 | Val Gloss Acc: 0.462 | Val Cat Acc: 0.751
+Epoch 75/100 | Train Loss: 0.5542 | Val Loss: 1.5342 | Val Gloss Acc: 0.453 | Val Cat Acc: 0.746
+Epoch 76/100 | Train Loss: 0.5307 | Val Loss: 1.3367 | Val Gloss Acc: 0.479 | Val Cat Acc: 0.756
+Epoch 77/100 | Train Loss: 0.5925 | Val Loss: 1.3139 | Val Gloss Acc: 0.474 | Val Cat Acc: 0.770
+Epoch 78/100 | Train Loss: 0.5182 | Val Loss: 1.4567 | Val Gloss Acc: 0.453 | Val Cat Acc: 0.761
+Epoch 79/100 | Train Loss: 0.5033 | Val Loss: 1.3572 | Val Gloss Acc: 0.462 | Val Cat Acc: 0.756
+Epoch 80/100 | Train Loss: 0.5191 | Val Loss: 1.3252 | Val Gloss Acc: 0.472 | Val Cat Acc: 0.765
+Epoch 81/100 | Train Loss: 0.5008 | Val Loss: 1.4680 | Val Gloss Acc: 0.462 | Val Cat Acc: 0.746
+Epoch 82/100 | Train Loss: 0.5174 | Val Loss: 1.4541 | Val Gloss Acc: 0.481 | Val Cat Acc: 0.751
+Epoch 83/100 | Train Loss: 0.4837 | Val Loss: 1.2937 | Val Gloss Acc: 0.469 | Val Cat Acc: 0.791
+Epoch 84/100 | Train Loss: 0.4274 | Val Loss: 1.3425 | Val Gloss Acc: 0.495 | Val Cat Acc: 0.763
+Epoch 85/100 | Train Loss: 0.4416 | Val Loss: 1.3272 | Val Gloss Acc: 0.498 | Val Cat Acc: 0.775
+Epoch 86/100 | Train Loss: 0.4072 | Val Loss: 1.3835 | Val Gloss Acc: 0.481 | Val Cat Acc: 0.782
+Epoch 87/100 | Train Loss: 0.3889 | Val Loss: 1.4284 | Val Gloss Acc: 0.481 | Val Cat Acc: 0.761
+Epoch 88/100 | Train Loss: 0.4156 | Val Loss: 1.3582 | Val Gloss Acc: 0.477 | Val Cat Acc: 0.782
+Epoch 89/100 | Train Loss: 0.4064 | Val Loss: 1.4589 | Val Gloss Acc: 0.477 | Val Cat Acc: 0.779
+Epoch 90/100 | Train Loss: 0.3922 | Val Loss: 1.3857 | Val Gloss Acc: 0.493 | Val Cat Acc: 0.793
+Epoch 91/100 | Train Loss: 0.3665 | Val Loss: 1.4273 | Val Gloss Acc: 0.472 | Val Cat Acc: 0.779
+Epoch 92/100 | Train Loss: 0.3826 | Val Loss: 1.3480 | Val Gloss Acc: 0.516 | Val Cat Acc: 0.784
+Epoch 93/100 | Train Loss: 0.3489 | Val Loss: 1.4695 | Val Gloss Acc: 0.491 | Val Cat Acc: 0.768
+Epoch 94/100 | Train Loss: 0.3759 | Val Loss: 1.3483 | Val Gloss Acc: 0.526 | Val Cat Acc: 0.784
+Epoch 95/100 | Train Loss: 0.3797 | Val Loss: 1.5701 | Val Gloss Acc: 0.479 | Val Cat Acc: 0.737
+Epoch 96/100 | Train Loss: 0.4139 | Val Loss: 1.4554 | Val Gloss Acc: 0.495 | Val Cat Acc: 0.763
+Epoch 97/100 | Train Loss: 0.3682 | Val Loss: 1.4040 | Val Gloss Acc: 0.491 | Val Cat Acc: 0.777
+Epoch 98/100 | Train Loss: 0.3047 | Val Loss: 1.4349 | Val Gloss Acc: 0.505 | Val Cat Acc: 0.779
+Epoch 99/100 | Train Loss: 0.3089 | Val Loss: 1.4672 | Val Gloss Acc: 0.495 | Val Cat Acc: 0.793
+Epoch 100/100 | Train Loss: 0.3145 | Val Loss: 1.4060 | Val Gloss Acc: 0.514 | Val Cat Acc: 0.782
+------------------------------------------------------------
+Training completed!

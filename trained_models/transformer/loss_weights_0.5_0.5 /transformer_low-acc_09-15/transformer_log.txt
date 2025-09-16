@@ -1,0 +1,133 @@
+============================================================
+DATA LOADING
+============================================================
+✓ Loaded data successfully
+  - Dataset type: Transformer Keypoints
+  - Training folder: data/processed/keypoints_train
+  - Validation folder: data/processed/keypoints_val
+  - Keypoint key: X
+  - Gloss classes: 105
+  - Category classes: 10
+
+============================================================
+DATASET PREPARATION
+============================================================
+✓ Created datasets and data loaders
+  - Batch size: 32
+  - Training batches: 54
+  - Validation batches: 14
+  - Training dataset size: 1704 samples
+  - Validation dataset size: 426 samples
+  - Data format: [T, 156] keypoints
+
+============================================================
+MODEL SELECTION
+============================================================
+Available models:
+- transformer: Multi-head attention transformer
+- iv3_gru: InceptionV3 + GRU hybrid
+✓ Using SignTransformer model
+
+================================================================================
+COMPREHENSIVE TRAINING CONFIGURATION
+================================================================================
+Session Information:
+  - Start time: 2025-09-16 15:53:59
+  - Working directory: /home/novelle/Documents/fslr-transformer-vs-iv3gru
+  - Command: /home/novelle/Documents/fslr-transformer-vs-iv3gru/training/train.py --model transformer --keypoints-train data/processed/keypoints_train --keypoints-val data/processed/keypoints_val --labels-train-csv data/processed/train_labels.csv --labels-val-csv data/processed/val_labels.csv --num-gloss 105 --num-cat 10 --epochs 30 --batch-size 32 --output-dir data/processed
+
+System Information:
+  - Platform: Linux-6.14.0-29-generic-x86_64-with-glibc2.39
+  - Python version: 3.11.0 (main, Sep 11 2025, 23:19:28) [GCC 13.3.0]
+  - PyTorch version: 2.8.0+cu128
+  - NumPy version: 2.2.6
+
+Core Training Parameters:
+  - Model: transformer
+  - Epochs: 30
+  - Batch size: 32
+  - Learning rate: 0.0001
+  - Weight decay: 0.0
+  - Gradient clipping: None
+  - Loss weights - Alpha: 0.5, Beta: 0.5
+
+Data Configuration:
+  - Gloss classes: 105
+  - Category classes: 10
+  - Data source: Real data files
+  - Training folder: data/processed/keypoints_train
+  - Validation folder: data/processed/keypoints_val
+  - Keypoint key: X
+
+Training Control:
+  - Scheduler: None
+  - Scheduler patience: 5
+  - Early stopping: None
+  - Resume from: None
+
+Performance Settings:
+  - AMP (Mixed Precision): False
+  - Model compilation: False
+  - Gradient accumulation steps: 1
+  - DataLoader workers: 0
+  - Auto workers: False
+  - Pin memory: False
+  - Prefetch factor: None
+
+Reproducibility:
+  - Random seed: 42
+  - Deterministic mode: False
+
+Output Configuration:
+  - Checkpoint directory: data/processed
+  - CSV log file: None
+
+Model Information:
+  - Model type: SignTransformer
+  - Total parameters: 3,280,627
+  - Trainable parameters: 3,280,627
+  - Model size: 12.5 MB
+================================================================================
+
+============================================================
+TRAINING START
+============================================================
+Training Configuration:
+  - Gradient accumulation steps: 1
+  - AMP enabled: False
+  - Model compiled: False
+Training for 30 epochs...
+Loss weights - Gloss: 0.5, Category: 0.5
+------------------------------------------------------------
+Epoch  1/30 | Train Loss: 3.4921 | Val Loss: 3.4831 | Val Gloss Acc: 0.007 | Val Cat Acc: 0.115 | Time: 25.8s
+Epoch  2/30 | Train Loss: 3.4168 | Val Loss: 3.3249 | Val Gloss Acc: 0.012 | Val Cat Acc: 0.216 | Time: 24.1s
+Epoch  3/30 | Train Loss: 3.2829 | Val Loss: 3.2018 | Val Gloss Acc: 0.009 | Val Cat Acc: 0.242 | Time: 24.0s
+Epoch  4/30 | Train Loss: 3.1836 | Val Loss: 3.0975 | Val Gloss Acc: 0.028 | Val Cat Acc: 0.265 | Time: 24.3s
+Epoch  5/30 | Train Loss: 3.1010 | Val Loss: 3.0489 | Val Gloss Acc: 0.028 | Val Cat Acc: 0.263 | Time: 24.6s
+Epoch  6/30 | Train Loss: 2.9975 | Val Loss: 2.9059 | Val Gloss Acc: 0.014 | Val Cat Acc: 0.326 | Time: 24.7s
+Epoch  7/30 | Train Loss: 2.9203 | Val Loss: 2.8593 | Val Gloss Acc: 0.045 | Val Cat Acc: 0.369 | Time: 24.6s
+Epoch  8/30 | Train Loss: 2.8033 | Val Loss: 2.6859 | Val Gloss Acc: 0.047 | Val Cat Acc: 0.423 | Time: 26.1s
+Epoch  9/30 | Train Loss: 2.7008 | Val Loss: 2.7322 | Val Gloss Acc: 0.042 | Val Cat Acc: 0.354 | Time: 25.3s
+Epoch 10/30 | Train Loss: 2.6521 | Val Loss: 2.5169 | Val Gloss Acc: 0.068 | Val Cat Acc: 0.481 | Time: 24.7s
+Epoch 11/30 | Train Loss: 2.5352 | Val Loss: 2.4451 | Val Gloss Acc: 0.106 | Val Cat Acc: 0.446 | Time: 24.3s
+Epoch 12/30 | Train Loss: 2.4728 | Val Loss: 2.3634 | Val Gloss Acc: 0.099 | Val Cat Acc: 0.462 | Time: 24.3s
+Epoch 13/30 | Train Loss: 2.4495 | Val Loss: 2.4305 | Val Gloss Acc: 0.115 | Val Cat Acc: 0.427 | Time: 23.9s
+Epoch 14/30 | Train Loss: 2.3199 | Val Loss: 2.1952 | Val Gloss Acc: 0.164 | Val Cat Acc: 0.514 | Time: 24.7s
+Epoch 15/30 | Train Loss: 2.2460 | Val Loss: 2.1922 | Val Gloss Acc: 0.153 | Val Cat Acc: 0.542 | Time: 24.3s
+Epoch 16/30 | Train Loss: 2.1210 | Val Loss: 2.1852 | Val Gloss Acc: 0.138 | Val Cat Acc: 0.528 | Time: 24.6s
+Epoch 17/30 | Train Loss: 2.1124 | Val Loss: 2.0273 | Val Gloss Acc: 0.207 | Val Cat Acc: 0.573 | Time: 26.6s
+Epoch 18/30 | Train Loss: 2.0792 | Val Loss: 1.9804 | Val Gloss Acc: 0.216 | Val Cat Acc: 0.563 | Time: 29.2s
+Epoch 19/30 | Train Loss: 2.0018 | Val Loss: 1.8880 | Val Gloss Acc: 0.200 | Val Cat Acc: 0.606 | Time: 25.7s
+Epoch 20/30 | Train Loss: 1.9195 | Val Loss: 1.9090 | Val Gloss Acc: 0.225 | Val Cat Acc: 0.575 | Time: 24.0s
+Epoch 21/30 | Train Loss: 1.8883 | Val Loss: 1.8303 | Val Gloss Acc: 0.216 | Val Cat Acc: 0.622 | Time: 26.1s
+Epoch 22/30 | Train Loss: 1.8503 | Val Loss: 1.8031 | Val Gloss Acc: 0.244 | Val Cat Acc: 0.582 | Time: 24.8s
+Epoch 23/30 | Train Loss: 1.7763 | Val Loss: 1.8712 | Val Gloss Acc: 0.237 | Val Cat Acc: 0.601 | Time: 26.5s
+Epoch 24/30 | Train Loss: 1.7317 | Val Loss: 1.7687 | Val Gloss Acc: 0.249 | Val Cat Acc: 0.617 | Time: 29.4s
+Epoch 25/30 | Train Loss: 1.7051 | Val Loss: 1.7791 | Val Gloss Acc: 0.258 | Val Cat Acc: 0.610 | Time: 27.7s
+Epoch 26/30 | Train Loss: 1.6577 | Val Loss: 1.7380 | Val Gloss Acc: 0.286 | Val Cat Acc: 0.606 | Time: 24.5s
+Epoch 27/30 | Train Loss: 1.6044 | Val Loss: 1.8164 | Val Gloss Acc: 0.246 | Val Cat Acc: 0.627 | Time: 24.8s
+Epoch 28/30 | Train Loss: 1.5989 | Val Loss: 1.6845 | Val Gloss Acc: 0.268 | Val Cat Acc: 0.662 | Time: 24.0s
+Epoch 29/30 | Train Loss: 1.6001 | Val Loss: 1.7225 | Val Gloss Acc: 0.265 | Val Cat Acc: 0.610 | Time: 24.7s
+Epoch 30/30 | Train Loss: 1.5155 | Val Loss: 1.6300 | Val Gloss Acc: 0.298 | Val Cat Acc: 0.662 | Time: 24.8s
+------------------------------------------------------------
+Training completed!
