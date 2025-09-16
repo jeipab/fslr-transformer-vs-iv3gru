@@ -12,7 +12,7 @@ Input/Output overview:
 - Outputs: gloss logits [B, num_gloss], category logits [B, num_cat]
 
 Usage:
-    from models.transformer import SignTransformer
+    from models import SignTransformer
 
     model = SignTransformer()
     gloss_logits, cat_logits = model(x)  # x: [B, T, 156]

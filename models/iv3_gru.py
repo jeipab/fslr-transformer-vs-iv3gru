@@ -16,7 +16,7 @@ or Input (features): [B, T, 2048]
 → Linear heads → logits (gloss, category)
 
 Usage:
-    from models.iv3_gru import InceptionV3GRU
+    from models import InceptionV3GRU
     
     model = InceptionV3GRU(num_gloss=105, num_cat=10)
     gloss_logits, cat_logits = model(feats, features_already=True)
