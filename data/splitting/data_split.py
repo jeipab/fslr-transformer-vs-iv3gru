@@ -35,6 +35,7 @@ import random
 import hashlib
 import pandas as pd
 import numpy as np
+from sklearn.model_selection import StratifiedShuffleSplit
 
 def _resolve_npz_path(processed_root: Path, file_entry: str) -> Path:
     """
@@ -167,9 +168,20 @@ def main():
 
     # Handle split
     if "split" not in df.columns:
-        df = df.sample(frac=1, random_state=42).reset_index(drop=True)  # shuffle
-        n_train = int(len(df) * args.train_ratio)
-        df["split"] = ["train"] * n_train + ["val"] * (len(df) - n_train)
+        # Stratify by gloss for proper 80/20 split per gloss
+        splitter = StratifiedShuffleSplit(
+            n_splits=1, 
+            test_size=1-args.train_ratio, 
+            random_state=42
+        )
+        train_indices, val_indices = next(splitter.split(df, df['gloss']))
+        
+        # Create split column
+        df["split"] = "val"  # Initialize all as val
+        df.loc[train_indices, "split"] = "train"
+        
+        # Shuffle the entire dataframe to randomize order for training
+        df = df.sample(frac=1, random_state=42).reset_index(drop=True)
 
     df_train = df[df["split"] == "train"].reset_index(drop=True)
     df_val   = df[df["split"] == "val"].reset_index(drop=True)
