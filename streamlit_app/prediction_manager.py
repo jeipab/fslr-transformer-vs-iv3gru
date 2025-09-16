@@ -119,7 +119,7 @@ class ModelManager:
                 if str(project_root) not in sys.path:
                     sys.path.insert(0, str(project_root))
                 
-                from trained_models.label_mapping import load_label_mappings
+                from data.labels.label_mapping import load_label_mappings
                 self._label_mappings = load_label_mappings()
             except Exception as e:
                 st.toast(f"Could not load label mappings: {str(e)}", icon="⚠️", duration=3000)
