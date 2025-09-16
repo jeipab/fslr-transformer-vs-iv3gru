@@ -289,36 +289,26 @@ def set_page() -> None:
 
 def render_sidebar() -> Dict:
     """Render sidebar controls and return configuration dict."""
-    st.sidebar.markdown("<h1 style='color: #1f77b4;'>FSLR Demo</h1>", unsafe_allow_html=True)
+    st.sidebar.markdown("<h1 style='color: #1f77b4; font-size: 2.5rem; font-weight: bold;'>FSLR Demo</h1>", unsafe_allow_html=True)
     st.sidebar.markdown("---")
     
     # Data Input Section
     st.sidebar.markdown("### Data Input")
     st.sidebar.info("Upload a preprocessed .npz file or video file for processing.")
     
+    # Model Status Section
+    st.sidebar.markdown("### Model Status")
+    render_model_status()
+    
     # Model Configuration Section
     st.sidebar.markdown("### Model Configuration")
     with st.sidebar.container():
         model_choice = st.selectbox(
             "Model Architecture", 
-            ["SignTransformer", "IV3_GRU"], 
+            get_available_models(), 
             index=0,
-            help="Choose between Transformer (keypoints) or IV3-GRU (features)"
+            help="Choose between available model architectures"
         )
-        
-        col1, col2 = st.columns(2)
-        with col1:
-            num_gloss_classes = st.number_input(
-                "Gloss Classes", 
-                min_value=2, max_value=2000, value=105, step=1,
-                help="Number of sign/word classes"
-            )
-        with col2:
-            num_category_classes = st.number_input(
-                "Category Classes", 
-                min_value=2, max_value=200, value=10, step=1,
-                help="Number of semantic categories"
-            )
     
     # Processing Options Section
     st.sidebar.markdown("### Processing Options")
@@ -333,11 +323,6 @@ def render_sidebar() -> Dict:
             min_value=1, max_value=10, value=5,
             help="Show top K most likely predictions"
         )
-        random_seed = st.number_input(
-            "Random Seed", 
-            min_value=0, max_value=1_000_000, value=42, step=1,
-            help="Seed for reproducible simulation"
-        )
     
     # About Section
     st.sidebar.markdown("---")
@@ -347,19 +332,42 @@ def render_sidebar() -> Dict:
     - **Automatic file processing** (NPZ or video input)
     - **Data validation** and visualization
     - **Feature analysis** over time
-    - **Simulated predictions** for gloss and category classification
+    - **Real model predictions** for gloss and category classification
     """)
 
     return dict(
         model_choice=model_choice,
         sequence_length=int(sequence_length),
         topk=int(topk),
-        num_gloss_classes=int(num_gloss_classes),
-        num_category_classes=int(num_category_classes),
-        random_seed=int(random_seed),
     )
 
 
+
+
+def render_model_status():
+    """Render model availability status in sidebar."""
+    from streamlit_app.prediction_manager import MODEL_CONFIG
+    
+    # Show warning if IV3-GRU model is unavailable
+    if not MODEL_CONFIG['iv3_gru']['enabled']:
+        st.sidebar.warning("IV3-GRU model not available. Only Transformer predictions will be shown.")
+
+
+def get_available_models():
+    """Get list of available models for selection."""
+    from streamlit_app.prediction_manager import MODEL_CONFIG
+    
+    available_models = []
+    if MODEL_CONFIG['transformer']['enabled']:
+        available_models.append("SignTransformer")
+    if MODEL_CONFIG['iv3_gru']['enabled']:
+        available_models.append("IV3_GRU")
+    
+    # Fallback to at least one model if none are available
+    if not available_models:
+        available_models = ["SignTransformer"]
+    
+    return available_models
 
 
 def render_file_upload() -> object:
@@ -380,10 +388,9 @@ def render_main_header() -> None:
     </div>
     """, unsafe_allow_html=True)
     
+    # Add spacing to move content down
     st.markdown("""
-    <div style='text-align: center; margin-bottom: 2rem; color: #7f8c8d;'>
-        Upload a preprocessed .npz file or video to analyze sign language sequences and view predictions.
-    </div>
+    <div style='margin-top: 3rem;'></div>
     """, unsafe_allow_html=True)
 
 
@@ -406,6 +413,10 @@ def render_predictions_section(cfg: Dict, npz_data: Dict = None, filename: str =
         
         with st.spinner("Making prediction..."):
             prediction_results = make_real_prediction(npz_data, model_name)
+        
+        if prediction_results is None:
+            st.error("Failed to make prediction. Please check model availability and try again.")
+            return
         
         # Get label mappings
         model_manager = get_model_manager()
@@ -462,45 +473,5 @@ def render_predictions_section(cfg: Dict, npz_data: Dict = None, filename: str =
         # Prediction completed successfully - no need to show message
         
     else:
-        # Fallback to simulated predictions when no NPZ data is available
-        from streamlit_app.utils import simulate_predictions, topk_from_logits
-        import numpy as np
-        
-        rng = np.random.RandomState(cfg["random_seed"])
-        gloss_logits, cat_logits = simulate_predictions(
-            rng, cfg["num_gloss_classes"], cfg["num_category_classes"]
-        )
-
-        g_idx, g_prob = topk_from_logits(gloss_logits, cfg["topk"]) 
-        c_idx, c_prob = topk_from_logits(cat_logits, cfg["topk"]) 
-
-        # Enhanced predictions display
-        pred_col1, pred_col2 = st.columns(2)
-        
-        with pred_col1:
-            from streamlit_app.visualization import render_topk_table
-            render_topk_table(g_idx, g_prob, "gloss", "Top Gloss Predictions (Simulated)")
-        
-        with pred_col2:
-            render_topk_table(c_idx, c_prob, "category", "Top Category Predictions (Simulated)")
-        
-        # Additional insights
-        st.markdown("---")
-        with st.expander("Prediction Insights", expanded=False):
-            col1, col2, col3 = st.columns(3)
-            
-            with col1:
-                st.metric("Top Gloss Confidence", f"{g_prob[0]*100:.1f}%")
-                st.metric("Gloss Entropy", f"{-np.sum(g_prob * np.log(g_prob + 1e-10)):.3f}")
-            
-            with col2:
-                st.metric("Top Category Confidence", f"{c_prob[0]*100:.1f}%")
-                st.metric("Category Entropy", f"{-np.sum(c_prob * np.log(c_prob + 1e-10)):.3f}")
-            
-            with col3:
-                st.metric("Model", cfg['model_choice'])
-                st.metric("Sequence Length", f"{cfg['sequence_length']} frames")
-        
-        # Disclaimer
-        st.markdown("---")
-        st.info("Note: Using simulated predictions. Upload an NPZ file to see real model predictions.")
+        # No NPZ data available - show message to upload files
+        st.info("Please upload an NPZ file or video to see model predictions.")
