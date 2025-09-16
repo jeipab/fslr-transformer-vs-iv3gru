@@ -26,7 +26,7 @@ from streamlit_app.upload_manager import remove_file_from_stage
 MODEL_CONFIG = {
     'transformer': {
         'enabled': True,
-        'checkpoint_path': 'trained_models/transformer/transformer_low-acc_09-15/SignTransformer_last.pt',
+        'checkpoint_path': 'trained_models/transformer/transformer_100_epoch/SignTransformer_best.pt',
         'model_type': 'transformer',
         'num_gloss_classes': 105,  # From actual model configuration
         'num_category_classes': 10  # From actual model configuration
