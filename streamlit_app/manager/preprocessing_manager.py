@@ -102,8 +102,7 @@ def render_preprocessing_stage():
             st.rerun()
         return
     
-    # Preprocessing options (needed first to update session state)
-    render_preprocessing_options(video_files)
+    # Preprocessing options removed - using default configuration
     
     # Show video files with preprocessing options
     render_video_files_list(all_files_to_show)
@@ -124,11 +123,8 @@ def render_video_files_list(all_files_to_show: List):
     is_processing = any(st.session_state.file_status.get(f.name, 'pending') == 'processing' for f in st.session_state.video_files)
     is_processing = is_processing or any(st.session_state.file_status.get(f.name, 'completed') == 'processing' for f in st.session_state.preprocessed_files)
     
-    # Get current extraction options from session state (will be updated by checkboxes)
-    options = st.session_state.get('preprocessing_options', {
-        'write_keypoints': True,
-        'write_iv3_features': True
-    })
+    # Use default extraction options
+    options = get_default_preprocessing_options()
     has_extraction_options = options.get('write_keypoints', True) or options.get('write_iv3_features', True)
     
     for i, (file_type, uploaded_file, status) in enumerate(all_files_to_show):
@@ -217,58 +213,15 @@ def render_video_files_list(all_files_to_show: List):
             st.markdown("---")
 
 
-def render_preprocessing_options(video_files: List):
-    """Render preprocessing options."""
-    
-    # Check if any files are currently being processed
-    is_processing = any(st.session_state.file_status.get(f.name, 'pending') == 'processing' for f in video_files)
-    is_processing = is_processing or any(st.session_state.file_status.get(f.name, 'completed') == 'processing' for f in st.session_state.preprocessed_files)
-    
-    # Preprocessing options
-    with st.expander("Preprocessing Options", expanded=False):
-        col1, col2 = st.columns(2)
-        
-        with col1:
-            video_config = PROCESSING_CONFIG['video']
-            target_fps = st.slider(
-                "Target FPS", 
-                min_value=15, max_value=60, value=video_config['target_fps'], step=5,
-                help="Frames per second for processing",
-                disabled=is_processing
-            )
-            out_size = st.slider(
-                "Output Size", 
-                min_value=128, max_value=512, value=video_config['out_size'], step=32,
-                help="Frame size for processing",
-                disabled=is_processing
-            )
-        
-        with col2:
-            write_keypoints = st.checkbox(
-                "Extract Keypoints (156-D)", 
-                value=video_config['write_keypoints'],
-                help="Extract pose keypoint features for Transformer model",
-                disabled=is_processing
-            )
-            write_iv3_features = st.checkbox(
-                "Extract IV3 Features (2048-D)", 
-                value=video_config['write_iv3_features'],
-                help="Extract InceptionV3 features for IV3-GRU model",
-                disabled=is_processing
-            )
-        
-        # Store options in session state
-        st.session_state.preprocessing_options = {
-            'target_fps': target_fps,
-            'out_size': out_size,
-            'write_keypoints': write_keypoints,
-            'write_iv3_features': write_iv3_features
-        }
-        
-        # Validate that at least one extraction option is selected
-        has_extraction_options = write_keypoints or write_iv3_features
-        if not has_extraction_options:
-            st.warning("⚠️ Please select at least one extraction option (Keypoints or IV3 Features) to enable preprocessing.")
+def get_default_preprocessing_options():
+    """Get default preprocessing options."""
+    video_config = PROCESSING_CONFIG['video']
+    return {
+        'target_fps': video_config['target_fps'],
+        'out_size': video_config['out_size'],
+        'write_keypoints': video_config['write_keypoints'],
+        'write_iv3_features': video_config['write_iv3_features']
+    }
 
 
 def render_batch_operations(video_files: List):
@@ -295,8 +248,8 @@ def render_batch_operations(video_files: List):
                 pending_count += 1
         
         if pending_count > 0:
-            # Check if at least one extraction option is selected
-            options = st.session_state.get('preprocessing_options', {})
+            # Use default extraction options
+            options = get_default_preprocessing_options()
             has_extraction_options = options.get('write_keypoints', True) or options.get('write_iv3_features', True)
             
             button_disabled = is_processing or not has_extraction_options
@@ -367,14 +320,8 @@ def preprocess_single_video(uploaded_file, filename: str):
     try:
         st.session_state.file_status[filename] = 'processing'
         
-        # Get preprocessing options
-        video_config = PROCESSING_CONFIG['video']
-        options = st.session_state.get('preprocessing_options', {
-            'target_fps': video_config['target_fps'],
-            'out_size': video_config['out_size'],
-            'write_keypoints': video_config['write_keypoints'],
-            'write_iv3_features': video_config['write_iv3_features']
-        })
+        # Get default preprocessing options
+        options = get_default_preprocessing_options()
         
         # Process video file
         with st.spinner(f"Preprocessing {filename}..."):

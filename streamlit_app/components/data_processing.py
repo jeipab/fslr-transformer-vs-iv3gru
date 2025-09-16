@@ -17,13 +17,17 @@ except ImportError:
     st.warning("OpenCV not available. Video processing may not work properly.")
 
 # Import preprocessing functions
-sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
+# Go up to project root: streamlit_app/components -> streamlit_app -> project_root
+project_root = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
+if project_root not in sys.path:
+    sys.path.insert(0, project_root)
+
 try:
-    from preprocessing.preprocess import process_video
+    from preprocessing.core.preprocess import process_video
     PREPROCESSING_AVAILABLE = True
-except ImportError:
+except ImportError as e:
     PREPROCESSING_AVAILABLE = False
-    st.warning("Preprocessing module not available. Video processing will not work.")
+    st.warning(f"Preprocessing module not available: {e}. Video processing will not work.")
 
 
 def process_video_file(uploaded_file, target_fps: int = 30, out_size: int = 256, 

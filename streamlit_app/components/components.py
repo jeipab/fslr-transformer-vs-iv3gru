@@ -285,56 +285,74 @@ def set_page() -> None:
 
 def render_sidebar() -> Dict:
     """Render sidebar controls and return configuration dict."""
-    st.sidebar.markdown("<h1 style='color: #1f77b4; font-size: 2.5rem; font-weight: bold;'>FSLR Demo</h1>", unsafe_allow_html=True)
-    st.sidebar.markdown("---")
+    # Enhanced header with better styling
+    st.sidebar.markdown("""
+    <div style='text-align: center; padding: 1rem 0; border-bottom: 2px solid #1f77b4; margin-bottom: 1.5rem;'>
+        <h1 style='color: #1f77b4; font-size: 2rem; font-weight: bold; margin: 0;'>FSLR Demo</h1>
+        <p style='color: #666; font-size: 0.9rem; margin: 0.5rem 0 0 0;'>Filipino Sign Language Recognition</p>
+    </div>
+    """, unsafe_allow_html=True)
     
-    # Data Input Section
-    st.sidebar.markdown("### Data Input")
-    st.sidebar.info("Upload a preprocessed .npz file or video file for processing.")
+    # Data Input Section with enhanced styling
+    st.sidebar.markdown("""
+    <div style='background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 1rem; border-radius: 8px; margin-bottom: 1.5rem;'>
+        <h3 style='color: white; margin: 0 0 0.5rem 0; font-size: 1.1rem;'>📁 Data Input</h3>
+        <p style='color: rgba(255,255,255,0.9); margin: 0; font-size: 0.9rem;'>Upload NPZ files or video files for processing</p>
+    </div>
+    """, unsafe_allow_html=True)
     
-    # Model Status Section
-    st.sidebar.markdown("### Model Status")
+    # Model Status Section with enhanced styling
+    st.sidebar.markdown("""
+    <div style='background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%); padding: 1rem; border-radius: 8px; margin-bottom: 1.5rem;'>
+        <h3 style='color: white; margin: 0 0 0.5rem 0; font-size: 1.1rem;'>🤖 Model Status</h3>
+    </div>
+    """, unsafe_allow_html=True)
     render_model_status()
     
-    # Model Configuration Section
-    st.sidebar.markdown("### Model Configuration")
+    # Model Configuration Section with enhanced styling
+    st.sidebar.markdown("""
+    <div style='background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%); padding: 1rem; border-radius: 8px; margin-bottom: 1.5rem;'>
+        <h3 style='color: white; margin: 0 0 0.5rem 0; font-size: 1.1rem;'>⚙️ Model Configuration</h3>
+    </div>
+    """, unsafe_allow_html=True)
+    
     with st.sidebar.container():
         model_choice = st.selectbox(
             "Model Architecture", 
             get_available_models(), 
             index=0,
-            help="Choose between available model architectures"
+            help="Choose between available model architectures",
+            key="model_architecture_select"
         )
     
-    # Processing Options Section
-    st.sidebar.markdown("### Processing Options")
-    with st.sidebar.container():
-        sequence_length = st.slider(
-            "Target Sequence Length", 
-            min_value=50, max_value=300, value=150, step=10,
-            help="Pad or trim sequences to this length"
-        )
-        topk = st.slider(
-            "Top-K Predictions", 
-            min_value=1, max_value=10, value=5,
-            help="Show top K most likely predictions"
-        )
+    # Add some spacing
+    st.sidebar.markdown("<br>", unsafe_allow_html=True)
     
-    # About Section
-    st.sidebar.markdown("---")
-    st.sidebar.markdown("### About")
+    # About Section with enhanced styling
     st.sidebar.markdown("""
-    This demo processes Filipino Sign Language sequences and provides:
-    - **Automatic file processing** (NPZ or video input)
-    - **Data validation** and visualization
-    - **Feature analysis** over time
-    - **Real model predictions** for gloss and category classification
-    """)
+    <div style='background: linear-gradient(135deg, #fa709a 0%, #fee140 100%); padding: 1rem; border-radius: 8px; margin-top: 1rem;'>
+        <h3 style='color: white; margin: 0 0 0.5rem 0; font-size: 1.1rem;'>ℹ️ About</h3>
+    </div>
+    """, unsafe_allow_html=True)
+    
+    st.sidebar.markdown("""
+    <div style='background: rgba(255,255,255,0.1); padding: 1rem; border-radius: 8px; margin-top: 0.5rem;'>
+        <p style='color: #333; margin: 0; font-size: 0.9rem; line-height: 1.4;'>
+        This demo processes Filipino Sign Language sequences and provides:
+        </p>
+        <ul style='color: #333; font-size: 0.85rem; margin: 0.5rem 0 0 0; padding-left: 1rem;'>
+            <li>Automatic file processing</li>
+            <li>Data validation & visualization</li>
+            <li>Feature analysis over time</li>
+            <li>Real model predictions</li>
+        </ul>
+    </div>
+    """, unsafe_allow_html=True)
 
     return dict(
         model_choice=model_choice,
-        sequence_length=int(sequence_length),
-        topk=int(topk),
+        sequence_length=150,  # Default sequence length
+        topk=5,  # Default top-k predictions
     )
 
 
@@ -344,9 +362,59 @@ def render_model_status():
     """Render model availability status in sidebar."""
     from ..manager.prediction_manager import MODEL_CONFIG
     
-    # Show warning if IV3-GRU model is unavailable
-    if not MODEL_CONFIG['iv3_gru']['enabled']:
-        st.sidebar.warning("IV3-GRU model not available. Only Transformer predictions will be shown.")
+    # Check model availability
+    transformer_available = MODEL_CONFIG['transformer']['enabled']
+    iv3_gru_available = MODEL_CONFIG['iv3_gru']['enabled']
+    
+    # Create styled status display
+    if transformer_available and iv3_gru_available:
+        st.sidebar.markdown("""
+        <div style='background: rgba(46, 160, 67, 0.1); border: 1px solid #2ea043; border-radius: 6px; padding: 0.75rem; margin-bottom: 0.5rem;'>
+            <div style='display: flex; align-items: center; color: #2ea043; font-weight: 500;'>
+                <span style='font-size: 1.2rem; margin-right: 0.5rem;'>✅</span>
+                <span>Both models available</span>
+            </div>
+            <div style='font-size: 0.8rem; color: #666; margin-top: 0.25rem;'>
+                SignTransformer & InceptionV3+GRU
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+    elif transformer_available:
+        st.sidebar.markdown("""
+        <div style='background: rgba(255, 193, 7, 0.1); border: 1px solid #ffc107; border-radius: 6px; padding: 0.75rem; margin-bottom: 0.5rem;'>
+            <div style='display: flex; align-items: center; color: #856404; font-weight: 500;'>
+                <span style='font-size: 1.2rem; margin-right: 0.5rem;'>⚠️</span>
+                <span>Only Transformer available</span>
+            </div>
+            <div style='font-size: 0.8rem; color: #666; margin-top: 0.25rem;'>
+                SignTransformer model only
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+    elif iv3_gru_available:
+        st.sidebar.markdown("""
+        <div style='background: rgba(255, 193, 7, 0.1); border: 1px solid #ffc107; border-radius: 6px; padding: 0.75rem; margin-bottom: 0.5rem;'>
+            <div style='display: flex; align-items: center; color: #856404; font-weight: 500;'>
+                <span style='font-size: 1.2rem; margin-right: 0.5rem;'>⚠️</span>
+                <span>Only IV3-GRU available</span>
+            </div>
+            <div style='font-size: 0.8rem; color: #666; margin-top: 0.25rem;'>
+                InceptionV3+GRU model only
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+    else:
+        st.sidebar.markdown("""
+        <div style='background: rgba(220, 53, 69, 0.1); border: 1px solid #dc3545; border-radius: 6px; padding: 0.75rem; margin-bottom: 0.5rem;'>
+            <div style='display: flex; align-items: center; color: #dc3545; font-weight: 500;'>
+                <span style='font-size: 1.2rem; margin-right: 0.5rem;'>❌</span>
+                <span>No models available</span>
+            </div>
+            <div style='font-size: 0.8rem; color: #666; margin-top: 0.25rem;'>
+                Please check model configuration
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
 
 
 def get_available_models():
