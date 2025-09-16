@@ -17,6 +17,9 @@ import random
 import argparse
 import time
 import psutil
+import sys
+import platform
+from datetime import datetime
 from typing import Optional, Tuple, Callable
 
 import numpy as np
@@ -286,6 +289,115 @@ def print_device_info(device: torch.device) -> None:
         print(f"CPU cores: {psutil.cpu_count(logical=False)} physical, {psutil.cpu_count(logical=True)} logical")
         print(f"Available RAM: {psutil.virtual_memory().total / 1e9:.1f} GB")
 
+def log_comprehensive_config(args, device, model=None):
+    """Log comprehensive training configuration and system information."""
+    print("\n" + "="*80)
+    print("COMPREHENSIVE TRAINING CONFIGURATION")
+    print("="*80)
+    
+    # Session Information
+    print(f"Session Information:")
+    print(f"  - Start time: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+    print(f"  - Working directory: {os.getcwd()}")
+    print(f"  - Command: {' '.join(sys.argv)}")
+    
+    # System Information
+    print(f"\nSystem Information:")
+    print(f"  - Platform: {platform.platform()}")
+    print(f"  - Python version: {sys.version}")
+    print(f"  - PyTorch version: {torch.__version__}")
+    if device.type == 'cuda':
+        print(f"  - CUDA version: {torch.version.cuda}")
+        print(f"  - cuDNN version: {torch.backends.cudnn.version()}")
+    print(f"  - NumPy version: {np.__version__}")
+    
+    # Core Training Parameters
+    print(f"\nCore Training Parameters:")
+    print(f"  - Model: {args.model}")
+    print(f"  - Epochs: {args.epochs}")
+    print(f"  - Batch size: {args.batch_size}")
+    print(f"  - Learning rate: {args.lr}")
+    print(f"  - Weight decay: {args.weight_decay}")
+    print(f"  - Gradient clipping: {args.grad_clip}")
+    print(f"  - Loss weights - Alpha: {args.alpha}, Beta: {args.beta}")
+    
+    # Model-Specific Parameters
+    if args.model == "iv3_gru":
+        print(f"\nIV3-GRU Model Parameters:")
+        print(f"  - Hidden1: {args.hidden1}")
+        print(f"  - Hidden2: {args.hidden2}")
+        print(f"  - Dropout: {args.dropout}")
+        print(f"  - Pretrained backbone: {args.pretrained_backbone}")
+        print(f"  - Freeze backbone: {args.freeze_backbone}")
+    
+    # Data Configuration
+    print(f"\nData Configuration:")
+    print(f"  - Gloss classes: {args.num_gloss}")
+    print(f"  - Category classes: {args.num_cat}")
+    
+    # Data Source Information
+    if args.features_train or args.keypoints_train:
+        print(f"  - Data source: Real data files")
+        if args.model == "iv3_gru":
+            print(f"  - Training folder: {args.features_train}")
+            print(f"  - Validation folder: {args.features_val}")
+            print(f"  - Feature key: {args.feature_key}")
+        elif args.model == "transformer":
+            print(f"  - Training folder: {args.keypoints_train}")
+            print(f"  - Validation folder: {args.keypoints_val}")
+            print(f"  - Keypoint key: {args.kp_key}")
+    else:
+        print(f"  - Data source: Synthetic data")
+        print(f"  - Training samples: {args.train_samples}")
+        print(f"  - Validation samples: {args.val_samples}")
+        print(f"  - Sequence length: {args.seq_length}")
+    
+    # Training Control
+    print(f"\nTraining Control:")
+    print(f"  - Scheduler: {args.scheduler}")
+    print(f"  - Scheduler patience: {args.scheduler_patience}")
+    print(f"  - Early stopping: {args.early_stop}")
+    print(f"  - Resume from: {args.resume}")
+    
+    # Performance Settings
+    print(f"\nPerformance Settings:")
+    print(f"  - AMP (Mixed Precision): {args.amp}")
+    print(f"  - Model compilation: {args.compile_model}")
+    print(f"  - Gradient accumulation steps: {args.gradient_accumulation_steps}")
+    print(f"  - DataLoader workers: {args.num_workers}")
+    print(f"  - Auto workers: {args.auto_workers}")
+    print(f"  - Pin memory: {args.pin_memory}")
+    print(f"  - Prefetch factor: {args.prefetch_factor}")
+    
+    # Reproducibility
+    print(f"\nReproducibility:")
+    print(f"  - Random seed: {args.seed}")
+    print(f"  - Deterministic mode: {args.deterministic}")
+    
+    # Output Configuration
+    print(f"\nOutput Configuration:")
+    print(f"  - Checkpoint directory: {args.output_dir}")
+    print(f"  - CSV log file: {args.log_csv}")
+    
+    # Smoke Test Configuration
+    if args.smoke_test:
+        print(f"\nSmoke Test Configuration:")
+        print(f"  - Smoke test mode: {args.smoke_test}")
+        print(f"  - Smoke batch size: {args.smoke_batch_size}")
+        print(f"  - Smoke sequence length: {args.smoke_T}")
+    
+    # Model Information (if model is provided)
+    if model is not None:
+        total_params = sum(p.numel() for p in model.parameters())
+        trainable_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
+        print(f"\nModel Information:")
+        print(f"  - Model type: {model.__class__.__name__}")
+        print(f"  - Total parameters: {total_params:,}")
+        print(f"  - Trainable parameters: {trainable_params:,}")
+        print(f"  - Model size: {total_params * 4 / 1024 / 1024:.1f} MB")
+    
+    print("="*80)
+
 def clear_gpu_memory():
     """Clear GPU memory cache."""
     if torch.cuda.is_available():
@@ -419,6 +531,17 @@ def train_model(
         csv_fh = open(log_csv_path, 'a', newline='')
         csv_writer = csv.writer(csv_fh)
         if new_file:
+            # Write configuration header as comment
+            config_header = [
+                f"# Training Configuration: model={args.model}, epochs={args.epochs}, batch_size={args.batch_size}",
+                f"# Learning Rate: {args.lr}, Weight Decay: {args.weight_decay}, Alpha: {args.alpha}, Beta: {args.beta}",
+                f"# Data: gloss_classes={args.num_gloss}, cat_classes={args.num_cat}, seed={args.seed}",
+                f"# Performance: amp={args.amp}, compile={args.compile_model}, workers={args.num_workers}",
+                f"# Timestamp: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
+            ]
+            for header_line in config_header:
+                csv_writer.writerow([header_line])
+            csv_writer.writerow([])  # Empty line separator
             csv_writer.writerow(["epoch", "train_loss", "val_loss", "val_gloss_acc", "val_cat_acc", "lr", "epoch_time", "gpu_memory_allocated", "gpu_memory_reserved"]) 
 
     print(f"Training for {epochs} epochs...")
@@ -789,10 +912,24 @@ if __name__ == "__main__":
                 seed=args.seed,
             )
         print(f"✓ Loaded data successfully")
-        if not (use_feature_files or use_keypoint_files):
+        
+        # Log dataset source information
+        if use_feature_files:
+            print(f"  - Dataset type: IV3-GRU Features")
+            print(f"  - Training folder: {args.features_train}")
+            print(f"  - Validation folder: {args.features_val}")
+            print(f"  - Feature key: {args.feature_key}")
+        elif use_keypoint_files:
+            print(f"  - Dataset type: Transformer Keypoints")
+            print(f"  - Training folder: {args.keypoints_train}")
+            print(f"  - Validation folder: {args.keypoints_val}")
+            print(f"  - Keypoint key: {args.kp_key}")
+        else:
+            print(f"  - Dataset type: Synthetic/Dummy Data")
             print(f"  - Training samples: {len(train_X)}")
             print(f"  - Validation samples: {len(val_X)}")
             print(f"  - Sequence shape: {train_X.shape[1:]} (T, features)")
+        
         print(f"  - Gloss classes: {args.num_gloss}")
         print(f"  - Category classes: {args.num_cat}")
     except Exception as e:
@@ -849,6 +986,20 @@ if __name__ == "__main__":
     print(f"  - Batch size: {batch_size}")
     print(f"  - Training batches: {len(train_loader)}")
     print(f"  - Validation batches: {len(val_loader)}")
+    
+    # Log dataset details
+    if use_feature_files:
+        print(f"  - Training dataset size: {len(train_dataset)} samples")
+        print(f"  - Validation dataset size: {len(val_dataset)} samples")
+        print(f"  - Data format: [T, 2048] features")
+    elif use_keypoint_files:
+        print(f"  - Training dataset size: {len(train_dataset)} samples")
+        print(f"  - Validation dataset size: {len(val_dataset)} samples")
+        print(f"  - Data format: [T, 156] keypoints")
+    else:
+        print(f"  - Training dataset size: {len(train_dataset)} samples")
+        print(f"  - Validation dataset size: {len(val_dataset)} samples")
+        print(f"  - Data format: Synthetic data")
 
     # Model selection
     print("\n" + "="*60)
@@ -879,15 +1030,8 @@ if __name__ == "__main__":
     else:
         raise ValueError(f"Invalid --model {args.model}")
 
-    # Model information
-    total_params = sum(p.numel() for p in model.parameters())
-    trainable_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
-    
-    print(f"\nModel Information:")
-    print(f"  - Model type: {model.__class__.__name__}")
-    print(f"  - Total parameters: {total_params:,}")
-    print(f"  - Trainable parameters: {trainable_params:,}")
-    print(f"  - Model size: {total_params * 4 / 1024 / 1024:.1f} MB")
+    # Log model information with comprehensive config
+    log_comprehensive_config(args, device, model)
 
     # Forward adapter per model (unifies calling convention)
     if args.model == "transformer":
