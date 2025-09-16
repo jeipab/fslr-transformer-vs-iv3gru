@@ -39,7 +39,7 @@ project_root = Path(__file__).parent.parent
 sys.path.insert(0, str(project_root))
 
 from models import SignTransformer, InceptionV3GRU
-from label_mapping import load_label_mappings, format_prediction_results
+from data.labels.label_mapping import load_label_mappings, format_prediction_results
 
 # Suppress warnings for cleaner output
 warnings.filterwarnings('ignore', category=UserWarning)

@@ -15,17 +15,32 @@ Usage:
     python -m training.train --model transformer --epochs 30
 """
 
-from .utils import FSLDataset, evaluate
-from .train import (
-    FSLFeatureFileDataset,
-    train_model,
-    main
-)
+# Conditional imports to avoid errors when dependencies are missing
+try:
+    from .utils import FSLDataset, evaluate
+    TRAINING_UTILS_AVAILABLE = True
+except ImportError:
+    TRAINING_UTILS_AVAILABLE = False
+    FSLDataset = None
+    evaluate = None
 
-__all__ = [
-    'FSLDataset',
-    'FSLFeatureFileDataset', 
-    'evaluate',
-    'train_model',
-    'main'
-]
+try:
+    from .train import (
+        FSLFeatureFileDataset,
+        train_model
+        # Note: train.py doesn't have a main function, it's designed to be run as a script
+    )
+    TRAINING_TRAIN_AVAILABLE = True
+except ImportError:
+    TRAINING_TRAIN_AVAILABLE = False
+    FSLFeatureFileDataset = None
+    train_model = None
+
+# Build __all__ list dynamically based on what's available
+__all__ = []
+
+if TRAINING_UTILS_AVAILABLE:
+    __all__.extend(['FSLDataset', 'evaluate'])
+
+if TRAINING_TRAIN_AVAILABLE:
+    __all__.extend(['FSLFeatureFileDataset', 'train_model'])

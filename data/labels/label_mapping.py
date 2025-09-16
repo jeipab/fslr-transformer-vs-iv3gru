@@ -17,7 +17,7 @@ def load_label_mappings():
         tuple: (gloss_mapping, category_mapping) dictionaries
     """
     # Path to the labels reference CSV
-    csv_path = Path(__file__).parent.parent / "data" / "splitting" / "labels_reference.csv"
+    csv_path = Path(__file__).parent.parent.parent / "data" / "splitting" / "labels_reference.csv"
     
     if not csv_path.exists():
         raise FileNotFoundError(f"Labels reference file not found: {csv_path}")

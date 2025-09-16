@@ -30,41 +30,80 @@ Usage:
 """
 
 # Core preprocessing functionality
-from .core.preprocess import main as preprocess_main
-from .core.multi_preprocess import main as multi_preprocess_main
+# Note: preprocess.py doesn't have a main function, it's designed to be run as a script
+# from .core.preprocess import main as preprocess_main  # This doesn't exist
+
+# Conditional imports to avoid errors when dependencies are missing
+try:
+    from .core.multi_preprocess import main as multi_preprocess_main
+    MULTI_PREPROCESS_AVAILABLE = True
+except ImportError:
+    MULTI_PREPROCESS_AVAILABLE = False
+    multi_preprocess_main = None
 
 # Feature extractors
-from .extractors.iv3_features import extract_iv3_features
-from .extractors.keypoints_features import (
-    extract_keypoints_from_frame,
-    interpolate_gaps,
-    create_models,
-    close_models
-)
+try:
+    from .extractors.iv3_features import extract_iv3_features
+    IV3_FEATURES_AVAILABLE = True
+except ImportError:
+    IV3_FEATURES_AVAILABLE = False
+    extract_iv3_features = None
+
+try:
+    from .extractors.keypoints_features import (
+        extract_keypoints_from_frame,
+        interpolate_gaps,
+        create_models,
+        close_models
+    )
+    KEYPOINTS_FEATURES_AVAILABLE = True
+except ImportError:
+    KEYPOINTS_FEATURES_AVAILABLE = False
+    extract_keypoints_from_frame = None
+    interpolate_gaps = None
+    create_models = None
+    close_models = None
 
 # Utilities
-from .utils.validate_npz import validate_dataset
-from .utils.rename_clips import rename_clips
+try:
+    from .utils.validate_npz import validate_dataset
+    VALIDATE_NPZ_AVAILABLE = True
+except ImportError:
+    VALIDATE_NPZ_AVAILABLE = False
+    validate_dataset = None
+
+try:
+    from .utils.rename_clips import rename_clips
+    RENAME_CLIPS_AVAILABLE = True
+except ImportError:
+    RENAME_CLIPS_AVAILABLE = False
+    rename_clips = None
 
 # Occlusion detection
-from .core.occlusion_detection import compute_occlusion_flag_from_keypoints
+try:
+    from .core.occlusion_detection import compute_occlusion_flag_from_keypoints
+    OCCLUSION_DETECTION_AVAILABLE = True
+except ImportError:
+    OCCLUSION_DETECTION_AVAILABLE = False
+    compute_occlusion_flag_from_keypoints = None
 
-__all__ = [
-    # Core processors
-    'preprocess_main',
-    'multi_preprocess_main',
-    
-    # Feature extractors
-    'extract_iv3_features',
-    'extract_keypoints_from_frame',
-    'interpolate_gaps',
-    'create_models',
-    'close_models',
-    
-    # Utilities
-    'validate_dataset',
-    'rename_clips',
-    
-    # Occlusion detection
-    'compute_occlusion_flag_from_keypoints'
-]
+# Build __all__ list dynamically based on what's available
+__all__ = []
+
+if MULTI_PREPROCESS_AVAILABLE:
+    __all__.append('multi_preprocess_main')
+
+if IV3_FEATURES_AVAILABLE:
+    __all__.append('extract_iv3_features')
+
+if KEYPOINTS_FEATURES_AVAILABLE:
+    __all__.extend(['extract_keypoints_from_frame', 'interpolate_gaps', 'create_models', 'close_models'])
+
+if VALIDATE_NPZ_AVAILABLE:
+    __all__.append('validate_dataset')
+
+if RENAME_CLIPS_AVAILABLE:
+    __all__.append('rename_clips')
+
+if OCCLUSION_DETECTION_AVAILABLE:
+    __all__.append('compute_occlusion_flag_from_keypoints')

@@ -54,16 +54,16 @@ class ModelManager:
             import sys
             from pathlib import Path
             
-            # Set up paths correctly
-            project_root = Path(__file__).parent.parent
+            # Set up paths correctly - go up to project root
+            project_root = Path(__file__).parent.parent.parent  # Go up to project root
             trained_models_path = project_root / "trained_models"
             
-            # Add trained_models to path if not already there
-            if str(trained_models_path) not in sys.path:
-                sys.path.insert(0, str(trained_models_path))
+            # Add project root to path if not already there
+            if str(project_root) not in sys.path:
+                sys.path.insert(0, str(project_root))
             
             # Import using the full module path
-            from evaluation import ModelPredictor
+            from evaluation.prediction.predict import ModelPredictor
             
             # Determine device
             device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -89,7 +89,7 @@ class ModelManager:
                 # Add project root to path for label_mapping import
                 import sys
                 from pathlib import Path
-                project_root = Path(__file__).parent.parent
+                project_root = Path(__file__).parent.parent.parent  # Go up to project root
                 if str(project_root) not in sys.path:
                     sys.path.insert(0, str(project_root))
                 
