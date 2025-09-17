@@ -83,7 +83,7 @@ except ImportError:
 try:
     from .core.occlusion_detection import (
         compute_occlusion_flag_from_keypoints,
-        compute_advanced_occlusion_detection,
+        compute_occlusion_detection,
         get_occlusion_config,
         validate_occlusion_config,
         DEFAULT_OCCLUSION_CONFIG
@@ -92,7 +92,7 @@ try:
 except ImportError:
     OCCLUSION_DETECTION_AVAILABLE = False
     compute_occlusion_flag_from_keypoints = None
-    compute_advanced_occlusion_detection = None
+    compute_occlusion_detection = None
     get_occlusion_config = None
     validate_occlusion_config = None
     DEFAULT_OCCLUSION_CONFIG = None
@@ -118,7 +118,7 @@ if RENAME_CLIPS_AVAILABLE:
 if OCCLUSION_DETECTION_AVAILABLE:
     __all__.extend([
         'compute_occlusion_flag_from_keypoints',
-        'compute_advanced_occlusion_detection',
+        'compute_occlusion_detection',
         'get_occlusion_config',
         'validate_occlusion_config',
         'DEFAULT_OCCLUSION_CONFIG'
