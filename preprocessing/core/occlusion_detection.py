@@ -25,7 +25,7 @@ def _point_in_ellipse(px: float, py: float, cx: float, cy: float, ax: float, by:
 
 
 def _hand_centers_and_tips(frame_xy: np.ndarray, frame_mask: np.ndarray, hand_start: int, hand_len: int) -> tuple[tuple[float, float] | None, list[tuple[float, float]]]:
-    """Return (palm_center, fingertip_points) for one hand.
+    """Return (palm_center, fingertip_points) for one hand with validation.
 
     Uses MediaPipe Hands indexing (21 landmarks). Palm center is the mean of MCP
     joints (5, 9, 13, 17) when available, else the wrist (0) if visible.
@@ -34,12 +34,17 @@ def _hand_centers_and_tips(frame_xy: np.ndarray, frame_mask: np.ndarray, hand_st
     mcp_rel = [5, 9, 13, 17]  # MCP joints
     fingertip_rel = [4, 8, 12, 16, 20]  # fingertips
     mcp_coords: list[tuple[float, float]] = []
+    
     for r in mcp_rel:
         if hand_len <= r:
             continue
         if bool(frame_mask[hand_start + r]):
             idx = 2 * (hand_start + r)
-            mcp_coords.append((float(frame_xy[idx]), float(frame_xy[idx + 1])))
+            coord = (float(frame_xy[idx]), float(frame_xy[idx + 1]))
+            # Validate coordinate is within reasonable bounds
+            if 0 <= coord[0] <= 1 and 0 <= coord[1] <= 1:
+                mcp_coords.append(coord)
+    
     palm_center: tuple[float, float] | None
     if len(mcp_coords) >= 2:
         mx = sum(p[0] for p in mcp_coords) / float(len(mcp_coords))
@@ -49,18 +54,86 @@ def _hand_centers_and_tips(frame_xy: np.ndarray, frame_mask: np.ndarray, hand_st
         # fallback to wrist if visible
         if bool(frame_mask[hand_start + 0]):
             idx0 = 2 * (hand_start + 0)
-            palm_center = (float(frame_xy[idx0]), float(frame_xy[idx0 + 1]))
+            wrist_coord = (float(frame_xy[idx0]), float(frame_xy[idx0 + 1]))
+            if 0 <= wrist_coord[0] <= 1 and 0 <= wrist_coord[1] <= 1:
+                palm_center = wrist_coord
+            else:
+                palm_center = None
         else:
             palm_center = None
-    # Fingertips
+    
+    # Fingertips with validation
     tips: list[tuple[float, float]] = []
     for r in fingertip_rel:
         if hand_len <= r:
             continue
         if bool(frame_mask[hand_start + r]):
             idx = 2 * (hand_start + r)
-            tips.append((float(frame_xy[idx]), float(frame_xy[idx + 1])))
+            tip_coord = (float(frame_xy[idx]), float(frame_xy[idx + 1]))
+            # Validate coordinate is within reasonable bounds
+            if 0 <= tip_coord[0] <= 1 and 0 <= tip_coord[1] <= 1:
+                tips.append(tip_coord)
+    
     return palm_center, tips
+
+
+def _validate_face_landmarks(face_coords: List[Tuple[float, float]], 
+                           face_indices: List[int]) -> Tuple[List[Tuple[float, float]], List[int]]:
+    """
+    Validate and clean face landmarks for better reliability.
+    
+    Args:
+        face_coords: List of face landmark coordinates
+        face_indices: List of face landmark indices
+        
+    Returns:
+        Tuple of (validated_coords, validated_indices)
+    """
+    validated_coords = []
+    validated_indices = []
+    
+    for i, (coord, idx) in enumerate(zip(face_coords, face_indices)):
+        # Check if coordinates are within valid bounds
+        if 0 <= coord[0] <= 1 and 0 <= coord[1] <= 1:
+            # Check for reasonable landmark positions (basic sanity check)
+            if _is_valid_landmark_position(coord, idx):
+                validated_coords.append(coord)
+                validated_indices.append(idx)
+    
+    return validated_coords, validated_indices
+
+
+def _is_valid_landmark_position(coord: Tuple[float, float], landmark_idx: int) -> bool:
+    """
+    Check if landmark position is reasonable based on landmark type.
+    
+    Args:
+        coord: Landmark coordinate (x, y)
+        landmark_idx: Landmark index
+        
+    Returns:
+        True if position is reasonable
+    """
+    x, y = coord
+    
+    # Basic sanity checks for different landmark types
+    if landmark_idx == 0:  # nose_tip
+        return 0.3 <= x <= 0.7 and 0.3 <= y <= 0.7
+    elif landmark_idx in [1, 2]:  # eye_outer
+        return 0.2 <= x <= 0.8 and 0.2 <= y <= 0.6
+    elif landmark_idx in [3, 4]:  # eye_inner
+        return 0.3 <= x <= 0.7 and 0.2 <= y <= 0.6
+    elif landmark_idx in [5, 6]:  # mouth
+        return 0.2 <= x <= 0.8 and 0.5 <= y <= 0.8
+    elif landmark_idx == 7:  # forehead
+        return 0.2 <= x <= 0.8 and 0.1 <= y <= 0.4
+    elif landmark_idx == 8:  # chin
+        return 0.3 <= x <= 0.7 and 0.6 <= y <= 0.9
+    elif landmark_idx in [9, 10]:  # cheeks
+        return 0.1 <= x <= 0.9 and 0.3 <= y <= 0.7
+    
+    # Default validation for unknown landmarks
+    return 0.1 <= x <= 0.9 and 0.1 <= y <= 0.9
 
 
 def _check_dependencies() -> bool:
@@ -438,12 +511,12 @@ def compute_occlusion_detection_from_keypoints(
         face_len = 11
         face_start = pose_len + hand_len + hand_len  # 67
         
-        # Conservative detection parameters to prevent false positives
-        min_face_points = 5  # Require more face points for accuracy
-        min_hand_points = 4  # Require more hand points for reliability
-        min_fingertips_inside = 3  # Require multiple fingertips for reliable detection
-        proximity_multiplier = 1.2  # Conservative multiplier
-        occlusion_threshold = 0.30  # Higher threshold for reliability
+        # Adaptive detection parameters for better sensitivity
+        min_face_points = 3  # Reduced for better coverage
+        min_hand_points = 3  # Reduced for better coverage
+        min_fingertips_inside = 1  # Reduced to catch subtle occlusions
+        proximity_multiplier = 1.5  # Increased for better detection
+        occlusion_threshold = 0.15  # Reduced for better sensitivity
         
         results = []
         hand_trajectories = {'left': [], 'right': []}  # Track hand movement
@@ -463,7 +536,7 @@ def compute_occlusion_detection_from_keypoints(
                 })
                 continue
             
-            # Get visible face coordinates
+            # Get visible face coordinates with validation
             face_coords = []
             face_indices = []
             for i_rel in range(face_len):
@@ -472,7 +545,10 @@ def compute_occlusion_detection_from_keypoints(
                     face_coords.append((float(frame_xy[idx]), float(frame_xy[idx + 1])))
                     face_indices.append(i_rel)
             
-            if len(face_coords) < min_face_points:
+            # Validate face landmarks for better reliability
+            validated_coords, validated_indices = _validate_face_landmarks(face_coords, face_indices)
+            
+            if len(validated_coords) < min_face_points:
                 results.append({
                     'frame_idx': t,
                     'occlusion_detected': False,
@@ -481,8 +557,8 @@ def compute_occlusion_detection_from_keypoints(
                 })
                 continue
             
-            # Create enhanced face regions
-            face_regions = _create_enhanced_face_regions(face_coords, face_indices)
+            # Create enhanced face regions with validated landmarks
+            face_regions = _create_enhanced_face_regions(validated_coords, validated_indices)
             
             # Initialize detection results
             occlusion_detected = False
@@ -510,9 +586,9 @@ def compute_occlusion_detection_from_keypoints(
                         min_fingertips_inside, proximity_multiplier
                     )
                     
-                    # Aggregate results with conservative threshold
+                    # Aggregate results with balanced threshold
                     for region_name, confidence in region_results.items():
-                        if confidence > 0.6:  # High threshold to prevent false positives
+                        if confidence > 0.4:  # Balanced threshold for better sensitivity
                             occlusion_detected = True
                             if region_name not in occluded_regions:
                                 occluded_regions.append(region_name)
@@ -552,7 +628,7 @@ def compute_occlusion_detection_from_keypoints(
 def _create_enhanced_face_regions(face_coords: List[Tuple[float, float]], 
                                 face_indices: List[int]) -> Dict[str, Dict]:
     """
-    Create enhanced face regions based on facial landmarks.
+    Create enhanced face regions based on facial landmarks with adaptive sizing.
     
     Args:
         face_coords: List of (x, y) coordinates for visible face points
@@ -561,7 +637,7 @@ def _create_enhanced_face_regions(face_coords: List[Tuple[float, float]],
     Returns:
         Dictionary mapping region names to region definitions
     """
-    if len(face_coords) < 3:
+    if len(face_coords) < 2:
         return {}
     
     # Map face indices to landmark names (from FACEMESH_11)
@@ -588,59 +664,92 @@ def _create_enhanced_face_regions(face_coords: List[Tuple[float, float]],
     
     regions = {}
     
-    # Define regions based on available landmarks
+    # Calculate face scale for adaptive region sizing
+    face_scale = _calculate_face_scale(landmarks)
+    
+    # Define regions based on available landmarks with adaptive sizing
     if 'nose_tip' in landmarks:
         nose = landmarks['nose_tip']
         
-        # Forehead region (top of head) - precise radius
+        # Forehead region (top of head) - adaptive radius
         if 'forehead' in landmarks:
             forehead = landmarks['forehead']
             regions['forehead'] = {
                 'center': forehead,
-                'radius': 0.06,  # Much smaller for precision
+                'radius': 0.12 * face_scale,  # Increased and adaptive
                 'type': 'circle'
             }
         
-        # Cheeks region (eye area) - precise radius
+        # Cheeks region (eye area) - adaptive radius
         if 'left_eye_outer' in landmarks and 'right_eye_outer' in landmarks:
             left_eye = landmarks['left_eye_outer']
             right_eye = landmarks['right_eye_outer']
             cheek_center = ((left_eye[0] + right_eye[0]) / 2, (left_eye[1] + right_eye[1]) / 2)
             regions['cheeks'] = {
                 'center': cheek_center,
-                'radius': 0.08,  # Much smaller for precision
+                'radius': 0.15 * face_scale,  # Increased and adaptive
                 'type': 'circle'
             }
         
-        # Nose region (central face) - precise radius
+        # Nose region (central face) - adaptive radius
         regions['nose'] = {
             'center': nose,
-            'radius': 0.05,  # Much smaller for precision
+            'radius': 0.10 * face_scale,  # Increased and adaptive
             'type': 'circle'
         }
         
-        # Mouth region (lower face) - precise radius
+        # Mouth region (lower face) - adaptive radius
         if 'mouth_left' in landmarks and 'mouth_right' in landmarks:
             mouth_left = landmarks['mouth_left']
             mouth_right = landmarks['mouth_right']
             mouth_center = ((mouth_left[0] + mouth_right[0]) / 2, (mouth_left[1] + mouth_right[1]) / 2)
             regions['mouth'] = {
                 'center': mouth_center,
-                'radius': 0.06,  # Much smaller for precision
+                'radius': 0.12 * face_scale,  # Increased and adaptive
                 'type': 'circle'
             }
         
-        # Neck region (below chin) - precise radius
+        # Neck region (below chin) - adaptive radius
         if 'chin' in landmarks:
             chin = landmarks['chin']
-            neck_center = (chin[0], chin[1] + 0.03)  # Closer to chin
+            neck_center = (chin[0], chin[1] + 0.05 * face_scale)  # Adaptive offset
             regions['neck'] = {
                 'center': neck_center,
-                'radius': 0.08,  # Much smaller for precision
+                'radius': 0.15 * face_scale,  # Increased and adaptive
                 'type': 'circle'
             }
     
     return regions
+
+
+def _calculate_face_scale(landmarks: Dict[str, Tuple[float, float]]) -> float:
+    """
+    Calculate adaptive face scale based on available landmarks.
+    
+    Args:
+        landmarks: Dictionary of landmark names to coordinates
+        
+    Returns:
+        Scale factor for adaptive region sizing
+    """
+    if len(landmarks) < 2:
+        return 1.0  # Default scale
+    
+    # Calculate face width and height from available landmarks
+    x_coords = [coord[0] for coord in landmarks.values()]
+    y_coords = [coord[1] for coord in landmarks.values()]
+    
+    face_width = max(x_coords) - min(x_coords)
+    face_height = max(y_coords) - min(y_coords)
+    
+    # Use average of width and height for scale
+    face_size = (face_width + face_height) / 2
+    
+    # Normalize scale (typical face size is around 0.3-0.4 in normalized coordinates)
+    normalized_scale = face_size / 0.35
+    
+    # Clamp scale to reasonable bounds
+    return max(0.5, min(2.0, normalized_scale))
 
 
 def _detect_occlusions_multi_method(palm_center: Optional[Tuple[float, float]], 
@@ -649,9 +758,9 @@ def _detect_occlusions_multi_method(palm_center: Optional[Tuple[float, float]],
                                   trajectory: List[Tuple[int, Tuple[float, float]]],
                                   current_frame: int,
                                   min_fingertips_inside: int = 1,
-                                  proximity_multiplier: float = 1.6) -> Dict[str, float]:
+                                  proximity_multiplier: float = 1.5) -> Dict[str, float]:
     """
-    Detect occlusions using multiple methods for each region.
+    Detect occlusions using multiple methods for each region with balanced weighting.
     
     Args:
         palm_center: Palm center coordinates
@@ -670,32 +779,31 @@ def _detect_occlusions_multi_method(palm_center: Optional[Tuple[float, float]],
         region_center = region_def['center']
         region_radius = region_def['radius']
         
-        # Method 1: Direct fingertip intersection (conservative detection)
+        # Method 1: Direct fingertip intersection (primary detection)
         if tips:
             fingertips_inside = 0
             for tip_x, tip_y in tips:
                 distance = ((tip_x - region_center[0])**2 + (tip_y - region_center[1])**2)**0.5
-                if distance <= region_radius * 0.8:  # Conservative intersection
+                if distance <= region_radius:  # Direct intersection
                     fingertips_inside += 1
             
-            # Only count if minimum fingertips are inside
+            # Count if minimum fingertips are inside
             if fingertips_inside >= min_fingertips_inside:
-                confidence += 0.6  # High confidence for direct intersection
+                confidence += 0.5  # Primary weight for direct intersection
         
-        # Method 2: Palm center proximity (conservative detection)
+        # Method 2: Palm center proximity (secondary detection)
         if palm_center is not None:
             palm_x, palm_y = palm_center
             distance = ((palm_x - region_center[0])**2 + (palm_y - region_center[1])**2)**0.5
-            # Use conservative proximity multiplier
             proximity_radius = region_radius * proximity_multiplier
-            if distance <= proximity_radius * 0.9:  # Conservative
-                proximity_score = max(0, 1 - distance / (proximity_radius * 0.9))
-                confidence += proximity_score * 0.2  # Lower weight for proximity
+            if distance <= proximity_radius:
+                proximity_score = max(0, 1 - distance / proximity_radius)
+                confidence += proximity_score * 0.3  # Increased weight for proximity
         
-        # Method 3: Trajectory analysis (conservative approach detection)
-        if len(trajectory) >= 8:  # Require many frames for reliable trajectory
-            recent_positions = trajectory[-8:]  # Last 8 positions
-            if len(recent_positions) >= 5:
+        # Method 3: Trajectory analysis (motion-based detection)
+        if len(trajectory) >= 5:  # Reduced requirement for faster response
+            recent_positions = trajectory[-5:]  # Last 5 positions
+            if len(recent_positions) >= 3:
                 # Check if hand is consistently moving toward face
                 distances = []
                 for _, pos in recent_positions:
@@ -703,23 +811,23 @@ def _detect_occlusions_multi_method(palm_center: Optional[Tuple[float, float]],
                     distances.append(dist)
                 
                 # Check if distance is consistently decreasing
-                if len(distances) >= 5:
+                if len(distances) >= 3:
                     decreasing_count = sum(1 for i in range(1, len(distances)) if distances[i] < distances[i-1])
-                    if decreasing_count >= 4 and distances[-1] <= region_radius * 1.2:  # Conservative radius
+                    if decreasing_count >= 2 and distances[-1] <= region_radius * 1.5:  # More lenient
                         approach_score = max(0, (distances[0] - distances[-1]) / distances[0])
-                        confidence += approach_score * 0.1  # Low weight for trajectory
+                        confidence += approach_score * 0.15  # Increased weight for trajectory
         
-        # Method 4: Multi-point hand analysis (conservative orientation)
-        if palm_center is not None and len(tips) >= 4:  # Require many fingertips
+        # Method 4: Multi-point hand analysis (orientation detection)
+        if palm_center is not None and len(tips) >= 2:  # Reduced requirement
             # Check if hand is oriented toward face
             hand_points = [palm_center] + tips
             face_distances = [((p[0] - region_center[0])**2 + (p[1] - region_center[1])**2)**0.5 for p in hand_points]
             min_distance = min(face_distances)
             
-            # Conservative radius for orientation detection
-            if min_distance <= region_radius * 1.3:
-                orientation_score = max(0, 1 - min_distance / (region_radius * 1.3))
-                confidence += orientation_score * 0.05  # Very low weight for orientation
+            # More lenient radius for orientation detection
+            if min_distance <= region_radius * 1.8:
+                orientation_score = max(0, 1 - min_distance / (region_radius * 1.8))
+                confidence += orientation_score * 0.05  # Small weight for orientation
         
         region_confidences[region_name] = min(confidence, 1.0)  # Cap at 1.0
     
@@ -728,7 +836,7 @@ def _detect_occlusions_multi_method(palm_center: Optional[Tuple[float, float]],
 
 def _apply_temporal_filtering(results: List[Dict]) -> List[Dict]:
     """
-    Apply temporal filtering to smooth detection results.
+    Apply adaptive temporal filtering to smooth detection results.
     
     Args:
         results: List of frame detection results
@@ -736,13 +844,20 @@ def _apply_temporal_filtering(results: List[Dict]) -> List[Dict]:
     Returns:
         Filtered results with improved temporal consistency
     """
-    if len(results) < 3:
+    if len(results) < 2:
         return results
     
     filtered_results = []
-    window_size = 3
     
     for i, result in enumerate(results):
+        # Adaptive window size based on sequence length
+        if len(results) < 10:
+            window_size = 3
+        elif len(results) < 30:
+            window_size = 5
+        else:
+            window_size = 7
+        
         # Get temporal window
         start = max(0, i - window_size // 2)
         end = min(len(results), i + window_size // 2 + 1)
@@ -752,26 +867,39 @@ def _apply_temporal_filtering(results: List[Dict]) -> List[Dict]:
         confidences = [r['confidence'] for r in window]
         avg_confidence = sum(confidences) / len(confidences)
         
-        # Apply majority voting for occlusion detection
+        # Apply weighted majority voting for occlusion detection
         occlusions = [r['occlusion_detected'] for r in window]
-        majority_occluded = sum(occlusions) > len(occlusions) // 2
+        occlusion_weights = [r['confidence'] for r in window]
         
-        # Combine regions from window
+        # Weighted voting based on confidence
+        weighted_occlusions = sum(occ * weight for occ, weight in zip(occlusions, occlusion_weights))
+        total_weight = sum(occlusion_weights)
+        weighted_majority = weighted_occlusions / total_weight if total_weight > 0 else 0
+        
+        # Combine regions from window with confidence weighting
         all_regions = []
+        region_confidences = {}
+        
         for r in window:
-            all_regions.extend(r['occluded_regions'])
+            for region in r['occluded_regions']:
+                all_regions.append(region)
+                if region not in region_confidences:
+                    region_confidences[region] = []
+                region_confidences[region].append(r['confidence'])
         
-        # Count region occurrences
-        region_counts = {}
-        for region in all_regions:
-            region_counts[region] = region_counts.get(region, 0) + 1
-        
-        # Keep regions that appear in majority of frames
-        filtered_regions = [region for region, count in region_counts.items() 
-                          if count > len(window) // 2]
+        # Keep regions with sufficient confidence and frequency
+        filtered_regions = []
+        for region, conf_list in region_confidences.items():
+            avg_region_conf = sum(conf_list) / len(conf_list)
+            region_frequency = len(conf_list) / len(window)
+            
+            # Region must appear in at least 40% of frames and have decent confidence
+            if region_frequency >= 0.4 and avg_region_conf >= 0.3:
+                filtered_regions.append(region)
         
         filtered_result = result.copy()
-        filtered_result['occlusion_detected'] = majority_occluded or avg_confidence > 0.7  # High threshold to prevent false positives
+        # Use balanced threshold for final decision
+        filtered_result['occlusion_detected'] = weighted_majority > 0.4 or avg_confidence > 0.5
         filtered_result['occluded_regions'] = list(set(filtered_regions))
         filtered_result['confidence'] = avg_confidence
         
@@ -920,7 +1048,15 @@ DEFAULT_OCCLUSION_CONFIG = {
     'tracking_window_size': 5,
     'motion_threshold': 10,
     'temporal_filtering': True,
-    'output_detailed_results': False
+    'output_detailed_results': False,
+    # Enhanced detection parameters
+    'min_face_points': 3,
+    'min_hand_points': 3,
+    'min_fingertips_inside': 1,
+    'proximity_multiplier': 1.5,
+    'occlusion_threshold': 0.15,
+    'confidence_threshold': 0.4,
+    'temporal_confidence': 0.5
 }
 
 

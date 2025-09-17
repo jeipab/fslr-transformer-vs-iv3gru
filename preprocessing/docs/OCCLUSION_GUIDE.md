@@ -32,8 +32,10 @@ The occlusion detection system implements sophisticated computer vision-based de
 
 - **5-Region Head Partitioning**: Divides the head into linguistically significant regions (forehead, cheeks, nose, mouth, neck)
 - **Multi-Method Detection**: Uses ellipse intersection, proximity analysis, trajectory tracking, and orientation detection
-- **Temporal Filtering**: Applies sliding window with majority voting for consistency
-- **Conservative Thresholds**: Designed to minimize false positives while maintaining accuracy
+- **Adaptive Temporal Filtering**: Applies weighted sliding window with confidence-based voting for consistency
+- **Balanced Thresholds**: Designed to minimize false negatives while maintaining accuracy
+- **Robust Keypoint Validation**: Validates landmark positions and provides fallback mechanisms
+- **Adaptive Region Sizing**: Automatically adjusts region sizes based on face scale
 
 ### Head Regions
 
@@ -57,13 +59,15 @@ The system divides the head into 5 regions based on the Suvi dictionary:
 ### Default Parameters
 
 ```python
-# Conservative detection parameters
+# Balanced detection parameters for improved sensitivity
 config = {
-    'min_face_points': 5,           # Require more face points for accuracy
-    'min_hand_points': 4,            # Require more hand points for reliability
-    'min_fingertips_inside': 3,      # Require multiple fingertips for reliable detection
-    'proximity_multiplier': 1.2,     # Conservative multiplier
-    'occlusion_threshold': 0.30      # Higher threshold for reliability
+    'min_face_points': 3,           # Reduced for better coverage
+    'min_hand_points': 3,            # Reduced for better coverage
+    'min_fingertips_inside': 1,      # Reduced to catch subtle occlusions
+    'proximity_multiplier': 1.5,     # Increased for better detection
+    'occlusion_threshold': 0.15,     # Reduced for better sensitivity
+    'confidence_threshold': 0.4,      # Balanced threshold
+    'temporal_confidence': 0.5        # Balanced temporal threshold
 }
 ```
 
