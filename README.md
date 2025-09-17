@@ -70,14 +70,14 @@ Category: GREETING (0) (confidence: 0.774)
 ```
 fslr-transformer-vs-iv3gru/
 ├── 📊 data/                    # Data management and label mapping
-├── 🔧 preprocessing/           # Video preprocessing and feature extraction
-├── 🧠 models/                  # Neural network architectures
-├── 🏋️ training/               # Model training and evaluation
 ├── 📈 evaluation/              # Model validation and prediction
-├── 🖥️ streamlit_app/          # Interactive web application
+├── 🧠 models/                  # Neural network architectures
 ├── 📓 notebooks/               # Jupyter notebooks for experiments
+├── 🔧 preprocessing/           # Video preprocessing and feature extraction
+├── 📚 shared/                  # Shared resources and documentation
+├── 🖥️ streamlit_app/          # Interactive web application
 ├── 💾 trained_models/          # Model checkpoints and weights
-└── 📚 shared/                  # Shared resources and documentation
+└── 🏋️ training/               # Model training and evaluation
 ```
 
 ## 🔄 Workflow
@@ -172,6 +172,7 @@ python -m training.train --model iv3_gru --smoke-test --num-gloss 105 --num-cat 
 - **[Data Guide](data/DATA_GUIDE.md)** - File formats and data structures
 - **[Preprocessing Guide](preprocessing/docs/PREPROCESS_GUIDE.MD)** - Video to NPZ conversion
 - **[Multi-Process Guide](preprocessing/docs/MULTI_PREPROCESS_GUIDE.md)** - 30-50x faster preprocessing
+- **[Occlusion Guide](preprocessing/docs/OCCLUSION_GUIDE.md)** - Hand occlusion detection and handling
 - **[Model Guide](models/MODEL_GUIDE.md)** - Architecture details and usage
 - **[Training Guide](training/TRAINING_GUIDE.md)** - Model training instructions
 - **[Tool Guide](streamlit_app/TOOL_GUIDE.md)** - Interactive visualization app
