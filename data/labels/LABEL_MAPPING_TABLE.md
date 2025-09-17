@@ -113,18 +113,18 @@ This document provides a complete mapping of class IDs to human-readable labels 
 
 ### RELATIONSHIPS (Category 6)
 
-| ID  | Gloss            |
-| --- | ---------------- |
-| 62  | BOY              |
-| 63  | GIRL             |
-| 64  | MAN              |
-| 65  | WOMAN            |
-| 66  | DEAF             |
-| 67  | HARD OF HEARING  |
-| 68  | WEELCHAIR PERSON |
-| 69  | BLIND            |
-| 70  | DEAF BLIND       |
-| 71  | MARRIED          |
+| ID  | Gloss             |
+| --- | ----------------- |
+| 62  | BOY               |
+| 63  | GIRL              |
+| 64  | MAN               |
+| 65  | WOMAN             |
+| 66  | DEAF              |
+| 67  | HARD OF HEARING   |
+| 68  | WHEELCHAIR PERSON |
+| 69  | BLIND             |
+| 70  | DEAF BLIND        |
+| 71  | MARRIED           |
 
 ### COLOR (Category 7)
 
