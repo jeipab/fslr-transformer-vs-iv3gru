@@ -176,6 +176,165 @@ def set_page() -> None:
     /* Clean sidebar styling */
     .css-1d391kg {
         background-color: #ffffff !important;
+        padding-bottom: 0 !important;
+        margin-bottom: 0 !important;
+        height: fit-content !important;
+        min-height: auto !important;
+    }
+    
+    /* Remove excess bottom spacing from sidebar */
+    .css-1d391kg .stMarkdownContainer:last-child {
+        margin-bottom: 0 !important;
+        padding-bottom: 0 !important;
+    }
+    
+    /* Ensure sidebar content fits properly */
+    .css-1d391kg .stMarkdownContainer {
+        margin-bottom: 0 !important;
+        padding-bottom: 0 !important;
+    }
+    
+    /* Target sidebar content area specifically */
+    .css-1d391kg > div {
+        padding-bottom: 0 !important;
+        margin-bottom: 0 !important;
+    }
+    
+    /* Remove spacing from sidebar blocks */
+    .css-1d391kg .stMarkdownContainer,
+    .css-1d391kg .stContainer,
+    .css-1d391kg .stSelectbox,
+    .css-1d391kg .stRadio {
+        margin-bottom: 0 !important;
+        padding-bottom: 0 !important;
+    }
+    
+    /* Remove any default Streamlit sidebar spacing */
+    .css-1d391kg .element-container:last-child {
+        margin-bottom: 0 !important;
+        padding-bottom: 0 !important;
+    }
+    
+    /* Additional sidebar cleanup - remove all bottom spacing */
+    .css-1d391kg .stMarkdownContainer:last-child,
+    .css-1d391kg .stContainer:last-child,
+    .css-1d391kg .element-container:last-child {
+        margin-bottom: 0 !important;
+        padding-bottom: 0 !important;
+    }
+    
+    /* Ensure sidebar ends cleanly without extra space */
+    .css-1d391kg {
+        overflow: hidden !important;
+    }
+    
+    /* Additional comprehensive sidebar spacing cleanup */
+    .css-1d391kg *:last-child {
+        margin-bottom: 0 !important;
+        padding-bottom: 0 !important;
+    }
+    
+    /* Remove any Streamlit default spacing from sidebar */
+    .css-1d391kg .stMarkdown,
+    .css-1d391kg .stMarkdownContainer,
+    .css-1d391kg .stContainer,
+    .css-1d391kg .element-container {
+        margin-bottom: 0 !important;
+        padding-bottom: 0 !important;
+    }
+    
+    /* Force sidebar to not have any bottom padding/margin */
+    .css-1d391kg {
+        padding-bottom: 0 !important;
+        margin-bottom: 0 !important;
+        border-bottom: none !important;
+    }
+    
+    /* Target Streamlit's sidebar container specifically */
+    .css-1d391kg .stContainer,
+    .css-1d391kg .stMarkdownContainer,
+    .css-1d391kg .element-container {
+        margin-bottom: 0 !important;
+        padding-bottom: 0 !important;
+    }
+    
+    /* Remove spacing from sidebar separators */
+    .css-1d391kg hr {
+        margin: 0.5rem 0 !important;
+        border: none !important;
+        border-top: 1px solid #4a5568 !important;
+    }
+    
+    /* Remove spacing from sidebar containers */
+    .css-1d391kg .stContainer {
+        margin: 0 !important;
+        padding: 0 !important;
+    }
+    
+    /* Ensure the last element in sidebar has no bottom spacing */
+    .css-1d391kg > div:last-child,
+    .css-1d391kg .stMarkdownContainer:last-child,
+    .css-1d391kg .stContainer:last-child {
+        margin-bottom: 0 !important;
+        padding-bottom: 0 !important;
+    }
+    
+    /* More aggressive sidebar spacing removal */
+    .css-1d391kg * {
+        margin-bottom: 0 !important;
+    }
+    
+    /* Target specific Streamlit sidebar elements */
+    .css-1d391kg .stMarkdown,
+    .css-1d391kg .stMarkdownContainer,
+    .css-1d391kg .stContainer,
+    .css-1d391kg .element-container,
+    .css-1d391kg .stRadio,
+    .css-1d391kg .stSelectbox,
+    .css-1d391kg .stCheckbox {
+        margin-bottom: 0 !important;
+        padding-bottom: 0 !important;
+    }
+    
+    /* Remove spacing from the sidebar content area */
+    .css-1d391kg .block-container {
+        padding-bottom: 0 !important;
+        margin-bottom: 0 !important;
+    }
+    
+    /* Force sidebar to end exactly at content */
+    .css-1d391kg {
+        height: auto !important;
+        max-height: none !important;
+        min-height: auto !important;
+    }
+    
+    /* Comprehensive sidebar cleanup - remove ALL spacing */
+    .css-1d391kg,
+    .css-1d391kg *,
+    .css-1d391kg > div,
+    .css-1d391kg .block-container,
+    .css-1d391kg .stMarkdownContainer,
+    .css-1d391kg .stContainer,
+    .css-1d391kg .element-container {
+        margin-bottom: 0 !important;
+        padding-bottom: 0 !important;
+    }
+    
+    /* Ensure sidebar content area has no bottom spacing */
+    .css-1d391kg .block-container {
+        padding: 0 !important;
+        margin: 0 !important;
+    }
+    
+    /* Remove any Streamlit default spacing from sidebar */
+    .css-1d391kg .stMarkdownContainer:last-child,
+    .css-1d391kg .stContainer:last-child,
+    .css-1d391kg .element-container:last-child,
+    .css-1d391kg > div:last-child {
+        margin-bottom: 0 !important;
+        padding-bottom: 0 !important;
+        border-bottom: none !important;
     }
     
     /* Sidebar selectbox styling */
@@ -344,7 +503,7 @@ def render_sidebar() -> Dict:
     """Render sidebar controls and return configuration dict."""
     # Clean, elegant header
     st.sidebar.markdown("""
-    <div style='text-align: center; padding: 0 0 1rem 0; border-bottom: 1px solid #4a5568; margin-bottom: 1rem; margin-top: -3rem;'>
+    <div style='text-align: center; padding: 0 0 1rem 0; border-bottom: 1px solid #4a5568; margin-bottom: 1rem; margin-top: -1rem;'>
         <h1 style='color: #1f77b4; font-size: 2.8rem; font-weight: bold; margin: 0;'>FSLR Demo</h1>
         <p style='color: #a0aec0; font-size: 1rem; margin: 0.5rem 0 0 0; font-weight: 400;'>Filipino Sign Language Recognition</p>
     </div>
@@ -365,41 +524,40 @@ def render_sidebar() -> Dict:
     </div>
     """, unsafe_allow_html=True)
     
-    with st.sidebar.container():
-        # Model Architecture Selection
-        st.markdown("**Model Architecture**")
-        
-        available_models = get_available_models()
-        if len(available_models) == 2:
-            # Use radio button for binary choice
-            model_choice = st.radio(
-                "Choose Model",
-                available_models,
-                index=0,
-                help="Select the model architecture for predictions",
-                key="model_architecture_radio"
-            )
-        else:
-            # Fallback to selectbox for multiple options
-            model_choice = st.selectbox(
-                "Model Architecture", 
-                available_models, 
-                index=0,
-                help="Choose between available model architectures",
-                key="model_architecture_select"
-            )
-        
-        # Occlusion Detection Options
-        st.markdown("---")
-        st.markdown("**Occlusion Detection**")
-        
-        # Detailed Results
-        occ_detailed = st.checkbox(
-            "Detailed Results",
-            value=False,
-            help="Include detailed per-frame occlusion analysis with region detection",
-            key="occ_detailed_checkbox"
+    # Model Architecture Selection
+    st.sidebar.markdown("**Model Architecture**")
+    
+    available_models = get_available_models()
+    if len(available_models) == 2:
+        # Use radio button for binary choice
+        model_choice = st.sidebar.radio(
+            "Choose Model",
+            available_models,
+            index=0,
+            help="Select the model architecture for predictions",
+            key="model_architecture_radio"
         )
+    else:
+        # Fallback to selectbox for multiple options
+        model_choice = st.sidebar.selectbox(
+            "Model Architecture", 
+            available_models, 
+            index=0,
+            help="Choose between available model architectures",
+            key="model_architecture_select"
+        )
+    
+    # Occlusion Detection Options
+    st.sidebar.markdown("---")
+    st.sidebar.markdown("**Occlusion Detection**")
+    
+    # Detailed Results
+    occ_detailed = st.sidebar.checkbox(
+        "Detailed Results",
+        value=False,
+        help="Include detailed per-frame occlusion analysis with region detection",
+        key="occ_detailed_checkbox"
+    )
     
     # About Section - Clean and minimal
     st.sidebar.markdown("""
@@ -409,7 +567,7 @@ def render_sidebar() -> Dict:
     """, unsafe_allow_html=True)
     
     st.sidebar.markdown("""
-    <div style='background: rgba(255, 255, 255, 0.05); padding: 1.25rem; border-radius: 6px; border-left: 3px solid #3498db; margin-bottom: 1rem;'>
+    <div style='background: rgba(255, 255, 255, 0.05); padding: 1.25rem; border-radius: 6px; border-left: 3px solid #3498db; margin: 0;'>
         <p style='color: #e2e8f0; margin: 0 0 0.75rem 0; font-size: 1rem; line-height: 1.5; font-weight: 400;'>
         This demo processes Filipino Sign Language sequences and provides:
         </p>
@@ -429,8 +587,6 @@ def render_sidebar() -> Dict:
     )
 
 
-
-
 def render_model_status():
     """Render model availability status in sidebar."""
     from ..manager.prediction_manager import MODEL_CONFIG
@@ -442,7 +598,7 @@ def render_model_status():
     # Create clean, elegant status display
     if transformer_available and iv3_gru_available:
         st.sidebar.markdown("""
-        <div style='background: rgba(16, 185, 129, 0.1); border: 1px solid #10b981; border-radius: 8px; padding: 1rem; margin-bottom: 0.25rem;'>
+        <div style='background: rgba(16, 185, 129, 0.1); border: 1px solid #10b981; border-radius: 8px; padding: 1rem; margin-bottom: 0;'>
             <div style='display: flex; align-items: center; color: #ffffff; font-weight: 500; margin-bottom: 0.5rem;'>
                 <div style='width: 8px; height: 8px; background: #10b981; border-radius: 50%; margin-right: 0.75rem;'></div>
                 <span style='font-size: 1rem;'>All Models Ready</span>
@@ -454,7 +610,7 @@ def render_model_status():
         """, unsafe_allow_html=True)
     elif transformer_available:
         st.sidebar.markdown("""
-        <div style='background: rgba(245, 158, 11, 0.1); border: 1px solid #f59e0b; border-radius: 8px; padding: 1rem; margin-bottom: 0.25rem;'>
+        <div style='background: rgba(245, 158, 11, 0.1); border: 1px solid #f59e0b; border-radius: 8px; padding: 1rem; margin-bottom: 0;'>
             <div style='display: flex; align-items: center; color: #ffffff; font-weight: 500; margin-bottom: 0.5rem;'>
                 <div style='width: 8px; height: 8px; background: #f59e0b; border-radius: 50%; margin-right: 0.75rem;'></div>
                 <span style='font-size: 1rem;'>Partial Availability</span>
@@ -466,7 +622,7 @@ def render_model_status():
         """, unsafe_allow_html=True)
     elif iv3_gru_available:
         st.sidebar.markdown("""
-        <div style='background: rgba(245, 158, 11, 0.1); border: 1px solid #f59e0b; border-radius: 8px; padding: 1rem; margin-bottom: 0.25rem;'>
+        <div style='background: rgba(245, 158, 11, 0.1); border: 1px solid #f59e0b; border-radius: 8px; padding: 1rem; margin-bottom: 0;'>
             <div style='display: flex; align-items: center; color: #ffffff; font-weight: 500; margin-bottom: 0.5rem;'>
                 <div style='width: 8px; height: 8px; background: #f59e0b; border-radius: 50%; margin-right: 0.75rem;'></div>
                 <span style='font-size: 1rem;'>Partial Availability</span>
@@ -478,7 +634,7 @@ def render_model_status():
         """, unsafe_allow_html=True)
     else:
         st.sidebar.markdown("""
-        <div style='background: rgba(239, 68, 68, 0.1); border: 1px solid #ef4444; border-radius: 8px; padding: 1rem; margin-bottom: 0.25rem;'>
+        <div style='background: rgba(239, 68, 68, 0.1); border: 1px solid #ef4444; border-radius: 8px; padding: 1rem; margin-bottom: 0;'>
             <div style='display: flex; align-items: center; color: #ffffff; font-weight: 500; margin-bottom: 0.5rem;'>
                 <div style='width: 8px; height: 8px; background: #ef4444; border-radius: 50%; margin-right: 0.75rem;'></div>
                 <span style='font-size: 1rem;'>No Models Available</span>
