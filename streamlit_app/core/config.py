@@ -48,7 +48,9 @@ PROCESSING_CONFIG = {
         'conf_thresh': 0.5,
         'max_gap': 5,
         'write_keypoints': True,
-        'write_iv3_features': True
+        'write_iv3_features': True,
+        'enable_advanced': True,
+        'occ_detailed': False
     },
     'npz': {
         'sequence_length': 150,  # Default sequence length for padding/trimming

@@ -220,7 +220,9 @@ def get_default_preprocessing_options():
         'target_fps': video_config['target_fps'],
         'out_size': video_config['out_size'],
         'write_keypoints': video_config['write_keypoints'],
-        'write_iv3_features': video_config['write_iv3_features']
+        'write_iv3_features': video_config['write_iv3_features'],
+        'enable_advanced': st.session_state.get('enable_advanced_radio', 'Yes') == 'Yes',
+        'occ_detailed': st.session_state.get('occ_detailed_checkbox', video_config['occ_detailed'])
     }
 
 
@@ -330,7 +332,9 @@ def preprocess_single_video(uploaded_file, filename: str):
                 target_fps=options['target_fps'],
                 out_size=options['out_size'],
                 write_keypoints=options['write_keypoints'],
-                write_iv3_features=options['write_iv3_features']
+                write_iv3_features=options['write_iv3_features'],
+                enable_advanced=options['enable_advanced'],
+                occ_detailed=options['occ_detailed']
             )
         
         # Check compatibility
