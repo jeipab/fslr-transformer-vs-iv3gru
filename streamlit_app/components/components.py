@@ -344,7 +344,7 @@ def render_sidebar() -> Dict:
     """Render sidebar controls and return configuration dict."""
     # Clean, elegant header
     st.sidebar.markdown("""
-    <div style='text-align: center; padding: 1rem 0 1rem 0; border-bottom: 1px solid #4a5568; margin-bottom: 1rem;'>
+    <div style='text-align: center; padding: 0 0 1rem 0; border-bottom: 1px solid #4a5568; margin-bottom: 1rem; margin-top: -3rem;'>
         <h1 style='color: #1f77b4; font-size: 2.8rem; font-weight: bold; margin: 0;'>FSLR Demo</h1>
         <p style='color: #a0aec0; font-size: 1rem; margin: 0.5rem 0 0 0; font-weight: 400;'>Filipino Sign Language Recognition</p>
     </div>

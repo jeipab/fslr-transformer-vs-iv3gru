@@ -131,11 +131,7 @@ def render_upload_stage():
                 button_help = "Move to appropriate processing stage"
             
             if st.button(button_text, type="primary", help=button_help, use_container_width=True):
-                if st.session_state.get("confirm_proceed", False):
-                    proceed_to_next_stage()
-                else:
-                    st.session_state["confirm_proceed"] = True
-                    st.toast(f"Click '{button_text}' again to confirm", icon="⚠️", duration=5000)
+                proceed_to_next_stage()
     else:
         render_welcome_screen()
 
@@ -165,10 +161,6 @@ def route_files_to_stages(uploaded_files: List) -> Tuple[List, List]:
 
 def proceed_to_next_stage():
     """Move files to appropriate stages and transition workflow."""
-    # Clear confirmation state
-    if "confirm_proceed" in st.session_state:
-        del st.session_state["confirm_proceed"]
-    
     # Move files to uploaded_files and set initial status
     st.session_state.uploaded_files = st.session_state.pending_upload_files
     

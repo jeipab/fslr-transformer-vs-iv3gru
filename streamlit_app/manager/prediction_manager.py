@@ -192,11 +192,7 @@ def render_predictions_stage(cfg: Dict):
         back_help = f"Return to {back_destination} stage"
         
         if st.button(back_text, help=back_help, type="secondary"):
-            if st.session_state.get("confirm_back_predictions", False):
-                navigate_back_from_predictions()
-            else:
-                st.session_state["confirm_back_predictions"] = True
-                st.toast(f"Click '{back_text}' again to confirm", icon="⚠️", duration=5000)
+            navigate_back_from_predictions()
     with col2:
         st.markdown("")  # Empty space
     with col3:
@@ -310,12 +306,8 @@ def render_npz_files_management(all_npz_files: List):
         # Remove button with confirmation
         with col5:
             if st.button("Remove", key=f"remove_{filename}", help="Remove this file", type="secondary"):
-                if st.session_state.get(f"confirm_remove_{filename}", False):
-                    remove_file_from_predictions(filename)
-                    st.rerun()
-                else:
-                    st.session_state[f"confirm_remove_{filename}"] = True
-                    st.toast(f"Click 'Remove' again to confirm removal of {filename}", icon="⚠️", duration=5000)
+                remove_file_from_predictions(filename)
+                st.rerun()
         
         # Add separator line only if not the last file
         if i < len(all_npz_files) - 1:
@@ -343,12 +335,8 @@ def render_npz_files_management(all_npz_files: List):
     
     with col5:
         if st.button("Clear All", help="Clear all files", type="primary"):
-            if st.session_state.get("confirm_clear_all", False):
-                clear_all_predictions_files()
-                st.rerun()
-            else:
-                st.session_state["confirm_clear_all"] = True
-                st.toast("Click 'Clear All' again to confirm clearing all files", icon="⚠️", duration=5000)
+            clear_all_predictions_files()
+            st.rerun()
 
 
 def process_single_npz_file(uploaded_file, filename: str):
@@ -700,10 +688,6 @@ def create_batch_download(summary_data):
 
 def navigate_back_from_predictions():
     """Navigate back from predictions stage."""
-    # Clear confirmation state
-    if "confirm_back_predictions" in st.session_state:
-        del st.session_state["confirm_back_predictions"]
-    
     # Check if we have video files in preprocessing
     if st.session_state.video_files or st.session_state.preprocessed_files:
         st.session_state.workflow_stage = 'preprocessing'
