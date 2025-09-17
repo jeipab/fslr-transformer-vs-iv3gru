@@ -19,7 +19,7 @@ mediapipe
 tqdm
 pyarrow
 
-# Optional: advanced occlusion detection
+# Optional: occlusion detection
 scipy>=1.10.0
 
 # Optional: analysis notebooks
