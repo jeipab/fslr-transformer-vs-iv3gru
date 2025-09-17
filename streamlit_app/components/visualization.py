@@ -622,13 +622,13 @@ def create_keypoint_animation_video(keypoints_2d: np.ndarray, mask: Optional[np.
             # Draw keypoints and skeleton for each body part
             for part_name, connections in skeleton_connections.items():
                 if part_name == "pose":
-                    start_idx, end_idx = 0, 25
+                    start_idx, end_idx = 0, 25  # 25 pose landmarks (0-24)
                 elif part_name == "left_hand":
-                    start_idx, end_idx = 25, 46
+                    start_idx, end_idx = 25, 46  # 21 hand landmarks (25-45)
                 elif part_name == "right_hand":
-                    start_idx, end_idx = 46, 67
+                    start_idx, end_idx = 46, 67  # 21 hand landmarks (46-66)
                 elif part_name == "face":
-                    start_idx, end_idx = 67, 78
+                    start_idx, end_idx = 67, 78  # 11 face landmarks (67-77)
                 
                 part_keypoints = pixel_points[start_idx:end_idx]
                 part_valid = valid_mask[start_idx:end_idx]
