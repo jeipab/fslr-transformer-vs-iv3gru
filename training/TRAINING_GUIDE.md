@@ -2,7 +2,7 @@
 
 ## Overview
 
-This guide covers training sign language recognition models using either Transformer (keypoints) or InceptionV3+GRU (features) architectures. The training script includes comprehensive performance optimizations for CUDA, memory management, and data loading.
+This guide covers training sign language recognition models using either Transformer (keypoints) or InceptionV3+GRU (features) architectures. The training script includes performance optimizations for CUDA, memory management, and data loading.
 
 ## Prerequisites
 
@@ -179,7 +179,7 @@ python training/train.py \
 | `--alpha` | Gloss loss weight    | `0.5`   | Higher = focus on gloss accuracy    |
 | `--beta`  | Category loss weight | `0.5`   | Higher = focus on category accuracy |
 
-## Advanced Training Examples
+## Additional Training Examples
 
 ### High-Performance GPU Training
 
@@ -238,7 +238,7 @@ python training/train.py \
 
 ### Real-Time Monitoring
 
-The training script provides comprehensive monitoring:
+The training script provides monitoring:
 
 - **Device Information**: GPU specs, memory, compute capability
 - **Performance Metrics**: Epoch time, validation time
