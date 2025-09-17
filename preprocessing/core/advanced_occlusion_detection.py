@@ -438,12 +438,12 @@ def compute_advanced_occlusion_detection_from_keypoints(
         face_len = 11
         face_start = pose_len + hand_len + hand_len  # 67
         
-        # Balanced detection parameters with elegant sensitivity
-        min_face_points = 3  # Restored for better accuracy
-        min_hand_points = 2  # Keep lenient for hand detection
-        min_fingertips_inside = 1
-        proximity_multiplier = 1.6  # Slightly reduced for elegance
-        occlusion_threshold = 0.12  # More balanced threshold
+        # Ultra-conservative detection parameters to prevent false positives
+        min_face_points = 5  # Require more face points for accuracy
+        min_hand_points = 4  # Require more hand points for reliability
+        min_fingertips_inside = 3  # Require multiple fingertips for reliable detection
+        proximity_multiplier = 1.2  # Very conservative multiplier
+        occlusion_threshold = 0.30  # Much higher threshold for reliability
         
         results = []
         hand_trajectories = {'left': [], 'right': []}  # Track hand movement
@@ -506,12 +506,13 @@ def compute_advanced_occlusion_detection_from_keypoints(
                     
                     # Multi-method detection
                     region_results = _detect_occlusions_multi_method(
-                        palm_center, tips, face_regions, hand_trajectories[hand_side], t
+                        palm_center, tips, face_regions, hand_trajectories[hand_side], t,
+                        min_fingertips_inside, proximity_multiplier
                     )
                     
-                    # Aggregate results with elegant threshold
+                    # Aggregate results with ultra-conservative threshold
                     for region_name, confidence in region_results.items():
-                        if confidence > 0.25:  # More elegant threshold for detection
+                        if confidence > 0.6:  # Very high threshold to prevent false positives
                             occlusion_detected = True
                             if region_name not in occluded_regions:
                                 occluded_regions.append(region_name)
@@ -591,51 +592,51 @@ def _create_enhanced_face_regions(face_coords: List[Tuple[float, float]],
     if 'nose_tip' in landmarks:
         nose = landmarks['nose_tip']
         
-        # Forehead region (top of head) - larger radius
+        # Forehead region (top of head) - precise radius
         if 'forehead' in landmarks:
             forehead = landmarks['forehead']
             regions['forehead'] = {
                 'center': forehead,
-                'radius': 0.15,  # Increased from 0.08
+                'radius': 0.06,  # Much smaller for precision
                 'type': 'circle'
             }
         
-        # Cheeks region (eye area) - larger radius
+        # Cheeks region (eye area) - precise radius
         if 'left_eye_outer' in landmarks and 'right_eye_outer' in landmarks:
             left_eye = landmarks['left_eye_outer']
             right_eye = landmarks['right_eye_outer']
             cheek_center = ((left_eye[0] + right_eye[0]) / 2, (left_eye[1] + right_eye[1]) / 2)
             regions['cheeks'] = {
                 'center': cheek_center,
-                'radius': 0.20,  # Increased from 0.12
+                'radius': 0.08,  # Much smaller for precision
                 'type': 'circle'
             }
         
-        # Nose region (central face) - larger radius
+        # Nose region (central face) - precise radius
         regions['nose'] = {
             'center': nose,
-            'radius': 0.12,  # Increased from 0.06
+            'radius': 0.05,  # Much smaller for precision
             'type': 'circle'
         }
         
-        # Mouth region (lower face) - larger radius
+        # Mouth region (lower face) - precise radius
         if 'mouth_left' in landmarks and 'mouth_right' in landmarks:
             mouth_left = landmarks['mouth_left']
             mouth_right = landmarks['mouth_right']
             mouth_center = ((mouth_left[0] + mouth_right[0]) / 2, (mouth_left[1] + mouth_right[1]) / 2)
             regions['mouth'] = {
                 'center': mouth_center,
-                'radius': 0.15,  # Increased from 0.08
+                'radius': 0.06,  # Much smaller for precision
                 'type': 'circle'
             }
         
-        # Neck region (below chin) - larger radius
+        # Neck region (below chin) - precise radius
         if 'chin' in landmarks:
             chin = landmarks['chin']
-            neck_center = (chin[0], chin[1] + 0.05)  # Below chin
+            neck_center = (chin[0], chin[1] + 0.03)  # Closer to chin
             regions['neck'] = {
                 'center': neck_center,
-                'radius': 0.18,  # Increased from 0.10
+                'radius': 0.08,  # Much smaller for precision
                 'type': 'circle'
             }
     
@@ -646,7 +647,9 @@ def _detect_occlusions_multi_method(palm_center: Optional[Tuple[float, float]],
                                   tips: List[Tuple[float, float]],
                                   face_regions: Dict[str, Dict],
                                   trajectory: List[Tuple[int, Tuple[float, float]]],
-                                  current_frame: int) -> Dict[str, float]:
+                                  current_frame: int,
+                                  min_fingertips_inside: int = 1,
+                                  proximity_multiplier: float = 1.6) -> Dict[str, float]:
     """
     Detect occlusions using multiple methods for each region.
     
@@ -667,58 +670,56 @@ def _detect_occlusions_multi_method(palm_center: Optional[Tuple[float, float]],
         region_center = region_def['center']
         region_radius = region_def['radius']
         
-        # Method 1: Direct fingertip intersection (elegant sensitivity)
+        # Method 1: Direct fingertip intersection (ultra-conservative detection)
         if tips:
+            fingertips_inside = 0
             for tip_x, tip_y in tips:
                 distance = ((tip_x - region_center[0])**2 + (tip_y - region_center[1])**2)**0.5
-                if distance <= region_radius * 1.3:  # Moderate radius for fingertips
-                    proximity_score = max(0, 1 - distance / (region_radius * 1.3))
-                    confidence += proximity_score * 0.45  # Balanced weight
+                if distance <= region_radius * 0.8:  # Even more conservative intersection
+                    fingertips_inside += 1
+            
+            # Only count if minimum fingertips are inside
+            if fingertips_inside >= min_fingertips_inside:
+                confidence += 0.6  # High confidence for direct intersection
         
-        # Method 2: Palm center proximity (elegant sensitivity)
+        # Method 2: Palm center proximity (ultra-conservative detection)
         if palm_center is not None:
             palm_x, palm_y = palm_center
             distance = ((palm_x - region_center[0])**2 + (palm_y - region_center[1])**2)**0.5
-            if distance <= region_radius * 2.0:  # Moderate radius for palm
-                proximity_score = max(0, 1 - distance / (region_radius * 2.0))
-                confidence += proximity_score * 0.35  # Balanced weight
+            # Use very conservative proximity multiplier
+            proximity_radius = region_radius * proximity_multiplier
+            if distance <= proximity_radius * 0.9:  # Even more conservative
+                proximity_score = max(0, 1 - distance / (proximity_radius * 0.9))
+                confidence += proximity_score * 0.2  # Lower weight for proximity
         
-        # Method 3: Trajectory analysis (hand approaching face) - elegant sensitivity
-        if len(trajectory) >= 3:  # Require more frames for stability
-            recent_positions = trajectory[-3:]  # Last 3 positions
-            if len(recent_positions) >= 2:
-                # Check if hand is moving toward face
-                prev_pos = recent_positions[0][1]
-                curr_pos = recent_positions[-1][1]
+        # Method 3: Trajectory analysis (ultra-conservative approach detection)
+        if len(trajectory) >= 8:  # Require many more frames for reliable trajectory
+            recent_positions = trajectory[-8:]  # Last 8 positions
+            if len(recent_positions) >= 5:
+                # Check if hand is consistently moving toward face
+                distances = []
+                for _, pos in recent_positions:
+                    dist = ((pos[0] - region_center[0])**2 + (pos[1] - region_center[1])**2)**0.5
+                    distances.append(dist)
                 
-                # Calculate movement toward face
-                prev_dist = ((prev_pos[0] - region_center[0])**2 + (prev_pos[1] - region_center[1])**2)**0.5
-                curr_dist = ((curr_pos[0] - region_center[0])**2 + (curr_pos[1] - region_center[1])**2)**0.5
-                
-                if curr_dist < prev_dist and curr_dist <= region_radius * 2.5:  # Moderate radius
-                    approach_score = max(0, (prev_dist - curr_dist) / prev_dist)
-                    confidence += approach_score * 0.25  # Balanced weight
+                # Check if distance is consistently decreasing
+                if len(distances) >= 5:
+                    decreasing_count = sum(1 for i in range(1, len(distances)) if distances[i] < distances[i-1])
+                    if decreasing_count >= 4 and distances[-1] <= region_radius * 1.2:  # Very conservative radius
+                        approach_score = max(0, (distances[0] - distances[-1]) / distances[0])
+                        confidence += approach_score * 0.1  # Low weight for trajectory
         
-        # Method 4: Multi-point hand analysis - elegant sensitivity
-        if palm_center is not None and tips:
+        # Method 4: Multi-point hand analysis (ultra-conservative orientation)
+        if palm_center is not None and len(tips) >= 4:  # Require many fingertips
             # Check if hand is oriented toward face
             hand_points = [palm_center] + tips
             face_distances = [((p[0] - region_center[0])**2 + (p[1] - region_center[1])**2)**0.5 for p in hand_points]
             min_distance = min(face_distances)
             
-            if min_distance <= region_radius * 2.5:  # Moderate radius
-                orientation_score = max(0, 1 - min_distance / (region_radius * 2.5))
-                confidence += orientation_score * 0.15  # Balanced weight
-        
-        # Method 5: General proximity detection (elegant sensitivity)
-        if palm_center is not None:
-            palm_x, palm_y = palm_center
-            distance = ((palm_x - region_center[0])**2 + (palm_y - region_center[1])**2)**0.5
-            
-            # Elegant proximity detection
-            if distance <= region_radius * 2.5:  # Moderate radius
-                proximity_score = max(0, 1 - distance / (region_radius * 2.5))
-                confidence += proximity_score * 0.08  # Small but consistent contribution
+            # Very conservative radius for orientation detection
+            if min_distance <= region_radius * 1.3:
+                orientation_score = max(0, 1 - min_distance / (region_radius * 1.3))
+                confidence += orientation_score * 0.05  # Very low weight for orientation
         
         region_confidences[region_name] = min(confidence, 1.0)  # Cap at 1.0
     
@@ -770,7 +771,7 @@ def _apply_temporal_filtering(results: List[Dict]) -> List[Dict]:
                           if count > len(window) // 2]
         
         filtered_result = result.copy()
-        filtered_result['occlusion_detected'] = majority_occluded or avg_confidence > 0.35  # More elegant threshold
+        filtered_result['occlusion_detected'] = majority_occluded or avg_confidence > 0.7  # Very high threshold to prevent false positives
         filtered_result['occluded_regions'] = list(set(filtered_regions))
         filtered_result['confidence'] = avg_confidence
         
