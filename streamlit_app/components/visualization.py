@@ -346,6 +346,13 @@ def render_animated_keypoints(sequence: np.ndarray, mask: Optional[np.ndarray] =
             else:
                 point_colors = [colors[part_name]] * len(valid_keypoints)
             
+            # Create hover text with keypoint numbers
+            hover_texts = []
+            for i, (x, y) in enumerate(valid_keypoints):
+                # Calculate the actual keypoint index in the full 78-point array
+                actual_keypoint_idx = start_idx + np.where(valid_mask)[0][i]
+                hover_texts.append(f"Keypoint {actual_keypoint_idx}<br>X: {x:.3f}<br>Y: {y:.3f}")
+            
             fig.add_trace(go.Scatter(
                 x=valid_keypoints[:, 0],
                 y=valid_keypoints[:, 1],
@@ -356,7 +363,9 @@ def render_animated_keypoints(sequence: np.ndarray, mask: Optional[np.ndarray] =
                     line=dict(width=2, color='white')
                 ),
                 name=f"{part_name.title()} Points",
-                showlegend=True
+                showlegend=True,
+                hovertemplate='%{text}<extra></extra>',
+                text=hover_texts
             ))
         
         # Plot skeleton connections
