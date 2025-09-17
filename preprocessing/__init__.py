@@ -81,11 +81,21 @@ except ImportError:
 
 # Occlusion detection
 try:
-    from .core.occlusion_detection import compute_occlusion_flag_from_keypoints
+    from .core.occlusion_detection import (
+        compute_occlusion_flag_from_keypoints,
+        compute_advanced_occlusion_detection,
+        get_occlusion_config,
+        validate_occlusion_config,
+        DEFAULT_OCCLUSION_CONFIG
+    )
     OCCLUSION_DETECTION_AVAILABLE = True
 except ImportError:
     OCCLUSION_DETECTION_AVAILABLE = False
     compute_occlusion_flag_from_keypoints = None
+    compute_advanced_occlusion_detection = None
+    get_occlusion_config = None
+    validate_occlusion_config = None
+    DEFAULT_OCCLUSION_CONFIG = None
 
 # Build __all__ list dynamically based on what's available
 __all__ = []
@@ -106,4 +116,10 @@ if RENAME_CLIPS_AVAILABLE:
     __all__.append('rename_clips')
 
 if OCCLUSION_DETECTION_AVAILABLE:
-    __all__.append('compute_occlusion_flag_from_keypoints')
+    __all__.extend([
+        'compute_occlusion_flag_from_keypoints',
+        'compute_advanced_occlusion_detection',
+        'get_occlusion_config',
+        'validate_occlusion_config',
+        'DEFAULT_OCCLUSION_CONFIG'
+    ])

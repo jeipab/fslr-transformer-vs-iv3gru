@@ -1,22 +1,30 @@
 """
 Occlusion detection utilities.
 
-Provides functions to compute a clip-level occlusion flag.
+Provides functions to compute a clip-level occlusion flag using two complementary methods:
 
-Two complementary methods are available:
-- Keypoints-based hand–head occlusion (preferred): approximate the head with a
-  robust face ellipse using face keypoints and detect whether either hand (palm
-  center or fingertips) enters this ellipse. Aggregates per-frame events into a
-  clip-level flag.
-- Visibility-based fallback: use overall keypoint visibility rate with
-  proportion and run-length thresholds (legacy).
+1. **Simple Method (Default)**: Keypoints-based hand–head occlusion detection
+   - Approximates the head with a robust face ellipse using face keypoints
+   - Detects whether either hand (palm center or fingertips) enters this ellipse
+   - Aggregates per-frame events into a clip-level flag
+   - Fast, lightweight, and reliable for most use cases
+
+2. **Advanced Method (Optional)**: Computer vision-based occlusion detection
+   - Uses computer vision techniques from referenced research paper
+   - Implements dual tracking (local + global) for detection
+   - Provides detailed per-region occlusion analysis
+   - Higher accuracy but requires additional dependencies
+
 """
 
 from __future__ import annotations
 
 import numpy as np
+from typing import Union, Dict, Optional
+import warnings
 
-# Note: we avoid importing heavy vision libs here; rely only on keypoint geometry.
+# Note: we avoid importing heavy vision libs here by default; rely only on keypoint geometry.
+# Advanced dependencies are imported only when needed.
 
 
 def _point_in_ellipse(px: float, py: float, cx: float, cy: float, ax: float, by: float) -> bool:
@@ -284,5 +292,136 @@ def compute_occlusion_flag_from_keypoints(
             frame_prop_threshold=frame_prop_threshold,
             min_consecutive_occ_frames=min_consecutive_occ_frames,
         )
+
+
+# ============================================================================
+# ADVANCED OCCLUSION DETECTION INTEGRATION
+# ============================================================================
+
+def compute_advanced_occlusion_detection(
+    video_path: str = None,
+    X: np.ndarray = None,
+    mask_bool_array: np.ndarray = None,
+    mode: str = 'advanced',
+    output_format: str = 'compatible',
+    **kwargs
+) -> Union[int, Dict]:
+    """
+    Compute occlusion detection using advanced computer vision methods.
+    
+    Args:
+        video_path: Path to input video file (for raw video processing)
+        X: [T, 156] normalized keypoint coordinates (for keypoint-based processing)
+        mask_bool_array: [T, 78] visibility mask (for keypoint-based processing)
+        mode: Detection mode ('simple', 'advanced', 'both')
+        output_format: Output format ('compatible', 'detailed')
+        **kwargs: Additional parameters for advanced detection
+    
+    Returns:
+        int: Binary occlusion flag (compatible format)
+        Dict: Detailed results (detailed format)
+    """
+    try:
+        # Import advanced detection module
+        from .advanced_occlusion_detection import (
+            compute_advanced_occlusion_detection as _advanced_detect,
+            compute_advanced_occlusion_detection_from_keypoints as _advanced_detect_keypoints
+        )
+        
+        # Prefer keypoint-based method if keypoint data is available
+        if X is not None and mask_bool_array is not None:
+            return _advanced_detect_keypoints(X, mask_bool_array, output_format, **kwargs)
+        elif video_path is not None:
+            return _advanced_detect(video_path, mode, output_format, **kwargs)
+        else:
+            warnings.warn(
+                "Advanced occlusion detection requires either video_path or keypoint data (X, mask_bool_array)",
+                UserWarning
+            )
+            return 0
+            
+    except ImportError:
+        warnings.warn(
+            "Advanced occlusion detection requires additional dependencies. "
+            "Please install: pip install scipy scikit-learn",
+            UserWarning
+        )
+        return 0
+    except Exception as e:
+        warnings.warn(f"Advanced occlusion detection failed: {e}", UserWarning)
+        return 0
+
+
+# Unified function removed - use direct method calls instead
+
+
+# ============================================================================
+# CONFIGURATION AND UTILITIES
+# ============================================================================
+
+# Default configuration
+DEFAULT_OCCLUSION_CONFIG = {
+    'enable_advanced': True,  # Boolean flag for advanced mode
+    'simple': {
+        'frame_prop_threshold': 0.4,
+        'min_consecutive_occ_frames': 15,
+        'visibility_fallback_threshold': 0.6,
+        'face_scale': 1.3,
+        'min_hand_points': 4,
+        'min_fingertips_inside': 1,
+        'near_face_multiplier': 1.2
+    },
+    'advanced': {
+        'use_global_tracking': True,
+        'gridlet_size': 4,
+        'tracking_window_size': 5,
+        'motion_threshold': 10,
+        'temporal_filtering': True,
+        'output_detailed_results': False
+    }
+}
+
+# Import advanced config to avoid duplication
+try:
+    from .advanced_occlusion_detection import DEFAULT_ADVANCED_CONFIG
+    DEFAULT_OCCLUSION_CONFIG['advanced'] = DEFAULT_ADVANCED_CONFIG
+except ImportError:
+    pass  # Keep default config if advanced module not available
+
+
+def get_occlusion_config(mode: str = 'simple') -> Dict:
+    """Get configuration for specified occlusion detection mode."""
+    config = DEFAULT_OCCLUSION_CONFIG.copy()
+    config['mode'] = mode
+    return config
+
+
+def validate_occlusion_config(config: Dict) -> bool:
+    """Validate occlusion detection configuration."""
+    # For backward compatibility, check both old and new format
+    if 'mode' in config:
+        # Old format with mode string
+        valid_modes = ['simple', 'advanced', 'both']
+        return config['mode'] in valid_modes
+    elif 'enable_advanced' in config:
+        # New format with boolean flag
+        return isinstance(config['enable_advanced'], bool)
+    else:
+        return False
+
+
+# ============================================================================
+# LEGACY COMPATIBILITY
+# ============================================================================
+
+# Ensure existing functions remain available with same signatures
+__all__ = [
+    'compute_occlusion_flag_from_keypoints',
+    'compute_hand_head_occlusion_frames',
+    'compute_advanced_occlusion_detection',
+    'get_occlusion_config',
+    'validate_occlusion_config',
+    'DEFAULT_OCCLUSION_CONFIG'
+]
 
 

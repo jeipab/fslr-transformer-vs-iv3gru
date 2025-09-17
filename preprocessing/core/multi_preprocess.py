@@ -24,7 +24,7 @@ if __package__ in (None, ""):
     sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 
 from ..extractors.iv3_features import extract_iv3_features  # InceptionV3 (torchvision) feature extractor
-from ..core.occlusion_detection import compute_occlusion_flag_from_keypoints
+from ..core.occlusion_detection import compute_occlusion_flag_from_keypoints, compute_advanced_occlusion_detection
 from ..extractors.keypoints_features import (
     POSE_UPPER_25,
     N_HAND,
@@ -175,8 +175,8 @@ def process_video_worker(args):
     """Worker function for processing a single video in multiprocessing."""
     (video_path, out_dir, target_fps, out_size, conf_thresh, max_gap, 
      write_keypoints, write_iv3_features, feature_key, occ_vis_thresh, 
-     occ_frame_prop, occ_min_run, compute_occlusion, labels_csv_path, 
-     gloss_id, cat_id, batch_size, device_id, disable_parquet) = args
+     occ_frame_prop, occ_min_run, compute_occlusion, occ_mode, occ_detailed,
+     labels_csv_path, gloss_id, cat_id, batch_size, device_id, disable_parquet) = args
     
     try:
         # Set CUDA device for this worker if specified
@@ -279,6 +279,72 @@ def process_video_worker(args):
         # Do not interpolate CNN features using keypoint visibility mask; keep raw temporal values
         X2048_filled = X2048
 
+        # Occlusion detection and CSV update
+        occluded_flag = 0
+        occlusion_results = None
+        
+        if compute_occlusion:
+            if occ_mode == 'simple' and write_keypoints:
+                # Use simple keypoint-based method
+                occluded_flag = compute_occlusion_flag_from_keypoints(
+                    X_filled,
+                    M_filled,
+                    frame_prop_threshold=occ_frame_prop,
+                    min_consecutive_occ_frames=occ_min_run,
+                    visibility_fallback_threshold=occ_vis_thresh,
+                )
+            elif occ_mode == 'advanced':
+                # Use advanced computer vision method
+                if occ_detailed:
+                    occlusion_results = compute_advanced_occlusion_detection(
+                        video_path=video_path,
+                        X=X_filled if write_keypoints else None,
+                        mask_bool_array=M_filled if write_keypoints else None,
+                        mode='advanced', 
+                        output_format='detailed'
+                    )
+                    occluded_flag = occlusion_results.get('binary_flag', 0)
+                else:
+                    occluded_flag = compute_advanced_occlusion_detection(
+                        video_path=video_path,
+                        X=X_filled if write_keypoints else None,
+                        mask_bool_array=M_filled if write_keypoints else None,
+                        mode='advanced', 
+                        output_format='compatible'
+                    )
+            elif occ_mode == 'both':
+                # Use both methods and compare
+                simple_result = 0
+                advanced_result = 0
+                
+                if write_keypoints:
+                    simple_result = compute_occlusion_flag_from_keypoints(
+                        X_filled, M_filled,
+                        frame_prop_threshold=occ_frame_prop,
+                        min_consecutive_occ_frames=occ_min_run,
+                        visibility_fallback_threshold=occ_vis_thresh,
+                    )
+                
+                advanced_result = compute_advanced_occlusion_detection(
+                    video_path=video_path,
+                    X=X_filled if write_keypoints else None,
+                    mask_bool_array=M_filled if write_keypoints else None,
+                    mode='advanced', 
+                    output_format='compatible'
+                )
+                
+                # Use consensus (majority vote)
+                occluded_flag = 1 if (simple_result + advanced_result) >= 1 else 0
+                
+                if occ_detailed:
+                    occlusion_results = {
+                        'simple_result': simple_result,
+                        'advanced_result': advanced_result,
+                        'consensus': occluded_flag,
+                        'agreement': simple_result == advanced_result
+                    }
+        
+        # Create metadata with occlusion results
         meta = dict(
             video=os.path.basename(video_path),
             target_fps=target_fps,
@@ -289,21 +355,16 @@ def process_video_worker(args):
             pose_indices=POSE_UPPER_25,
             face_indices=FACEMESH_11,
             conf_thresh=conf_thresh,
-            interpolation_max_gap=max_gap
+            interpolation_max_gap=max_gap,
+            occluded_flag=occluded_flag,
+            occlusion_mode=occ_mode
         )
+        
+        if occlusion_results is not None:
+            meta['occlusion_results'] = occlusion_results
 
         to_npz(npz_out_path, X_filled, M_filled, T_ms, meta, also_parquet=not disable_parquet)
-
-        # Occlusion detection and CSV update
-        occluded_flag = 0
-        if compute_occlusion and write_keypoints:
-            occluded_flag = compute_occlusion_flag_from_keypoints(
-                X_filled,
-                M_filled,
-                frame_prop_threshold=occ_frame_prop,
-                min_consecutive_occ_frames=occ_min_run,
-                visibility_fallback_threshold=occ_vis_thresh,
-            )
+        
         # Append to labels CSV if requested and ids are provided
         if labels_csv_path is not None and gloss_id is not None:
             final_cat = cat_id if cat_id is not None else gloss_id
@@ -325,8 +386,8 @@ def process_video_worker(args):
 def process_videos_multiprocess(video_files, out_dir, target_fps=30, out_size=256, conf_thresh=0.5, 
                                max_gap=5, write_keypoints=True, write_iv3_features=True, feature_key='X2048',
                                occ_vis_thresh=0.6, occ_frame_prop=0.4, occ_min_run=15, compute_occlusion=True, 
-                               labels_csv_path=None, gloss_id=None, cat_id=None, workers=None, batch_size=32, 
-                               disable_parquet=False):
+                               occ_mode='simple', occ_detailed=False, labels_csv_path=None, gloss_id=None, cat_id=None, 
+                               workers=None, batch_size=32, disable_parquet=False):
     """Process multiple videos using multiprocessing with batched GPU inference."""
     
     if workers is None:
@@ -348,8 +409,8 @@ def process_videos_multiprocess(video_files, out_dir, target_fps=30, out_size=25
         
         args = (video_path, out_dir, target_fps, out_size, conf_thresh, max_gap,
                 write_keypoints, write_iv3_features, feature_key, occ_vis_thresh,
-                occ_frame_prop, occ_min_run, compute_occlusion, labels_csv_path,
-                gloss_id, cat_id, batch_size, device_id, disable_parquet)
+                occ_frame_prop, occ_min_run, compute_occlusion, occ_mode, occ_detailed,
+                labels_csv_path, gloss_id, cat_id, batch_size, device_id, disable_parquet)
         worker_args.append(args)
     
     # Process videos in parallel
@@ -415,9 +476,11 @@ if __name__ == "__main__":
     
     # Occlusion controls
     parser.add_argument('--occ-enable', action='store_true', help='Enable occlusion detection from keypoint visibility (defaults to enabled when keypoints are written)')
+    parser.add_argument('--occ-mode', type=str, default='simple', choices=['simple', 'advanced', 'both'], help='Occlusion detection mode (default: simple)')
     parser.add_argument('--occ-vis-thresh', type=float, default=0.6, help='Frame visible fraction threshold (default: 0.6)')
     parser.add_argument('--occ-frame-prop', type=float, default=0.4, help='Clip occluded if proportion of occluded frames >= this (default: 0.4)')
     parser.add_argument('--occ-min-run', type=int, default=15, help='Clip occluded if there exists a run of occluded frames >= this (default: 15)')
+    parser.add_argument('--occ-detailed', action='store_true', help='Output detailed occlusion results (advanced mode only)')
     
     args = parser.parse_args()
     
@@ -491,6 +554,8 @@ if __name__ == "__main__":
         occ_frame_prop=args.occ_frame_prop,
         occ_min_run=args.occ_min_run,
         compute_occlusion=compute_occlusion,
+        occ_mode=args.occ_mode,
+        occ_detailed=args.occ_detailed,
         labels_csv_path=labels_csv,
         gloss_id=gloss_id,
         cat_id=cat_id,
