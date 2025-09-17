@@ -39,20 +39,12 @@ def render_preprocessing_stage():
     col1, col2, col3, col4 = st.columns([2, 6, 1, 1])
     with col1:
         if st.button("← Back to Upload", help="Return to upload stage", type="secondary"):
-            if st.session_state.get("confirm_back_preprocessing", False):
-                # Clear confirmation state
-                if "confirm_back_preprocessing" in st.session_state:
-                    del st.session_state["confirm_back_preprocessing"]
-                
-                # Clear video files when going back to upload
-                st.session_state.video_files = []
-                st.session_state.preprocessed_files = []
-                
-                st.session_state.workflow_stage = 'upload'
-                st.rerun()
-            else:
-                st.session_state["confirm_back_preprocessing"] = True
-                st.toast("Click '← Back to Upload' again to confirm", icon="⚠️", duration=5000)
+            # Clear video files when going back to upload
+            st.session_state.video_files = []
+            st.session_state.preprocessed_files = []
+            
+            st.session_state.workflow_stage = 'upload'
+            st.rerun()
     with col2:
         st.markdown("")  # Empty space
     with col3:
@@ -198,15 +190,11 @@ def render_video_files_list(all_files_to_show: List):
         # Remove button with confirmation
         with col6:
             if st.button("Remove", key=f"remove_{filename}", help="Remove this file", type="secondary", disabled=is_processing):
-                if st.session_state.get(f"confirm_remove_{filename}", False):
-                    if file_type == 'video':
-                        remove_file_from_stage(filename, 'video')
-                    else:
-                        remove_file_from_stage(filename, 'preprocessed')
-                    st.rerun()
+                if file_type == 'video':
+                    remove_file_from_stage(filename, 'video')
                 else:
-                    st.session_state[f"confirm_remove_{filename}"] = True
-                    st.toast(f"Click 'Remove' again to confirm removal of {filename}", icon="⚠️", duration=5000)
+                    remove_file_from_stage(filename, 'preprocessed')
+                st.rerun()
         
         # Add separator line only if not the last file
         if i < len(all_files_to_show) - 1:
@@ -235,9 +223,15 @@ def render_batch_operations(video_files: List):
     is_processing = is_processing or any(st.session_state.file_status.get(f.name, 'completed') == 'processing' for f in st.session_state.preprocessed_files)
     
     # Batch operations
-    col1, col2, col3, col4 = st.columns([5, 1, 1, 1])
+    col1, col2, col3, col4, col5, col6 = st.columns([3, 1, 1, 1, 1, 1])
     
     with col1:
+        st.markdown("")  # Empty space for alignment
+    
+    with col2:
+        st.markdown("")  # Empty space for alignment
+    
+    with col3:
         # Count pending files from both video_files and preprocessed_files
         pending_count = 0
         for f in video_files:
@@ -263,22 +257,18 @@ def render_batch_operations(video_files: List):
         else:
             st.info("All video files have been processed")
     
-    with col2:
-        st.markdown("")  # Empty space for alignment
+    with col4:
+        st.markdown("")  # Empty space for equal spacing
     
-    with col3:
+    with col5:
         if st.button("Reset All", help="Reset all processed videos back to pending", type="primary", disabled=is_processing):
             reset_preprocessed_videos()
             st.rerun()
     
-    with col4:
+    with col6:
         if st.button("Clear All", help="Clear all video files", type="primary", disabled=is_processing):
-            if st.session_state.get("confirm_clear_videos", False):
-                clear_all_video_files()
-                st.rerun()
-            else:
-                st.session_state["confirm_clear_videos"] = True
-                st.toast("Click 'Clear All' again to confirm clearing all video files", icon="⚠️", duration=5000)
+            clear_all_video_files()
+            st.rerun()
 
 
 def render_preprocessed_files_summary(all_files_to_show: List):
