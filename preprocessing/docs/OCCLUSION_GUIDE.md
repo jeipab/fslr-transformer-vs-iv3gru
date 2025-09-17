@@ -32,7 +32,7 @@ The occlusion detection system implements sophisticated computer vision-based de
 
 - **5-Region Head Partitioning**: Divides the head into linguistically significant regions (forehead, cheeks, nose, mouth, neck)
 - **Multi-Method Detection**: Uses ellipse intersection, proximity analysis, trajectory tracking, and orientation detection
-- **Adaptive Temporal Filtering**: Applies weighted sliding window with confidence-based voting for consistency
+- **Consecutive Frame Filtering**: Requires 5 consecutive frames with occlusion detection (confidence ≥ 0.2) with tolerance for 1-2 missed frames
 - **Balanced Thresholds**: Designed to minimize false negatives while maintaining accuracy
 - **Robust Keypoint Validation**: Validates landmark positions and provides fallback mechanisms
 - **Adaptive Region Sizing**: Automatically adjusts region sizes based on face scale
@@ -59,15 +59,17 @@ The system divides the head into 5 regions based on the Suvi dictionary:
 ### Default Parameters
 
 ```python
-# Balanced detection parameters for improved sensitivity
+# Consecutive frame detection parameters
 config = {
-    'min_face_points': 3,           # Reduced for better coverage
-    'min_hand_points': 3,            # Reduced for better coverage
-    'min_fingertips_inside': 1,      # Reduced to catch subtle occlusions
-    'proximity_multiplier': 1.5,     # Increased for better detection
-    'occlusion_threshold': 0.15,     # Reduced for better sensitivity
-    'confidence_threshold': 0.4,      # Balanced threshold
-    'temporal_confidence': 0.5        # Balanced temporal threshold
+    'min_face_points': 3,                    # Reduced for better coverage
+    'min_hand_points': 3,                    # Reduced for better coverage
+    'min_fingertips_inside': 1,              # Reduced to catch subtle occlusions
+    'proximity_multiplier': 1.5,             # Increased for better detection
+    'confidence_threshold': 0.4,              # Balanced threshold
+    'temporal_confidence': 0.5,              # Balanced temporal threshold
+    'consecutive_window_size': 5,             # Require 5 consecutive frames
+    'max_consecutive_skips': 2,              # Allow up to 2 missed frames
+    'min_consecutive_confidence': 0.2        # Minimum confidence threshold
 }
 ```
 
