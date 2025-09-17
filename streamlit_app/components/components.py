@@ -366,13 +366,52 @@ def render_sidebar() -> Dict:
     """, unsafe_allow_html=True)
     
     with st.sidebar.container():
-        model_choice = st.selectbox(
-            "Model Architecture", 
-            get_available_models(), 
-            index=0,
-            help="Choose between available model architectures",
-            key="model_architecture_select"
+        # Model Architecture Selection
+        st.markdown("**Model Architecture**")
+        
+        available_models = get_available_models()
+        if len(available_models) == 2:
+            # Use radio button for binary choice
+            model_choice = st.radio(
+                "Choose Model",
+                available_models,
+                index=0,
+                help="Select the model architecture for predictions",
+                key="model_architecture_radio"
+            )
+        else:
+            # Fallback to selectbox for multiple options
+            model_choice = st.selectbox(
+                "Model Architecture", 
+                available_models, 
+                index=0,
+                help="Choose between available model architectures",
+                key="model_architecture_select"
+            )
+        
+        # Occlusion Detection Options
+        st.markdown("---")
+        st.markdown("**Occlusion Detection**")
+        
+        # Enable Advanced Occlusion Detection
+        enable_advanced = st.radio(
+            "Enable Advanced Occlusion Detection",
+            ["Yes", "No"],
+            index=0,  # Default to "Yes"
+            help="Advanced: Computer vision-based detection with 5-region analysis\nSimple: Fast keypoint-based detection",
+            key="enable_advanced_radio"
         )
+        
+        # Detailed Results (only show when advanced is enabled)
+        if enable_advanced == "Yes":
+            occ_detailed = st.checkbox(
+                "Detailed Results",
+                value=False,
+                help="Include detailed per-frame occlusion analysis with region detection",
+                key="occ_detailed_checkbox"
+            )
+        else:
+            occ_detailed = False
     
     # About Section - Clean and minimal
     st.sidebar.markdown("""

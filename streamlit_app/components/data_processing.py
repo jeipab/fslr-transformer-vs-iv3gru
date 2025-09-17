@@ -31,7 +31,8 @@ except ImportError as e:
 
 
 def process_video_file(uploaded_file, target_fps: int = 30, out_size: int = 256, 
-                      write_keypoints: bool = True, write_iv3_features: bool = True) -> Dict[str, np.ndarray]:
+                      write_keypoints: bool = True, write_iv3_features: bool = True,
+                      enable_advanced: bool = True, occ_detailed: bool = False) -> Dict[str, np.ndarray]:
     """
     Process uploaded video file to extract keypoints and/or features.
     
@@ -41,6 +42,8 @@ def process_video_file(uploaded_file, target_fps: int = 30, out_size: int = 256,
         out_size: Target frame size for processing
         write_keypoints: Whether to extract 156-D keypoint features
         write_iv3_features: Whether to extract 2048-D InceptionV3 features
+        enable_advanced: Enable advanced occlusion detection (True/False)
+        occ_detailed: Whether to include detailed occlusion results
         
     Returns:
         Dictionary with keypoint/feature data similar to NPZ format
@@ -71,7 +74,9 @@ def process_video_file(uploaded_file, target_fps: int = 30, out_size: int = 256,
             compute_occlusion=True,  # Enable occlusion detection
             occ_vis_thresh=0.6,     # Default occlusion parameters
             occ_frame_prop=0.4,
-            occ_min_run=15
+            occ_min_run=15,
+            occ_mode='advanced' if enable_advanced else 'simple',  # Convert boolean to mode
+            occ_detailed=occ_detailed  # Include detailed results if requested
         )
         
         # Load the generated NPZ file
