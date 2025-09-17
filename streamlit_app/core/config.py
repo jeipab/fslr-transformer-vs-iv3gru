@@ -49,7 +49,6 @@ PROCESSING_CONFIG = {
         'max_gap': 5,
         'write_keypoints': True,
         'write_iv3_features': True,
-        'enable_advanced': True,
         'occ_detailed': False
     },
     'npz': {

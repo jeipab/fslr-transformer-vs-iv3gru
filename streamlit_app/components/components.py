@@ -393,25 +393,13 @@ def render_sidebar() -> Dict:
         st.markdown("---")
         st.markdown("**Occlusion Detection**")
         
-        # Enable Advanced Occlusion Detection
-        enable_advanced = st.radio(
-            "Enable Advanced Occlusion Detection",
-            ["Yes", "No"],
-            index=0,  # Default to "Yes"
-            help="Advanced: Computer vision-based detection with 5-region analysis\nSimple: Fast keypoint-based detection",
-            key="enable_advanced_radio"
+        # Detailed Results
+        occ_detailed = st.checkbox(
+            "Detailed Results",
+            value=False,
+            help="Include detailed per-frame occlusion analysis with region detection",
+            key="occ_detailed_checkbox"
         )
-        
-        # Detailed Results (only show when advanced is enabled)
-        if enable_advanced == "Yes":
-            occ_detailed = st.checkbox(
-                "Detailed Results",
-                value=False,
-                help="Include detailed per-frame occlusion analysis with region detection",
-                key="occ_detailed_checkbox"
-            )
-        else:
-            occ_detailed = False
     
     # About Section - Clean and minimal
     st.sidebar.markdown("""
