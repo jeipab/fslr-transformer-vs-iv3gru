@@ -602,12 +602,15 @@ def compute_occlusion_detection_from_keypoints(
             })
         
         # Apply temporal filtering for consistency
-        filtered_results = _apply_temporal_filtering(results)
+        filtered_results = _apply_temporal_filtering(results, kwargs)
         
-        # Aggregate results with threshold
+        # Aggregate results with consecutive frame logic
         total_occlusions = sum(1 for r in filtered_results if r['occlusion_detected'])
         occlusion_rate = total_occlusions / len(filtered_results) if filtered_results else 0
-        binary_flag = 1 if occlusion_rate > occlusion_threshold else 0
+        
+        # Binary flag: 1 if any consecutive occlusion pattern is detected
+        # The consecutive frame filtering already ensures robust detection
+        binary_flag = 1 if total_occlusions > 0 else 0
         
         if output_format == 'compatible':
             return binary_flag
@@ -834,78 +837,186 @@ def _detect_occlusions_multi_method(palm_center: Optional[Tuple[float, float]],
     return region_confidences
 
 
-def _apply_temporal_filtering(results: List[Dict]) -> List[Dict]:
+def _apply_temporal_filtering(results: List[Dict], config: Dict = None) -> List[Dict]:
     """
-    Apply adaptive temporal filtering to smooth detection results.
+    Apply consecutive frame temporal filtering for occlusion detection.
+    
+    Requires 5 consecutive frames with occlusion detection (confidence >= 0.2)
+    with tolerance for 1-2 missed frames within the window.
     
     Args:
         results: List of frame detection results
+        config: Configuration dictionary with consecutive frame parameters
         
     Returns:
-        Filtered results with improved temporal consistency
+        Filtered results with consecutive frame consistency
     """
     if len(results) < 2:
         return results
     
+    # Use default config if not provided
+    if config is None:
+        config = DEFAULT_OCCLUSION_CONFIG
+    
     filtered_results = []
+    consecutive_window_size = config.get('consecutive_window_size', 5)
+    max_skips = config.get('max_consecutive_skips', 2)
+    min_confidence = config.get('min_consecutive_confidence', 0.2)
     
     for i, result in enumerate(results):
-        # Adaptive window size based on sequence length
-        if len(results) < 10:
-            window_size = 3
-        elif len(results) < 30:
-            window_size = 5
-        else:
-            window_size = 7
+        # Check for consecutive occlusion detection
+        occlusion_detected = _check_consecutive_occlusion(
+            results, i, consecutive_window_size, max_skips, min_confidence
+        )
         
-        # Get temporal window
-        start = max(0, i - window_size // 2)
-        end = min(len(results), i + window_size // 2 + 1)
-        window = results[start:end]
+        # Get regions from consecutive window
+        occluded_regions = _get_consecutive_regions(
+            results, i, consecutive_window_size, max_skips, min_confidence
+        )
         
-        # Calculate smoothed confidence
-        confidences = [r['confidence'] for r in window]
-        avg_confidence = sum(confidences) / len(confidences)
-        
-        # Apply weighted majority voting for occlusion detection
-        occlusions = [r['occlusion_detected'] for r in window]
-        occlusion_weights = [r['confidence'] for r in window]
-        
-        # Weighted voting based on confidence
-        weighted_occlusions = sum(occ * weight for occ, weight in zip(occlusions, occlusion_weights))
-        total_weight = sum(occlusion_weights)
-        weighted_majority = weighted_occlusions / total_weight if total_weight > 0 else 0
-        
-        # Combine regions from window with confidence weighting
-        all_regions = []
-        region_confidences = {}
-        
-        for r in window:
-            for region in r['occluded_regions']:
-                all_regions.append(region)
-                if region not in region_confidences:
-                    region_confidences[region] = []
-                region_confidences[region].append(r['confidence'])
-        
-        # Keep regions with sufficient confidence and frequency
-        filtered_regions = []
-        for region, conf_list in region_confidences.items():
-            avg_region_conf = sum(conf_list) / len(conf_list)
-            region_frequency = len(conf_list) / len(window)
-            
-            # Region must appear in at least 40% of frames and have decent confidence
-            if region_frequency >= 0.4 and avg_region_conf >= 0.3:
-                filtered_regions.append(region)
+        # Calculate average confidence from consecutive detections
+        avg_confidence = _calculate_consecutive_confidence(
+            results, i, consecutive_window_size, max_skips, min_confidence
+        )
         
         filtered_result = result.copy()
-        # Use balanced threshold for final decision
-        filtered_result['occlusion_detected'] = weighted_majority > 0.4 or avg_confidence > 0.5
-        filtered_result['occluded_regions'] = list(set(filtered_regions))
+        filtered_result['occlusion_detected'] = occlusion_detected
+        filtered_result['occluded_regions'] = list(set(occluded_regions))
         filtered_result['confidence'] = avg_confidence
         
         filtered_results.append(filtered_result)
     
     return filtered_results
+
+
+def _check_consecutive_occlusion(results: List[Dict], center_idx: int, 
+                               window_size: int, max_skips: int, 
+                               min_confidence: float) -> bool:
+    """
+    Check if there are enough consecutive occlusion detections around center_idx.
+    
+    Args:
+        results: List of detection results
+        center_idx: Center frame index
+        window_size: Size of consecutive window (5)
+        max_skips: Maximum allowed skips (2)
+        min_confidence: Minimum confidence threshold (0.2)
+        
+    Returns:
+        True if consecutive occlusion pattern is detected
+    """
+    # Define window boundaries
+    half_window = window_size // 2
+    start = max(0, center_idx - half_window)
+    end = min(len(results), center_idx + half_window + 1)
+    
+    # Need at least window_size frames to check
+    if end - start < window_size:
+        return False
+    
+    # Check all possible consecutive windows within the range
+    for window_start in range(start, end - window_size + 1):
+        window_end = window_start + window_size
+        
+        # Count valid detections in this window
+        valid_detections = 0
+        skips = 0
+        
+        for i in range(window_start, window_end):
+            if i < len(results):
+                result = results[i]
+                # Check if frame has occlusion detection with sufficient confidence
+                if (result['occlusion_detected'] and 
+                    result['confidence'] >= min_confidence):
+                    valid_detections += 1
+                else:
+                    skips += 1
+        
+        # Check if this window meets the criteria
+        if valid_detections >= (window_size - max_skips):
+            return True
+    
+    return False
+
+
+def _get_consecutive_regions(results: List[Dict], center_idx: int,
+                           window_size: int, max_skips: int,
+                           min_confidence: float) -> List[str]:
+    """
+    Get occluded regions from consecutive detection window.
+    
+    Args:
+        results: List of detection results
+        center_idx: Center frame index
+        window_size: Size of consecutive window
+        max_skips: Maximum allowed skips
+        min_confidence: Minimum confidence threshold
+        
+    Returns:
+        List of occluded region names
+    """
+    # Define window boundaries
+    half_window = window_size // 2
+    start = max(0, center_idx - half_window)
+    end = min(len(results), center_idx + half_window + 1)
+    
+    all_regions = []
+    region_confidences = {}
+    
+    # Collect regions from valid detections in window
+    for i in range(start, end):
+        if i < len(results):
+            result = results[i]
+            if (result['occlusion_detected'] and 
+                result['confidence'] >= min_confidence):
+                for region in result['occluded_regions']:
+                    all_regions.append(region)
+                    if region not in region_confidences:
+                        region_confidences[region] = []
+                    region_confidences[region].append(result['confidence'])
+    
+    # Keep regions that appear frequently enough
+    filtered_regions = []
+    for region, conf_list in region_confidences.items():
+        if len(conf_list) >= (window_size - max_skips) // 2:  # At least half the window
+            filtered_regions.append(region)
+    
+    return filtered_regions
+
+
+def _calculate_consecutive_confidence(results: List[Dict], center_idx: int,
+                                    window_size: int, max_skips: int,
+                                    min_confidence: float) -> float:
+    """
+    Calculate average confidence from consecutive detection window.
+    
+    Args:
+        results: List of detection results
+        center_idx: Center frame index
+        window_size: Size of consecutive window
+        max_skips: Maximum allowed skips
+        min_confidence: Minimum confidence threshold
+        
+    Returns:
+        Average confidence from valid detections
+    """
+    # Define window boundaries
+    half_window = window_size // 2
+    start = max(0, center_idx - half_window)
+    end = min(len(results), center_idx + half_window + 1)
+    
+    confidences = []
+    
+    # Collect confidences from valid detections
+    for i in range(start, end):
+        if i < len(results):
+            result = results[i]
+            if (result['occlusion_detected'] and 
+                result['confidence'] >= min_confidence):
+                confidences.append(result['confidence'])
+    
+    # Return average confidence, or 0 if no valid detections
+    return sum(confidences) / len(confidences) if confidences else 0.0
 
 
 def compute_occlusion_detection(
@@ -1003,19 +1114,22 @@ def _compute_occlusion_from_video(
         
         cap.release()
         
-        # Aggregate results
-        total_occlusions = sum(1 for r in results if r['occlusion_detected'])
-        occlusion_rate = total_occlusions / len(results) if results else 0
+        # Apply consecutive frame temporal filtering
+        filtered_results = _apply_temporal_filtering(results, kwargs)
         
-        # Determine binary flag
-        binary_flag = 1 if occlusion_rate > 0.3 else 0  # 30% threshold
+        # Aggregate results with consecutive frame logic
+        total_occlusions = sum(1 for r in filtered_results if r['occlusion_detected'])
+        occlusion_rate = total_occlusions / len(filtered_results) if filtered_results else 0
+        
+        # Binary flag: 1 if any consecutive occlusion pattern is detected
+        binary_flag = 1 if total_occlusions > 0 else 0
         
         if output_format == 'compatible':
             return binary_flag
         else:
-            # Convert results to JSON-serializable format
+            # Convert filtered results to JSON-serializable format
             serializable_results = []
-            for result in results:
+            for result in filtered_results:
                 serializable_result = {
                     'frame_idx': result['frame_idx'],
                     'occlusion_detected': result['occlusion_detected'],
@@ -1031,7 +1145,7 @@ def _compute_occlusion_from_video(
             return {
                 'binary_flag': binary_flag,
                 'occlusion_rate': float(occlusion_rate),  # Convert numpy float to Python float
-                'total_frames': int(len(results)),       # Convert numpy int to Python int
+                'total_frames': int(len(filtered_results)),       # Convert numpy int to Python int
                 'occluded_frames': int(total_occlusions), # Convert numpy int to Python int
                 'detailed_results': serializable_results
             }
@@ -1056,7 +1170,11 @@ DEFAULT_OCCLUSION_CONFIG = {
     'proximity_multiplier': 1.5,
     'occlusion_threshold': 0.15,
     'confidence_threshold': 0.4,
-    'temporal_confidence': 0.5
+    'temporal_confidence': 0.5,
+    # Consecutive frame detection parameters
+    'consecutive_window_size': 5,      # Require 5 consecutive frames
+    'max_consecutive_skips': 2,        # Allow up to 2 missed frames
+    'min_consecutive_confidence': 0.2  # Minimum confidence threshold
 }
 
 
