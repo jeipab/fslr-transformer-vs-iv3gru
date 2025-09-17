@@ -1,6 +1,6 @@
 # Sign Language Recognition Model Validation Guide
 
-This guide provides comprehensive instructions for validating trained Sign Language Recognition models using the `validate.py` script.
+This guide provides instructions for validating trained Sign Language Recognition models using the `validate.py` script.
 
 ## Command Line Usage
 
@@ -63,7 +63,7 @@ python validate.py --model <model_type> --checkpoint <checkpoint_path> [options]
 
 ### Output Structure
 
-The validation script generates comprehensive results in the specified output directory:
+The validation script generates results in the specified output directory:
 
 ```
 results-validate/
@@ -101,7 +101,7 @@ python validate.py --model transformer --checkpoint transformer/transformer_low-
 python validate.py --model iv3_gru --checkpoint iv3_gru/model.pt
 ```
 
-### Advanced Usage
+### Additional Usage
 
 ```bash
 # Custom batch size and save individual predictions
@@ -120,7 +120,7 @@ python validate.py --model iv3_gru --checkpoint iv3_gru/model.pt --device cpu
 
 ### Overall Results (`overall_results.json`)
 
-Contains comprehensive metrics for the entire validation dataset:
+Contains metrics for the entire validation dataset:
 
 ```json
 {
@@ -235,7 +235,7 @@ A positive difference indicates the model performs better on non-occluded sample
 Use validation results to compare different models:
 
 1. **Overall Performance**: Compare `gloss_accuracy` and `category_accuracy`
-2. **Robustness**: Compare occlusion impact (smaller differences indicate better robustness)
+2. **Performance**: Compare occlusion impact (smaller differences indicate better performance)
 3. **Class Balance**: Check per-class F1-scores for balanced performance across all signs
 
 ## Common Use Cases

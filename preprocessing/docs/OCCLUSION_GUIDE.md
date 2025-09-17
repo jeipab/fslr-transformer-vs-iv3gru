@@ -2,7 +2,7 @@
 
 ## Overview
 
-The preprocessing pipeline includes hand-head occlusion detection for sign language video analysis. The system uses computer vision techniques based on MediaPipe keypoints and advanced detection algorithms.
+The preprocessing pipeline includes hand-head occlusion detection for sign language video analysis. The system uses computer vision techniques based on MediaPipe keypoints and detection algorithms.
 
 ## Quick Start
 
@@ -28,13 +28,13 @@ python preprocessing/multi_preprocess.py video.mp4 output/ --write-keypoints --o
 
 ## How It Works
 
-The occlusion detection system implements sophisticated computer vision-based detection with:
+The occlusion detection system implements computer vision-based detection with:
 
 - **5-Region Head Partitioning**: Divides the head into linguistically significant regions (forehead, cheeks, nose, mouth, neck)
 - **Multi-Method Detection**: Uses ellipse intersection, proximity analysis, trajectory tracking, and orientation detection
 - **Consecutive Frame Filtering**: Requires 5 consecutive frames with occlusion detection (confidence ≥ 0.2) with tolerance for 1-2 missed frames
 - **Balanced Thresholds**: Designed to minimize false negatives while maintaining accuracy
-- **Robust Keypoint Validation**: Validates landmark positions and provides fallback mechanisms
+- **Keypoint Validation**: Validates landmark positions and provides fallback mechanisms
 - **Adaptive Region Sizing**: Automatically adjusts region sizes based on face scale
 
 ### Head Regions
@@ -86,7 +86,7 @@ occlusion_flag = compute_occlusion_detection(video_path, output_format='compatib
 **Detailed Format**:
 
 ```python
-# Returns comprehensive analysis
+# Returns detailed analysis
 results = compute_occlusion_detection(video_path, output_format='detailed')
 # Returns: {
 #     'binary_flag': 0 or 1,
@@ -220,7 +220,7 @@ This will provide frame-by-frame analysis in the metadata.
 
 This implementation is based on research in hand-head occlusion detection for sign language video analysis, incorporating:
 
-- Computer vision techniques for robust detection
+- Computer vision techniques for detection
 - Temporal consistency filtering
 - Multi-region analysis for linguistic relevance
 - Conservative thresholds for production use
