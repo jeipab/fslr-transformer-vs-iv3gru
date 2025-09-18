@@ -207,24 +207,54 @@ def render_keypoint_video(sequence: np.ndarray, mask: Optional[np.ndarray] = Non
     if f"video_path_{key_suffix}" in st.session_state:
         video_path = st.session_state[f"video_path_{key_suffix}"]
         if os.path.exists(video_path):
-            # Display video with smaller size
+            # Display video with dynamic sizing, autoplay, and autoloop
             with open(video_path, "rb") as video_file:
                 video_bytes = video_file.read()
             
-            # Create a container with fixed width for smaller video preview
+            # Create a container with dynamic sizing
             video_container = st.container()
             with video_container:
-                st.video(video_bytes, format="video/mp4")
+                st.video(video_bytes, format="video/mp4", autoplay=True, loop=True)
             
-            # Add custom CSS to make video smaller and centered
+            # Add custom CSS for dynamic video sizing and autoplay/loop
             st.markdown("""
             <style>
             .stVideo {
-                max-width: 400px !important;
+                width: 100% !important;
+                max-width: 600px !important;
                 margin: 0 auto !important;
                 display: block !important;
             }
+            
+            .stVideo video {
+                width: 100% !important;
+                height: auto !important;
+                border-radius: 8px !important;
+                box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1) !important;
+            }
+            
+            /* Ensure autoplay and loop work */
+            .stVideo video[autoplay] {
+                autoplay: true !important;
+            }
+            
+            .stVideo video[loop] {
+                loop: true !important;
+            }
             </style>
+            
+            <script>
+            // Force autoplay and loop for better browser compatibility
+            document.addEventListener('DOMContentLoaded', function() {
+                const videos = document.querySelectorAll('.stVideo video');
+                videos.forEach(video => {
+                    video.autoplay = true;
+                    video.loop = true;
+                    video.muted = true; // Muted autoplay works better
+                    video.play();
+                });
+            });
+            </script>
             """, unsafe_allow_html=True)
             
             # Download button
@@ -578,7 +608,6 @@ def create_keypoint_animation_video(keypoints_2d: np.ndarray, mask: Optional[np.
     
     # Create output path
     output_path = os.path.join(tempfile.gettempdir(), f"keypoint_animation_{key_suffix}.mp4")
-    st.write(f"🔍 Debug: Output path: {output_path}")
     
     # Define skeleton connections
     skeleton_connections = {
@@ -633,9 +662,11 @@ def create_keypoint_animation_video(keypoints_2d: np.ndarray, mask: Optional[np.
                 original_video_cap = cv2.VideoCapture(temp_video_path)
                 
                 if original_video_cap.isOpened():
-                    # Get original video dimensions (since we're using Original Size)
+                    # Get original video dimensions and properties
                     width = int(original_video_cap.get(cv2.CAP_PROP_FRAME_WIDTH))
                     height = int(original_video_cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+                    original_fps = original_video_cap.get(cv2.CAP_PROP_FPS)
+                    total_frames = int(original_video_cap.get(cv2.CAP_PROP_FRAME_COUNT))
                     
                     # Extract all frames from original video (no resizing needed)
                     while True:
@@ -660,23 +691,15 @@ def create_keypoint_animation_video(keypoints_2d: np.ndarray, mask: Optional[np.
         st.error(f"Invalid video dimensions: {width}x{height}. Please try again.")
         return None
     
-    # Debug info
-    st.write(f"🔍 Debug: Video dimensions: {width}x{height}")
-    st.write(f"🔍 Debug: Background type: {bg_type}")
-    st.write(f"🔍 Debug: Original video frames: {len(original_video_frames)}")
-    
     try:
         # Video writer setup - use H.264 codec for better compatibility
         fourcc = cv2.VideoWriter_fourcc(*'H264')
         out = cv2.VideoWriter(output_path, fourcc, fps, (width, height))
-        st.write(f"🔍 Debug: H264 writer opened: {out.isOpened()}")
         
         # Alternative fallback if H264 doesn't work
         if not out.isOpened():
-            st.write("🔍 Debug: H264 failed, trying mp4v...")
             fourcc = cv2.VideoWriter_fourcc(*'mp4v')
             out = cv2.VideoWriter(output_path, fourcc, fps, (width, height))
-            st.write(f"🔍 Debug: mp4v writer opened: {out.isOpened()}")
         
         # Final check
         if not out.isOpened():
@@ -686,23 +709,33 @@ def create_keypoint_animation_video(keypoints_2d: np.ndarray, mask: Optional[np.
         for frame_idx in range(len(keypoints_2d)):
             # Create background
             if bg_type == "Original Video" and original_video_frames:
-                # Use original video frame as background
-                if frame_idx < len(original_video_frames):
-                    frame = original_video_frames[frame_idx].copy()
-                else:
-                    # If we run out of original frames, use the last available frame
-                    frame = original_video_frames[-1].copy() if original_video_frames else np.ones((height, width, 3), dtype=np.uint8) * 255
-            elif bg_type == "White":
-                frame = np.ones((height, width, 3), dtype=np.uint8) * 255
-            elif bg_type == "Black":
-                frame = np.zeros((height, width, 3), dtype=np.uint8)
-            else:  # Grid
-                frame = np.ones((height, width, 3), dtype=np.uint8) * 240
-                # Draw grid
-                for i in range(0, width, 50):
-                    cv2.line(frame, (i, 0), (i, height), (200, 200, 200), 1)
-                for i in range(0, height, 50):
-                    cv2.line(frame, (0, i), (width, i), (200, 200, 200), 1)
+                # Time-based synchronization
+                # Calculate time position for this keypoint frame
+                keypoint_time = frame_idx / 30.0  # Assuming keypoints are at 30fps
+                
+                # Calculate corresponding video frame based on time
+                video_frame_idx = int(keypoint_time * original_fps)
+                
+                # Ensure we don't go out of bounds
+                video_frame_idx = min(video_frame_idx, len(original_video_frames) - 1)
+                video_frame_idx = max(0, video_frame_idx)  # Ensure non-negative
+                
+                # Use the calculated video frame
+                frame = original_video_frames[video_frame_idx].copy()
+                
+            else:
+                # Use static background
+                if bg_type == "White":
+                    frame = np.ones((height, width, 3), dtype=np.uint8) * 255
+                elif bg_type == "Black":
+                    frame = np.zeros((height, width, 3), dtype=np.uint8)
+                else:  # Grid
+                    frame = np.ones((height, width, 3), dtype=np.uint8) * 240
+                    # Draw grid
+                    for i in range(0, width, 50):
+                        cv2.line(frame, (i, 0), (i, height), (200, 200, 200), 1)
+                    for i in range(0, height, 50):
+                        cv2.line(frame, (0, i), (width, i), (200, 200, 200), 1)
             
             current_keypoints = keypoints_2d[frame_idx]
             
@@ -786,19 +819,12 @@ def create_keypoint_animation_video(keypoints_2d: np.ndarray, mask: Optional[np.
             frames_written += 1
         
         out.release()
-        st.write(f"🔍 Debug: Frames written: {frames_written}")
         
         # Verify video was created successfully
-        if os.path.exists(output_path):
-            file_size = os.path.getsize(output_path)
-            st.write(f"🔍 Debug: Video file size: {file_size} bytes")
-            if file_size > 0:
-                return output_path
-            else:
-                st.error("Video file was created but is empty")
-                return None
+        if os.path.exists(output_path) and os.path.getsize(output_path) > 0:
+            return output_path
         else:
-            st.error("Video file was not created")
+            st.error("Video file was not created properly")
             return None
         
     except Exception as e:
