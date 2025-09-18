@@ -102,7 +102,7 @@ def main():
     ap = argparse.ArgumentParser(description="Rename and flatten video clips based on labels.csv")
     ap.add_argument("--root", type=Path, default=Path("."), help="Project root containing labels.csv and clips/")
     ap.add_argument("--clips", type=Path, default=None, help="Path to clips/ (default: <root>/data/raw/clips)")
-    ap.add_argument("--labels", type=Path, default=None, help="Path to labels.csv (default: <root>/data/raw/labels.csv)")
+    ap.add_argument("--labels", type=Path, default=None, help="Path to labels.csv (default: <root>/preprocessing/utils/rename.csv)")
     ap.add_argument("--out", type=Path, default=None, help="Output folder (default: <root>/videos)")
     ap.add_argument("--start-index", type=int, default=1, help="Starting index for clip numbering (default: 1)")
     ap.add_argument("--digits", type=int, default=4, help="Zero-pad width for numbers (default: 4)")
@@ -111,8 +111,8 @@ def main():
 
     root = args.root.resolve() if args.root else Path(__file__).resolve().parent
     clips_dir = (root / "data/raw/clips").resolve()
-    labels_csv = (root / "data/raw/labels.csv").resolve()
-    out_dir = (root / "data/raw/videos").resolve()
+    labels_csv = (root / "preprocessing/utils/rename.csv").resolve()
+    out_dir = (root / "data/raw").resolve()
 
     print(f"📂 Root directory: {root}")
     print(f"📂 clips_dir: {clips_dir}")
@@ -140,12 +140,12 @@ def main():
             print(f"[WARN] ❗ No category found in labels.csv for id={id_num}; skipping {src}", file=sys.stderr)
             continue
         label, cat = id_to_cat.get(id_num)
-        new_name = f"clip_{counter:0{width}d}_{label}.MOV" # Option: Change {label} to {cat} to rename with a category instead
+        new_name = f"clip_{counter:0{width}d}_{label}.MOV"
         dest = out_dir / new_name
         # If destination exists, increment counter until free to avoid accidental overwrite.
         while dest.exists():
             counter += 1
-            new_name = f"clip_{counter:0{width}d}_{label}.MOV" # Option: Change {label} to {cat} to rename with a category instead
+            new_name = f"clip_{counter:0{width}d}_{label}.MOV"
             dest = out_dir / new_name
         moves.append((src, dest))
         counter += 1
