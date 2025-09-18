@@ -141,9 +141,17 @@ def render_keypoint_video(sequence: np.ndarray, mask: Optional[np.ndarray] = Non
     keypoints_2d = sequence.reshape(time_steps, 78, 2)
     
     # Video settings
-    col1, col2, col3 = st.columns(3)
+    col1, col2, col3 = st.columns([2, 1, 1])
     with col1:
-        fps = st.slider("FPS", 5, 30, 15, help="Frames per second for video", key=f"video_fps_{key_suffix}")
+        fps = st.slider(
+            "FPS", 
+            min_value=5, 
+            max_value=30, 
+            value=15, 
+            step=1,
+            help="Frames per second for video", 
+            key=f"video_fps_{key_suffix}"
+        )
     with col2:
         show_skeleton = st.checkbox("Show Skeleton", value=True, help="Display skeleton connections", key=f"video_skeleton_{key_suffix}")
     with col3:
@@ -185,8 +193,8 @@ def render_keypoint_video(sequence: np.ndarray, mask: Optional[np.ndarray] = Non
         # This will be set when we load the original video
         pass
     
-    # Video control buttons in a row
-    col_gen, col_download = st.columns([2, 1])
+    # Video control buttons with Download Video right-aligned to dropdown and Generate Video with gap
+    col_empty1, col_empty2, col_empty3, col_empty4, col_empty5, col_gen, col_gap, col_download = st.columns([2, 2, 1, 1, 1, 2, 0.25, 2])
     
     with col_gen:
         if st.button("Generate Video", key=f"generate_video_{key_suffix}"):
@@ -202,6 +210,22 @@ def render_keypoint_video(sequence: np.ndarray, mask: Optional[np.ndarray] = Non
                     st.toast("Video generated successfully!", icon="✅")
                 else:
                     st.toast("Failed to generate video", icon="❌")
+    
+    with col_download:
+        # Download button (moved here to be next to generate video button)
+        if f"video_path_{key_suffix}" in st.session_state:
+            video_path = st.session_state[f"video_path_{key_suffix}"]
+            if os.path.exists(video_path):
+                with open(video_path, "rb") as video_file:
+                    video_bytes = video_file.read()
+                
+                st.download_button(
+                    label="Download Video",
+                    data=video_bytes,
+                    file_name=f"keypoint_animation_{key_suffix}.mp4",
+                    mime="video/mp4",
+                    key=f"download_btn_{key_suffix}"
+                )
     
     # Display video if it exists in session state
     if f"video_path_{key_suffix}" in st.session_state:
@@ -256,16 +280,6 @@ def render_keypoint_video(sequence: np.ndarray, mask: Optional[np.ndarray] = Non
             });
             </script>
             """, unsafe_allow_html=True)
-            
-            # Download button
-            with col_download:
-                st.download_button(
-                    label="Download Video",
-                    data=video_bytes,
-                    file_name=f"keypoint_animation_{key_suffix}.mp4",
-                    mime="video/mp4",
-                    key=f"download_btn_{key_suffix}"
-                )
 
 
 def render_animated_keypoints(sequence: np.ndarray, mask: Optional[np.ndarray] = None, key_suffix: str = "") -> None:
@@ -285,10 +299,12 @@ def render_animated_keypoints(sequence: np.ndarray, mask: Optional[np.ndarray] =
     keypoints_2d = sequence.reshape(time_steps, 78, 2)
     
     # Video generation option
-    col1, col2 = st.columns([3, 1])
+    col1, col2, col3 = st.columns([2, 1, 1])
     with col1:
         st.markdown("**Choose visualization method:**")
     with col2:
+        st.markdown("")  # Empty space for alignment
+    with col3:
         use_video = st.checkbox("Generate Video", value=False, help="Create an MP4 video with keypoint animation", key=f"use_video_{key_suffix}")
     
     if use_video:
