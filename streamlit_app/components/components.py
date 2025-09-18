@@ -863,10 +863,10 @@ def render_video_preview(uploaded_file) -> None:
     if not uploaded_file:
         return
     
-    # Use Streamlit's built-in video display with autoplay enabled
+    # Use Streamlit's built-in video display with autoplay and loop enabled
     try:
-        # Always autoplay with sound enabled
-        st.video(uploaded_file, format="video/mp4", start_time=0, autoplay=True)
+        # Always autoplay with sound enabled and loop continuously
+        st.video(uploaded_file, format="video/mp4", start_time=0, autoplay=True, loop=True)
     except Exception as e:
         # Fallback: show file info if video preview fails
         st.info(f"Video preview not available for {uploaded_file.name}")
