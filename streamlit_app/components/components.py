@@ -426,6 +426,191 @@ def set_page() -> None:
         }
     }
     
+    /* ===== VIDEO PREVIEW STYLING ===== */
+    .video-preview-container {
+        background-color: rgba(255, 255, 255, 0.05);
+        border-radius: 8px;
+        padding: 0.5rem;
+        margin: 0.5rem 0;
+        border: 1px solid rgba(255, 255, 255, 0.1);
+    }
+    
+    .video-preview-container video {
+        border-radius: 6px;
+        max-height: 120px;
+        width: 100%;
+    }
+    
+    /* Video file card styling */
+    .video-file-card {
+        background-color: rgba(255, 255, 255, 0.05);
+        border-radius: 8px;
+        padding: 0.75rem;
+        margin: 0.5rem 0;
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        transition: all 0.3s ease;
+    }
+    
+    .video-file-card:hover {
+        background-color: rgba(255, 255, 255, 0.08);
+        border-color: rgba(52, 152, 219, 0.3);
+    }
+    
+    /* Make Streamlit video elements fit container */
+    .stVideo {
+        max-height: 500px !important;
+        height: 500px !important;
+        width: 100% !important;
+        margin: 0 auto !important;
+        display: flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        background-color: rgba(0, 0, 0, 0.1) !important;
+        border-radius: 8px !important;
+    }
+
+    .stVideo video {
+        max-height: 500px !important;
+        max-width: 100% !important;
+        height: auto !important;
+        width: auto !important;
+        object-fit: contain !important;
+        border-radius: 6px !important;
+    }
+    
+    /* Video thumbnail carousel styling */
+    .video-thumbnail {
+        transition: all 0.3s ease !important;
+        margin: 0.25rem !important;
+    }
+    
+    .video-thumbnail:hover {
+        background-color: rgba(255, 255, 255, 0.1) !important;
+        transform: translateY(-2px) !important;
+    }
+    
+    .video-thumbnail.selected {
+        background-color: rgba(52, 152, 219, 0.2) !important;
+        border-color: #3498db !important;
+        box-shadow: 0 4px 8px rgba(52, 152, 219, 0.3) !important;
+    }
+    
+    /* Vertical thumbnail carousel styling */
+    .video-thumbnail-vertical {
+        transition: all 0.3s ease !important;
+        margin: 0.5rem 0 !important;
+        width: 100% !important;
+    }
+    
+    .video-thumbnail-vertical:hover {
+        background-color: rgba(255, 255, 255, 0.1) !important;
+        transform: translateX(4px) !important;
+    }
+    
+    .video-thumbnail-vertical.selected {
+        background-color: rgba(52, 152, 219, 0.2) !important;
+        border-color: #3498db !important;
+        box-shadow: 0 4px 8px rgba(52, 152, 219, 0.3) !important;
+        transform: translateX(4px) !important;
+    }
+    
+    /* Compact thumbnail styling */
+    .video-thumbnail-compact {
+        transition: all 0.3s ease !important;
+        margin: 0.2rem 0 !important;
+        width: 100% !important;
+    }
+    
+    .video-thumbnail-compact:hover {
+        background-color: rgba(255, 255, 255, 0.1) !important;
+        transform: translateX(2px) !important;
+    }
+    
+    .video-thumbnail-compact.selected {
+        background-color: rgba(52, 152, 219, 0.2) !important;
+        border-color: #3498db !important;
+        box-shadow: 0 2px 4px rgba(52, 152, 219, 0.3) !important;
+        transform: translateX(2px) !important;
+    }
+    
+    /* Compact button styling */
+    .stButton > button[key*="thumb_"] {
+        font-size: 0.75rem !important;
+        padding: 0.25rem 0.5rem !important;
+        height: auto !important;
+        min-height: 2rem !important;
+        display: block !important;
+    }
+
+    /* Video list select button styling - make them look like cards */
+    .stButton > button[key*="video_select_"] {
+        height: 56px !important;
+        min-height: 56px !important;
+        max-height: 56px !important;
+        display: flex !important;
+        align-items: center !important;
+        justify-content: space-between !important;
+        font-size: 0.9rem !important;
+        font-weight: 500 !important;
+        padding: 0.75rem !important;
+        border-radius: 6px !important;
+        transition: all 0.3s ease !important;
+        text-align: left !important;
+        margin: 0.25rem 0 !important;
+        border: 1px solid rgba(255, 255, 255, 0.1) !important;
+        background-color: rgba(255, 255, 255, 0.05) !important;
+        color: #ffffff !important;
+    }
+    
+    /* Enhanced button hover effects */
+    .stButton > button[key*="video_select_"]:hover:not(:disabled) {
+        transform: translateY(-1px) !important;
+        box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2) !important;
+        background-color: rgba(255, 255, 255, 0.08) !important;
+        border-color: rgba(52, 152, 219, 0.3) !important;
+    }
+    
+    /* Selected button styling */
+    .stButton > button[key*="video_select_"][disabled] {
+        background-color: rgba(52, 152, 219, 0.2) !important;
+        border-color: #3498db !important;
+        color: #ffffff !important;
+        opacity: 1 !important;
+        box-shadow: 0 2px 4px rgba(52, 152, 219, 0.2) !important;
+    }
+    
+    /* Primary button styling for selected state */
+    .stButton > button[key*="video_select_"][kind="primary"] {
+        background-color: rgba(52, 152, 219, 0.2) !important;
+        border-color: #3498db !important;
+        color: #ffffff !important;
+        font-weight: 600 !important;
+    }
+    
+    /* Secondary button styling for unselected state */
+    .stButton > button[key*="video_select_"][kind="secondary"] {
+        background-color: rgba(255, 255, 255, 0.05) !important;
+        border-color: rgba(255, 255, 255, 0.1) !important;
+        color: #ffffff !important;
+    }
+    
+    
+    /* Video list styling - now handled by native Streamlit container */
+    .video-item-selected {
+        background-color: rgba(52, 152, 219, 0.2) !important;
+        border: 2px solid #3498db !important;
+    }
+
+    .video-item-unselected {
+        background-color: rgba(255, 255, 255, 0.05) !important;
+        border: 1px solid rgba(255, 255, 255, 0.1) !important;
+    }
+
+    .video-item-unselected:hover {
+        background-color: rgba(255, 255, 255, 0.08) !important;
+        border-color: rgba(52, 152, 219, 0.3) !important;
+    }
+    
     /* ===== CUSTOM BUTTON COLORS ===== */
     /* Reset button - Warning/Orange color */
     .stButton > button[kind="primary"]:has-text("Reset") {
@@ -671,6 +856,70 @@ def render_file_upload() -> object:
         accept_multiple_files=True,
         help="Upload preprocessed .npz files or video files for processing (up to 10 files)"
     )
+
+
+def render_video_preview(uploaded_file) -> None:
+    """Render video preview for uploaded video files."""
+    if not uploaded_file:
+        return
+    
+    # Use Streamlit's built-in video display with smaller size
+    try:
+        st.video(uploaded_file, format="video/mp4", start_time=0)
+    except Exception as e:
+        # Fallback: show file info if video preview fails
+        st.info(f"Video preview not available for {uploaded_file.name}")
+        st.write(f"File size: {len(uploaded_file.getvalue()) / (1024*1024):.1f} MB")
+
+
+def render_video_carousel(video_files) -> None:
+    """Render video files in a scrollable list with side-by-side layout."""
+    if not video_files:
+        return
+
+    # Initialize session state for carousel
+    if 'selected_video_index' not in st.session_state:
+        st.session_state.selected_video_index = 0
+
+    # Create side-by-side layout: video list on left, preview on right
+    col1, col2 = st.columns([1, 3], gap="medium")
+
+    with col1:
+        # Use Streamlit's native container with fixed height for scrolling
+        with st.container(height=500):
+            # Create compact video list items with consistent spacing
+            for i, video_file in enumerate(video_files):
+                file_size = len(video_file.getvalue())
+                size_mb = file_size / (1024 * 1024)
+
+                # Check if this video is selected
+                is_selected = i == st.session_state.selected_video_index
+
+                # Create a clickable video card using button with custom styling
+                button_text = video_file.name
+                
+                if st.button(
+                    button_text,
+                    key=f"video_select_{i}",
+                    help=f"Click to view {video_file.name}" if not is_selected else f"Currently viewing {video_file.name}",
+                    type="primary" if is_selected else "secondary",
+                    disabled=False,
+                    use_container_width=True
+                ):
+                    st.session_state.selected_video_index = i
+                    st.rerun()
+
+                # Consistent spacing between items
+                if i < len(video_files) - 1:  # Don't add spacing after last item
+                    st.markdown("<div style='height: 0.5rem;'></div>", unsafe_allow_html=True)
+
+    with col2:
+        # Show video preview in a fixed container without scrolling
+        if st.session_state.selected_video_index < len(video_files):
+            selected_video = video_files[st.session_state.selected_video_index]
+            render_video_preview(selected_video)
+        else:
+            st.info("Select a video from the list to preview it.")
 
 
 def render_main_header() -> None:

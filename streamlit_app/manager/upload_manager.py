@@ -3,7 +3,7 @@
 import streamlit as st
 from typing import List, Tuple, Dict
 from ..components.utils import detect_file_type, format_file_size
-from ..components.components import render_file_upload
+from ..components.components import render_file_upload, render_video_preview, render_video_carousel
 
 
 def render_welcome_screen() -> None:
@@ -72,32 +72,80 @@ def render_upload_stage():
     if uploaded_files:
         st.session_state.pending_upload_files = uploaded_files
         
-        # Display selected files in multiple columns
+        # Display selected files with previews
         st.markdown("**Selected Files:**")
         
-        # Calculate number of columns based on number of files
-        num_files = len(uploaded_files)
-        if num_files <= 3:
-            num_cols = num_files
-        elif num_files <= 6:
-            num_cols = 3
-        else:
-            num_cols = 4
+        # Separate NPZ and video files for different display layouts
+        npz_files = [f for f in uploaded_files if detect_file_type(f) == 'npz']
+        video_files = [f for f in uploaded_files if detect_file_type(f) == 'video']
         
-        # Create columns for file display
-        cols = st.columns(num_cols)
-        
-        for i, uploaded_file in enumerate(uploaded_files):
-            file_type = uploaded_file.name.split('.')[-1].lower()
-            icon = "📄" if file_type == "npz" else "🎥"
-            file_size = len(uploaded_file.getvalue())
-            size_mb = file_size / (1024 * 1024)
+        # Display NPZ files in compact columns (if any)
+        if npz_files:
+            st.markdown("**📄 NPZ Files:**")
             
-            # Use modulo to cycle through columns
-            col_index = i % num_cols
-            with cols[col_index]:
-                st.markdown(f"{icon} **{uploaded_file.name}**")
-                st.markdown(f"({size_mb:.1f} MB)")
+            # Show NPZ count summary
+            total_size = sum(len(f.getvalue()) for f in npz_files) / (1024 * 1024)
+            st.markdown(f"""
+            <div style="text-align: center; margin-bottom: 1rem; padding: 0.5rem; background-color: rgba(255, 255, 255, 0.05); border-radius: 6px;">
+                <p style="margin: 0; color: #a0aec0; font-size: 0.9rem;">
+                    <span>{len(npz_files)} NPZ file{'s' if len(npz_files) > 1 else ''}</span>
+                    <span style="margin: 0 1rem;">•</span>
+                    <span>Total: {total_size:.1f} MB</span>
+                </p>
+            </div>
+            """, unsafe_allow_html=True)
+            
+            num_npz = len(npz_files)
+            if num_npz <= 3:
+                num_cols = num_npz
+            elif num_npz <= 6:
+                num_cols = 3
+            else:
+                num_cols = 4
+            
+            cols = st.columns(num_cols, gap="medium")
+            for i, uploaded_file in enumerate(npz_files):
+                file_size = len(uploaded_file.getvalue())
+                size_mb = file_size / (1024 * 1024)
+                
+                col_index = i % num_cols
+                with cols[col_index]:
+                    # Create consistent card styling for NPZ files
+                    st.markdown(f"""
+                    <div style="background-color: rgba(255, 255, 255, 0.05);
+                                border: 1px solid rgba(255, 255, 255, 0.1);
+                                border-radius: 6px;
+                                padding: 0.75rem;
+                                margin: 0.25rem 0;
+                                text-align: center;
+                                transition: all 0.3s ease;">
+                        <div style="color: #ffffff; font-size: 0.9rem; font-weight: 600; margin-bottom: 0.25rem;">
+                            {uploaded_file.name}
+                        </div>
+                        <div style="color: #a0aec0; font-size: 0.8rem; font-weight: 500;">
+                            {size_mb:.1f} MB
+                        </div>
+                    </div>
+                    """, unsafe_allow_html=True)
+        
+        # Display video files in carousel (if any)
+        if video_files:
+            st.markdown("**🎥 Video Files:**")
+            
+            # Show video count summary
+            total_size = sum(len(f.getvalue()) for f in video_files) / (1024 * 1024)
+            st.markdown(f"""
+            <div style="text-align: center; margin-bottom: 1rem; padding: 0.5rem; background-color: rgba(255, 255, 255, 0.05); border-radius: 6px;">
+                <p style="margin: 0; color: #a0aec0; font-size: 0.9rem;">
+                    <span>{len(video_files)} video file{'s' if len(video_files) > 1 else ''}</span>
+                    <span style="margin: 0 1rem;">•</span>
+                    <span>Total: {total_size:.1f} MB</span>
+                </p>
+            </div>
+            """, unsafe_allow_html=True)
+            
+            # Render video carousel
+            render_video_carousel(video_files)
         
         # Show file type summary
         npz_count = sum(1 for f in uploaded_files if detect_file_type(f) == 'npz')
