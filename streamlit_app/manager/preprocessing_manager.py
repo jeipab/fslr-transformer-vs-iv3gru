@@ -4,7 +4,7 @@ import streamlit as st
 from typing import List, Dict
 from pathlib import Path
 from ..components.utils import detect_file_type, format_file_size
-from ..components.data_processing import process_video_file
+from ..components.data_processing import process_video_file, process_multiple_videos
 from .upload_manager import remove_file_from_stage
 from ..core.config import PROCESSING_CONFIG
 
@@ -381,7 +381,7 @@ def preprocess_single_video(uploaded_file, filename: str):
 
 
 def preprocess_all_pending_videos():
-    """Preprocess all pending video files."""
+    """Preprocess all pending video files using automatic multi-processing."""
     pending_files = []
     
     # Get pending files from video_files
@@ -398,9 +398,13 @@ def preprocess_all_pending_videos():
         st.toast("No pending video files to preprocess", icon="ℹ️", duration=5000)
         return
     
-    # Process all files
-    for uploaded_file in pending_files:
-        preprocess_single_video(uploaded_file, uploaded_file.name)
+    # Use multi-processing for multiple files, single processing for one file
+    if len(pending_files) == 1:
+        # Single file - use existing single processing
+        preprocess_single_video(pending_files[0], pending_files[0].name)
+    else:
+        # Multiple files - use multi-processing
+        preprocess_multiple_videos_batch(pending_files)
     
     # Show consolidated summary
     completed_count = len(st.session_state.preprocessed_files)
@@ -412,6 +416,95 @@ def preprocess_all_pending_videos():
     
     if error_files:
         st.toast(f"{len(error_files)} videos failed to preprocess", icon="❌", duration=5000)
+
+
+def preprocess_multiple_videos_batch(uploaded_files):
+    """Preprocess multiple videos using automatic device detection and worker optimization."""
+    try:
+        # Get default preprocessing options
+        options = get_default_preprocessing_options()
+        
+        # Set all files to processing status
+        for uploaded_file in uploaded_files:
+            st.session_state.file_status[uploaded_file.name] = 'processing'
+        
+        # Process videos using multi-processing
+        with st.spinner(f"Preprocessing {len(uploaded_files)} videos in parallel..."):
+            processed_results = process_multiple_videos(
+                uploaded_files,
+                target_fps=options['target_fps'],
+                out_size=options['out_size'],
+                write_keypoints=options['write_keypoints'],
+                write_iv3_features=options['write_iv3_features'],
+                occ_detailed=options['occ_detailed']
+            )
+        
+        # Process results and update session state
+        for uploaded_file in uploaded_files:
+            filename = uploaded_file.name
+            basename = Path(filename).stem
+            
+            if basename in processed_results and processed_results[basename]:
+                npz_data = processed_results[basename]
+                
+                # Check compatibility
+                from ..components.utils import check_npz_compatibility
+                compatibility = check_npz_compatibility(npz_data)
+                
+                if not any(compatibility.values()):
+                    st.session_state.file_status[filename] = 'error'
+                    st.toast(f"{filename}: Preprocessing failed - incompatible output", icon="❌", duration=5000)
+                    continue
+                
+                # Store processed data
+                st.session_state.processed_data[filename] = npz_data
+                
+                # Store original file data for reset functionality
+                st.session_state.original_file_data[filename] = {
+                    'name': uploaded_file.name,
+                    'data': uploaded_file.getvalue(),
+                    'type': uploaded_file.type,
+                    'size': uploaded_file.size
+                }
+                
+                # Update metadata
+                existing_metadata = st.session_state.file_metadata.get(filename, {})
+                st.session_state.file_metadata[filename] = {
+                    **existing_metadata,
+                    'compatibility': compatibility,
+                    'file_type': 'npz',
+                    'frame_count': npz_data['X'].shape[0] if 'X' in npz_data else npz_data['X2048'].shape[0] if 'X2048' in npz_data else 0,
+                    'source_type': 'video',
+                    'preprocessing_options': options
+                }
+                
+                # Move from video_files to preprocessed_files
+                st.session_state.video_files = [f for f in st.session_state.video_files if f.name != filename]
+                
+                # Create a mock uploaded file object for the preprocessed file
+                from ..components.utils import TempUploadedFile
+                preprocessed_file = TempUploadedFile(filename, b"")  # Empty content since data is in processed_data
+                st.session_state.preprocessed_files.append(preprocessed_file)
+                
+                st.session_state.file_status[filename] = 'completed'
+                
+                # Show success message
+                compatible_models = []
+                if compatibility['transformer']:
+                    compatible_models.append("Transformer")
+                if compatibility['iv3_gru']:
+                    compatible_models.append("IV3-GRU")
+                
+                st.toast(f"{filename} preprocessed successfully - compatible with {', '.join(compatible_models)}", icon="✅", duration=5000)
+            else:
+                st.session_state.file_status[filename] = 'error'
+                st.toast(f"Preprocessing failed for {filename}", icon="❌", duration=5000)
+        
+    except Exception as e:
+        # Set all files to error status
+        for uploaded_file in uploaded_files:
+            st.session_state.file_status[uploaded_file.name] = 'error'
+        st.toast(f"Multi-processing failed: {str(e)}", icon="❌", duration=5000)
 
 
 def reset_preprocessed_videos():
