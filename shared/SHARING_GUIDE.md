@@ -66,7 +66,3 @@ Before training, quickly verify shape/dtype/keys:
 python -m preprocessing.validate_npz data\processed\keypoints_train
 python -m preprocessing.validate_npz data\processed\keypoints_val --require-x2048
 ````
-
-```
-
-```
