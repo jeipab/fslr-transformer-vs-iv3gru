@@ -1,0 +1,11 @@
+{
+  "gloss_accuracy": 0.07772020725388601,
+  "category_accuracy": 0.9948186528497409,
+  "gloss_precision": 0.014466204492111228,
+  "gloss_recall": 0.07772020725388601,
+  "gloss_f1_score": 0.023356028717596643,
+  "category_precision": 0.9950439288127957,
+  "category_recall": 0.9948186528497409,
+  "category_f1_score": 0.9948062051688995,
+  "num_samples": 193
+}
