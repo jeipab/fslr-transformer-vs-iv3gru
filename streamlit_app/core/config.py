@@ -24,7 +24,7 @@ PAGE_CONFIG = {
 MODEL_CONFIG = {
     'transformer': {
         'enabled': True,
-        'checkpoint_path': 'trained_models/transformer/transformer_100_epoch_09-16/SignTransformer_best.pt',
+        'checkpoint_path': 'shared/trained_by_nov/vast.ai/loss-weights_0.5-0.5/transformer_100_epochs/SignTransformer_best.pt',
         'model_type': 'transformer',
         'num_gloss_classes': 105,
         'num_category_classes': 10,
@@ -32,7 +32,7 @@ MODEL_CONFIG = {
     },
     'iv3_gru': {
         'enabled': True,
-        'checkpoint_path': 'trained_models/iv3_gru/iv3gru_100_epochs_09-16/InceptionV3GRU_best.pt',
+        'checkpoint_path': 'shared/trained_by_nov/vast.ai/loss-weights_0.5-0.5/iv3gru_100_epochs/InceptionV3GRU_best.pt',
         'model_type': 'iv3_gru',
         'num_gloss_classes': 105,
         'num_category_classes': 10,
