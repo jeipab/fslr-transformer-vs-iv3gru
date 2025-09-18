@@ -1,0 +1,33 @@
+Expose port "8501" in your Vast AI Template
+
+Set-up code base:
+1. git clone https://github.com/jeipab/fslr-transformer-vs-iv3gru.git
+2. cd fslr-transformer-vs-iv3gru
+3. python -m venv venv
+4. source venv/bin/activate
+5. pip install -r requirements.txt
+
+Add missing files:
+1. Data
+2. Trained models
+3. Replace validation
+
+Create a new tunnel.
+1. http://localhost:8081
+3. https://capable-oasis-aaa-load.trycloudflare.com
+
+Run streamlit app.
+1. streamlit run run_app.py --server.port 8081 --server.address 0.0.0.0
+
+Test IV3-GRU:
+python -c "
+try:
+    from evaluation.prediction.predict import ModelPredictor
+    predictor = ModelPredictor('iv3_gru', 'trained_models/iv3_gru/iv3gru_100_epochs_09-16/InceptionV3GRU_best.pt', device='cpu')
+    print('IV3-GRU loaded successfully on CPU')
+except Exception as e:
+    print('IV3-GRU loading failed:', str(e))
+"
+
+Fix for video generation:
+apt-get update && apt-get install -y ffmpeg libx264-dev
