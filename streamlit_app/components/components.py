@@ -858,26 +858,22 @@ def render_file_upload() -> object:
     )
 
 
-def render_video_preview(uploaded_file, autoplay=True) -> None:
+def render_video_preview(uploaded_file) -> None:
     """Render video preview for uploaded video files."""
     if not uploaded_file:
         return
     
-    # Use Streamlit's built-in video display with autoplay option
+    # Use Streamlit's built-in video display with autoplay enabled
     try:
-        if autoplay:
-            # Autoplay with sound enabled
-            st.video(uploaded_file, format="video/mp4", start_time=0, autoplay=True)
-        else:
-            # Manual play without autoplay
-            st.video(uploaded_file, format="video/mp4", start_time=0)
+        # Always autoplay with sound enabled
+        st.video(uploaded_file, format="video/mp4", start_time=0, autoplay=True)
     except Exception as e:
         # Fallback: show file info if video preview fails
         st.info(f"Video preview not available for {uploaded_file.name}")
         st.write(f"File size: {len(uploaded_file.getvalue()) / (1024*1024):.1f} MB")
 
 
-def render_video_carousel(video_files, autoplay=True) -> None:
+def render_video_carousel(video_files) -> None:
     """Render video files in a scrollable list with side-by-side layout."""
     if not video_files:
         return
@@ -885,11 +881,6 @@ def render_video_carousel(video_files, autoplay=True) -> None:
     # Initialize session state for carousel
     if 'selected_video_index' not in st.session_state:
         st.session_state.selected_video_index = 0
-
-    # Add autoplay toggle
-    col_toggle, col_spacer = st.columns([1, 4])
-    with col_toggle:
-        autoplay_enabled = st.checkbox("🎬 Autoplay videos", value=autoplay, help="Automatically play videos when selected")
     
     # Create side-by-side layout: video list on left, preview on right
     col1, col2 = st.columns([1, 3], gap="medium")
@@ -927,7 +918,7 @@ def render_video_carousel(video_files, autoplay=True) -> None:
         # Show video preview in a fixed container without scrolling
         if st.session_state.selected_video_index < len(video_files):
             selected_video = video_files[st.session_state.selected_video_index]
-            render_video_preview(selected_video, autoplay=autoplay_enabled)
+            render_video_preview(selected_video)
         else:
             st.info("Select a video from the list to preview it.")
 
