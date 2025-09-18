@@ -72,12 +72,36 @@ def render_upload_stage():
     if uploaded_files:
         st.session_state.pending_upload_files = uploaded_files
         
-        # Display selected files with previews
-        st.markdown("**Selected Files:**")
+        # Route files and show proceed options first
+        route_files_to_stages(uploaded_files)
         
-        # Separate NPZ and video files for different display layouts
+        # Determine button text based on file types
         npz_files = [f for f in uploaded_files if detect_file_type(f) == 'npz']
         video_files = [f for f in uploaded_files if detect_file_type(f) == 'video']
+        npz_count = len(npz_files)
+        video_count = len(video_files)
+        
+        # Centered proceed button
+        st.markdown("<br>", unsafe_allow_html=True)  # Add some spacing
+        col1, col2, col3 = st.columns([2, 1, 2])
+        with col2:
+            if video_count > 0:
+                button_text = "Proceed to Preprocessing"
+                button_help = "Move to preprocessing stage for video files"
+            elif npz_count > 0:
+                button_text = "Proceed to Inference"
+                button_help = "Move to inference stage for NPZ files"
+            else:
+                button_text = "Proceed to Processing"
+                button_help = "Move to appropriate processing stage"
+            
+            if st.button(button_text, type="primary", help=button_help, use_container_width=True):
+                proceed_to_next_stage()
+        
+        st.markdown("---")
+        
+        # Display selected files with previews
+        st.markdown("**Selected Files:**")
         
         # Display NPZ files in compact columns (if any)
         if npz_files:
@@ -148,9 +172,6 @@ def render_upload_stage():
             render_video_carousel(video_files)
         
         # Show file type summary
-        npz_count = sum(1 for f in uploaded_files if detect_file_type(f) == 'npz')
-        video_count = sum(1 for f in uploaded_files if detect_file_type(f) == 'video')
-        
         st.markdown("---")
         col1, col2, col3 = st.columns(3)
         with col1:
@@ -159,27 +180,6 @@ def render_upload_stage():
             st.metric("NPZ Files", npz_count)
         with col3:
             st.metric("Video Files", video_count)
-        
-        # Route files and show proceed options
-        route_files_to_stages(uploaded_files)
-        
-        # Centered proceed button
-        st.markdown("<br>", unsafe_allow_html=True)  # Add some spacing
-        col1, col2, col3 = st.columns([2, 1, 2])
-        with col2:
-            # Determine button text based on file types
-            if video_count > 0:
-                button_text = "Proceed to Preprocessing"
-                button_help = "Move to preprocessing stage for video files"
-            elif npz_count > 0:
-                button_text = "Proceed to Inference"
-                button_help = "Move to inference stage for NPZ files"
-            else:
-                button_text = "Proceed to Processing"
-                button_help = "Move to appropriate processing stage"
-            
-            if st.button(button_text, type="primary", help=button_help, use_container_width=True):
-                proceed_to_next_stage()
     else:
         render_welcome_screen()
 
