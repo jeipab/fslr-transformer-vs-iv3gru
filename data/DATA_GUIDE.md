@@ -96,6 +96,19 @@ Splitting parameters are configured in the data splitting utilities located in `
 - Customizable split ratios
 - Handling of occluded samples
 
+### Label Assignment
+
+Before data splitting, gloss text labels must be mapped to numeric IDs using `assign.py`:
+
+```bash
+python data/splitting/assign.py
+```
+
+**Purpose**: Maps gloss text in labels.csv to gloss_id and cat_id using labels_reference.csv
+**Input**: `data/processed/prepro_09-18/labels.csv` (with text labels)
+**Output**: Updated labels.csv with numeric IDs
+**Reference**: `data/splitting/labels_reference.csv`
+
 ### Output Structure
 
 ```
