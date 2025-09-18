@@ -152,11 +152,38 @@ def render_keypoint_video(sequence: np.ndarray, mask: Optional[np.ndarray] = Non
     # Background options
     col4, col5 = st.columns(2)
     with col4:
-        bg_type = st.selectbox("Background", ["White", "Black", "Grid"], key=f"bg_type_{key_suffix}")
+        # Check if we have original video data available
+        background_options = ["White", "Black", "Grid"]
+        
+        # Check if this is a processed video file with original video data
+        if key_suffix and key_suffix in st.session_state.get('original_file_data', {}):
+            original_data = st.session_state.original_file_data[key_suffix]
+            if original_data.get('type', '').startswith('video/'):
+                background_options.append("Original Video")
+        
+        bg_type = st.selectbox("Background", background_options, key=f"bg_type_{key_suffix}")
     with col5:
-        video_size = st.selectbox("Video Size", ["512x512", "768x768", "1024x1024"], key=f"video_size_{key_suffix}")
+        # Show size options based on background selection
+        if bg_type == "Original Video":
+            # Only show Original Size when using original video background
+            video_size_options = ["Original Size"]
+        else:
+            # Show standard size options for other backgrounds
+            video_size_options = ["512x512", "768x768", "1024x1024"]
+        
+        video_size = st.selectbox("Video Size", video_size_options, key=f"video_size_{key_suffix}")
     
-    width, height = map(int, video_size.split('x'))
+    # Handle original size option
+    if video_size == "Original Size":
+        # We'll determine dimensions from the original video
+        width, height = None, None
+    else:
+        width, height = map(int, video_size.split('x'))
+    
+    # Ensure we have valid dimensions before proceeding
+    if width is None or height is None:
+        # This will be set when we load the original video
+        pass
     
     # Video control buttons in a row
     col_gen, col_download = st.columns([2, 1])
@@ -551,15 +578,7 @@ def create_keypoint_animation_video(keypoints_2d: np.ndarray, mask: Optional[np.
     
     # Create output path
     output_path = os.path.join(tempfile.gettempdir(), f"keypoint_animation_{key_suffix}.mp4")
-    
-    # Video writer setup - use H.264 codec for better compatibility
-    fourcc = cv2.VideoWriter_fourcc(*'H264')
-    out = cv2.VideoWriter(output_path, fourcc, fps, (width, height))
-    
-    # Alternative fallback if H264 doesn't work
-    if not out.isOpened():
-        fourcc = cv2.VideoWriter_fourcc(*'mp4v')
-        out = cv2.VideoWriter(output_path, fourcc, fps, (width, height))
+    st.write(f"🔍 Debug: Output path: {output_path}")
     
     # Define skeleton connections
     skeleton_connections = {
@@ -593,10 +612,87 @@ def create_keypoint_animation_video(keypoints_2d: np.ndarray, mask: Optional[np.
         "face": (0, 165, 255)     # Orange
     }
     
+    # Handle original video background
+    original_video_cap = None
+    original_video_frames = []
+    
+    # If we need original video dimensions, get them first
+    if bg_type == "Original Video" and key_suffix in st.session_state.get('original_file_data', {}):
+        try:
+            # Get original video data
+            original_data = st.session_state.original_file_data[key_suffix]
+            video_data = original_data.get('data')
+            
+            if video_data:
+                # Save original video temporarily
+                with tempfile.NamedTemporaryFile(delete=False, suffix='.mp4') as tmp_file:
+                    tmp_file.write(video_data)
+                    temp_video_path = tmp_file.name
+                
+                # Open original video
+                original_video_cap = cv2.VideoCapture(temp_video_path)
+                
+                if original_video_cap.isOpened():
+                    # Get original video dimensions (since we're using Original Size)
+                    width = int(original_video_cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+                    height = int(original_video_cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+                    
+                    # Extract all frames from original video (no resizing needed)
+                    while True:
+                        ret, frame = original_video_cap.read()
+                        if not ret:
+                            break
+                        original_video_frames.append(frame)
+                    
+                    original_video_cap.release()
+                
+                # Clean up temporary file
+                if os.path.exists(temp_video_path):
+                    os.unlink(temp_video_path)
+                    
+        except Exception as e:
+            st.warning(f"Could not load original video: {str(e)}. Using default background.")
+            bg_type = "White"  # Fallback to white background
+            width, height = 512, 512  # Default fallback
+    
+    # Final validation - ensure we have valid dimensions
+    if width is None or height is None or width <= 0 or height <= 0:
+        st.error(f"Invalid video dimensions: {width}x{height}. Please try again.")
+        return None
+    
+    # Debug info
+    st.write(f"🔍 Debug: Video dimensions: {width}x{height}")
+    st.write(f"🔍 Debug: Background type: {bg_type}")
+    st.write(f"🔍 Debug: Original video frames: {len(original_video_frames)}")
+    
     try:
+        # Video writer setup - use H.264 codec for better compatibility
+        fourcc = cv2.VideoWriter_fourcc(*'H264')
+        out = cv2.VideoWriter(output_path, fourcc, fps, (width, height))
+        st.write(f"🔍 Debug: H264 writer opened: {out.isOpened()}")
+        
+        # Alternative fallback if H264 doesn't work
+        if not out.isOpened():
+            st.write("🔍 Debug: H264 failed, trying mp4v...")
+            fourcc = cv2.VideoWriter_fourcc(*'mp4v')
+            out = cv2.VideoWriter(output_path, fourcc, fps, (width, height))
+            st.write(f"🔍 Debug: mp4v writer opened: {out.isOpened()}")
+        
+        # Final check
+        if not out.isOpened():
+            st.error(f"Failed to create video writer with dimensions {width}x{height} at {fps} FPS")
+            return None
+        frames_written = 0
         for frame_idx in range(len(keypoints_2d)):
             # Create background
-            if bg_type == "White":
+            if bg_type == "Original Video" and original_video_frames:
+                # Use original video frame as background
+                if frame_idx < len(original_video_frames):
+                    frame = original_video_frames[frame_idx].copy()
+                else:
+                    # If we run out of original frames, use the last available frame
+                    frame = original_video_frames[-1].copy() if original_video_frames else np.ones((height, width, 3), dtype=np.uint8) * 255
+            elif bg_type == "White":
                 frame = np.ones((height, width, 3), dtype=np.uint8) * 255
             elif bg_type == "Black":
                 frame = np.zeros((height, width, 3), dtype=np.uint8)
@@ -638,10 +734,21 @@ def create_keypoint_animation_video(keypoints_2d: np.ndarray, mask: Optional[np.
                     for start_conn, end_conn in connections:
                         if (start_conn < len(part_keypoints) and end_conn < len(part_keypoints) and
                             part_valid[start_conn] and part_valid[end_conn]):
-                            cv2.line(frame, 
-                                   tuple(part_keypoints[start_conn]), 
-                                   tuple(part_keypoints[end_conn]), 
-                                   colors[part_name], 2)
+                            # Add white outline for better visibility on video backgrounds
+                            if bg_type == "Original Video":
+                                cv2.line(frame, 
+                                       tuple(part_keypoints[start_conn]), 
+                                       tuple(part_keypoints[end_conn]), 
+                                       (255, 255, 255), 4)  # White outline
+                                cv2.line(frame, 
+                                       tuple(part_keypoints[start_conn]), 
+                                       tuple(part_keypoints[end_conn]), 
+                                       colors[part_name], 2)  # Colored line
+                            else:
+                                cv2.line(frame, 
+                                       tuple(part_keypoints[start_conn]), 
+                                       tuple(part_keypoints[end_conn]), 
+                                       colors[part_name], 2)
                 
                 # Draw keypoints
                 for i, (point, is_valid) in enumerate(zip(part_keypoints, part_valid)):
@@ -654,26 +761,44 @@ def create_keypoint_animation_video(keypoints_2d: np.ndarray, mask: Optional[np.
                             point_color = colors[part_name]
                         
                         # Different sizes for different body parts
-                        if part_name == "pose":
-                            cv2.circle(frame, tuple(point), 6, point_color, -1)
-                        elif part_name in ["left_hand", "right_hand"]:
-                            cv2.circle(frame, tuple(point), 4, point_color, -1)
-                        else:  # face
-                            cv2.circle(frame, tuple(point), 3, point_color, -1)
+                        # Add white outline for better visibility on video backgrounds
+                        if bg_type == "Original Video":
+                            cv2.circle(frame, tuple(point), 8, (255, 255, 255), -1)  # White outline
+                            cv2.circle(frame, tuple(point), 6, point_color, -1)  # Colored center
+                        else:
+                            if part_name == "pose":
+                                cv2.circle(frame, tuple(point), 6, point_color, -1)
+                            elif part_name in ["left_hand", "right_hand"]:
+                                cv2.circle(frame, tuple(point), 4, point_color, -1)
+                            else:  # face
+                                cv2.circle(frame, tuple(point), 3, point_color, -1)
             
-            # Add frame number
-            cv2.putText(frame, f"Frame {frame_idx + 1}/{len(keypoints_2d)}", 
-                       (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 0), 2)
+            # Add frame number with better visibility on video backgrounds
+            frame_text = f"Frame {frame_idx + 1}/{len(keypoints_2d)}"
+            if bg_type == "Original Video":
+                # Add white outline for better visibility
+                cv2.putText(frame, frame_text, (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 4)
+                cv2.putText(frame, frame_text, (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 0), 2)
+            else:
+                cv2.putText(frame, frame_text, (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 0), 2)
             
             out.write(frame)
+            frames_written += 1
         
         out.release()
+        st.write(f"🔍 Debug: Frames written: {frames_written}")
         
         # Verify video was created successfully
-        if os.path.exists(output_path) and os.path.getsize(output_path) > 0:
-            return output_path
+        if os.path.exists(output_path):
+            file_size = os.path.getsize(output_path)
+            st.write(f"🔍 Debug: Video file size: {file_size} bytes")
+            if file_size > 0:
+                return output_path
+            else:
+                st.error("Video file was created but is empty")
+                return None
         else:
-            st.error("Video file was not created properly")
+            st.error("Video file was not created")
             return None
         
     except Exception as e:
