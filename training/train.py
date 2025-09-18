@@ -203,10 +203,12 @@ def _make_dataloader(dataset, batch_size, shuffle, args, collate_fn=None):
     # Auto-detect optimal number of workers if not specified
     num_workers = args.num_workers
     if args.auto_workers or num_workers == 0:
-        # Use CPU count for optimal performance
-        num_workers = min(4, psutil.cpu_count(logical=False))
+        # Use more aggressive worker count for better performance
+        cpu_count = psutil.cpu_count(logical=False)
+        # Use more workers but cap at reasonable limit
+        num_workers = min(8, max(2, cpu_count // 2))
         if args.auto_workers:
-            print(f"Auto-detected {num_workers} DataLoader workers")
+            print(f"Auto-detected {num_workers} DataLoader workers (from {cpu_count} CPU cores)")
     
     # Optimize pin_memory based on device
     pin_memory = args.pin_memory
@@ -287,6 +289,41 @@ def print_device_info(device: torch.device) -> None:
         print("Using CPU")
         print(f"CPU cores: {psutil.cpu_count(logical=False)} physical, {psutil.cpu_count(logical=True)} logical")
         print(f"Available RAM: {psutil.virtual_memory().total / 1e9:.1f} GB")
+
+
+def optimize_model_for_parallel(model, device):
+    """Optimize model for parallel processing if multiple GPUs available."""
+    if torch.cuda.is_available() and torch.cuda.device_count() > 1:
+        print(f"Using DataParallel with {torch.cuda.device_count()} GPUs")
+        model = torch.nn.DataParallel(model)
+        return model
+    return model
+
+
+def calculate_optimal_batch_size(model, device, base_batch_size=32):
+    """Calculate optimal batch size based on available memory."""
+    if device.type == 'cuda':
+        # Get GPU memory info
+        gpu_memory_gb = torch.cuda.get_device_properties(0).total_memory / 1e9
+        
+        # Adjust batch size based on GPU memory
+        if gpu_memory_gb > 16:
+            optimal_batch_size = base_batch_size * 2  # 64
+        elif gpu_memory_gb > 8:
+            optimal_batch_size = base_batch_size      # 32
+        elif gpu_memory_gb > 4:
+            optimal_batch_size = base_batch_size // 2 # 16
+        else:
+            optimal_batch_size = base_batch_size // 4 # 8
+        
+        print(f"GPU Memory: {gpu_memory_gb:.1f} GB, Optimal batch size: {optimal_batch_size}")
+        return optimal_batch_size
+    else:
+        # CPU training - use smaller batches
+        cpu_count = psutil.cpu_count(logical=False)
+        optimal_batch_size = min(base_batch_size, cpu_count * 4)
+        print(f"CPU cores: {cpu_count}, Optimal batch size: {optimal_batch_size}")
+        return optimal_batch_size
 
 def log_comprehensive_config(args, device, model=None):
     """Log comprehensive training configuration and system information."""
@@ -825,6 +862,9 @@ def parse_args():
     parser.add_argument("--gradient-accumulation-steps", type=int, default=1, help="Number of steps to accumulate gradients")
     parser.add_argument("--compile-model", action="store_true", help="Compile model for better performance (PyTorch 2.0+)")
     parser.add_argument("--auto-workers", action="store_true", help="Auto-detect optimal number of DataLoader workers")
+    parser.add_argument("--auto-batch-size", action="store_true", help="Auto-calculate optimal batch size based on available memory")
+    parser.add_argument("--enable-parallel", action="store_true", help="Enable DataParallel for multiple GPUs")
+    parser.add_argument("--num-workers", type=int, default=0, help="Number of DataLoader workers (0 = auto-detect)")
     return parser.parse_args()
 
 if __name__ == "__main__":
@@ -1028,6 +1068,16 @@ if __name__ == "__main__":
         print("✓ Using InceptionV3GRU model")
     else:
         raise ValueError(f"Invalid --model {args.model}")
+    
+    # Optimize batch size if requested
+    if args.auto_batch_size:
+        batch_size = calculate_optimal_batch_size(model, device, args.batch_size)
+        print(f"✓ Auto-calculated optimal batch size: {batch_size}")
+    
+    # Enable parallel processing if requested and multiple GPUs available
+    if args.enable_parallel:
+        model = optimize_model_for_parallel(model, device)
+        print("✓ Parallel processing optimization applied")
 
     # Log model information with comprehensive config
     log_comprehensive_config(args, device, model)
