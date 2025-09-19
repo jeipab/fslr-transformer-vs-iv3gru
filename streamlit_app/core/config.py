@@ -24,19 +24,19 @@ PAGE_CONFIG = {
 MODEL_CONFIG = {
     'transformer': {
         'enabled': True,
-        'checkpoint_path': 'shared/trained_by_nov/vast.ai/loss-weights_0.5-0.5_seq -prepro-30fps/transformer_100_epochs/SignTransformer_best.pt',
+        'checkpoint_path': 'trained_models/transformer/transformer_hierarchical_30ep/SignTransformer_best.pt',
         'model_type': 'transformer',
         'num_gloss_classes': 105,
         'num_category_classes': 10,
-        'display_name': 'SignTransformer'
+        'display_name': 'SignTransformer (Hierarchical)'
     },
     'iv3_gru': {
         'enabled': True,
-        'checkpoint_path': 'shared/trained_by_nov/vast.ai/loss-weights_0.5-0.5_seq -prepro-30fps/iv3gru_100_epochs/InceptionV3GRU_best.pt',
+        'checkpoint_path': 'trained_models/iv3_gru/iv3gru_hierarchical_30ep/InceptionV3GRU_best.pt',
         'model_type': 'iv3_gru',
         'num_gloss_classes': 105,
         'num_category_classes': 10,
-        'display_name': 'InceptionV3+GRU'
+        'display_name': 'InceptionV3+GRU (Hierarchical)'
     }
 }
 

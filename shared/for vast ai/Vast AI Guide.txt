@@ -38,3 +38,94 @@ except Exception as e:
 
 Fix for video generation:
 apt-get update && apt-get install -y ffmpeg libx264-dev
+
+Fix CSV:
+cat > fix_csv_encoding.py << 'EOF'
+import pandas as pd
+import os
+
+# Fix training CSV
+try:
+    df_train = pd.read_csv('data/processed/train_labels.csv', encoding='latin-1')
+    df_train.to_csv('data/processed/train_labels_fixed.csv', index=False, encoding='utf-8')
+    print("Fixed train_labels.csv")
+except Exception as e:
+    print(f"Error fixing train_labels.csv: {e}")
+
+# Fix validation CSV
+try:
+    df_val = pd.read_csv('data/processed/val_labels.csv', encoding='latin-1')
+    df_val.to_csv('data/processed/val_labels_fixed.csv', index=False, encoding='utf-8')
+    print("Fixed val_labels.csv")
+except Exception as e:
+    print(f"Error fixing val_labels.csv: {e}")
+
+print("CSV files fixed with UTF-8 encoding")
+EOF
+
+python fix_csv_encoding.py
+
+Remove smart quote in NPZ:
+cat > fix_smart_quotes.py << 'EOF'
+import os
+from pathlib import Path
+
+def fix_smart_quotes(directory):
+    """Fix smart quotes in filenames"""
+    dir_path = Path(directory)
+    if not dir_path.exists():
+        print(f"Directory {directory} does not exist")
+        return
+    
+    renamed_count = 0
+    
+    # Look for files with smart quotes
+    for file_path in dir_path.glob("*.npz"):
+        old_name = file_path.name
+        
+        # Fix smart quote apostrophe (\u2019) to nothing
+        if '\u2019' in old_name:
+            new_name = old_name.replace('\u2019', '')  # Remove smart quote
+            new_path = file_path.parent / new_name
+            file_path.rename(new_path)
+            print(f"Renamed: {old_name} -> {new_name}")
+            renamed_count += 1
+    
+    print(f"Renamed {renamed_count} files in {directory}")
+
+# Fix both directories
+print("Fixing smart quotes in keypoints_train...")
+fix_smart_quotes("data/processed/keypoints_train")
+
+print("\nFixing smart quotes in keypoints_val...")
+fix_smart_quotes("data/processed/keypoints_val")
+
+print("\nDone! Fixed smart quote apostrophes in filenames.")
+EOF
+
+python fix_smart_quotes.py
+
+cat > fix_csv_to_match_npz.py << 'EOF'
+import pandas as pd
+
+# Read CSV
+df = pd.read_csv('data/processed/train_labels_fixed.csv', encoding='utf-8')
+
+# Fix the problematic character \x92 (Windows apostrophe)
+df['file'] = df['file'].str.replace('\x92', '')
+
+# Save the corrected CSV
+df.to_csv('data/processed/train_labels_final.csv', index=False, encoding='utf-8')
+
+print("Fixed CSV file - removed \\x92 characters")
+print("Saved as train_labels_final.csv")
+
+# Do the same for validation CSV
+df_val = pd.read_csv('data/processed/val_labels_fixed.csv', encoding='utf-8')
+df_val['file'] = df_val['file'].str.replace('\x92', '')
+df_val.to_csv('data/processed/val_labels_final.csv', index=False, encoding='utf-8')
+
+print("Fixed validation CSV - saved as val_labels_final.csv")
+EOF
+
+python fix_csv_to_match_npz.py
