@@ -28,7 +28,6 @@ import torch.nn as nn
 import torch.optim as optim
 from torch.utils.data import DataLoader, Dataset
 
-from .utils import FSLDataset
 from models import InceptionV3GRU, SignTransformer
 
 class FSLFeatureFileDataset(Dataset):
