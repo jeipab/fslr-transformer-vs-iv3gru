@@ -1,24 +1,31 @@
 Expose port "8501" in your Vast AI Template
 
 Set-up code base:
-1. git clone https://github.com/jeipab/fslr-transformer-vs-iv3gru.git
-2. cd fslr-transformer-vs-iv3gru
-3. python -m venv venv
-4. source venv/bin/activate
-5. pip install -r requirements.txt
+	Clone the repository:
+		1. git clone https://github.com/jeipab/fslr-transformer-vs-iv3gru.git
+	Change directory:
+		2. cd fslr-transformer-vs-iv3gru
+	Set up virtual environment:
+		3. python -m venv venv
+	Activate virtual environment:
+		4. source venv/bin/activate
+	Install dependencies:
+		5. pip install -r requirements.txt
 
 Add missing files:
 1. Data
 2. Trained models
 3. Replace validation
 
+Run streamlit app.
+1. streamlit run run_app.py --server.port 8081 --server.address 0.0.0.0
+
 Create a new tunnel.
 1. http://localhost:8081
 3. https://capable-oasis-aaa-load.trycloudflare.com
 
-Run streamlit app.
-1. streamlit run run_app.py --server.port 8081 --server.address 0.0.0.0
 
+OPTIONAL:
 Test IV3-GRU:
 python -c "
 try:
