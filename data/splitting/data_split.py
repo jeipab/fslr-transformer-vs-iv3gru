@@ -11,11 +11,23 @@ Purpose:
 
 Usage:
 - Split with default 80/20 ratio (copy files):
-    python data/splitting/data_split.py `
-        --processed-root data/processed `
-        --labels data/processed/labels.csv `
-        --out-root data/processed `
-        --copy
+    python data/splitting/data_split.py \
+        --processed-root data/processed \
+        --labels data/processed/labels.csv \
+        --out-root data/processed \
+        --copy \
+        --train-ratio 0.8
+
+- Split with custom ratio (copy files):
+    python data/splitting/data_split.py \
+        --processed-root data/processed \
+        --labels data/processed/labels.csv \
+        --out-root data/processed \
+        --copy \
+        --train-ratio 0.8 \
+        --cats greeting survival number \
+        --gloss yes no wrong \
+        --label-ref data/splitting/labels_reference.csv
 
 Options:
 - `--processed-root` : Path to directory of preprocessed `.npz`/`.parquet` files (required).
