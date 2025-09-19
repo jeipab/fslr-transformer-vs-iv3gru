@@ -115,19 +115,15 @@ def _move_or_copy_unique(src_npz: Path, dst_dir: Path, do_copy: bool) -> str:
     if dst_npz.exists():
         stem = f"{stem}-{_stable_h8(src_npz)}"
         dst_npz = dst_dir / f"{stem}.npz"
-    if do_copy:
-        shutil.copy2(src_npz, dst_npz)
-    else:
-        shutil.move(src_npz, dst_npz)
+    
+    # Always copy to preserve source files
+    shutil.copy2(src_npz, dst_npz)
 
     # Handle optional parquet
     pq_src = src_npz.with_suffix(".parquet")
     if pq_src.exists():
         pq_dst = dst_dir / f"{stem}.parquet"
-        if do_copy:
-            shutil.copy2(pq_src, pq_dst)
-        else:
-            shutil.move(pq_src, pq_dst)
+        shutil.copy2(pq_src, pq_dst)
     return stem
 
 def _write_csv(path: Path, rows):
@@ -275,7 +271,18 @@ def main():
     d_train = out_root / "keypoints_train"
     d_val = out_root / "keypoints_val"
 
-    # Move/copy files and capture final basenames (after collision handling)
+    # Clear existing content from output directories
+    print(f"Clearing existing content from {d_train}...")
+    if d_train.exists():
+        shutil.rmtree(d_train)
+    d_train.mkdir(parents=True, exist_ok=True)
+    
+    print(f"Clearing existing content from {d_val}...")
+    if d_val.exists():
+        shutil.rmtree(d_val)
+    d_val.mkdir(parents=True, exist_ok=True)
+
+    # Copy files and capture final basenames (after collision handling)
     basenames_train = []
     for p in df_train["__npz_path"]:
         stem = _move_or_copy_unique(p, d_train, args.copy)
@@ -301,6 +308,11 @@ def main():
     _write_csv(csv_val, rows_val)
 
     print("Done!")
+    print(f"- Train samples:   {len(rows_train)}")
+    print(f"- Val samples:     {len(rows_val)}")
+    print(f"- Total samples:   {len(rows_train) + len(rows_val)}")
+    print(f"- Train ratio:     {len(rows_train)/(len(rows_train) + len(rows_val))*100:.1f}%")
+    print(f"- Val ratio:       {len(rows_val)/(len(rows_train) + len(rows_val))*100:.1f}%")
     print(f"- Train CSV:       {csv_train}")
     print(f"- Val CSV:         {csv_val}")
     print(f"- Train files dir: {d_train}")
