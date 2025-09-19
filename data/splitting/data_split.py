@@ -17,13 +17,26 @@ Usage:
         --out-root data/processed `
         --copy
 
-
 Options:
 - `--processed-root` : Path to directory of preprocessed `.npz`/`.parquet` files (required).
 - `--labels`         : Path to `labels.csv` with columns `file,gloss,cat,occluded` (required).
 - `--out-root`       : Destination root directory (default = `processed-root`).
 - `--copy`           : Copy files instead of moving them.
 - `--train-ratio`    : Train split ratio if no `split` column is present (default = 0.8).
+- `--cats`           : Restrict to specific categories (by ID or name).
+                      Examples:
+                        --cats 0 1 2
+                        --cats greeting survival number
+                        --cats "daily routine" "sports"    # use quotes if the name has spaces or punctuation
+
+- `--gloss`          : Restrict to specific glosses (by ID or name).
+                      Examples:
+                        --gloss 0 1 2
+                        --gloss yes no wrong
+                        --gloss "good morning" "thank you" "don't understand" # use quotes if the name has spaces or punctuation
+
+- `--label-ref` data/splitting/labels_reference.csv      : Path to label_reference.csv (required if using names instead of numeric IDs for --cats or --gloss).
+
 """
 
 import argparse
@@ -132,6 +145,9 @@ def main():
     ap.add_argument("--out-root", type=Path, default=None)
     ap.add_argument("--copy", action="store_true")
     ap.add_argument("--train-ratio", type=float, default=0.8, help="Train split ratio if no split column is present")
+    ap.add_argument("--cats", nargs="+",help="Restrict to specific categories (IDs or names). ",default=None)
+    ap.add_argument("--gloss", nargs="+", help="Restrict to specific glosses (IDs or names). ",default=None)
+    ap.add_argument("--label-ref", type=Path,help="Path to label_reference.csv (required if using names in --cats or --gloss).")
     args = ap.parse_args()
 
     processed_root: Path = args.processed_root.resolve()
@@ -149,6 +165,18 @@ def main():
     if missing:
         print(f"ERROR: labels CSV missing required columns: {sorted(missing)}", file=sys.stderr)
         return 2
+    
+    # Load label reference for mapping gloss/cat names to IDs (if provided)
+    gloss_name_to_id, cat_name_to_id = {}, {}
+    if args.label_ref is not None:
+        try:
+            ref_df = pd.read_csv(args.label_ref)
+            gloss_name_to_id = {str(row["label"]).upper(): int(row["gloss_id"]) for _, row in ref_df.iterrows()}
+            cat_name_to_id   = {str(row["category"]).upper(): int(row["cat_id"]) for _, row in ref_df.iterrows()}
+        except Exception as e:
+            print(f"ERROR: Could not read label reference CSV: {e}", file=sys.stderr)
+            return 2
+
 
     # Resolve .npz paths
     paths = []
@@ -165,6 +193,54 @@ def main():
     # Ensure 'cat' is integer ids starting at 0 (write mapping for reference)
     cat_map_path = out_root / "cat_mapping.csv"
     df["cat"] = _coerce_or_encode_cat(df["cat"], cat_map_path)
+
+    # Filter categories if requested
+    if args.cats is not None:
+        allowed_ids = set()
+        for c in args.cats:
+            if str(c).isdigit():
+                allowed_ids.add(int(c))
+            else:
+                if not cat_name_to_id:
+                    print(f"ERROR: Category name '{c}' requires --label-ref to resolve names to IDs", file=sys.stderr)
+                    return 2
+                key = str(c).upper()
+                if key in cat_name_to_id:
+                    allowed_ids.add(cat_name_to_id[key])
+                else:
+                    print(f"WARNING: Unknown category '{c}'", file=sys.stderr)
+        df = df[df["cat"].isin(allowed_ids)].reset_index(drop=True)
+        if df.empty:
+            print(f"ERROR: No samples left after filtering by categories {args.cats}", file=sys.stderr)
+            return 2
+        print(f"Using subset of categories: {args.cats} (kept {len(df)} samples)")
+
+    # Filter gloss if requested
+    if args.gloss is not None:
+        allowed_ids = set()
+        for g in args.gloss:
+            if str(g).isdigit():
+                allowed_ids.add(int(g))
+            else:
+                key = str(g).strip().upper()
+                if key in gloss_name_to_id:
+                    allowed_ids.add(gloss_name_to_id[key])
+                else:
+                    # fallback: check if the file column contains this string
+                    mask = df["file"].str.contains(key, case=False, na=False)
+                    matched_ids = df.loc[mask, "gloss"].unique().tolist()
+                    if matched_ids:
+                        allowed_ids.update(matched_ids)
+                    else:
+                        print(f"WARNING: Unknown gloss '{g}'", file=sys.stderr)
+
+        df = df[df["gloss"].isin(allowed_ids)].reset_index(drop=True)
+        if df.empty:
+            print(f"ERROR: No samples left after filtering by gloss {args.gloss}", file=sys.stderr)
+            return 2
+        print(f"Using subset of glosses: {args.gloss} (kept {len(df)} samples)")
+
+
 
     # Handle split
     if "split" not in df.columns:
