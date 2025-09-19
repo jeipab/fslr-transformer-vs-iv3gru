@@ -569,10 +569,8 @@ def train_model(
         if new_file:
             # Write configuration header as comment
             config_header = [
-                f"# Training Configuration: model={args.model}, epochs={args.epochs}, batch_size={args.batch_size}",
-                f"# Learning Rate: {args.lr}, Weight Decay: {args.weight_decay}, Alpha: {args.alpha}, Beta: {args.beta}",
-                f"# Data: gloss_classes={args.num_gloss}, cat_classes={args.num_cat}, seed={args.seed}",
-                f"# Performance: amp={args.amp}, compile={args.compile_model}, workers={args.num_workers}",
+                f"# Training Configuration: epochs={epochs}, batch_size={batch_size}",
+                f"# Learning Rate: {lr}, Weight Decay: {weight_decay}, Alpha: {alpha}, Beta: {beta}",
                 f"# Timestamp: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
             ]
             for header_line in config_header:
@@ -628,14 +626,23 @@ def train_model(
                 scaler.step(optimizer)
                 scaler.update()
                 optimizer.zero_grad(set_to_none=True)
+        
+        # Handle remaining gradients if last batch doesn't align with accumulation steps
+        if len(train_loader) % gradient_accumulation_steps != 0:
+            if grad_clip is not None and grad_clip > 0:
+                scaler.unscale_(optimizer)
+                torch.nn.utils.clip_grad_norm_(model.parameters(), grad_clip)
+            scaler.step(optimizer)
+            scaler.update()
+            optimizer.zero_grad(set_to_none=True)
             
-            total_loss += loss.item() * gradient_accumulation_steps
-            num_batches += 1
-            
-            # Clear intermediate variables to save memory
-            del X, gloss, cat, gloss_pred, cat_pred, loss, loss_gloss, loss_cat
-            if lengths is not None:
-                del lengths
+        total_loss += loss.item() * gradient_accumulation_steps
+        num_batches += 1
+        
+        # Clear intermediate variables to save memory
+        del X, gloss, cat, gloss_pred, cat_pred, loss, loss_gloss, loss_cat
+        if lengths is not None:
+            del lengths
 
         # Handle case where training dataloader yields zero batches
         if num_batches == 0:
@@ -847,10 +854,8 @@ def parse_args():
     parser.add_argument("--num-workers", type=int, default=0, help="DataLoader workers")
     parser.add_argument("--pin-memory", action="store_true", help="DataLoader pin_memory")
     parser.add_argument("--prefetch-factor", type=int, default=None, help="DataLoader prefetch_factor (worker>0)")
-    # Synthetic data controls for smoke tests
-    parser.add_argument("--train-samples", type=int, default=100, help="Number of synthetic training samples")
-    parser.add_argument("--val-samples", type=int, default=20, help="Number of synthetic validation samples")
-    parser.add_argument("--seq-length", type=int, default=50, help="Sequence length (T)")
+    # Sequence length for synthetic data (kept for compatibility)
+    parser.add_argument("--seq-length", type=int, default=50, help="Sequence length (T) - for synthetic data only")
     parser.add_argument("--seed", type=int, default=42, help="Global RNG seed")
     parser.add_argument("--deterministic", action="store_true", help="Enable deterministic CUDA ops (slower)")
     # Smoke test
@@ -939,16 +944,7 @@ if __name__ == "__main__":
             args.model == "transformer" and args.keypoints_train is not None and args.keypoints_val is not None
         )
         if not (use_feature_files or use_keypoint_files):
-            input_dim = 2048 if args.model == "iv3_gru" else 156
-            train_X, train_gloss, train_cat, val_X, val_gloss, val_cat = load_data(
-                n_train_samples=args.train_samples,
-                n_val_samples=args.val_samples,
-                seq_length=args.seq_length,
-                input_dim=input_dim,
-                num_gloss=args.num_gloss,
-                num_cat=args.num_cat,
-                seed=args.seed,
-            )
+            raise ValueError("No data files provided. Please specify either --features-train/--features-val for IV3-GRU model or --keypoints-train/--keypoints-val for Transformer model.")
         print(f"✓ Loaded data successfully")
         
         # Log dataset source information
@@ -962,17 +958,11 @@ if __name__ == "__main__":
             print(f"  - Training folder: {args.keypoints_train}")
             print(f"  - Validation folder: {args.keypoints_val}")
             print(f"  - Keypoint key: {args.kp_key}")
-        else:
-            print(f"  - Dataset type: Synthetic/Dummy Data")
-            print(f"  - Training samples: {len(train_X)}")
-            print(f"  - Validation samples: {len(val_X)}")
-            print(f"  - Sequence shape: {train_X.shape[1:]} (T, features)")
         
         print(f"  - Gloss classes: {args.num_gloss}")
         print(f"  - Category classes: {args.num_cat}")
     except Exception as e:
         print(f"✗ Error loading data: {e}")
-        print("Please implement the load_data() function with actual data loading logic")
         exit(1)
 
     # Dataset preparation
@@ -981,14 +971,19 @@ if __name__ == "__main__":
     print("="*60)
     
     batch_size = args.batch_size
-    use_feature_files = (
-        args.model == "iv3_gru" and args.features_train is not None and args.features_val is not None
-    )
-    use_keypoint_files = (
-        args.model == "transformer" and args.keypoints_train is not None and args.keypoints_val is not None
-    )
+    
+    # Optimize batch size if requested BEFORE creating datasets
+    if args.auto_batch_size:
+        batch_size = calculate_optimal_batch_size(model, device, args.batch_size)
+        print(f"✓ Auto-calculated optimal batch size: {batch_size}")
 
     if use_feature_files:
+        # Validate CSV files exist
+        if args.labels_train_csv is None or not os.path.exists(args.labels_train_csv):
+            raise FileNotFoundError(f"Training labels CSV not found: {args.labels_train_csv}")
+        if args.labels_val_csv is None or not os.path.exists(args.labels_val_csv):
+            raise FileNotFoundError(f"Validation labels CSV not found: {args.labels_val_csv}")
+        
         train_dataset = FSLFeatureFileDataset(
             features_dir=args.features_train,
             labels_csv=args.labels_train_csv,
@@ -1002,6 +997,12 @@ if __name__ == "__main__":
         train_loader = _make_dataloader(train_dataset, batch_size, True, args, collate_fn=collate_features_with_padding)
         val_loader = _make_dataloader(val_dataset, batch_size, False, args, collate_fn=collate_features_with_padding)
     elif use_keypoint_files:
+        # Validate CSV files exist
+        if args.labels_train_csv is None or not os.path.exists(args.labels_train_csv):
+            raise FileNotFoundError(f"Training labels CSV not found: {args.labels_train_csv}")
+        if args.labels_val_csv is None or not os.path.exists(args.labels_val_csv):
+            raise FileNotFoundError(f"Validation labels CSV not found: {args.labels_val_csv}")
+        
         train_dataset = FSLKeypointFileDataset(
             keypoints_dir=args.keypoints_train,
             labels_csv=args.labels_train_csv,
@@ -1014,11 +1015,6 @@ if __name__ == "__main__":
         )
         train_loader = _make_dataloader(train_dataset, batch_size, True, args, collate_fn=collate_keypoints_with_padding)
         val_loader = _make_dataloader(val_dataset, batch_size, False, args, collate_fn=collate_keypoints_with_padding)
-    else:
-        train_dataset = FSLDataset(train_X, train_gloss, train_cat)
-        val_dataset = FSLDataset(val_X, val_gloss, val_cat)
-        train_loader = _make_dataloader(train_dataset, batch_size, True, args)
-        val_loader = _make_dataloader(val_dataset, batch_size, False, args)
     
     print(f"✓ Created datasets and data loaders")
     print(f"  - Batch size: {batch_size}")
@@ -1034,10 +1030,6 @@ if __name__ == "__main__":
         print(f"  - Training dataset size: {len(train_dataset)} samples")
         print(f"  - Validation dataset size: {len(val_dataset)} samples")
         print(f"  - Data format: [T, 156] keypoints")
-    else:
-        print(f"  - Training dataset size: {len(train_dataset)} samples")
-        print(f"  - Validation dataset size: {len(val_dataset)} samples")
-        print(f"  - Data format: Synthetic data")
 
     # Model selection
     print("\n" + "="*60)
@@ -1067,11 +1059,6 @@ if __name__ == "__main__":
         print("✓ Using InceptionV3GRU model")
     else:
         raise ValueError(f"Invalid --model {args.model}")
-    
-    # Optimize batch size if requested
-    if args.auto_batch_size:
-        batch_size = calculate_optimal_batch_size(model, device, args.batch_size)
-        print(f"✓ Auto-calculated optimal batch size: {batch_size}")
     
     # Enable parallel processing if requested and multiple GPUs available
     if args.enable_parallel:
