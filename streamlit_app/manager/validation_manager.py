@@ -381,7 +381,8 @@ class ModelValidator:
             'occluded_results': occluded_results,
             'non_occluded_results': non_occluded_results,
             'per_class_results': per_class_results,
-            'confusion_matrices': confusion_matrices
+            'confusion_matrices': confusion_matrices,
+            'detailed_predictions': all_predictions
         }
         
         return results
