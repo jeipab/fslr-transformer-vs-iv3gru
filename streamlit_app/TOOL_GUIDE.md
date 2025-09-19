@@ -36,7 +36,7 @@ Interactive Streamlit application for FSLR (First Sign Language Recognition) mod
 
 ### File Management
 
-- **Multi-format Support**: NPZ files, video files (MP4, AVI, MOV, MKV, WMV, FLV, WebM)
+- **Multi-format Support**: NPZ files, video files (MP4, MOV)
 - **Batch Processing**: Process multiple videos simultaneously
 - **File Organization**: Clear workflow from upload → preprocessing → analysis
 

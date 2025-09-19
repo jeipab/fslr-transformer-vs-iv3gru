@@ -34,6 +34,14 @@ from .visualization import (
     render_feature_charts,
     render_topk_table
 )
+from .validation_components import (
+    render_model_selection,
+    render_dataset_upload,
+    render_validation_configuration,
+    render_validation_results,
+    render_validation_summary,
+    render_download_results
+)
 
 __all__ = [
     # UI Components
@@ -59,5 +67,13 @@ __all__ = [
     'render_sequence_overview',
     'render_animated_keypoints',
     'render_feature_charts',
-    'render_topk_table'
+    'render_topk_table',
+    
+    # Validation Components
+    'render_model_selection',
+    'render_dataset_upload',
+    'render_validation_configuration',
+    'render_validation_results',
+    'render_validation_summary',
+    'render_download_results'
 ]

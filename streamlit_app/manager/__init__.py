@@ -17,6 +17,10 @@ from .prediction_manager import (
     render_predictions_stage,
     cleanup_on_app_exit
 )
+from .validation_manager import (
+    run_validation_from_folder,
+    cleanup_temp_files
+)
 
 __all__ = [
     'initialize_upload_session_state',
@@ -24,5 +28,7 @@ __all__ = [
     'remove_file_from_stage',
     'render_preprocessing_stage',
     'render_predictions_stage',
-    'cleanup_on_app_exit'
+    'cleanup_on_app_exit',
+    'run_validation_from_folder',
+    'cleanup_temp_files'
 ]

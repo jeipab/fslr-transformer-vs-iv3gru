@@ -67,7 +67,7 @@ def detect_file_type(uploaded_file) -> str:
     
     if file_extension == '.npz':
         return 'npz'
-    elif file_extension in ['.mp4', '.avi', '.mov', '.mkv', '.wmv', '.flv', '.webm']:
+    elif file_extension in ['.mp4', '.mov']:
         return 'video'
     else:
         return 'unknown'

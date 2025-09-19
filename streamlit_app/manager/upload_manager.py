@@ -17,7 +17,7 @@ def render_welcome_screen() -> None:
         
         **Supported file types:**
         - **Preprocessed .npz files**: Ready-to-use keypoint/feature data
-        - **Video files**: MP4, AVI, MOV, MKV, WMV, FLV, WebM
+        - **Video files**: MP4, MOV
         
         **Features:**
         - File queue with status tracking and file size display
@@ -26,6 +26,7 @@ def render_welcome_screen() -> None:
         - Batch summary with comparative statistics
         - Individual and batch download options
         """)
+        
 
 
 def initialize_upload_session_state():
@@ -48,6 +49,8 @@ def initialize_upload_session_state():
         st.session_state.original_file_data = {}
     if 'current_tab' not in st.session_state:
         st.session_state.current_tab = None
+    if 'validation_mode' not in st.session_state:
+        st.session_state.validation_mode = False
     if 'selected_files' not in st.session_state:
         st.session_state.selected_files = []
     if 'workflow_stage' not in st.session_state:
@@ -81,10 +84,12 @@ def render_upload_stage():
         npz_count = len(npz_files)
         video_count = len(video_files)
         
-        # Centered proceed button
+        # Centered proceed buttons
         st.markdown("<br>", unsafe_allow_html=True)  # Add some spacing
-        col1, col2, col3 = st.columns([2, 1, 2])
+        col1, col2, col3 = st.columns([1, 2, 1])
+        
         with col2:
+            # Main proceed button
             if video_count > 0:
                 button_text = "Proceed to Preprocessing"
                 button_help = "Move to preprocessing stage for video files"
@@ -97,6 +102,7 @@ def render_upload_stage():
             
             if st.button(button_text, type="primary", help=button_help, use_container_width=True):
                 proceed_to_next_stage()
+            
         
         st.markdown("---")
         
