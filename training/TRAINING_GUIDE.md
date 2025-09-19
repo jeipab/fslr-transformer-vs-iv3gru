@@ -2,14 +2,20 @@
 
 ## Overview
 
-This guide covers training sign language recognition models using either Transformer (keypoints) or InceptionV3+GRU (features) architectures. The training script includes performance optimizations for CUDA, memory management, data loading, and **automatic parallelization** for multi-GPU setups.
+This guide covers training sign language recognition models using either Transformer (keypoints) or InceptionV3+GRU (features) architectures. The training script has been **completely optimized** for real data training with performance optimizations for CUDA, memory management, data loading, and **automatic parallelization** for multi-GPU setups.
 
 ## Prerequisites
 
-data\processed\seq prepro_30 fps_09-13\clip_0004_good morning.parquet```bash
+```bash
 pip install -r requirements.txt
+```
 
-````
+## ⚠️ **Important: Real Data Required**
+
+The training script now **requires real data files** and no longer supports synthetic data. You must provide either:
+
+- **For Transformer**: Keypoint data files with CSV labels
+- **For IV3-GRU**: Feature data files with CSV labels
 
 ## Quick Start
 
@@ -20,10 +26,10 @@ pip install -r requirements.txt
 ```bash
 python training/train.py \
   --model transformer \
-  --keypoints-train data/processed/transformer_only \
-  --keypoints-val data/processed/test_15fps \
-  --labels-train-csv data/processed/transformer_only/labels.csv \
-  --labels-val-csv data/processed/test_15fps/labels.csv \
+  --keypoints-train data/processed/keypoints_train \
+  --keypoints-val data/processed/keypoints_val \
+  --labels-train-csv data/processed/train_labels.csv \
+  --labels-val-csv data/processed/val_labels.csv \
   --num-gloss 105 --num-cat 10 \
   --epochs 50 --batch-size 32 \
   --auto-workers --auto-batch-size --enable-parallel \
@@ -35,10 +41,10 @@ python training/train.py \
 ```bash
 python training/train.py \
   --model iv3_gru \
-  --features-train data/processed/iv3_gru_only \
-  --features-val data/processed/test_15fps \
-  --labels-train-csv data/processed/iv3_gru_only/labels.csv \
-  --labels-val-csv data/processed/test_15fps/labels.csv \
+  --features-train data/processed/prepro_09-18 \
+  --features-val data/processed/prepro_09-18 \
+  --labels-train-csv data/processed/train_labels.csv \
+  --labels-val-csv data/processed/val_labels.csv \
   --num-gloss 105 --num-cat 10 \
   --epochs 50 --batch-size 32 \
   --auto-workers --auto-batch-size --enable-parallel \
@@ -52,10 +58,10 @@ python training/train.py \
 ```bash
 python training/train.py \
   --model transformer \
-  --keypoints-train data/processed/transformer_only \
-  --keypoints-val data/processed/test_15fps \
-  --labels-train-csv data/processed/transformer_only/labels.csv \
-  --labels-val-csv data/processed/test_15fps/labels.csv \
+  --keypoints-train data/processed/keypoints_train \
+  --keypoints-val data/processed/keypoints_val \
+  --labels-train-csv data/processed/train_labels.csv \
+  --labels-val-csv data/processed/val_labels.csv \
   --num-gloss 105 --num-cat 10 \
   --epochs 100 --batch-size 64 \
   --auto-workers --auto-batch-size --enable-parallel \
@@ -69,10 +75,10 @@ python training/train.py \
 ```bash
 python training/train.py \
   --model transformer \
-  --keypoints-train data/processed/transformer_only \
-  --keypoints-val data/processed/test_15fps \
-  --labels-train-csv data/processed/transformer_only/labels.csv \
-  --labels-val-csv data/processed/test_15fps/labels.csv \
+  --keypoints-train data/processed/keypoints_train \
+  --keypoints-val data/processed/keypoints_val \
+  --labels-train-csv data/processed/train_labels.csv \
+  --labels-val-csv data/processed/val_labels.csv \
   --num-gloss 105 --num-cat 10 \
   --epochs 50 --batch-size 16 \
   --auto-workers --auto-batch-size \
@@ -86,15 +92,17 @@ python training/train.py \
 
 ```
 data/processed/
-├── transformer_only/          # Transformer training data
+├── keypoints_train/          # Transformer training data
 │   ├── clip_0089_how are you.npz
-│   └── labels.csv
-├── iv3_gru_only/             # IV3-GRU training data
+│   └── ...
+├── keypoints_val/            # Transformer validation data
+│   ├── clip_0161_thank you.npz
+│   └── ...
+├── prepro_09-18/            # IV3-GRU features (both train/val)
 │   ├── clip_0032_good afternoon.npz
-│   └── labels.csv
-└── test_15fps/               # Validation data
-    ├── clip_0161_thank you.npz
-    └── labels.csv
+│   └── ...
+├── train_labels.csv         # Training labels
+└── val_labels.csv           # Validation labels
 ```
 
 ### Data Format Requirements
@@ -111,13 +119,40 @@ data/processed/
 - `gloss`: Gloss class ID (0-based, range: 0 to num_gloss-1)
 - `cat`: Category class ID (0-based, range: 0 to num_cat-1)
 
-Example labels.csv:
+Example train_labels.csv:
 
 ```csv
 file,gloss,cat
 clip_0089_how are you,42,3
 clip_0032_good afternoon,15,1
 ```
+
+Example val_labels.csv:
+
+```csv
+file,gloss,cat
+clip_0161_thank you,28,2
+clip_0250_good morning,5,1
+```
+
+## Recent Improvements & Fixes
+
+### ✅ **Critical Issues Fixed**
+
+The training script has been completely overhauled with the following fixes:
+
+1. **CSV Logging Error** - Fixed undefined variable references in CSV logging
+2. **Gradient Accumulation** - Fixed edge case where remaining gradients weren't stepped
+3. **Auto Batch Size** - Fixed timing issue where batch size optimization occurred too late
+4. **Data Validation** - Added validation to ensure CSV files exist before training
+5. **Synthetic Data Removal** - Removed unused synthetic data logic for cleaner real data training
+
+### ✅ **Enhanced Error Handling**
+
+- **File Validation**: Automatic validation of data files and CSV labels
+- **Clear Error Messages**: Descriptive error messages for missing files or invalid data
+- **Robust Training**: Improved gradient flow and memory management
+- **Better Logging**: Fixed CSV logging with proper parameter references
 
 ## Performance Optimizations
 
@@ -216,16 +251,16 @@ python training/train.py \
 
 ### Performance Parameters
 
-| Parameter                       | Description                    | Default | Notes                       |
-| ------------------------------- | ------------------------------ | ------- | --------------------------- |
-| `--amp`                         | Enable mixed precision         | `False` | Faster training on CUDA     |
-| `--compile-model`               | Compile model (PyTorch 2.0+)   | `False` | Better performance          |
-| `--auto-workers`                | Auto-detect DataLoader workers | `False` | Worker count (up to 8) |
-| `--auto-batch-size`             | Auto-calculate batch size | `False` | Based on available memory   |
+| Parameter                       | Description                       | Default | Notes                       |
+| ------------------------------- | --------------------------------- | ------- | --------------------------- |
+| `--amp`                         | Enable mixed precision            | `False` | Faster training on CUDA     |
+| `--compile-model`               | Compile model (PyTorch 2.0+)      | `False` | Better performance          |
+| `--auto-workers`                | Auto-detect DataLoader workers    | `False` | Worker count (up to 8)      |
+| `--auto-batch-size`             | Auto-calculate batch size         | `False` | Based on available memory   |
 | `--enable-parallel`             | Enable DataParallel for multi-GPU | `False` | Automatic multi-GPU support |
-| `--gradient-accumulation-steps` | Gradient accumulation          | `1`     | Effective larger batch size |
-| `--num-workers`                 | DataLoader workers             | `0`     | 0 = auto-detect             |
-| `--pin-memory`                  | Pin memory for GPU             | `False` | Faster GPU transfers        |
+| `--gradient-accumulation-steps` | Gradient accumulation             | `1`     | Effective larger batch size |
+| `--num-workers`                 | DataLoader workers                | `0`     | 0 = auto-detect             |
+| `--pin-memory`                  | Pin memory for GPU                | `False` | Faster GPU transfers        |
 
 ### Training Control Parameters
 
@@ -252,10 +287,10 @@ python training/train.py \
 ```bash
 python training/train.py \
   --model transformer \
-  --keypoints-train data/processed/transformer_only \
-  --keypoints-val data/processed/test_15fps \
-  --labels-train-csv data/processed/transformer_only/labels.csv \
-  --labels-val-csv data/processed/test_15fps/labels.csv \
+  --keypoints-train data/processed/keypoints_train \
+  --keypoints-val data/processed/keypoints_val \
+  --labels-train-csv data/processed/train_labels.csv \
+  --labels-val-csv data/processed/val_labels.csv \
   --num-gloss 105 --num-cat 10 \
   --epochs 100 --batch-size 64 \
   --lr 5e-5 --weight-decay 1e-4 \
@@ -271,10 +306,10 @@ python training/train.py \
 ```bash
 python training/train.py \
   --model transformer \
-  --keypoints-train data/processed/transformer_only \
-  --keypoints-val data/processed/test_15fps \
-  --labels-train-csv data/processed/transformer_only/labels.csv \
-  --labels-val-csv data/processed/test_15fps/labels.csv \
+  --keypoints-train data/processed/keypoints_train \
+  --keypoints-val data/processed/keypoints_val \
+  --labels-train-csv data/processed/train_labels.csv \
+  --labels-val-csv data/processed/val_labels.csv \
   --num-gloss 105 --num-cat 10 \
   --epochs 50 --batch-size 32 \
   --lr 3e-4 --weight-decay 1e-4 \
@@ -290,10 +325,10 @@ python training/train.py \
 ```bash
 python training/train.py \
   --model iv3_gru \
-  --features-train data/processed/iv3_gru_only \
-  --features-val data/processed/test_15fps \
-  --labels-train-csv data/processed/iv3_gru_only/labels.csv \
-  --labels-val-csv data/processed/test_15fps/labels.csv \
+  --features-train data/processed/prepro_09-18 \
+  --features-val data/processed/prepro_09-18 \
+  --labels-train-csv data/processed/train_labels.csv \
+  --labels-val-csv data/processed/val_labels.csv \
   --num-gloss 105 --num-cat 10 \
   --epochs 40 --batch-size 16 \
   --gradient-accumulation-steps 4 \
@@ -308,10 +343,10 @@ python training/train.py \
 ```bash
 python training/train.py \
   --model transformer \
-  --keypoints-train data/processed/transformer_only \
-  --keypoints-val data/processed/test_15fps \
-  --labels-train-csv data/processed/transformer_only/labels.csv \
-  --labels-val-csv data/processed/test_15fps/labels.csv \
+  --keypoints-train data/processed/keypoints_train \
+  --keypoints-val data/processed/keypoints_val \
+  --labels-train-csv data/processed/train_labels.csv \
+  --labels-val-csv data/processed/val_labels.csv \
   --num-gloss 105 --num-cat 10 \
   --epochs 30 --batch-size 8 \
   --auto-workers --auto-batch-size \
@@ -324,10 +359,10 @@ python training/train.py \
 ```bash
 python training/train.py \
   --model transformer \
-  --keypoints-train data/processed/transformer_only \
-  --keypoints-val data/processed/test_15fps \
-  --labels-train-csv data/processed/transformer_only/labels.csv \
-  --labels-val-csv data/processed/test_15fps/labels.csv \
+  --keypoints-train data/processed/keypoints_train \
+  --keypoints-val data/processed/keypoints_val \
+  --labels-train-csv data/processed/train_labels.csv \
+  --labels-val-csv data/processed/val_labels.csv \
   --num-gloss 105 --num-cat 10 \
   --epochs 10 --batch-size 16 \
   --auto-workers --auto-batch-size \
@@ -427,9 +462,11 @@ python training/train.py \
 
 **Data Loading Issues**:
 
-- Check NPZ file keys (`--kp-key`, `--feature-key`)
-- Verify CSV column names (`file`, `gloss`, `cat`)
-- Ensure file paths match between CSV and NPZ files
+- **Missing Data Files**: Ensure you provide either `--keypoints-train/--keypoints-val` for Transformer or `--features-train/--features-val` for IV3-GRU
+- **Missing CSV Files**: Ensure `--labels-train-csv` and `--labels-val-csv` files exist
+- **Check NPZ file keys**: Verify `--kp-key` (default: `X`) for keypoints or `--feature-key` (default: `X2048`) for features
+- **Verify CSV format**: Ensure CSV has columns `file`, `gloss`, `cat`
+- **File path consistency**: Ensure CSV file names match NPZ filenames (without extension)
 
 **Convergence Issues**:
 
@@ -443,22 +480,23 @@ python training/train.py \
 Validate your data before training:
 
 ```bash
-# Validate NPZ files
-python -m preprocessing.validate_npz data/processed/transformer_only
+# Validate keypoint NPZ files
+python -m preprocessing.validate_npz data/processed/keypoints_train
 
-# Require X2048 for IV3-GRU
-python -m preprocessing.validate_npz data/processed/iv3_gru_only --require-x2048
+# Validate feature NPZ files (require X2048 for IV3-GRU)
+python -m preprocessing.validate_npz data/processed/prepro_09-18 --require-x2048
 ```
 
 ## Best Practices
 
 ### Training Strategy
 
-1. **Start Small**: Begin with smoke tests to verify setup
-2. **Monitor Memory**: Watch GPU memory usage during training
-3. **Use Validation**: Always use validation data for monitoring
-4. **Save Logs**: Enable CSV logging for analysis
-5. **Checkpoint**: Resume capability for long training runs
+1. **Validate Data First**: Ensure all data files and CSV labels exist before training
+2. **Start Small**: Begin with a few epochs to verify setup and data loading
+3. **Monitor Memory**: Watch GPU memory usage during training
+4. **Use Validation**: Always use validation data for monitoring
+5. **Save Logs**: Enable CSV logging for analysis with `--log-csv`
+6. **Checkpoint**: Resume capability for long training runs with `--resume`
 
 ### Performance Tips
 
@@ -498,12 +536,14 @@ Both models support multi-task learning with configurable loss weights for gloss
 ### Multi-GPU Training Advantages
 
 **Performance Improvements**:
+
 - **2-4x faster training** with multiple GPUs
 - **Near-linear scaling** with DataParallel
 - **Larger effective batch sizes** for gradient estimates
 - **Reduced training time** enables more experimentation
 
 **Accuracy Impact**:
+
 - ✅ **No negative impact** on model accuracy
 - ✅ **Same convergence** as single-GPU training
 - ✅ **Better gradient averaging** with parallel processing
@@ -512,6 +552,7 @@ Both models support multi-task learning with configurable loss weights for gloss
 ### Resource Configuration
 
 **Automatic Adaptations**:
+
 - **GPU Memory**: Batch size adjusts from 8-64 based on available memory
 - **CPU Cores**: Uses up to 8 DataLoader workers for data loading
 - **Multi-GPU**: Distributes training across available GPUs
@@ -520,11 +561,13 @@ Both models support multi-task learning with configurable loss weights for gloss
 **Recommended Configurations**:
 
 **Vast AI (Multi-GPU)**:
+
 ```bash
 --enable-parallel --auto-batch-size --auto-workers --amp --compile-model
 ```
 
 **Local Machine (CPU/Single GPU)**:
+
 ```bash
 --auto-workers --auto-batch-size --amp
 ```
@@ -532,13 +575,18 @@ Both models support multi-task learning with configurable loss weights for gloss
 ### Training Time Estimates
 
 **With Parallelization**:
+
 - **Single GPU**: 2-3 hours for 50 epochs
 - **Multi-GPU (2x)**: 1-1.5 hours for 50 epochs
 - **Multi-GPU (4x)**: 30-45 minutes for 50 epochs
 
 **Without Parallelization**:
+
 - **Single GPU**: 4-6 hours for 50 epochs
 - **CPU**: 8-12 hours for 50 epochs
 
 The parallelization features enable faster experimentation and longer training runs, leading to model performance through hyperparameter optimization.
-````
+
+```
+
+```
