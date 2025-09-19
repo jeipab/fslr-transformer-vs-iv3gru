@@ -456,6 +456,63 @@ def set_global_seed(seed: int, deterministic: bool = False) -> None:
     else:
         torch.backends.cudnn.benchmark = True
 
+def setup_hierarchical_training(model, hierarchical_training=False, category_first_epochs=5):
+    """
+    Setup hierarchical training by freezing/unfreezing model components.
+    
+    Args:
+        model: The model to configure
+        hierarchical_training: Whether to use hierarchical training
+        category_first_epochs: Number of epochs to train category head only
+    
+    Returns:
+        dict: Configuration for hierarchical training phases
+    """
+    if not hierarchical_training:
+        # Standard training - all parameters trainable
+        for param in model.parameters():
+            param.requires_grad = True
+        return {"phase": "joint", "epochs_remaining": 0}
+    
+    # Phase 1: Train category head only
+    for param in model.parameters():
+        param.requires_grad = False
+    
+    # Enable category head and shared features
+    for param in model.category_head.parameters():
+        param.requires_grad = True
+    
+    # Enable shared components (GRU layers, feature extractor if not frozen)
+    if hasattr(model, 'feat_extractor') and not getattr(model, 'freeze_backbone', True):
+        for param in model.feat_extractor.parameters():
+            param.requires_grad = True
+    
+    if hasattr(model, 'gru1'):
+        for param in model.gru1.parameters():
+            param.requires_grad = True
+        for param in model.gru2.parameters():
+            param.requires_grad = True
+    
+    if hasattr(model, 'encoder_layers'):
+        for layer in model.encoder_layers:
+            for param in layer.parameters():
+                param.requires_grad = True
+    
+    if hasattr(model, 'embedding'):
+        for param in model.embedding.parameters():
+            param.requires_grad = True
+    
+    return {
+        "phase": "category_first",
+        "epochs_remaining": category_first_epochs
+    }
+
+def transition_to_joint_training(model):
+    """Transition from category-first to joint training by enabling all parameters."""
+    for param in model.parameters():
+        param.requires_grad = True
+    return {"phase": "joint", "epochs_remaining": 0}
+
 def train_model(
     model,
     train_loader,
@@ -477,6 +534,9 @@ def train_model(
     log_csv_path=None,
     gradient_accumulation_steps=1,
     compile_model=False,
+    hierarchical_training=False,
+    category_first_epochs=5,
+    hierarchical_lr_scale=1.0,
 ):
     """
     Train a model with multi-task loss on gloss and category predictions.
@@ -580,12 +640,30 @@ def train_model(
 
     print(f"Training for {epochs} epochs...")
     print(f"Loss weights - Gloss: {alpha}, Category: {beta}")
+    if hierarchical_training:
+        print(f"Hierarchical training enabled - Category first epochs: {category_first_epochs}")
     print("-" * 60)
 
     epochs_to_run = epochs
     patience_counter = 0
+    
+    # Setup hierarchical training
+    hierarchical_config = setup_hierarchical_training(model, hierarchical_training, category_first_epochs)
+    print(f"Training phase: {hierarchical_config['phase']}")
 
     for epoch in range(start_epoch, start_epoch + epochs_to_run):
+        # Check for hierarchical training phase transition
+        if hierarchical_training and hierarchical_config['phase'] == 'category_first' and hierarchical_config['epochs_remaining'] == 0:
+            print(f"\n🔄 Transitioning to joint training at epoch {epoch + 1}")
+            hierarchical_config = transition_to_joint_training(model)
+            # Recreate optimizer with updated parameters
+            optimizer = optim.Adam(model.parameters(), lr=lr * hierarchical_lr_scale, weight_decay=weight_decay)
+            print(f"✓ Joint training enabled - all parameters trainable")
+        
+        # Update hierarchical config
+        if hierarchical_config['epochs_remaining'] > 0:
+            hierarchical_config['epochs_remaining'] -= 1
+        
         model.train()
         total_loss = 0
         num_batches = 0
@@ -611,7 +689,14 @@ def train_model(
                 gloss_pred, cat_pred = forward_fn(model, X, lengths)
                 loss_gloss = criterion(gloss_pred, gloss)
                 loss_cat = criterion(cat_pred, cat)
-                loss = alpha * loss_gloss + beta * loss_cat
+                
+                # Hierarchical training: adjust loss weights based on phase
+                if hierarchical_training and hierarchical_config['phase'] == 'category_first':
+                    # Phase 1: Focus on category prediction only
+                    loss = loss_cat
+                else:
+                    # Phase 2: Joint training with original weights
+                    loss = alpha * loss_gloss + beta * loss_cat
                 
                 # Scale loss by accumulation steps
                 loss = loss / gradient_accumulation_steps
@@ -663,7 +748,8 @@ def train_model(
         epoch_time = time.time() - epoch_start_time
         
         # Print epoch results with performance metrics
-        print(f"Epoch {epoch+1:2d}/{epochs} | "
+        phase_info = f" [{hierarchical_config['phase']}]" if hierarchical_training else ""
+        print(f"Epoch {epoch+1:2d}/{epochs}{phase_info} | "
               f"Train Loss: {avg_train_loss:.4f} | "
               f"Val Loss: {val_loss:.4f} | "
               f"Val Gloss Acc: {val_gloss_acc:.3f} | "
@@ -817,6 +903,10 @@ def parse_args():
     parser.add_argument("--batch-size", type=int, default=32, help="Batch size")
     parser.add_argument("--alpha", type=float, default=0.5, help="Weight for gloss loss")
     parser.add_argument("--beta", type=float, default=0.5, help="Weight for category loss")
+    # Hierarchical training options
+    parser.add_argument("--hierarchical-training", action="store_true", help="Enable hierarchical training strategies")
+    parser.add_argument("--category-first-epochs", type=int, default=5, help="Number of epochs to train category head only (hierarchical)")
+    parser.add_argument("--hierarchical-lr-scale", type=float, default=1.0, help="Learning rate scaling for hierarchical training")
     # Class counts
     parser.add_argument("--num-gloss", type=int, default=105, help="Number of gloss classes")
     parser.add_argument("--num-cat", type=int, default=10, help="Number of category classes")
@@ -1110,4 +1200,7 @@ if __name__ == "__main__":
         log_csv_path=args.log_csv,
         gradient_accumulation_steps=args.gradient_accumulation_steps,
         compile_model=args.compile_model,
+        hierarchical_training=args.hierarchical_training,
+        category_first_epochs=args.category_first_epochs,
+        hierarchical_lr_scale=args.hierarchical_lr_scale,
     )

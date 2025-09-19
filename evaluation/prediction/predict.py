@@ -243,11 +243,15 @@ class ModelPredictor:
         gloss_probs = torch.softmax(gloss_logits, dim=-1).squeeze(0)
         cat_probs = torch.softmax(cat_logits, dim=-1).squeeze(0)
         
+        # Calculate hierarchical confidence
+        hierarchical_confidence = float(gloss_probs[gloss_pred].item() * cat_probs[cat_pred].item())
+        
         return {
             'gloss_prediction': int(gloss_pred),
             'category_prediction': int(cat_pred),
             'gloss_probability': float(gloss_probs[gloss_pred].item()),
             'category_probability': float(cat_probs[cat_pred].item()),
+            'hierarchical_confidence': hierarchical_confidence,
             'gloss_top5': [(int(i), float(gloss_probs[i].item())) for i in torch.topk(gloss_probs, 5).indices],
             'category_top3': [(int(i), float(cat_probs[i].item())) for i in torch.topk(cat_probs, 3).indices]
         }
@@ -325,11 +329,15 @@ class ModelPredictor:
         gloss_probs = torch.softmax(gloss_logits, dim=-1).squeeze(0)
         cat_probs = torch.softmax(cat_logits, dim=-1).squeeze(0)
         
+        # Calculate hierarchical confidence
+        hierarchical_confidence = float(gloss_probs[gloss_pred].item() * cat_probs[cat_pred].item())
+        
         return {
             'gloss_prediction': int(gloss_pred),
             'category_prediction': int(cat_pred),
             'gloss_probability': float(gloss_probs[gloss_pred].item()),
             'category_probability': float(cat_probs[cat_pred].item()),
+            'hierarchical_confidence': hierarchical_confidence,
             'gloss_top5': [(int(i), float(gloss_probs[i].item())) for i in torch.topk(gloss_probs, 5).indices],
             'category_top3': [(int(i), float(cat_probs[i].item())) for i in torch.topk(cat_probs, 3).indices],
             'frames_extracted': int(len(frames))

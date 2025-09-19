@@ -61,6 +61,10 @@ def format_prediction_results(results, gloss_mapping=None, category_mapping=None
     formatted['gloss_probability'] = results['gloss_probability']
     formatted['category_probability'] = results['category_probability']
     
+    # Add hierarchical confidence if available
+    if 'hierarchical_confidence' in results:
+        formatted['hierarchical_confidence'] = results['hierarchical_confidence']
+    
     # Compact top predictions
     formatted['gloss_top5'] = [
         [f"{gloss_mapping.get(gloss_id, f'Unknown')} ({gloss_id})", prob]
@@ -99,6 +103,9 @@ def print_prediction_summary(results, gloss_mapping=None, category_mapping=None)
     print("="*60)
     print(f"Gloss: {formatted['gloss_prediction']} (confidence: {formatted['gloss_probability']:.3f})")
     print(f"Category: {formatted['category_prediction']} (confidence: {formatted['category_probability']:.3f})")
+    
+    if 'hierarchical_confidence' in formatted:
+        print(f"Hierarchical Confidence: {formatted['hierarchical_confidence']:.3f}")
     
     print(f"\nTop 5 Gloss Predictions:")
     for i, (gloss_label_with_id, prob) in enumerate(formatted['gloss_top5'], 1):

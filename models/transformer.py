@@ -322,12 +322,16 @@ class EncoderLayer(nn.Module):
 
 class SignTransformer(nn.Module):
     """
-    Transformer-based model for Sign Language Recognition.
+    Hierarchical Transformer-based model for Sign Language Recognition.
 
     Processes sequences of body keypoints using a Transformer encoder
-    and predicts both:
-        - Gloss classification (word/sign ID)
-        - Category classification (semantic class/group)
+    and predicts hierarchically:
+        1. Category classification (semantic class/group) - first level
+        2. Gloss classification (word/sign ID) - second level, conditioned on category
+    
+    The model uses category-specific gloss heads, where each category has its own
+    dedicated head for gloss prediction, reflecting the natural hierarchy where
+    glosses belong to categories.
 
     Args:
         input_dim: Input feature dimension per frame (default 156).
@@ -344,6 +348,9 @@ class SignTransformer(nn.Module):
     Note:
         Input sequences are expected to have shape [B, T, 156] where 156 is the
         number of keypoint features (78 keypoints × 2 coordinates).
+        
+        The hierarchical architecture predicts category first, then uses the
+        predicted category to select the appropriate gloss head for prediction.
     """
     
     def __init__(self,
@@ -388,28 +395,34 @@ class SignTransformer(nn.Module):
         # CLS token (always create it, use it only when pooling_method == 'cls')
         self.cls_token = nn.Parameter(torch.randn(1, 1, emb_dim))
 
-        # ----- Output heads -----
+        # ----- Hierarchical Output heads -----
         self.dropout_final = nn.Dropout(dropout)
         
-        # Gloss classification head
-        self.gloss_head = nn.Sequential(
-            nn.Linear(emb_dim, emb_dim // 2),
-            nn.ReLU(),
-            nn.Dropout(dropout),
-            nn.Linear(emb_dim // 2, num_gloss)
-        )
-        
-        # Category classification head
+        # Category classification head (first level)
         self.category_head = nn.Sequential(
             nn.Linear(emb_dim, emb_dim // 2),
             nn.ReLU(),
             nn.Dropout(dropout),
             nn.Linear(emb_dim // 2, num_cat)
         )
+        
+        # Category-conditioned gloss heads (second level)
+        # Each category has its own gloss prediction head
+        self.gloss_heads = nn.ModuleList([
+            nn.Sequential(
+                nn.Linear(emb_dim + num_cat, emb_dim // 2),  # +num_cat for category embedding
+                nn.ReLU(),
+                nn.Dropout(dropout),
+                nn.Linear(emb_dim // 2, num_gloss)
+            ) for _ in range(num_cat)
+        ])
+        
+        # Category embedding layer for conditioning gloss prediction
+        self.category_embedding = nn.Embedding(num_cat, num_cat)
 
     def forward(self, x, mask=None):
         """
-        Forward pass.
+        Hierarchical forward pass.
 
         Args:
             x (Tensor): input sequence [B, T, 156].
@@ -418,8 +431,12 @@ class SignTransformer(nn.Module):
                                    Internally broadcast to [B, 1, 1, T(+1)] for attention.
 
         Returns:
-            gloss_out (Tensor): [B, num_gloss] logits for gloss prediction.
+            gloss_out (Tensor): [B, num_gloss] logits for gloss prediction (conditioned on category).
             cat_out   (Tensor): [B, num_cat] logits for category prediction.
+            
+        Note:
+            The model first predicts category, then uses the predicted category
+            to select the appropriate gloss head for hierarchical prediction.
         """
         # Input validation
         if len(x.shape) != 3:
@@ -493,9 +510,25 @@ class SignTransformer(nn.Module):
         # Final dropout
         pooled = self.dropout_final(pooled)
 
-        # ----- Output predictions -----
-        gloss_out = self.gloss_head(pooled)     # [B, num_gloss]
+        # ----- Hierarchical predictions -----
+        # First: predict category
         cat_out = self.category_head(pooled)    # [B, num_cat]
+        
+        # Get predicted category for each sample in batch
+        cat_pred = torch.argmax(cat_out, dim=-1)  # [B]
+        
+        # Create category embeddings for conditioning
+        cat_emb = self.category_embedding(cat_pred)  # [B, num_cat]
+        
+        # Concatenate pooled features with category embeddings
+        conditioned_features = torch.cat([pooled, cat_emb], dim=-1)  # [B, emb_dim + num_cat]
+        
+        # Second: predict gloss using category-specific head
+        # For each sample, use the head corresponding to its predicted category
+        gloss_out = torch.zeros(B, self.gloss_heads[0][-1].out_features, device=pooled.device, dtype=pooled.dtype)
+        for i in range(B):
+            category_idx = cat_pred[i].item()
+            gloss_out[i] = self.gloss_heads[category_idx](conditioned_features[i])
 
         return gloss_out, cat_out
 

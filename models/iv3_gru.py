@@ -86,7 +86,15 @@ def _dropout_packed(packed_seq, p: float, training: bool):
 
 class InceptionV3GRU(nn.Module):
     """
-    InceptionV3-GRU for gloss and category classification from video sequences.
+    Hierarchical InceptionV3-GRU for gloss and category classification from video sequences.
+
+    Uses a hierarchical architecture where:
+        1. Category classification (semantic class/group) - first level
+        2. Gloss classification (word/sign ID) - second level, conditioned on category
+
+    The model uses category-specific gloss heads, where each category has its own
+    dedicated head for gloss prediction, reflecting the natural hierarchy where
+    glosses belong to categories.
 
     Args:
         num_gloss: Number of gloss classes.
@@ -107,6 +115,10 @@ class InceptionV3GRU(nn.Module):
 
     Returns:
         Tuple[Tensor, Tensor]: (gloss, category) tensors of shape (B, num_classes).
+        
+    Note:
+        The hierarchical architecture predicts category first, then uses the
+        predicted category to select the appropriate gloss head for prediction.
     """
     def __init__(
         self,
@@ -128,8 +140,17 @@ class InceptionV3GRU(nn.Module):
         self.gru2 = nn.GRU(input_size=hidden1, hidden_size=hidden2, num_layers=1, batch_first=True)
         self.do1 = nn.Dropout(dropout)
         self.do2 = nn.Dropout(dropout)
-        self.gloss_head = nn.Linear(hidden2, num_gloss)
+        
+        # Hierarchical architecture: Category first, then category-conditioned gloss
         self.category_head = nn.Linear(hidden2, num_cat)
+        
+        # Category-conditioned gloss heads - each category has its own head
+        self.gloss_heads = nn.ModuleList([
+            nn.Linear(hidden2 + num_cat, num_gloss) for _ in range(num_cat)
+        ])
+        
+        # Category embedding layer for conditioning gloss prediction
+        self.category_embedding = nn.Embedding(num_cat, num_cat)
 
 
         # Xavier/orthogonal init for GRUs helps stability on small hidden sizes
@@ -172,7 +193,7 @@ class InceptionV3GRU(nn.Module):
         features_already: bool = False,
     ) -> Tuple[torch.Tensor, torch.Tensor]:
         """
-        Forward pass with either raw frames or precomputed features.
+        Hierarchical forward pass with either raw frames or precomputed features.
 
         Args:
             frames_or_feats: (B, T, 3, H, W) if features_already=False, else (B, T, 2048).
@@ -183,6 +204,10 @@ class InceptionV3GRU(nn.Module):
         Returns:
             Tuple[Tensor, Tensor]: (gloss, category) logits or probabilities of
             shapes (B, num_gloss) and (B, num_cat).
+            
+        Note:
+            The hierarchical architecture predicts category first, then uses the
+            predicted category to select the appropriate gloss head for prediction.
         """
         # Build (B, T, 2048) sequence
         if features_already:
@@ -193,6 +218,8 @@ class InceptionV3GRU(nn.Module):
             if len(frames_or_feats.shape) != 5:
                 raise ValueError(f"Expected raw frames with shape [B, T, 3, H, W], got {frames_or_feats.shape}")
             seq = self.extract_features(frames_or_feats)  # (B, T, 2048)
+        
+        B = seq.shape[0]  # Get batch size
 
         # Packed or plain sequence through GRUs
         if lengths is not None:
@@ -216,8 +243,26 @@ class InceptionV3GRU(nn.Module):
             h = h2[-1]                                     # (B, hidden2)
 
         h = self.do2(h)                                    # final dropout on summary
-        gloss_logits = self.gloss_head(h)                  # (B, num_gloss)
+        
+        # Hierarchical predictions: Category first, then category-conditioned gloss
         cat_logits = self.category_head(h)                 # (B, num_cat)
+        
+        # Get predicted category for each sample in batch
+        cat_pred = torch.argmax(cat_logits, dim=-1)        # (B,)
+        
+        # Create category embeddings for conditioning
+        cat_emb = self.category_embedding(cat_pred)        # (B, num_cat)
+        
+        # Concatenate hidden features with category embeddings
+        conditioned_features = torch.cat([h, cat_emb], dim=-1)  # (B, hidden2 + num_cat)
+        
+        # Predict gloss using category-specific head
+        # For each sample, use the head corresponding to its predicted category
+        gloss_logits = torch.zeros(B, self.gloss_heads[0].out_features, device=h.device, dtype=h.dtype)
+        for i in range(B):
+            category_idx = cat_pred[i].item()
+            gloss_logits[i] = self.gloss_heads[category_idx](conditioned_features[i])
+        
         if return_probs:
             gloss_probs = F.softmax(gloss_logits, dim=-1)
             cat_probs = F.softmax(cat_logits, dim=-1)

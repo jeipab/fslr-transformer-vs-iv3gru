@@ -123,3 +123,90 @@ def evaluate(model, dataloader, criterion, device):
     cat_accuracy = correct_cat / total_samples if total_samples > 0 else 0.0
     
     return avg_loss, gloss_accuracy, cat_accuracy
+
+def evaluate_hierarchical(model, dataloader, criterion, device, alpha=0.5, beta=0.5):
+    """
+    Evaluate a hierarchical sign language recognition model with enhanced metrics.
+    
+    Args:
+        model: Model to evaluate (hierarchical SignTransformer or IV3_GRU)
+        dataloader: DataLoader containing evaluation data
+        criterion: Loss function (typically CrossEntropyLoss)
+        device: Device to run evaluation on (CPU/CUDA)
+        alpha: Weight for gloss loss
+        beta: Weight for category loss
+    
+    Returns:
+        dict: Comprehensive evaluation metrics including hierarchical-specific metrics
+    """
+    model.eval()
+    
+    total_loss = 0.0
+    total_gloss_loss = 0.0
+    total_cat_loss = 0.0
+    correct_gloss = 0
+    correct_cat = 0
+    hierarchical_correct = 0  # Both category and gloss correct
+    category_correct_gloss_wrong = 0  # Category correct, gloss wrong
+    category_wrong_gloss_correct = 0  # Category wrong, gloss correct (should be rare)
+    total_samples = 0
+    num_batches = 0
+
+    with torch.no_grad():
+        for X, gloss, cat in dataloader:
+            X, gloss, cat = X.to(device), gloss.to(device), cat.to(device)
+
+            gloss_pred, cat_pred = model(X)
+            loss_gloss = criterion(gloss_pred, gloss)
+            loss_cat = criterion(cat_pred, cat)
+            batch_loss = alpha * loss_gloss + beta * loss_cat
+            
+            total_loss += batch_loss.item()
+            total_gloss_loss += loss_gloss.item()
+            total_cat_loss += loss_cat.item()
+            num_batches += 1
+
+            gloss_preds = gloss_pred.argmax(dim=1)
+            cat_preds = cat_pred.argmax(dim=1)
+            
+            # Basic accuracies
+            correct_gloss += (gloss_preds == gloss).sum().item()
+            correct_cat += (cat_preds == cat).sum().item()
+            
+            # Hierarchical-specific metrics
+            for i in range(len(gloss)):
+                if cat_preds[i] == cat[i] and gloss_preds[i] == gloss[i]:
+                    hierarchical_correct += 1
+                elif cat_preds[i] == cat[i] and gloss_preds[i] != gloss[i]:
+                    category_correct_gloss_wrong += 1
+                elif cat_preds[i] != cat[i] and gloss_preds[i] == gloss[i]:
+                    category_wrong_gloss_correct += 1
+            
+            total_samples += gloss.size(0)
+
+    # Calculate metrics
+    avg_loss = total_loss / num_batches if num_batches > 0 else 0.0
+    avg_gloss_loss = total_gloss_loss / num_batches if num_batches > 0 else 0.0
+    avg_cat_loss = total_cat_loss / num_batches if num_batches > 0 else 0.0
+    
+    gloss_accuracy = correct_gloss / total_samples if total_samples > 0 else 0.0
+    cat_accuracy = correct_cat / total_samples if total_samples > 0 else 0.0
+    hierarchical_accuracy = hierarchical_correct / total_samples if total_samples > 0 else 0.0
+    
+    # Hierarchical consistency metrics
+    cat_correct_rate = correct_cat / total_samples if total_samples > 0 else 0.0
+    gloss_given_cat_correct = hierarchical_correct / correct_cat if correct_cat > 0 else 0.0
+    
+    return {
+        'avg_loss': avg_loss,
+        'avg_gloss_loss': avg_gloss_loss,
+        'avg_cat_loss': avg_cat_loss,
+        'gloss_accuracy': gloss_accuracy,
+        'cat_accuracy': cat_accuracy,
+        'hierarchical_accuracy': hierarchical_accuracy,
+        'cat_correct_rate': cat_correct_rate,
+        'gloss_given_cat_correct': gloss_given_cat_correct,
+        'category_correct_gloss_wrong': category_correct_gloss_wrong,
+        'category_wrong_gloss_correct': category_wrong_gloss_correct,
+        'total_samples': total_samples
+    }
