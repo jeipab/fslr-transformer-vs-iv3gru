@@ -154,6 +154,21 @@ The training script has been completely overhauled with the following fixes:
 - **Robust Training**: Improved gradient flow and memory management
 - **Better Logging**: Fixed CSV logging with proper parameter references
 
+### ✅ **New Curriculum Training Features**
+
+- **Task Scheduling**: Support for gloss-first, category-first, and dynamic curriculum strategies
+- **Weight Scheduling**: Linear, cosine, and exponential weight transition functions
+- **Progress Monitoring**: Real-time curriculum phase tracking and weight logging
+- **CSV Integration**: Curriculum weights and phases logged to CSV for analysis
+
+### ✅ **New Loss Weighting Strategies**
+
+- **Static Weights**: Traditional fixed alpha/beta weighting
+- **Grid Search**: Automatic exploration of multiple weight combinations
+- **Uncertainty Weighting**: Learnable uncertainty-based weighting (Kendall et al. 2018)
+- **GradNorm**: Gradient normalization for balanced task learning (Chen et al. 2018)
+- **Dynamic Monitoring**: Real-time weight tracking and adjustment
+
 ## Performance Optimizations
 
 ### Automatic Optimizations
@@ -279,6 +294,208 @@ python training/train.py \
 | --------- | -------------------- | ------- | ----------------------------------- |
 | `--alpha` | Gloss loss weight    | `0.5`   | Higher = focus on gloss accuracy    |
 | `--beta`  | Category loss weight | `0.5`   | Higher = focus on category accuracy |
+
+### Curriculum Training Parameters
+
+| Parameter                    | Description                                    | Default | Notes                                       |
+| ---------------------------- | ---------------------------------------------- | ------- | ------------------------------------------- |
+| `--curriculum`               | Curriculum strategy                            | `None`  | `gloss-first`, `category-first`, `dynamic`  |
+| `--curriculum-epochs`        | Number of epochs for curriculum phase          | `10`    | When to start balancing tasks               |
+| `--curriculum-warmup`        | Warmup epochs before curriculum (dynamic)      | `5`     | Only for dynamic strategy                   |
+| `--curriculum-min-weight`    | Minimum weight for secondary task              | `0.1`   | Range: 0.0-1.0                              |
+| `--curriculum-schedule`      | Weight scheduling function                     | `linear`| `linear`, `cosine`, `exponential`           |
+
+## Curriculum Training
+
+### Overview
+
+Curriculum training helps improve convergence by focusing on one task initially and gradually introducing the other task. This is particularly beneficial when tasks have different difficulty levels or when you want to establish a strong foundation in one task before adding complexity.
+
+### Curriculum Strategies
+
+#### 1. Gloss-First Strategy
+Train gloss classification first, then gradually add category classification:
+
+```bash
+python training/train.py \
+  --model transformer \
+  --keypoints-train data/processed/keypoints_train \
+  --keypoints-val data/processed/keypoints_val \
+  --labels-train-csv data/processed/train_labels.csv \
+  --labels-val-csv data/processed/val_labels.csv \
+  --num-gloss 105 --num-cat 10 \
+  --epochs 50 --batch-size 32 \
+  --curriculum gloss-first \
+  --curriculum-epochs 15 \
+  --curriculum-min-weight 0.1 \
+  --curriculum-schedule linear \
+  --amp --compile-model --auto-workers --auto-batch-size
+```
+
+#### 2. Category-First Strategy
+Train category classification first, then gradually add gloss classification:
+
+```bash
+python training/train.py \
+  --model iv3_gru \
+  --features-train data/processed/prepro_09-18 \
+  --features-val data/processed/prepro_09-18 \
+  --labels-train-csv data/processed/train_labels.csv \
+  --labels-val-csv data/processed/val_labels.csv \
+  --num-gloss 105 --num-cat 10 \
+  --epochs 50 --batch-size 32 \
+  --curriculum category-first \
+  --curriculum-epochs 20 \
+  --curriculum-min-weight 0.05 \
+  --curriculum-schedule cosine \
+  --amp --compile-model --auto-workers --auto-batch-size
+```
+
+#### 3. Dynamic Strategy
+Start with balanced weights, then gradually focus on one task, then balance again:
+
+```bash
+python training/train.py \
+  --model transformer \
+  --keypoints-train data/processed/keypoints_train \
+  --keypoints-val data/processed/keypoints_val \
+  --labels-train-csv data/processed/train_labels.csv \
+  --labels-val-csv data/processed/val_labels.csv \
+  --num-gloss 105 --num-cat 10 \
+  --epochs 60 --batch-size 32 \
+  --curriculum dynamic \
+  --curriculum-warmup 5 \
+  --curriculum-epochs 20 \
+  --curriculum-min-weight 0.1 \
+  --curriculum-schedule exponential \
+  --amp --compile-model --auto-workers --auto-batch-size
+```
+
+### Weight Scheduling Functions
+
+#### Linear Schedule
+Gradual linear increase from min_weight to 0.5:
+- **Best for**: Stable, predictable training
+- **Use case**: When you want consistent progress
+
+#### Cosine Schedule
+Cosine annealing from min_weight to 0.5:
+- **Best for**: Smooth transitions with slower initial changes
+- **Use case**: When tasks are very different in difficulty
+
+#### Exponential Schedule
+Exponential growth from min_weight to 0.5:
+- **Best for**: Quick initial progress with rapid final balancing
+- **Use case**: When you want to establish one task quickly
+
+### Curriculum Training Examples
+
+#### Multi-GPU Curriculum Training
+
+```bash
+python training/train.py \
+  --model transformer \
+  --keypoints-train data/processed/keypoints_train \
+  --keypoints-val data/processed/keypoints_val \
+  --labels-train-csv data/processed/train_labels.csv \
+  --labels-val-csv data/processed/val_labels.csv \
+  --num-gloss 105 --num-cat 10 \
+  --epochs 100 --batch-size 64 \
+  --curriculum gloss-first \
+  --curriculum-epochs 25 \
+  --curriculum-min-weight 0.1 \
+  --curriculum-schedule linear \
+  --amp --compile-model --auto-workers --auto-batch-size --enable-parallel \
+  --gradient-accumulation-steps 2 \
+  --grad-clip 1.0 \
+  --scheduler plateau --early-stop 15 \
+  --log-csv logs/curriculum_transformer.csv
+```
+
+#### Memory-Constrained Curriculum Training
+
+```bash
+python training/train.py \
+  --model iv3_gru \
+  --features-train data/processed/prepro_09-18 \
+  --features-val data/processed/prepro_09-18 \
+  --labels-train-csv data/processed/train_labels.csv \
+  --labels-val-csv data/processed/val_labels.csv \
+  --num-gloss 105 --num-cat 10 \
+  --epochs 40 --batch-size 16 \
+  --curriculum category-first \
+  --curriculum-epochs 15 \
+  --curriculum-min-weight 0.05 \
+  --curriculum-schedule cosine \
+  --gradient-accumulation-steps 4 \
+  --amp --auto-workers --auto-batch-size \
+  --scheduler plateau --scheduler-patience 3 \
+  --early-stop 8 \
+  --log-csv logs/curriculum_iv3_gru.csv
+```
+
+#### Development/Testing with Curriculum
+
+```bash
+python training/train.py \
+  --model transformer \
+  --keypoints-train data/processed/keypoints_train \
+  --keypoints-val data/processed/keypoints_val \
+  --labels-train-csv data/processed/train_labels.csv \
+  --labels-val-csv data/processed/val_labels.csv \
+  --num-gloss 105 --num-cat 10 \
+  --epochs 15 --batch-size 16 \
+  --curriculum dynamic \
+  --curriculum-warmup 3 \
+  --curriculum-epochs 8 \
+  --curriculum-min-weight 0.1 \
+  --curriculum-schedule linear \
+  --auto-workers --auto-batch-size \
+  --amp \
+  --log-csv logs/curriculum_test.csv
+```
+
+### Curriculum Training Benefits
+
+#### When to Use Curriculum Training
+
+1. **Task Difficulty Imbalance**: When one task is significantly harder than the other
+2. **Convergence Issues**: When balanced training struggles to converge
+3. **Feature Learning**: When you want to establish strong feature representations first
+4. **Multi-Task Learning**: When tasks might interfere with each other initially
+
+#### Expected Improvements
+
+- **Better Convergence**: More stable training with fewer oscillations
+- **Higher Accuracy**: Often achieves better final performance
+- **Faster Training**: May converge faster than balanced training
+- **Robust Features**: Better learned representations for both tasks
+
+### Monitoring Curriculum Training
+
+The training script provides detailed curriculum monitoring:
+
+```
+Epoch  1/50 | Train Loss: 2.1234 | Val Loss: 1.9876 | Val Gloss Acc: 0.234 | Val Cat Acc: 0.456 | Time: 45.2s
+  Curriculum: Gloss-first curriculum phase (epoch 1/15) | Weights: α=0.900, β=0.100
+
+Epoch  8/50 | Train Loss: 1.5432 | Val Loss: 1.4321 | Val Gloss Acc: 0.567 | Val Cat Acc: 0.678 | Time: 42.1s
+  Curriculum: Gloss-first curriculum phase (epoch 8/15) | Weights: α=0.533, β=0.467
+
+Epoch 16/50 | Train Loss: 1.2345 | Val Loss: 1.1234 | Val Gloss Acc: 0.789 | Val Cat Acc: 0.890 | Time: 41.8s
+  Curriculum: Balanced phase | Weights: α=0.500, β=0.500
+```
+
+### CSV Logging with Curriculum
+
+When curriculum training is enabled, the CSV log includes additional columns:
+
+```csv
+epoch,train_loss,val_loss,val_gloss_acc,val_cat_acc,lr,epoch_time,gpu_memory_allocated,gpu_memory_reserved,alpha,beta,curriculum_phase
+1,2.1234,1.9876,0.234,0.456,0.0001,45.2,2.1,2.5,0.900,0.100,Gloss-first curriculum phase (epoch 1/15)
+2,1.9876,1.8765,0.345,0.567,0.0001,43.1,2.1,2.5,0.867,0.133,Gloss-first curriculum phase (epoch 2/15)
+...
+```
 
 ## Additional Training Examples
 

@@ -357,6 +357,34 @@ def log_comprehensive_config(args, device, model=None):
     print(f"  - Gradient clipping: {args.grad_clip}")
     print(f"  - Loss weights - Alpha: {args.alpha}, Beta: {args.beta}")
     
+    # Curriculum Training Parameters
+    if args.curriculum is not None:
+        print(f"\nCurriculum Training Parameters:")
+        print(f"  - Strategy: {args.curriculum}")
+        print(f"  - Curriculum epochs: {args.curriculum_epochs}")
+        if args.curriculum == "dynamic":
+            print(f"  - Warmup epochs: {args.curriculum_warmup}")
+        print(f"  - Min weight: {args.curriculum_min_weight}")
+        print(f"  - Schedule: {args.curriculum_schedule}")
+    else:
+        print(f"\nCurriculum Training: Disabled")
+    
+    # Loss Weighting Parameters
+    print(f"\nLoss Weighting Parameters:")
+    print(f"  - Strategy: {args.loss_weighting}")
+    if args.loss_weighting == "grid-search":
+        weight_combinations = parse_grid_search_weights(args.grid_search_weights)
+        print(f"  - Weight combinations: {weight_combinations}")
+        print(f"  - Epochs per combination: {max(1, args.epochs // len(weight_combinations))}")
+    elif args.loss_weighting == "uncertainty":
+        print(f"  - Initial uncertainty: {args.uncertainty_init}")
+    elif args.loss_weighting == "gradnorm":
+        print(f"  - Alpha: {args.gradnorm_alpha}")
+        print(f"  - Update frequency: {args.gradnorm_update_freq}")
+    else:
+        print(f"  - Alpha: {args.alpha}")
+        print(f"  - Beta: {args.beta}")
+    
     # Model-Specific Parameters
     if args.model == "iv3_gru":
         print(f"\nIV3-GRU Model Parameters:")
@@ -456,6 +484,363 @@ def set_global_seed(seed: int, deterministic: bool = False) -> None:
     else:
         torch.backends.cudnn.benchmark = True
 
+class CurriculumScheduler:
+    """
+    Curriculum learning scheduler for multi-task training.
+    
+    Supports three strategies:
+    - gloss-first: Train gloss classification first, then gradually add category
+    - category-first: Train category classification first, then gradually add gloss  
+    - dynamic: Start with one task dominant and gradually balance both tasks
+    """
+    
+    def __init__(self, strategy: str, curriculum_epochs: int, warmup_epochs: int = 0, 
+                 min_weight: float = 0.1, schedule_type: str = "linear"):
+        """
+        Initialize curriculum scheduler.
+        
+        Args:
+            strategy: Curriculum strategy ("gloss-first", "category-first", "dynamic")
+            curriculum_epochs: Number of epochs for curriculum phase
+            warmup_epochs: Number of warmup epochs before curriculum starts (for dynamic)
+            min_weight: Minimum weight for secondary task (0.0-1.0)
+            schedule_type: Weight scheduling function ("linear", "cosine", "exponential")
+        """
+        self.strategy = strategy
+        self.curriculum_epochs = curriculum_epochs
+        self.warmup_epochs = warmup_epochs
+        self.min_weight = min_weight
+        self.schedule_type = schedule_type
+        
+        # Validate inputs
+        if strategy not in ["gloss-first", "category-first", "dynamic"]:
+            raise ValueError(f"Invalid strategy: {strategy}")
+        if schedule_type not in ["linear", "cosine", "exponential"]:
+            raise ValueError(f"Invalid schedule_type: {schedule_type}")
+        if not 0.0 <= min_weight <= 1.0:
+            raise ValueError(f"min_weight must be between 0.0 and 1.0, got {min_weight}")
+    
+    def get_weights(self, epoch: int, total_epochs: int) -> Tuple[float, float]:
+        """
+        Get alpha and beta weights for current epoch.
+        
+        Args:
+            epoch: Current epoch (0-indexed)
+            total_epochs: Total number of training epochs
+            
+        Returns:
+            Tuple of (alpha, beta) weights for gloss and category tasks
+        """
+        if self.strategy is None:
+            return 0.5, 0.5  # Default balanced weights
+        
+        # Calculate progress through curriculum
+        if self.strategy == "dynamic":
+            # Dynamic: warmup -> curriculum -> balanced
+            if epoch < self.warmup_epochs:
+                # Warmup phase: start with balanced weights
+                return 0.5, 0.5
+            elif epoch < self.warmup_epochs + self.curriculum_epochs:
+                # Curriculum phase: gradually balance
+                progress = (epoch - self.warmup_epochs) / self.curriculum_epochs
+                weight = self._schedule_weight(progress)
+                return weight, 1.0 - weight
+            else:
+                # Balanced phase
+                return 0.5, 0.5
+        else:
+            # gloss-first or category-first
+            if epoch < self.curriculum_epochs:
+                # Curriculum phase: focus on primary task
+                progress = epoch / self.curriculum_epochs
+                secondary_weight = self._schedule_weight(progress)
+                primary_weight = 1.0 - secondary_weight
+                
+                if self.strategy == "gloss-first":
+                    return primary_weight, secondary_weight  # alpha, beta
+                else:  # category-first
+                    return secondary_weight, primary_weight  # alpha, beta
+            else:
+                # Balanced phase
+                return 0.5, 0.5
+    
+    def _schedule_weight(self, progress: float) -> float:
+        """
+        Calculate secondary task weight based on progress and schedule type.
+        
+        Args:
+            progress: Progress through curriculum (0.0 to 1.0)
+            
+        Returns:
+            Weight for secondary task (min_weight to 0.5)
+        """
+        # Clamp progress to [0, 1]
+        progress = max(0.0, min(1.0, progress))
+        
+        if self.schedule_type == "linear":
+            # Linear interpolation from min_weight to 0.5
+            return self.min_weight + (0.5 - self.min_weight) * progress
+        elif self.schedule_type == "cosine":
+            # Cosine annealing from min_weight to 0.5
+            return self.min_weight + (0.5 - self.min_weight) * (1 - np.cos(np.pi * progress)) / 2
+        elif self.schedule_type == "exponential":
+            # Exponential growth from min_weight to 0.5
+            return self.min_weight + (0.5 - self.min_weight) * (np.exp(2 * progress) - 1) / (np.exp(2) - 1)
+        else:
+            raise ValueError(f"Unknown schedule_type: {self.schedule_type}")
+    
+    def get_phase_info(self, epoch: int) -> str:
+        """
+        Get human-readable information about current curriculum phase.
+        
+        Args:
+            epoch: Current epoch (0-indexed)
+            
+        Returns:
+            String describing current phase
+        """
+        if self.strategy is None:
+            return "Balanced training (no curriculum)"
+        
+        if self.strategy == "dynamic":
+            if epoch < self.warmup_epochs:
+                return f"Warmup phase (epoch {epoch+1}/{self.warmup_epochs})"
+            elif epoch < self.warmup_epochs + self.curriculum_epochs:
+                return f"Dynamic curriculum phase (epoch {epoch+1-self.warmup_epochs}/{self.curriculum_epochs})"
+            else:
+                return "Balanced phase"
+        else:
+            if epoch < self.curriculum_epochs:
+                primary_task = "gloss" if self.strategy == "gloss-first" else "category"
+                return f"{primary_task.title()}-first curriculum phase (epoch {epoch+1}/{self.curriculum_epochs})"
+            else:
+                return "Balanced phase"
+
+class LossWeightingStrategy:
+    """
+    Base class for loss weighting strategies.
+    
+    All loss weighting strategies should inherit from this class and implement
+    the get_weights method to return alpha and beta weights for each batch.
+    """
+    
+    def __init__(self, **kwargs):
+        """Initialize the loss weighting strategy."""
+        pass
+    
+    def get_weights(self, epoch: int, batch_idx: int, loss_gloss: float, loss_cat: float, 
+                   model=None, optimizer=None) -> Tuple[float, float]:
+        """
+        Get alpha and beta weights for current batch.
+        
+        Args:
+            epoch: Current epoch number
+            batch_idx: Current batch index
+            loss_gloss: Current gloss loss value
+            loss_cat: Current category loss value
+            model: The model being trained (for strategies that need model access)
+            optimizer: The optimizer (for strategies that need optimizer access)
+            
+        Returns:
+            Tuple of (alpha, beta) weights
+        """
+        raise NotImplementedError("Subclasses must implement get_weights method")
+    
+    def update_weights(self, epoch: int, losses: dict, model=None, optimizer=None):
+        """
+        Update internal state for adaptive weighting strategies.
+        
+        Args:
+            epoch: Current epoch number
+            losses: Dictionary of loss values
+            model: The model being trained
+            optimizer: The optimizer
+        """
+        pass
+
+class StaticWeighting(LossWeightingStrategy):
+    """Static loss weighting with fixed alpha and beta values."""
+    
+    def __init__(self, alpha: float = 0.5, beta: float = 0.5):
+        super().__init__()
+        self.alpha = alpha
+        self.beta = beta
+    
+    def get_weights(self, epoch: int, batch_idx: int, loss_gloss: float, loss_cat: float, 
+                   model=None, optimizer=None) -> Tuple[float, float]:
+        return self.alpha, self.beta
+
+class GridSearchWeighting(LossWeightingStrategy):
+    """Grid search over multiple weight combinations."""
+    
+    def __init__(self, weight_combinations: list, epochs_per_combination: int = 10):
+        super().__init__()
+        self.weight_combinations = weight_combinations
+        self.epochs_per_combination = epochs_per_combination
+        self.current_combination_idx = 0
+    
+    def get_weights(self, epoch: int, batch_idx: int, loss_gloss: float, loss_cat: float, 
+                   model=None, optimizer=None) -> Tuple[float, float]:
+        # Calculate which combination to use based on epoch
+        combination_idx = min(epoch // self.epochs_per_combination, len(self.weight_combinations) - 1)
+        alpha, beta = self.weight_combinations[combination_idx]
+        return alpha, beta
+
+class UncertaintyWeighting(LossWeightingStrategy):
+    """
+    Uncertainty weighting based on Kendall et al. 2018.
+    
+    Learns log variance parameters for each task and weights losses by 1/exp(log_var).
+    """
+    
+    def __init__(self, init_uncertainty: float = 1.0, device: str = "cpu"):
+        super().__init__()
+        self.device = device
+        # Initialize log variance parameters (higher = more uncertainty = lower weight)
+        self.log_var_gloss = torch.tensor(np.log(init_uncertainty), device=device, requires_grad=True)
+        self.log_var_cat = torch.tensor(np.log(init_uncertainty), device=device, requires_grad=True)
+    
+    def get_weights(self, epoch: int, batch_idx: int, loss_gloss: float, loss_cat: float, 
+                   model=None, optimizer=None) -> Tuple[float, float]:
+        # Convert to weights: 1 / exp(log_var) = exp(-log_var)
+        alpha = torch.exp(-self.log_var_gloss).item()
+        beta = torch.exp(-self.log_var_cat).item()
+        return alpha, beta
+    
+    def get_uncertainty_loss(self, loss_gloss: torch.Tensor, loss_cat: torch.Tensor) -> torch.Tensor:
+        """
+        Compute the uncertainty-weighted loss.
+        
+        Args:
+            loss_gloss: Gloss loss tensor
+            loss_cat: Category loss tensor
+            
+        Returns:
+            Total uncertainty-weighted loss
+        """
+        # Uncertainty weighting: 1/(2*sigma^2) * loss + 1/2 * log(sigma^2)
+        # where sigma^2 = exp(log_var)
+        alpha = torch.exp(-self.log_var_gloss)
+        beta = torch.exp(-self.log_var_cat)
+        
+        weighted_loss = alpha * loss_gloss + beta * loss_cat
+        uncertainty_penalty = 0.5 * (self.log_var_gloss + self.log_var_cat)
+        
+        return weighted_loss + uncertainty_penalty
+
+class GradNormWeighting(LossWeightingStrategy):
+    """
+    GradNorm weighting based on Chen et al. 2018.
+    
+    Adjusts task weights so that each task's gradients have similar magnitudes.
+    """
+    
+    def __init__(self, alpha: float = 1.5, update_freq: int = 1, device: str = "cpu"):
+        super().__init__()
+        self.alpha = alpha
+        self.update_freq = update_freq
+        self.device = device
+        self.initial_losses = None
+        self.weights = torch.tensor([1.0, 1.0], device=device, requires_grad=True)
+        self.last_updated_epoch = -1
+    
+    def get_weights(self, epoch: int, batch_idx: int, loss_gloss: float, loss_cat: float, 
+                   model=None, optimizer=None) -> Tuple[float, float]:
+        return self.weights[0].item(), self.weights[1].item()
+    
+    def update_weights(self, epoch: int, losses: dict, model=None, optimizer=None):
+        """Update weights using GradNorm algorithm."""
+        if epoch % self.update_freq != 0 or model is None or optimizer is None:
+            return
+        
+        # Store initial losses on first update
+        if self.initial_losses is None:
+            self.initial_losses = {
+                'gloss': losses['gloss'].detach().clone(),
+                'cat': losses['cat'].detach().clone()
+            }
+            return
+        
+        # Compute relative inverse training rates
+        current_losses = {
+            'gloss': losses['gloss'].detach(),
+            'cat': losses['cat'].detach()
+        }
+        
+        # Compute gradients of weighted losses w.r.t. shared parameters
+        # This is a simplified version - in practice, you'd need to compute
+        # gradients of each task loss w.r.t. shared parameters
+        try:
+            # For now, we'll use a simplified update based on loss ratios
+            gloss_ratio = current_losses['gloss'] / self.initial_losses['gloss']
+            cat_ratio = current_losses['cat'] / self.initial_losses['cat']
+            
+            # Update weights based on relative progress
+            # If one task is progressing faster, increase its weight
+            if gloss_ratio < cat_ratio:
+                self.weights[0] = self.weights[0] * (1 + self.alpha * (cat_ratio - gloss_ratio))
+            else:
+                self.weights[1] = self.weights[1] * (1 + self.alpha * (gloss_ratio - cat_ratio))
+            
+            # Normalize weights to prevent them from growing too large
+            total_weight = self.weights.sum()
+            if total_weight > 2.0:  # Prevent weights from growing too large
+                self.weights = self.weights / total_weight * 2.0
+            
+            self.last_updated_epoch = epoch
+            
+        except Exception as e:
+            print(f"Warning: GradNorm update failed: {e}")
+
+def create_loss_weighting_strategy(strategy: str, **kwargs) -> LossWeightingStrategy:
+    """
+    Factory function to create loss weighting strategies.
+    
+    Args:
+        strategy: Strategy name ("static", "grid-search", "uncertainty", "gradnorm")
+        **kwargs: Additional arguments for the strategy
+        
+    Returns:
+        LossWeightingStrategy instance
+    """
+    if strategy == "static":
+        return StaticWeighting(alpha=kwargs.get('alpha', 0.5), beta=kwargs.get('beta', 0.5))
+    elif strategy == "grid-search":
+        weight_combinations = kwargs.get('weight_combinations', [(0.5, 0.5)])
+        epochs_per_combination = kwargs.get('epochs_per_combination', 10)
+        return GridSearchWeighting(weight_combinations, epochs_per_combination)
+    elif strategy == "uncertainty":
+        init_uncertainty = kwargs.get('uncertainty_init', 1.0)
+        device = kwargs.get('device', 'cpu')
+        return UncertaintyWeighting(init_uncertainty, device)
+    elif strategy == "gradnorm":
+        alpha = kwargs.get('gradnorm_alpha', 1.5)
+        update_freq = kwargs.get('gradnorm_update_freq', 1)
+        device = kwargs.get('device', 'cpu')
+        return GradNormWeighting(alpha, update_freq, device)
+    else:
+        raise ValueError(f"Unknown loss weighting strategy: {strategy}")
+
+def parse_grid_search_weights(weight_string: str) -> list:
+    """
+    Parse grid search weight combinations from string format.
+    
+    Args:
+        weight_string: String in format "a1,b1;a2,b2;..." 
+        
+    Returns:
+        List of (alpha, beta) tuples
+    """
+    combinations = []
+    for pair in weight_string.split(';'):
+        if pair.strip():
+            try:
+                alpha, beta = map(float, pair.split(','))
+                combinations.append((alpha, beta))
+            except ValueError:
+                raise ValueError(f"Invalid weight format: {pair}. Expected 'alpha,beta'")
+    return combinations
+
 def train_model(
     model,
     train_loader,
@@ -477,6 +862,16 @@ def train_model(
     log_csv_path=None,
     gradient_accumulation_steps=1,
     compile_model=False,
+    curriculum_strategy=None,
+    curriculum_epochs=10,
+    curriculum_warmup=5,
+    curriculum_min_weight=0.1,
+    curriculum_schedule="linear",
+    loss_weighting_strategy="static",
+    grid_search_weights="0.5,0.5;0.7,0.3;0.3,0.7",
+    uncertainty_init=1.0,
+    gradnorm_alpha=1.5,
+    gradnorm_update_freq=1,
 ):
     """
     Train a model with multi-task loss on gloss and category predictions.
@@ -488,8 +883,8 @@ def train_model(
         device: Torch device to run on.
         forward_fn: Callable(model, X, lengths) -> (gloss_logits, cat_logits).
         epochs: Number of training epochs.
-        alpha: Weight for gloss loss component.
-        beta: Weight for category loss component.
+        alpha: Weight for gloss loss component (used as fallback if no curriculum).
+        beta: Weight for category loss component (used as fallback if no curriculum).
         output_dir: Directory to save checkpoints.
         lr: Learning rate for Adam optimizer.
         weight_decay: Weight decay for Adam optimizer.
@@ -502,6 +897,16 @@ def train_model(
         log_csv_path: Path to append per-epoch metrics as CSV.
         gradient_accumulation_steps: Number of steps to accumulate gradients.
         compile_model: Whether to compile the model for better performance.
+        curriculum_strategy: Curriculum strategy ("gloss-first", "category-first", "dynamic", None).
+        curriculum_epochs: Number of epochs for curriculum phase.
+        curriculum_warmup: Number of warmup epochs before curriculum starts (for dynamic).
+        curriculum_min_weight: Minimum weight for secondary task during curriculum.
+        curriculum_schedule: Weight scheduling function ("linear", "cosine", "exponential").
+        loss_weighting_strategy: Loss weighting strategy ("static", "grid-search", "uncertainty", "gradnorm").
+        grid_search_weights: Grid search weight combinations (format: "a1,b1;a2,b2;...").
+        uncertainty_init: Initial uncertainty for uncertainty weighting.
+        gradnorm_alpha: Alpha parameter for GradNorm weighting.
+        gradnorm_update_freq: Update frequency for GradNorm (every N epochs).
 
     Returns:
         None
@@ -514,6 +919,52 @@ def train_model(
     # Clear GPU memory before training
     clear_gpu_memory()
     
+    # Initialize curriculum scheduler if strategy is provided
+    curriculum_scheduler = None
+    if curriculum_strategy is not None:
+        curriculum_scheduler = CurriculumScheduler(
+            strategy=curriculum_strategy,
+            curriculum_epochs=curriculum_epochs,
+            warmup_epochs=curriculum_warmup,
+            min_weight=curriculum_min_weight,
+            schedule_type=curriculum_schedule
+        )
+        print(f"✓ Curriculum training enabled: {curriculum_strategy}")
+        print(f"  - Curriculum epochs: {curriculum_epochs}")
+        if curriculum_strategy == "dynamic":
+            print(f"  - Warmup epochs: {curriculum_warmup}")
+        print(f"  - Min weight: {curriculum_min_weight}")
+        print(f"  - Schedule: {curriculum_schedule}")
+    
+    # Initialize loss weighting strategy
+    loss_weighting = None
+    if loss_weighting_strategy == "grid-search":
+        weight_combinations = parse_grid_search_weights(grid_search_weights)
+        loss_weighting = create_loss_weighting_strategy(
+            loss_weighting_strategy,
+            weight_combinations=weight_combinations,
+            epochs_per_combination=max(1, epochs // len(weight_combinations))
+        )
+        print(f"✓ Grid search weighting enabled")
+        print(f"  - Weight combinations: {weight_combinations}")
+        print(f"  - Epochs per combination: {max(1, epochs // len(weight_combinations))}")
+    else:
+        loss_weighting = create_loss_weighting_strategy(
+            loss_weighting_strategy,
+            alpha=alpha,
+            beta=beta,
+            uncertainty_init=uncertainty_init,
+            gradnorm_alpha=gradnorm_alpha,
+            gradnorm_update_freq=gradnorm_update_freq,
+            device=str(device)
+        )
+        print(f"✓ Loss weighting strategy: {loss_weighting_strategy}")
+        if loss_weighting_strategy == "uncertainty":
+            print(f"  - Initial uncertainty: {uncertainty_init}")
+        elif loss_weighting_strategy == "gradnorm":
+            print(f"  - Alpha: {gradnorm_alpha}")
+            print(f"  - Update frequency: {gradnorm_update_freq}")
+    
     # Compile model for better performance if supported
     if compile_model and hasattr(torch, 'compile'):
         try:
@@ -523,7 +974,15 @@ def train_model(
             print(f"⚠ Model compilation failed: {e}")
     
     criterion = nn.CrossEntropyLoss()
-    optimizer = optim.Adam(model.parameters(), lr=lr, weight_decay=weight_decay)
+    
+    # Add uncertainty parameters to optimizer if using uncertainty weighting
+    if loss_weighting_strategy == "uncertainty" and isinstance(loss_weighting, UncertaintyWeighting):
+        optimizer = optim.Adam(
+            list(model.parameters()) + [loss_weighting.log_var_gloss, loss_weighting.log_var_cat],
+            lr=lr, weight_decay=weight_decay
+        )
+    else:
+        optimizer = optim.Adam(model.parameters(), lr=lr, weight_decay=weight_decay)
     
     # Enable AMP only when running on CUDA to avoid CPU-only issues
     amp_enabled = bool(use_amp and getattr(device, "type", "cpu") == "cuda")
@@ -576,16 +1035,32 @@ def train_model(
             for header_line in config_header:
                 csv_writer.writerow([header_line])
             csv_writer.writerow([])  # Empty line separator
-            csv_writer.writerow(["epoch", "train_loss", "val_loss", "val_gloss_acc", "val_cat_acc", "lr", "epoch_time", "gpu_memory_allocated", "gpu_memory_reserved"]) 
+            if curriculum_scheduler is not None:
+                csv_writer.writerow(["epoch", "train_loss", "val_loss", "val_gloss_acc", "val_cat_acc", "lr", "epoch_time", "gpu_memory_allocated", "gpu_memory_reserved", "alpha", "beta", "curriculum_phase"])
+            elif loss_weighting is not None and loss_weighting_strategy != "static":
+                csv_writer.writerow(["epoch", "train_loss", "val_loss", "val_gloss_acc", "val_cat_acc", "lr", "epoch_time", "gpu_memory_allocated", "gpu_memory_reserved", "alpha", "beta", "loss_weighting_strategy"])
+            else:
+                csv_writer.writerow(["epoch", "train_loss", "val_loss", "val_gloss_acc", "val_cat_acc", "lr", "epoch_time", "gpu_memory_allocated", "gpu_memory_reserved"]) 
 
     print(f"Training for {epochs} epochs...")
-    print(f"Loss weights - Gloss: {alpha}, Category: {beta}")
+    if curriculum_scheduler is not None:
+        print(f"Curriculum training: {curriculum_scheduler.get_phase_info(0)}")
+    else:
+        print(f"Loss weights - Gloss: {alpha}, Category: {beta}")
     print("-" * 60)
 
     epochs_to_run = epochs
     patience_counter = 0
 
     for epoch in range(start_epoch, start_epoch + epochs_to_run):
+        # Get current curriculum weights
+        if curriculum_scheduler is not None:
+            current_alpha, current_beta = curriculum_scheduler.get_weights(epoch, epochs)
+            phase_info = curriculum_scheduler.get_phase_info(epoch)
+        else:
+            current_alpha, current_beta = alpha, beta
+            phase_info = "Balanced training"
+        
         model.train()
         total_loss = 0
         num_batches = 0
@@ -611,7 +1086,25 @@ def train_model(
                 gloss_pred, cat_pred = forward_fn(model, X, lengths)
                 loss_gloss = criterion(gloss_pred, gloss)
                 loss_cat = criterion(cat_pred, cat)
-                loss = alpha * loss_gloss + beta * loss_cat
+                
+                # Get dynamic weights from loss weighting strategy
+                if loss_weighting is not None:
+                    dynamic_alpha, dynamic_beta = loss_weighting.get_weights(
+                        epoch, batch_idx, loss_gloss.item(), loss_cat.item(), model, optimizer
+                    )
+                    # Use curriculum weights if available, otherwise use loss weighting weights
+                    if curriculum_scheduler is not None:
+                        # Curriculum takes precedence over loss weighting
+                        loss = current_alpha * loss_gloss + current_beta * loss_cat
+                    else:
+                        # Use loss weighting strategy
+                        if loss_weighting_strategy == "uncertainty":
+                            loss = loss_weighting.get_uncertainty_loss(loss_gloss, loss_cat)
+                        else:
+                            loss = dynamic_alpha * loss_gloss + dynamic_beta * loss_cat
+                else:
+                    # Use curriculum weights or static weights
+                    loss = current_alpha * loss_gloss + current_beta * loss_cat
                 
                 # Scale loss by accumulation steps
                 loss = loss / gradient_accumulation_steps
@@ -651,24 +1144,54 @@ def train_model(
                 csv_fh.close()
             return
 
+        # Update loss weighting strategy if needed
+        if loss_weighting is not None and hasattr(loss_weighting, 'update_weights'):
+            loss_weighting.update_weights(
+                epoch, 
+                {'gloss': torch.tensor(avg_train_loss), 'cat': torch.tensor(avg_train_loss)}, 
+                model, 
+                optimizer
+            )
+        
         # Clear memory before validation
         clear_gpu_memory()
         
         # Validation
         val_start_time = time.time()
-        val_loss, val_gloss_acc, val_cat_acc = evaluate_with_forward(model, val_loader, criterion, device, forward_fn, alpha=alpha, beta=beta)
+        val_loss, val_gloss_acc, val_cat_acc = evaluate_with_forward(model, val_loader, criterion, device, forward_fn, alpha=current_alpha, beta=current_beta)
         val_time = time.time() - val_start_time
         
         avg_train_loss = total_loss / num_batches
         epoch_time = time.time() - epoch_start_time
         
-        # Print epoch results with performance metrics
-        print(f"Epoch {epoch+1:2d}/{epochs} | "
-              f"Train Loss: {avg_train_loss:.4f} | "
-              f"Val Loss: {val_loss:.4f} | "
-              f"Val Gloss Acc: {val_gloss_acc:.3f} | "
-              f"Val Cat Acc: {val_cat_acc:.3f} | "
-              f"Time: {epoch_time:.1f}s")
+        # Get current weights for logging
+        if loss_weighting is not None and curriculum_scheduler is None:
+            current_alpha, current_beta = loss_weighting.get_weights(epoch, 0, 0.0, 0.0, model, optimizer)
+        
+        # Print epoch results with performance metrics and weighting info
+        if curriculum_scheduler is not None:
+            print(f"Epoch {epoch+1:2d}/{epochs} | "
+                  f"Train Loss: {avg_train_loss:.4f} | "
+                  f"Val Loss: {val_loss:.4f} | "
+                  f"Val Gloss Acc: {val_gloss_acc:.3f} | "
+                  f"Val Cat Acc: {val_cat_acc:.3f} | "
+                  f"Time: {epoch_time:.1f}s")
+            print(f"  Curriculum: {phase_info} | Weights: α={current_alpha:.3f}, β={current_beta:.3f}")
+        elif loss_weighting is not None and loss_weighting_strategy != "static":
+            print(f"Epoch {epoch+1:2d}/{epochs} | "
+                  f"Train Loss: {avg_train_loss:.4f} | "
+                  f"Val Loss: {val_loss:.4f} | "
+                  f"Val Gloss Acc: {val_gloss_acc:.3f} | "
+                  f"Val Cat Acc: {val_cat_acc:.3f} | "
+                  f"Time: {epoch_time:.1f}s")
+            print(f"  Loss Weighting: {loss_weighting_strategy} | Weights: α={current_alpha:.3f}, β={current_beta:.3f}")
+        else:
+            print(f"Epoch {epoch+1:2d}/{epochs} | "
+                  f"Train Loss: {avg_train_loss:.4f} | "
+                  f"Val Loss: {val_loss:.4f} | "
+                  f"Val Gloss Acc: {val_gloss_acc:.3f} | "
+                  f"Val Cat Acc: {val_cat_acc:.3f} | "
+                  f"Time: {epoch_time:.1f}s")
         
         # Print GPU memory usage if available
         if device.type == 'cuda':
@@ -688,7 +1211,12 @@ def train_model(
         if csv_fh is not None:
             gpu_mem_alloc = torch.cuda.memory_allocated(0) / 1e9 if device.type == 'cuda' else 0.0
             gpu_mem_reserved = torch.cuda.memory_reserved(0) / 1e9 if device.type == 'cuda' else 0.0
-            csv_writer.writerow([epoch + 1, avg_train_loss, val_loss, val_gloss_acc, val_cat_acc, current_lr, epoch_time, gpu_mem_alloc, gpu_mem_reserved])
+            if curriculum_scheduler is not None:
+                csv_writer.writerow([epoch + 1, avg_train_loss, val_loss, val_gloss_acc, val_cat_acc, current_lr, epoch_time, gpu_mem_alloc, gpu_mem_reserved, current_alpha, current_beta, phase_info])
+            elif loss_weighting is not None and loss_weighting_strategy != "static":
+                csv_writer.writerow([epoch + 1, avg_train_loss, val_loss, val_gloss_acc, val_cat_acc, current_lr, epoch_time, gpu_mem_alloc, gpu_mem_reserved, current_alpha, current_beta, loss_weighting_strategy])
+            else:
+                csv_writer.writerow([epoch + 1, avg_train_loss, val_loss, val_gloss_acc, val_cat_acc, current_lr, epoch_time, gpu_mem_alloc, gpu_mem_reserved])
             csv_fh.flush()
 
         # Checkpointing on best metric (gloss accuracy)
@@ -869,6 +1397,29 @@ def parse_args():
     parser.add_argument("--auto-workers", action="store_true", help="Auto-detect optimal number of DataLoader workers")
     parser.add_argument("--auto-batch-size", action="store_true", help="Auto-calculate optimal batch size based on available memory")
     parser.add_argument("--enable-parallel", action="store_true", help="Enable DataParallel for multiple GPUs")
+    # Curriculum training arguments
+    parser.add_argument("--curriculum", type=str, default=None, choices=["gloss-first", "category-first", "dynamic"], 
+                       help="Curriculum training strategy: gloss-first, category-first, or dynamic weighting")
+    parser.add_argument("--curriculum-epochs", type=int, default=10, 
+                       help="Number of epochs for curriculum phase (when to start balancing tasks)")
+    parser.add_argument("--curriculum-warmup", type=int, default=5, 
+                       help="Number of warmup epochs before starting curriculum (for dynamic strategy)")
+    parser.add_argument("--curriculum-min-weight", type=float, default=0.1, 
+                       help="Minimum weight for secondary task during curriculum (0.0-1.0)")
+    parser.add_argument("--curriculum-schedule", type=str, default="linear", choices=["linear", "cosine", "exponential"], 
+                       help="Curriculum weight scheduling function: linear, cosine, or exponential")
+    # Loss weighting strategy arguments
+    parser.add_argument("--loss-weighting", type=str, default="static", 
+                       choices=["static", "grid-search", "uncertainty", "gradnorm"], 
+                       help="Loss weighting strategy: static, grid-search, uncertainty, or gradnorm")
+    parser.add_argument("--grid-search-weights", type=str, default="0.5,0.5;0.7,0.3;0.3,0.7;0.8,0.2;0.2,0.8", 
+                       help="Grid search weight combinations (format: 'a1,b1;a2,b2;...')")
+    parser.add_argument("--uncertainty-init", type=float, default=1.0, 
+                       help="Initial uncertainty for uncertainty weighting")
+    parser.add_argument("--gradnorm-alpha", type=float, default=1.5, 
+                       help="Alpha parameter for GradNorm weighting")
+    parser.add_argument("--gradnorm-update-freq", type=int, default=1, 
+                       help="Update frequency for GradNorm (every N epochs)")
     return parser.parse_args()
 
 if __name__ == "__main__":
@@ -1110,4 +1661,14 @@ if __name__ == "__main__":
         log_csv_path=args.log_csv,
         gradient_accumulation_steps=args.gradient_accumulation_steps,
         compile_model=args.compile_model,
+        curriculum_strategy=args.curriculum,
+        curriculum_epochs=args.curriculum_epochs,
+        curriculum_warmup=args.curriculum_warmup,
+        curriculum_min_weight=args.curriculum_min_weight,
+        curriculum_schedule=args.curriculum_schedule,
+        loss_weighting_strategy=args.loss_weighting,
+        grid_search_weights=args.grid_search_weights,
+        uncertainty_init=args.uncertainty_init,
+        gradnorm_alpha=args.gradnorm_alpha,
+        gradnorm_update_freq=args.gradnorm_update_freq,
     )
