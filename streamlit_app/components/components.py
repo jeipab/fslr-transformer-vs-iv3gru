@@ -714,21 +714,45 @@ def render_sidebar() -> Dict:
     
     available_models = get_available_models()
     if len(available_models) == 2:
+        # Create help text with model file paths
+        from ..manager.prediction_manager import MODEL_CONFIG
+        help_text = "Select the model architecture for predictions\n\n"
+        
+        if MODEL_CONFIG['transformer']['enabled']:
+            transformer_path = MODEL_CONFIG['transformer']['checkpoint_path']
+            help_text += f"SignTransformer:\n{transformer_path}\n\n"
+        
+        if MODEL_CONFIG['iv3_gru']['enabled']:
+            iv3_path = MODEL_CONFIG['iv3_gru']['checkpoint_path']
+            help_text += f"IV3-GRU:\n{iv3_path}"
+        
         # Use radio button for binary choice
         model_choice = st.sidebar.radio(
             "Choose Model",
             available_models,
             index=0,
-            help="Select the model architecture for predictions",
+            help=help_text,
             key="model_architecture_radio"
         )
     else:
+        # Create help text with model file paths
+        from ..manager.prediction_manager import MODEL_CONFIG
+        help_text = "Choose between available model architectures\n\n"
+        
+        if MODEL_CONFIG['transformer']['enabled']:
+            transformer_path = MODEL_CONFIG['transformer']['checkpoint_path']
+            help_text += f"SignTransformer:\n{transformer_path}\n\n"
+        
+        if MODEL_CONFIG['iv3_gru']['enabled']:
+            iv3_path = MODEL_CONFIG['iv3_gru']['checkpoint_path']
+            help_text += f"IV3-GRU:\n{iv3_path}"
+        
         # Fallback to selectbox for multiple options
         model_choice = st.sidebar.selectbox(
             "Model Architecture", 
             available_models, 
             index=0,
-            help="Choose between available model architectures",
+            help=help_text,
             key="model_architecture_select"
         )
     
@@ -774,14 +798,27 @@ def render_sidebar() -> Dict:
 
 def render_model_status():
     """Render model availability status in sidebar."""
+    import os
     from ..manager.prediction_manager import MODEL_CONFIG
     
-    # Check model availability
+    # Check model availability and file existence
     transformer_available = MODEL_CONFIG['transformer']['enabled']
     iv3_gru_available = MODEL_CONFIG['iv3_gru']['enabled']
     
-    # Create clean, elegant status display
-    if transformer_available and iv3_gru_available:
+    # Verify checkpoint files actually exist
+    transformer_exists = False
+    iv3_gru_exists = False
+    
+    if transformer_available:
+        transformer_path = MODEL_CONFIG['transformer']['checkpoint_path']
+        transformer_exists = os.path.exists(transformer_path)
+    
+    if iv3_gru_available:
+        iv3_gru_path = MODEL_CONFIG['iv3_gru']['checkpoint_path']
+        iv3_gru_exists = os.path.exists(iv3_gru_path)
+    
+    # Create clean, elegant status display based on actual file existence
+    if transformer_exists and iv3_gru_exists:
         st.sidebar.markdown("""
         <div style='background: rgba(16, 185, 129, 0.1); border: 1px solid #10b981; border-radius: 8px; padding: 1rem; margin-bottom: 0;'>
             <div style='display: flex; align-items: center; color: #ffffff; font-weight: 500; margin-bottom: 0.5rem;'>
@@ -793,7 +830,7 @@ def render_model_status():
             </div>
         </div>
         """, unsafe_allow_html=True)
-    elif transformer_available:
+    elif transformer_exists:
         st.sidebar.markdown("""
         <div style='background: rgba(245, 158, 11, 0.1); border: 1px solid #f59e0b; border-radius: 8px; padding: 1rem; margin-bottom: 0;'>
             <div style='display: flex; align-items: center; color: #ffffff; font-weight: 500; margin-bottom: 0.5rem;'>
@@ -805,7 +842,7 @@ def render_model_status():
             </div>
         </div>
         """, unsafe_allow_html=True)
-    elif iv3_gru_available:
+    elif iv3_gru_exists:
         st.sidebar.markdown("""
         <div style='background: rgba(245, 158, 11, 0.1); border: 1px solid #f59e0b; border-radius: 8px; padding: 1rem; margin-bottom: 0;'>
             <div style='display: flex; align-items: center; color: #ffffff; font-weight: 500; margin-bottom: 0.5rem;'>
@@ -825,21 +862,36 @@ def render_model_status():
                 <span style='font-size: 1rem;'>No Models Available</span>
             </div>
             <div style='font-size: 0.9rem; color: #a0aec0; line-height: 1.4;'>
-                Please check model configuration
+                Checkpoint files not found
             </div>
         </div>
         """, unsafe_allow_html=True)
+    
+    # Add validation button below model status
+    st.sidebar.markdown("<div style='height: 0.5rem;'></div>", unsafe_allow_html=True)
+    if st.sidebar.button("Validate Models", help="Access model validation mode", use_container_width=True):
+        st.session_state.workflow_stage = 'validation'
+        st.rerun()
 
 
 def get_available_models():
     """Get list of available models for selection."""
+    import os
     from ..manager.prediction_manager import MODEL_CONFIG
     
     available_models = []
+    
+    # Check if transformer model exists
     if MODEL_CONFIG['transformer']['enabled']:
-        available_models.append("SignTransformer")
+        transformer_path = MODEL_CONFIG['transformer']['checkpoint_path']
+        if os.path.exists(transformer_path):
+            available_models.append("SignTransformer")
+    
+    # Check if iv3_gru model exists
     if MODEL_CONFIG['iv3_gru']['enabled']:
-        available_models.append("IV3_GRU")
+        iv3_gru_path = MODEL_CONFIG['iv3_gru']['checkpoint_path']
+        if os.path.exists(iv3_gru_path):
+            available_models.append("IV3_GRU")
     
     # Fallback to at least one model if none are available
     if not available_models:
@@ -852,7 +904,7 @@ def render_file_upload() -> object:
     """Render file upload component with native Streamlit design."""
     return st.file_uploader(
         "Choose .npz files or video files (max 10)", 
-        type=["npz", "mp4", "avi", "mov", "mkv", "wmv", "flv", "webm"],
+        type=["npz", "mp4", "mov"],
         accept_multiple_files=True,
         help="Upload preprocessed .npz files or video files for processing (up to 10 files)"
     )
