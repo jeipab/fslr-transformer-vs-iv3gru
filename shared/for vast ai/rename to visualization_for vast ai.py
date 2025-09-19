@@ -353,9 +353,20 @@ def render_animated_keypoints(sequence: np.ndarray, mask: Optional[np.ndarray] =
         ],
         "face": [
             # Face connections (indices 67-77, relative to 0-10)
-            # Basic face outline connections
-            (0, 1), (1, 2), (2, 3), (3, 4), (4, 5), (5, 6), (6, 7), (7, 8),
-            (8, 9), (9, 10), (10, 0)
+            # FACEMESH_11 landmarks: [nose_tip, left_eye_outer, right_eye_outer, left_eye_inner, 
+            #                        right_eye_inner, mouth_left, mouth_right, left_eyebrow, 
+            #                        right_eyebrow, chin, nose_bridge]
+            # Meaningful face connections based on facial anatomy
+            (0, 10),  # nose_tip to nose_bridge
+            (1, 3),   # left_eye_outer to left_eye_inner
+            (2, 4),   # right_eye_outer to right_eye_inner
+            (1, 7),   # left_eye_outer to left_eyebrow
+            (2, 8),   # right_eye_outer to right_eyebrow
+            (5, 6),   # mouth_left to mouth_right
+            (0, 5),   # nose_tip to mouth_left
+            (0, 6),   # nose_tip to mouth_right
+            (9, 5),   # chin to mouth_left
+            (9, 6)    # chin to mouth_right
         ]
     }
     
@@ -649,8 +660,20 @@ def create_keypoint_animation_video(keypoints_2d: np.ndarray, mask: Optional[np.
             (0, 17), (17, 18), (18, 19), (19, 20)
         ],
         "face": [
-            (0, 1), (1, 2), (2, 3), (3, 4), (4, 5), (5, 6), (6, 7), (7, 8),
-            (8, 9), (9, 10), (10, 0)
+            # FACEMESH_11 landmarks: [nose_tip, left_eye_outer, right_eye_outer, left_eye_inner, 
+            #                        right_eye_inner, mouth_left, mouth_right, left_eyebrow, 
+            #                        right_eyebrow, chin, nose_bridge]
+            # Meaningful face connections based on facial anatomy
+            (0, 10),  # nose_tip to nose_bridge
+            (1, 3),   # left_eye_outer to left_eye_inner
+            (2, 4),   # right_eye_outer to right_eye_inner
+            (1, 7),   # left_eye_outer to left_eyebrow
+            (2, 8),   # right_eye_outer to right_eyebrow
+            (5, 6),   # mouth_left to mouth_right
+            (0, 5),   # nose_tip to mouth_left
+            (0, 6),   # nose_tip to mouth_right
+            (9, 5),   # chin to mouth_left
+            (9, 6)    # chin to mouth_right
         ]
     }
     
@@ -787,11 +810,11 @@ def create_keypoint_animation_video(keypoints_2d: np.ndarray, mask: Optional[np.
                                 cv2.line(frame, 
                                        tuple(part_keypoints[start_conn]), 
                                        tuple(part_keypoints[end_conn]), 
-                                       (255, 255, 255), 4)  # White outline
+                                       (255, 255, 255), 3)  # Moderate white outline
                                 cv2.line(frame, 
                                        tuple(part_keypoints[start_conn]), 
                                        tuple(part_keypoints[end_conn]), 
-                                       colors[part_name], 2)  # Colored line
+                                       colors[part_name], 2)  # Moderate colored line
                             else:
                                 cv2.line(frame, 
                                        tuple(part_keypoints[start_conn]), 
@@ -811,8 +834,16 @@ def create_keypoint_animation_video(keypoints_2d: np.ndarray, mask: Optional[np.
                         # Different sizes for different body parts
                         # Add white outline for better visibility on video backgrounds
                         if bg_type == "Original Video":
-                            cv2.circle(frame, tuple(point), 8, (255, 255, 255), -1)  # White outline
-                            cv2.circle(frame, tuple(point), 6, point_color, -1)  # Colored center
+                            # Moderately sized keypoints for original video background
+                            if part_name == "pose":
+                                cv2.circle(frame, tuple(point), 6, (255, 255, 255), -1)  # White outline
+                                cv2.circle(frame, tuple(point), 4, point_color, -1)  # Colored center
+                            elif part_name in ["left_hand", "right_hand"]:
+                                cv2.circle(frame, tuple(point), 5, (255, 255, 255), -1)  # White outline
+                                cv2.circle(frame, tuple(point), 3, point_color, -1)  # Colored center
+                            else:  # face
+                                cv2.circle(frame, tuple(point), 4, (255, 255, 255), -1)  # White outline
+                                cv2.circle(frame, tuple(point), 2, point_color, -1)  # Colored center
                         else:
                             if part_name == "pose":
                                 cv2.circle(frame, tuple(point), 6, point_color, -1)
