@@ -864,7 +864,6 @@ def parse_args():
     parser.add_argument("--auto-workers", action="store_true", help="Auto-detect optimal number of DataLoader workers")
     parser.add_argument("--auto-batch-size", action="store_true", help="Auto-calculate optimal batch size based on available memory")
     parser.add_argument("--enable-parallel", action="store_true", help="Enable DataParallel for multiple GPUs")
-    parser.add_argument("--num-workers", type=int, default=0, help="Number of DataLoader workers (0 = auto-detect)")
     return parser.parse_args()
 
 if __name__ == "__main__":
