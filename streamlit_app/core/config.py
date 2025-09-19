@@ -24,7 +24,7 @@ PAGE_CONFIG = {
 MODEL_CONFIG = {
     'transformer': {
         'enabled': True,
-        'checkpoint_path': 'shared/trained_by_nov/vast.ai/loss-weights_0.5-0.5/transformer_100_epochs/SignTransformer_best.pt',
+        'checkpoint_path': 'shared/trained_by_nov/vast.ai/loss-weights_0.5-0.5_seq -prepro-30fps/transformer_100_epochs/SignTransformer_best.pt',
         'model_type': 'transformer',
         'num_gloss_classes': 105,
         'num_category_classes': 10,
@@ -32,7 +32,7 @@ MODEL_CONFIG = {
     },
     'iv3_gru': {
         'enabled': True,
-        'checkpoint_path': 'shared/trained_by_nov/vast.ai/loss-weights_0.5-0.5/iv3gru_100_epochs/InceptionV3GRU_best.pt',
+        'checkpoint_path': 'shared/trained_by_nov/vast.ai/loss-weights_0.5-0.5_seq -prepro-30fps/iv3gru_100_epochs/InceptionV3GRU_best.pt',
         'model_type': 'iv3_gru',
         'num_gloss_classes': 105,
         'num_category_classes': 10,
@@ -95,7 +95,7 @@ DUMMY_DATA = {
 }
 
 # ===== WORKFLOW STAGES =====
-WORKFLOW_STAGES = ['upload', 'preprocessing', 'predictions']
+WORKFLOW_STAGES = ['upload', 'preprocessing', 'predictions', 'validation']
 
 # ===== FILE TYPES =====
 SUPPORTED_FILE_TYPES = {
