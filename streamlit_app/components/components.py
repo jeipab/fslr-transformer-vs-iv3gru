@@ -763,7 +763,7 @@ def render_sidebar() -> Dict:
     # Detailed Results
     occ_detailed = st.sidebar.checkbox(
         "Detailed Results",
-        value=False,
+        value=True,
         help="Include detailed per-frame occlusion analysis with region detection",
         key="occ_detailed_checkbox"
     )

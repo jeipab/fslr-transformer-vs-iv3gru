@@ -27,13 +27,24 @@ def render_model_selection():
         st.error("No models are available for validation.")
         return None
     
-    # Model selection
+    # Model selection with font styling
+    st.markdown("**Choose Model to Validate**")
     model_options = [f"{name} ({model_type})" for model_type, name in available_models]
     selected_option = st.selectbox(
-        "Choose Model to Validate",
+        "Select model architecture",
         model_options,
-        help="Select the model architecture for validation"
+        help="Select the model architecture for validation",
+        key="model_selection_selectbox"
     )
+    
+    # Check if model selection has changed and clear validation results
+    if 'previous_selected_model' not in st.session_state:
+        st.session_state.previous_selected_model = selected_option
+    elif st.session_state.previous_selected_model != selected_option:
+        # Model selection changed, clear validation results
+        if 'validation_results' in st.session_state:
+            del st.session_state.validation_results
+        st.session_state.previous_selected_model = selected_option
     
     # Extract model type from selection
     selected_model_type = None
@@ -69,7 +80,7 @@ def render_dataset_upload():
 
 def render_validation_configuration():
     """Render validation configuration options."""
-    st.markdown("### Configuration")
+    st.markdown("**Configuration**")
     
     col1, col2 = st.columns(2)
     
@@ -417,34 +428,15 @@ def render_occlusion_analysis(results: Dict[str, Any]):
     
     diff_df = pd.DataFrame(diff_data)
     
-    # Color code differences
-    def color_diff(val):
-        if val > 0:
-            return 'background-color: lightgreen'
-        elif val < 0:
-            return 'background-color: lightcoral'
-        else:
-            return ''
-    
-    styled_df = diff_df.style.applymap(color_diff, subset=['Difference'])
+    # Display dataframe with left-aligned text
+    styled_df = diff_df.style.set_properties(**{'text-align': 'left'})
     st.dataframe(styled_df, use_container_width=True)
     
-    # Summary insights
-    st.markdown("#### Key Insights")
-    
-    accuracy_diff = non_occluded['gloss_accuracy'] - occluded['gloss_accuracy']
-    f1_diff = non_occluded['gloss_f1_score'] - occluded['gloss_f1_score']
-    
-    if accuracy_diff > 0.05:
-        st.warning(f"⚠️ Significant performance drop with occlusion: {accuracy_diff:.3f} accuracy difference")
-    elif accuracy_diff > 0.02:
-        st.info(f"ℹ️ Moderate performance drop with occlusion: {accuracy_diff:.3f} accuracy difference")
-    else:
-        st.success(f"✅ Model is robust to occlusion: {accuracy_diff:.3f} accuracy difference")
 
 
 def render_validation_summary(results: Dict[str, Any]):
     """Render validation summary with key insights."""
+    st.markdown("---")
     st.markdown("### Validation Summary")
     
     model_info = results['model_info']
@@ -465,26 +457,6 @@ def render_validation_summary(results: Dict[str, Any]):
     with col4:
         st.metric("Validation Time", model_info['timestamp'])
     
-    # Performance assessment
-    st.markdown("#### Performance Assessment")
-    
-    if overall['gloss_accuracy'] > 0.8:
-        st.success("🎉 Excellent gloss classification performance!")
-    elif overall['gloss_accuracy'] > 0.6:
-        st.info("👍 Good gloss classification performance")
-    elif overall['gloss_accuracy'] > 0.4:
-        st.warning("⚠️ Fair gloss classification performance")
-    else:
-        st.error("❌ Poor gloss classification performance - needs improvement")
-    
-    if overall['category_accuracy'] > 0.7:
-        st.success("🎉 Excellent category classification performance!")
-    elif overall['category_accuracy'] > 0.5:
-        st.info("👍 Good category classification performance")
-    elif overall['category_accuracy'] > 0.3:
-        st.warning("⚠️ Fair category classification performance")
-    else:
-        st.error("❌ Poor category classification performance - needs improvement")
 
 
 def render_download_results(results: Dict[str, Any]):
@@ -497,7 +469,7 @@ def render_download_results(results: Dict[str, Any]):
         # Download as JSON
         json_str = json.dumps(results, indent=2, default=str)
         st.download_button(
-            label="📄 Download Results (JSON)",
+            label="Download Results (JSON)",
             data=json_str,
             file_name=f"validation_results_{results['model_info']['model_type']}_{results['model_info']['timestamp'].replace(':', '-')}.json",
             mime="application/json"
@@ -517,7 +489,7 @@ def render_download_results(results: Dict[str, Any]):
         summary_df = pd.DataFrame(summary_data)
         csv_str = summary_df.to_csv(index=False)
         st.download_button(
-            label="📊 Download Summary (CSV)",
+            label="Download Summary (CSV)",
             data=csv_str,
             file_name=f"validation_summary_{results['model_info']['model_type']}_{results['model_info']['timestamp'].replace(':', '-')}.csv",
             mime="text/csv"
