@@ -13,7 +13,7 @@ Usage:
 - Split with default 80/20 ratio (copy files):
     python data/splitting/data_split.py `
         --processed-root data/processed `
-        --labels data/processed/labels_updated.csv `
+        --labels data/processed/labels.csv `
         --out-root data/processed `
         --copy
 
