@@ -523,10 +523,8 @@ def run_validation_from_folder(model_type: str, npz_folder_path: str, labels_csv
     
     # Run validation
     validator = ModelValidator(
-        model_path=config['checkpoint_path'],
         model_type=model_type,
-        num_classes=config['num_gloss_classes'],
-        batch_size=batch_size
+        checkpoint_path=config['checkpoint_path']
     )
     
     results = validator.validate(dataset, progress_callback=progress_callback)

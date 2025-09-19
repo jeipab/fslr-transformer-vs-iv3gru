@@ -119,7 +119,7 @@ def render_validation_stage(cfg: Dict):
             progress_bar.empty()
             status_text.empty()
             
-            st.success("Validation completed successfully!")
+            st.toast("Validation completed successfully!", icon="✅")
             
         except Exception as e:
             st.error(f"Validation failed: {str(e)}")
