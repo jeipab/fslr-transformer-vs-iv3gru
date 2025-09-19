@@ -282,7 +282,7 @@ def render_keypoint_video(sequence: np.ndarray, mask: Optional[np.ndarray] = Non
             """, unsafe_allow_html=True)
 
 
-def render_animated_keypoints(sequence: np.ndarray, mask: Optional[np.ndarray] = None, key_suffix: str = "") -> None:
+def render_animated_keypoints(sequence: np.ndarray, mask: Optional[np.ndarray] = None, key_suffix: str = "", meta_dict: Optional[Dict] = None) -> None:
     """Render animated keypoint visualization with skeleton overlay."""
     st.markdown("<div class='section-header'>Keypoint Visualization</div>", unsafe_allow_html=True)
     
@@ -297,6 +297,18 @@ def render_animated_keypoints(sequence: np.ndarray, mask: Optional[np.ndarray] =
     
     # Reshape keypoints to [T, 78, 2] for easier handling
     keypoints_2d = sequence.reshape(time_steps, 78, 2)
+    
+    # Extract frame-by-frame occlusion information from metadata
+    frame_occlusion_data = None
+    if meta_dict:
+        occlusion_details = meta_dict.get('occlusion_results', None)
+        if occlusion_details and 'detailed_results' in occlusion_details:
+            # Create a mapping of frame index to occlusion status
+            frame_occlusion_data = {}
+            for result in occlusion_details['detailed_results']:
+                frame_idx = result.get('frame_idx', -1)
+                is_occluded = result.get('occlusion_detected', False)
+                frame_occlusion_data[frame_idx] = is_occluded
     
     # Video generation option
     col1, col2, col3 = st.columns([2, 1, 1])
@@ -477,9 +489,19 @@ def render_animated_keypoints(sequence: np.ndarray, mask: Optional[np.ndarray] =
                         hoverinfo='skip'
                     ))
     
-    # Update layout
+    # Update layout with frame-specific occlusion indicator
+    title_text = f"Keypoint Visualization - Frame {frame_idx}/{time_steps-1}"
+    
+    # Check if current frame is occluded
+    current_frame_occluded = False
+    if frame_occlusion_data is not None:
+        current_frame_occluded = frame_occlusion_data.get(frame_idx, False)
+    
+    if current_frame_occluded:
+        title_text += " 🔴 [OCCLUDED]"
+    
     fig.update_layout(
-        title=f"Keypoint Visualization - Frame {frame_idx}/{time_steps-1}",
+        title=title_text,
         xaxis=dict(
             title="X Coordinate",
             scaleanchor="y",
@@ -517,6 +539,7 @@ def render_animated_keypoints(sequence: np.ndarray, mask: Optional[np.ndarray] =
             avg_x = np.mean(current_keypoints[:, 0])
             avg_y = np.mean(current_keypoints[:, 1])
             st.metric("Center", f"({avg_x:.3f}, {avg_y:.3f})")
+    
 
 
 def render_feature_charts(sequence: np.ndarray, mask: Optional[np.ndarray] = None, key_suffix: str = "") -> None:

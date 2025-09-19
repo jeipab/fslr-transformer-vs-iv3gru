@@ -521,7 +521,7 @@ def render_visualization_tabs(cfg: Dict):
                 viz_col1, viz_col2 = st.columns([1, 1])
                 
                 with viz_col1:
-                    render_animated_keypoints(X_pad, mask if mask.size > 0 else None, key_suffix=filename)
+                    render_animated_keypoints(X_pad, mask if mask.size > 0 else None, key_suffix=filename, meta_dict=meta)
                 
                 with viz_col2:
                     render_feature_charts(X_pad, mask if mask.size > 0 else None, key_suffix=filename)
