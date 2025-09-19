@@ -1,0 +1,215 @@
+Using device: cpu
+Using CPU
+CPU cores: 6 physical, 12 logical
+Available RAM: 7.6 GB
+
+============================================================
+DATA LOADING
+============================================================
+✓ Loaded data successfully
+  - Dataset type: IV3-GRU Features
+  - Training folder: data/processed
+  - Validation folder: data/processed
+  - Feature key: X2048
+  - Gloss classes: 105
+  - Category classes: 10
+
+============================================================
+DATASET PREPARATION
+============================================================
+CPU cores: 6, Optimal batch size: 16
+✓ Auto-calculated optimal batch size: 16
+Auto-detected 3 DataLoader workers (from 6 CPU cores)
+Auto-detected 3 DataLoader workers (from 6 CPU cores)
+✓ Created datasets and data loaders
+  - Batch size: 16
+  - Training batches: 107
+  - Validation batches: 27
+  - Training dataset size: 1704 samples
+  - Validation dataset size: 426 samples
+  - Data format: [T, 2048] features
+
+============================================================
+MODEL SELECTION
+============================================================
+Available models:
+- transformer: Multi-head attention transformer
+- iv3_gru: InceptionV3 + GRU hybrid
+✓ Using InceptionV3GRU model
+
+================================================================================
+COMPREHENSIVE TRAINING CONFIGURATION
+================================================================================
+Session Information:
+  - Start time: 2025-09-20 02:17:44
+  - Working directory: /home/novelle/Documents/fslr-transformer-vs-iv3gru
+  - Command: training/train.py --model iv3_gru --features-train data/processed --features-val data/processed --labels-train-csv data/processed/train_labels.csv --labels-val-csv data/processed/val_labels.csv --num-gloss 105 --num-cat 10 --epochs 40 --batch-size 16 --curriculum category-first --curriculum-epochs 15 --curriculum-min-weight 0.05 --curriculum-schedule cosine --gradient-accumulation-steps 4 --amp --auto-workers --auto-batch-size --scheduler plateau --scheduler-patience 3 --early-stop 8 --log-csv logs/curriculum_iv3_gru.csv
+
+System Information:
+  - Platform: Linux-6.14.0-29-generic-x86_64-with-glibc2.39
+  - Python version: 3.11.0 (main, Sep 11 2025, 23:19:28) [GCC 13.3.0]
+  - PyTorch version: 2.8.0+cu128
+  - NumPy version: 2.2.6
+
+Core Training Parameters:
+  - Model: iv3_gru
+  - Epochs: 40
+  - Batch size: 16
+  - Learning rate: 0.0001
+  - Weight decay: 0.0
+  - Gradient clipping: None
+  - Loss weights - Alpha: 0.5, Beta: 0.5
+
+Curriculum Training Parameters:
+  - Strategy: category-first
+  - Curriculum epochs: 15
+  - Min weight: 0.05
+  - Schedule: cosine
+
+Loss Weighting Parameters:
+  - Strategy: static
+  - Alpha: 0.5
+  - Beta: 0.5
+
+IV3-GRU Model Parameters:
+  - Hidden1: 16
+  - Hidden2: 12
+  - Dropout: 0.3
+  - Pretrained backbone: True
+  - Freeze backbone: True
+
+Data Configuration:
+  - Gloss classes: 105
+  - Category classes: 10
+  - Data source: Real data files
+  - Training folder: data/processed
+  - Validation folder: data/processed
+  - Feature key: X2048
+
+Training Control:
+  - Scheduler: plateau
+  - Scheduler patience: 3
+  - Early stopping: 8
+  - Resume from: None
+
+Performance Settings:
+  - AMP (Mixed Precision): True
+  - Model compilation: False
+  - Gradient accumulation steps: 4
+  - DataLoader workers: 0
+  - Auto workers: True
+  - Pin memory: False
+  - Prefetch factor: None
+
+Reproducibility:
+  - Random seed: 42
+  - Deterministic mode: False
+
+Output Configuration:
+  - Checkpoint directory: data/processed
+  - CSV log file: logs/curriculum_iv3_gru.csv
+
+Model Information:
+  - Model type: InceptionV3GRU
+  - Total parameters: 25,214,007
+  - Trainable parameters: 101,743
+  - Model size: 96.2 MB
+================================================================================
+
+============================================================
+TRAINING START
+============================================================
+✓ Curriculum training enabled: category-first
+  - Curriculum epochs: 15
+  - Min weight: 0.05
+  - Schedule: cosine
+✓ Loss weighting strategy: static
+Training Configuration:
+  - Gradient accumulation steps: 4
+  - AMP enabled: False
+  - Model compiled: False
+Training for 40 epochs...
+Curriculum training: Category-first curriculum phase (epoch 1/15)
+------------------------------------------------------------
+Epoch  1/40 | Train Loss: 2.4100 | Val Loss: 2.3820 | Val Gloss Acc: 0.005 | Val Cat Acc: 0.127 | Time: 10.8s
+  Curriculum: Category-first curriculum phase (epoch 1/15) | Weights: α=0.050, β=0.950
+Epoch  2/40 | Train Loss: 2.4087 | Val Loss: 2.3371 | Val Gloss Acc: 0.005 | Val Cat Acc: 0.230 | Time: 10.7s
+  Curriculum: Category-first curriculum phase (epoch 2/15) | Weights: α=0.055, β=0.945
+Epoch  3/40 | Train Loss: 2.3567 | Val Loss: 2.3212 | Val Gloss Acc: 0.009 | Val Cat Acc: 0.254 | Time: 10.7s
+  Curriculum: Category-first curriculum phase (epoch 3/15) | Weights: α=0.069, β=0.931
+Epoch  4/40 | Train Loss: 2.4003 | Val Loss: 2.3447 | Val Gloss Acc: 0.009 | Val Cat Acc: 0.289 | Time: 10.8s
+  Curriculum: Category-first curriculum phase (epoch 4/15) | Weights: α=0.093, β=0.907
+Epoch  5/40 | Train Loss: 2.2949 | Val Loss: 2.3909 | Val Gloss Acc: 0.007 | Val Cat Acc: 0.317 | Time: 12.0s
+  Curriculum: Category-first curriculum phase (epoch 5/15) | Weights: α=0.124, β=0.876
+Epoch  6/40 | Train Loss: 2.4547 | Val Loss: 2.4658 | Val Gloss Acc: 0.014 | Val Cat Acc: 0.324 | Time: 10.7s
+  Curriculum: Category-first curriculum phase (epoch 6/15) | Weights: α=0.162, β=0.838
+Epoch  7/40 | Train Loss: 2.5514 | Val Loss: 2.5591 | Val Gloss Acc: 0.012 | Val Cat Acc: 0.362 | Time: 11.0s
+  Curriculum: Category-first curriculum phase (epoch 7/15) | Weights: α=0.205, β=0.795
+Epoch  8/40 | Train Loss: 2.5338 | Val Loss: 2.6609 | Val Gloss Acc: 0.019 | Val Cat Acc: 0.343 | Time: 10.3s
+  Curriculum: Category-first curriculum phase (epoch 8/15) | Weights: α=0.251, β=0.749
+Epoch  9/40 | Train Loss: 2.8894 | Val Loss: 2.7677 | Val Gloss Acc: 0.019 | Val Cat Acc: 0.373 | Time: 10.5s
+  Curriculum: Category-first curriculum phase (epoch 9/15) | Weights: α=0.299, β=0.701
+Epoch 10/40 | Train Loss: 2.9131 | Val Loss: 2.8742 | Val Gloss Acc: 0.016 | Val Cat Acc: 0.380 | Time: 10.3s
+  Curriculum: Category-first curriculum phase (epoch 10/15) | Weights: α=0.345, β=0.655
+Epoch 11/40 | Train Loss: 2.8413 | Val Loss: 2.9759 | Val Gloss Acc: 0.016 | Val Cat Acc: 0.378 | Time: 10.7s
+  Curriculum: Category-first curriculum phase (epoch 11/15) | Weights: α=0.387, β=0.613
+Epoch 12/40 | Train Loss: 3.1352 | Val Loss: 3.0655 | Val Gloss Acc: 0.023 | Val Cat Acc: 0.448 | Time: 10.5s
+  Curriculum: Category-first curriculum phase (epoch 12/15) | Weights: α=0.426, β=0.574
+Epoch 13/40 | Train Loss: 3.2236 | Val Loss: 3.1386 | Val Gloss Acc: 0.019 | Val Cat Acc: 0.408 | Time: 10.9s
+  Curriculum: Category-first curriculum phase (epoch 13/15) | Weights: α=0.457, β=0.543
+Epoch 14/40 | Train Loss: 3.0613 | Val Loss: 3.1886 | Val Gloss Acc: 0.016 | Val Cat Acc: 0.448 | Time: 11.2s
+  Curriculum: Category-first curriculum phase (epoch 14/15) | Weights: α=0.481, β=0.519
+Epoch 15/40 | Train Loss: 3.2958 | Val Loss: 3.2159 | Val Gloss Acc: 0.023 | Val Cat Acc: 0.512 | Time: 10.5s
+  Curriculum: Category-first curriculum phase (epoch 15/15) | Weights: α=0.495, β=0.505
+Epoch 16/40 | Train Loss: 3.1905 | Val Loss: 3.2145 | Val Gloss Acc: 0.026 | Val Cat Acc: 0.460 | Time: 10.6s
+  Curriculum: Balanced phase | Weights: α=0.500, β=0.500
+Epoch 17/40 | Train Loss: 3.2580 | Val Loss: 3.2026 | Val Gloss Acc: 0.033 | Val Cat Acc: 0.477 | Time: 11.0s
+  Curriculum: Balanced phase | Weights: α=0.500, β=0.500
+Epoch 18/40 | Train Loss: 3.2654 | Val Loss: 3.1854 | Val Gloss Acc: 0.031 | Val Cat Acc: 0.554 | Time: 11.2s
+  Curriculum: Balanced phase | Weights: α=0.500, β=0.500
+Epoch 19/40 | Train Loss: 3.2442 | Val Loss: 3.1691 | Val Gloss Acc: 0.033 | Val Cat Acc: 0.538 | Time: 11.0s
+  Curriculum: Balanced phase | Weights: α=0.500, β=0.500
+Epoch 20/40 | Train Loss: 3.2573 | Val Loss: 3.1539 | Val Gloss Acc: 0.035 | Val Cat Acc: 0.585 | Time: 10.9s
+  Curriculum: Balanced phase | Weights: α=0.500, β=0.500
+Epoch 21/40 | Train Loss: 3.2042 | Val Loss: 3.1370 | Val Gloss Acc: 0.035 | Val Cat Acc: 0.608 | Time: 11.2s
+  Curriculum: Balanced phase | Weights: α=0.500, β=0.500
+Epoch 22/40 | Train Loss: 3.0755 | Val Loss: 3.1223 | Val Gloss Acc: 0.038 | Val Cat Acc: 0.594 | Time: 10.7s
+  Curriculum: Balanced phase | Weights: α=0.500, β=0.500
+Epoch 23/40 | Train Loss: 2.9342 | Val Loss: 3.1036 | Val Gloss Acc: 0.033 | Val Cat Acc: 0.608 | Time: 11.0s
+  Curriculum: Balanced phase | Weights: α=0.500, β=0.500
+Epoch 24/40 | Train Loss: 3.0922 | Val Loss: 3.0871 | Val Gloss Acc: 0.033 | Val Cat Acc: 0.641 | Time: 10.9s
+  Curriculum: Balanced phase | Weights: α=0.500, β=0.500
+Epoch 25/40 | Train Loss: 3.1692 | Val Loss: 3.0690 | Val Gloss Acc: 0.033 | Val Cat Acc: 0.629 | Time: 10.9s
+  Curriculum: Balanced phase | Weights: α=0.500, β=0.500
+Epoch 26/40 | Train Loss: 3.0409 | Val Loss: 3.0538 | Val Gloss Acc: 0.040 | Val Cat Acc: 0.664 | Time: 10.8s
+  Curriculum: Balanced phase | Weights: α=0.500, β=0.500
+Epoch 27/40 | Train Loss: 3.1525 | Val Loss: 3.0344 | Val Gloss Acc: 0.038 | Val Cat Acc: 0.664 | Time: 10.8s
+  Curriculum: Balanced phase | Weights: α=0.500, β=0.500
+Epoch 28/40 | Train Loss: 3.1286 | Val Loss: 3.0201 | Val Gloss Acc: 0.038 | Val Cat Acc: 0.648 | Time: 10.8s
+  Curriculum: Balanced phase | Weights: α=0.500, β=0.500
+Epoch 29/40 | Train Loss: 2.9665 | Val Loss: 3.0010 | Val Gloss Acc: 0.038 | Val Cat Acc: 0.735 | Time: 10.8s
+  Curriculum: Balanced phase | Weights: α=0.500, β=0.500
+Epoch 30/40 | Train Loss: 3.0174 | Val Loss: 2.9856 | Val Gloss Acc: 0.038 | Val Cat Acc: 0.735 | Time: 11.1s
+  Curriculum: Balanced phase | Weights: α=0.500, β=0.500
+Epoch 31/40 | Train Loss: 3.0668 | Val Loss: 2.9697 | Val Gloss Acc: 0.040 | Val Cat Acc: 0.744 | Time: 10.7s
+  Curriculum: Balanced phase | Weights: α=0.500, β=0.500
+Epoch 32/40 | Train Loss: 2.9075 | Val Loss: 2.9611 | Val Gloss Acc: 0.042 | Val Cat Acc: 0.744 | Time: 11.3s
+  Curriculum: Balanced phase | Weights: α=0.500, β=0.500
+Epoch 33/40 | Train Loss: 3.0719 | Val Loss: 2.9570 | Val Gloss Acc: 0.038 | Val Cat Acc: 0.765 | Time: 11.6s
+  Curriculum: Balanced phase | Weights: α=0.500, β=0.500
+Epoch 34/40 | Train Loss: 2.8870 | Val Loss: 2.9441 | Val Gloss Acc: 0.042 | Val Cat Acc: 0.772 | Time: 11.4s
+  Curriculum: Balanced phase | Weights: α=0.500, β=0.500
+Epoch 35/40 | Train Loss: 3.0169 | Val Loss: 2.9361 | Val Gloss Acc: 0.045 | Val Cat Acc: 0.784 | Time: 11.2s
+  Curriculum: Balanced phase | Weights: α=0.500, β=0.500
+Epoch 36/40 | Train Loss: 2.9310 | Val Loss: 2.9270 | Val Gloss Acc: 0.040 | Val Cat Acc: 0.796 | Time: 11.3s
+  Curriculum: Balanced phase | Weights: α=0.500, β=0.500
+Epoch 37/40 | Train Loss: 2.8739 | Val Loss: 2.9169 | Val Gloss Acc: 0.042 | Val Cat Acc: 0.822 | Time: 11.1s
+  Curriculum: Balanced phase | Weights: α=0.500, β=0.500
+Epoch 38/40 | Train Loss: 2.9760 | Val Loss: 2.9085 | Val Gloss Acc: 0.040 | Val Cat Acc: 0.815 | Time: 11.0s
+  Curriculum: Balanced phase | Weights: α=0.500, β=0.500
+Epoch 39/40 | Train Loss: 2.9567 | Val Loss: 2.9020 | Val Gloss Acc: 0.042 | Val Cat Acc: 0.831 | Time: 10.8s
+  Curriculum: Balanced phase | Weights: α=0.500, β=0.500
+Epoch 40/40 | Train Loss: 2.8583 | Val Loss: 2.8951 | Val Gloss Acc: 0.042 | Val Cat Acc: 0.833 | Time: 10.9s
+  Curriculum: Balanced phase | Weights: α=0.500, β=0.500
+------------------------------------------------------------
+Training completed!
