@@ -128,7 +128,7 @@ def render_validation_results(results: Dict[str, Any]):
     render_summary_metrics(results)
     
     # Detailed analysis tabs
-    tab1, tab2, tab3, tab4 = st.tabs(["📊 Overall Performance", "🎯 Per-Class Analysis", "🔍 Confusion Matrices", "📈 Occlusion Analysis"])
+    tab1, tab2, tab3, tab4, tab5 = st.tabs(["📊 Overall Performance", "🎯 Per-Class Analysis", "🔍 Confusion Matrices", "📈 Occlusion Analysis", "📋 Detailed Predictions"])
     
     with tab1:
         render_overall_performance(results)
@@ -141,6 +141,9 @@ def render_validation_results(results: Dict[str, Any]):
     
     with tab4:
         render_occlusion_analysis(results)
+    
+    with tab5:
+        render_detailed_predictions(results)
 
 
 def render_summary_metrics(results: Dict[str, Any]):
@@ -494,3 +497,129 @@ def render_download_results(results: Dict[str, Any]):
             file_name=f"validation_summary_{results['model_info']['model_type']}_{results['model_info']['timestamp'].replace(':', '-')}.csv",
             mime="text/csv"
         )
+
+
+def render_detailed_predictions(results: Dict[str, Any]):
+    """Render detailed predictions table with file names, predictions, and correctness."""
+    if 'detailed_predictions' not in results:
+        st.error("Detailed predictions data not available.")
+        return
+    
+    predictions = results['detailed_predictions']
+    
+    # Load label mappings
+    try:
+        from data.labels.label_mapping import load_label_mappings
+        gloss_mapping, category_mapping = load_label_mappings()
+    except Exception as e:
+        st.warning(f"Could not load label mappings: {e}. Showing numeric IDs only.")
+        gloss_mapping, category_mapping = {}, {}
+    
+    # Create DataFrame with the requested columns
+    table_data = []
+    for pred in predictions:
+        # Determine correctness status
+        gloss_correct = "✅" if pred['gloss_pred'] == pred['gloss_gt'] else "❌"
+        cat_correct = "✅" if pred['cat_pred'] == pred['cat_gt'] else "❌"
+        
+        # Get human-readable labels
+        pred_gloss_label = gloss_mapping.get(pred['gloss_pred'], f"Unknown ({pred['gloss_pred']})")
+        actual_gloss_label = gloss_mapping.get(pred['gloss_gt'], f"Unknown ({pred['gloss_gt']})")
+        pred_cat_label = category_mapping.get(pred['cat_pred'], f"Unknown ({pred['cat_pred']})")
+        actual_cat_label = category_mapping.get(pred['cat_gt'], f"Unknown ({pred['cat_gt']})")
+        
+        # Determine occlusion status
+        occlusion_status = "✅" if pred.get('occluded', 0) == 1 else "❌"
+        
+        table_data.append({
+            'File Name': pred['file'],
+            'Predicted Gloss': f"{pred_gloss_label} ({pred['gloss_pred']})",
+            'Actual Gloss': f"{actual_gloss_label} ({pred['gloss_gt']})",
+            'Gloss Status': gloss_correct,
+            'Predicted Category': f"{pred_cat_label} ({pred['cat_pred']})",
+            'Actual Category': f"{actual_cat_label} ({pred['cat_gt']})",
+            'Category Status': cat_correct,
+            'Occlusion Status': occlusion_status
+        })
+    
+    df = pd.DataFrame(table_data)
+    
+    # Add filtering options
+    st.markdown("#### Detailed Predictions")
+    
+    # Filter options - 3 columns for individual filters
+    col1, col2, col3 = st.columns(3)
+    
+    with col1:
+        gloss_filter = st.selectbox(
+            "Filter by Gloss", 
+            ["All", "Correct Only", "Incorrect Only"],
+            key="gloss_filter"
+        )
+    
+    with col2:
+        category_filter = st.selectbox(
+            "Filter by Category", 
+            ["All", "Correct Only", "Incorrect Only"],
+            key="category_filter"
+        )
+    
+    with col3:
+        occlusion_filter = st.selectbox(
+            "Filter by Occlusion", 
+            ["All", "Occluded Only", "Non-Occluded Only"],
+            key="occlusion_filter"
+        )
+    
+    # Apply gloss filter
+    if gloss_filter == "Correct Only":
+        df = df[df['Gloss Status'] == "✅"]
+    elif gloss_filter == "Incorrect Only":
+        df = df[df['Gloss Status'] == "❌"]
+    
+    # Apply category filter
+    if category_filter == "Correct Only":
+        df = df[df['Category Status'] == "✅"]
+    elif category_filter == "Incorrect Only":
+        df = df[df['Category Status'] == "❌"]
+    
+    # Apply occlusion filter
+    if occlusion_filter == "Occluded Only":
+        df = df[df['Occlusion Status'] == "✅"]
+    elif occlusion_filter == "Non-Occluded Only":
+        df = df[df['Occlusion Status'] == "❌"]
+    
+    # Display statistics based on filtered data
+    filtered_samples = len(df)
+    correct_gloss_filtered = len(df[df['Gloss Status'] == "✅"])
+    correct_cat_filtered = len(df[df['Category Status'] == "✅"])
+    both_correct_filtered = len(df[(df['Gloss Status'] == "✅") & (df['Category Status'] == "✅")])
+    
+    col1, col2, col3, col4 = st.columns(4)
+    with col1:
+        st.metric("Total Samples", filtered_samples)
+    with col2:
+        st.metric("Correct Gloss", f"{correct_gloss_filtered} ({correct_gloss_filtered/filtered_samples*100:.1f}%)" if filtered_samples > 0 else "0 (0.0%)")
+    with col3:
+        st.metric("Correct Category", f"{correct_cat_filtered} ({correct_cat_filtered/filtered_samples*100:.1f}%)" if filtered_samples > 0 else "0 (0.0%)")
+    with col4:
+        st.metric("Both Correct", f"{both_correct_filtered} ({both_correct_filtered/filtered_samples*100:.1f}%)" if filtered_samples > 0 else "0 (0.0%)")
+    
+    # Display the table
+    total_samples = len(table_data)
+    st.markdown(f"**Showing {len(df)} of {total_samples} predictions**")
+    
+    st.dataframe(
+        df,
+        use_container_width=True,
+        height=400
+    )
+    
+    # Download option for the filtered table
+    csv_str = df.to_csv(index=False)
+    st.download_button(
+        label="Download Filtered Predictions (CSV)",
+        data=csv_str,
+        file_name=f"detailed_predictions_{results['model_info']['model_type']}_{results['model_info']['timestamp'].replace(':', '-')}.csv",
+        mime="text/csv"
+    )
