@@ -194,53 +194,62 @@ def main():
     cat_map_path = out_root / "cat_mapping.csv"
     df["cat"] = _coerce_or_encode_cat(df["cat"], cat_map_path)
 
-    # Filter categories if requested
+    # Step 1: Map categories to all glosses
+    cat_gloss_map = df.groupby("cat")["gloss"].unique().to_dict()
+
+    # Step 2: Determine allowed categories
+    allowed_cat_ids = set()
     if args.cats is not None:
-        allowed_ids = set()
         for c in args.cats:
             if str(c).isdigit():
-                allowed_ids.add(int(c))
+                allowed_cat_ids.add(int(c))
             else:
                 if not cat_name_to_id:
                     print(f"ERROR: Category name '{c}' requires --label-ref to resolve names to IDs", file=sys.stderr)
                     return 2
-                key = str(c).upper()
+                key = str(c).strip().upper()
                 if key in cat_name_to_id:
-                    allowed_ids.add(cat_name_to_id[key])
+                    allowed_cat_ids.add(cat_name_to_id[key])
                 else:
                     print(f"WARNING: Unknown category '{c}'", file=sys.stderr)
-        df = df[df["cat"].isin(allowed_ids)].reset_index(drop=True)
-        if df.empty:
-            print(f"ERROR: No samples left after filtering by categories {args.cats}", file=sys.stderr)
-            return 2
-        print(f"Using subset of categories: {args.cats} (kept {len(df)} samples)")
 
-    # Filter gloss if requested
+    # Step 3: Determine allowed glosses
+    allowed_gloss_ids = set()
     if args.gloss is not None:
-        allowed_ids = set()
         for g in args.gloss:
             if str(g).isdigit():
-                allowed_ids.add(int(g))
+                allowed_gloss_ids.add(int(g))
             else:
                 key = str(g).strip().upper()
                 if key in gloss_name_to_id:
-                    allowed_ids.add(gloss_name_to_id[key])
+                    allowed_gloss_ids.add(gloss_name_to_id[key])
                 else:
-                    # fallback: check if the file column contains this string
-                    mask = df["file"].str.contains(key, case=False, na=False)
-                    matched_ids = df.loc[mask, "gloss"].unique().tolist()
-                    if matched_ids:
-                        allowed_ids.update(matched_ids)
-                    else:
-                        print(f"WARNING: Unknown gloss '{g}'", file=sys.stderr)
+                    # fallback: search in file column
+                    matched = df.loc[df["file"].str.upper().str.contains(key), "gloss"].unique()
+                    allowed_gloss_ids.update(matched.tolist())
 
-        df = df[df["gloss"].isin(allowed_ids)].reset_index(drop=True)
-        if df.empty:
-            print(f"ERROR: No samples left after filtering by gloss {args.gloss}", file=sys.stderr)
-            return 2
-        print(f"Using subset of glosses: {args.gloss} (kept {len(df)} samples)")
+    # Step 4: Combine categories and glosses
+    combined_pairs = set()
+    for cat_id in (allowed_cat_ids or cat_gloss_map.keys()):
+        for gloss_id in cat_gloss_map.get(cat_id, []):
+            if not allowed_gloss_ids or gloss_id in allowed_gloss_ids:
+                combined_pairs.add((cat_id, gloss_id))
 
+    # Step 5: Filter dataframe by these pairs
+    df = df[df.apply(lambda row: (row["cat"], row["gloss"]) in combined_pairs, axis=1)].reset_index(drop=True)
 
+    # Step 6: Print context-aware log messages
+    if args.cats:
+        print(f"Using subset of categories: {args.cats} (kept {len(df)} samples)")
+    if args.gloss:
+        if args.cats:
+            print(f"Using subset of glosses (from subset of categories): {args.gloss} (kept {len(df)} samples)")
+        else:
+            print(f"Using subset of glosses: {args.gloss} (kept {len(df)} samples)")
+
+    if df.empty:
+        print(f"ERROR: No samples left after filtering by categories/glosses", file=sys.stderr)
+        return 2
 
     # Handle split
     if "split" not in df.columns:
