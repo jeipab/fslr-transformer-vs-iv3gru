@@ -62,7 +62,7 @@ def render_dataset_upload():
     # NPZ folder selection
     st.markdown("**Validation NPZ Folder**")
     npz_folder_path = st.text_input(
-        "Enter path to folder containing NPZ files",
+        "Enter path to folder containing NPZ files (default: data\\processed\\keypoints_val)",
         placeholder="e.g., data/processed/prepro_09-18/validation",
         help="Path to directory containing NPZ files for validation"
     )
