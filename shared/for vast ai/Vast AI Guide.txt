@@ -66,7 +66,7 @@ python -m training.train \
   --model iv3_gru \
   --epochs 200 \
   --batch-size 8 \
-  --lr 0.0005 \
+  --lr 0.0001 \
   --alpha 0.8 \
   --beta 0.2 \
   --num-gloss 105 \
@@ -85,11 +85,11 @@ python -m training.train \
   --augment-mask-prob 0.05 \
   --augment-mask-ratio 0.05 \
   --scheduler plateau \
-  --scheduler-patience 15 \
-  --early-stop 50 \
+  --scheduler-patience 20 \
+  --early-stop 100 \
   --weight-decay 1e-5 \
-  --log-csv iv3gru_full_final.csv \
-  --output-dir trained_models/iv3_gru/full_final
+  --log-csv iv3gru_full_final_fixed.csv \
+  --output-dir trained_models/iv3_gru/full_final_fixed
 
 Add missing files:
 1. Data
