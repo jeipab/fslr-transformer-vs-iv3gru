@@ -157,7 +157,7 @@ class FSLKeypointFileDataset(Dataset):
         path = os.path.join(self.keypoints_dir, stem + '.npz')
         if not os.path.exists(path):
             raise FileNotFoundError(f"Keypoint file not found: {path}")
-        data = torch.from_numpy(self._load_npz_keypoints(path))  # [T, 156]
+        data = torch.from_numpy(self._load_npz_keypoints(path))  # [T, 156] or [T, 2048]
         length = data.shape[0]
         
         # Apply augmentation if enabled and in training mode
@@ -172,7 +172,13 @@ class FSLKeypointFileDataset(Dataset):
                 X = np.array(npz[self.kp_key])
             else:
                 raise KeyError(f"Key '{self.kp_key}' not found in {path}")
-        if X.ndim != 2 or X.shape[-1] != 156:
+        if X.ndim != 2:
+            raise ValueError(f"Expected 2D data in {path}, got shape {X.shape}")
+        
+        # Validate dimension based on the key being used
+        if self.kp_key == "X2048" and X.shape[-1] != 2048:
+            raise ValueError(f"Expected [T,2048] features in {path}, got shape {X.shape}")
+        elif self.kp_key == "X" and X.shape[-1] != 156:
             raise ValueError(f"Expected [T,156] keypoints in {path}, got shape {X.shape}")
         return X
 
@@ -763,6 +769,26 @@ class WarmupCosineScheduler:
             self.warmup_scheduler.step()
         else:
             self.cosine_scheduler.step()
+    
+    def state_dict(self):
+        """Return the state of the scheduler."""
+        return {
+            'warmup_scheduler': self.warmup_scheduler.state_dict(),
+            'cosine_scheduler': self.cosine_scheduler.state_dict(),
+            'warmup_epochs': self.warmup_epochs,
+            'total_epochs': self.total_epochs,
+            'base_lr': self.base_lr,
+            'min_lr': self.min_lr
+        }
+    
+    def load_state_dict(self, state_dict):
+        """Load the state of the scheduler."""
+        self.warmup_scheduler.load_state_dict(state_dict['warmup_scheduler'])
+        self.cosine_scheduler.load_state_dict(state_dict['cosine_scheduler'])
+        self.warmup_epochs = state_dict['warmup_epochs']
+        self.total_epochs = state_dict['total_epochs']
+        self.base_lr = state_dict['base_lr']
+        self.min_lr = state_dict['min_lr']
 
 class EMA:
     """
@@ -1373,6 +1399,9 @@ def train_model(
                 csv_fh.close()
             return
 
+        # Calculate average training loss
+        avg_train_loss = total_loss / num_batches
+        
         # Update loss weighting strategy if needed
         if loss_weighting is not None and hasattr(loss_weighting, 'update_weights'):
             loss_weighting.update_weights(
@@ -1398,7 +1427,6 @@ def train_model(
             ema.restore()
         val_time = time.time() - val_start_time
         
-        avg_train_loss = total_loss / num_batches
         epoch_time = time.time() - epoch_start_time
         
         # Get current weights for logging
@@ -1865,11 +1893,18 @@ if __name__ == "__main__":
     print("- iv3_gru: InceptionV3 + GRU hybrid")
     
     if args.model == "transformer":
+        # Determine input dimension based on the data key being used
+        if args.kp_key == "X2048":
+            input_dim = 2048
+        else:
+            input_dim = 156  # Default for keypoints
+        
         model = SignTransformer(
+            input_dim=input_dim,
             num_gloss=args.num_gloss,
             num_cat=args.num_cat,
         ).to(device)
-        print("✓ Using SignTransformer model")
+        print(f"✓ Using SignTransformer model (input_dim={input_dim})")
     elif args.model == "iv3_gru":
         model = InceptionV3GRU(
             num_gloss=args.num_gloss,

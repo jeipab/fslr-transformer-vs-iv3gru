@@ -424,8 +424,8 @@ class SignTransformer(nn.Module):
         # Input validation
         if len(x.shape) != 3:
             raise ValueError(f"Expected input with 3 dimensions [B, T, features], got shape {x.shape}")
-        if x.shape[-1] != 156:
-            raise ValueError(f"Expected 156 input features, got {x.shape[-1]}")
+        if x.shape[-1] != self.embedding.in_features:
+            raise ValueError(f"Expected {self.embedding.in_features} input features, got {x.shape[-1]}")
         
         B, T, _ = x.size()
 
