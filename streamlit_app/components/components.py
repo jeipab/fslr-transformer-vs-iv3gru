@@ -998,7 +998,7 @@ def render_predictions_section(cfg: Dict, npz_data: Dict = None, filename: str =
     with model_info_col1:
         st.info(f"**Model**: {cfg['model_choice']}")
     with model_info_col2:
-        st.info(f"**Input**: {'Keypoints (X)' if cfg['model_choice'] == 'SignTransformer' else 'Features (X2048)'}")
+        st.info(f"**Input**: Features (X2048)")
     
     # Generate real predictions if NPZ data is available
     if npz_data is not None:
