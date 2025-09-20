@@ -155,28 +155,28 @@ def render_summary_metrics(results: Dict[str, Any]):
     with col1:
         st.metric(
             "Gloss Accuracy",
-            f"{overall['gloss_accuracy']:.3f}",
+            f"{overall.get('gloss_accuracy', 0.0):.3f}" if 'error' not in overall else "N/A",
             help="Overall gloss classification accuracy"
         )
     
     with col2:
         st.metric(
             "Category Accuracy", 
-            f"{overall['category_accuracy']:.3f}",
+            f"{overall.get('category_accuracy', 0.0):.3f}" if 'error' not in overall else "N/A",
             help="Overall category classification accuracy"
         )
     
     with col3:
         st.metric(
             "Gloss F1-Score",
-            f"{overall['gloss_f1_score']:.3f}",
+            f"{overall.get('gloss_f1_score', 0.0):.3f}" if 'error' not in overall else "N/A",
             help="Gloss classification F1-score"
         )
     
     with col4:
         st.metric(
             "Category F1-Score",
-            f"{overall['category_f1_score']:.3f}",
+            f"{overall.get('category_f1_score', 0.0):.3f}" if 'error' not in overall else "N/A",
             help="Category classification F1-score"
         )
     
@@ -205,16 +205,16 @@ def render_overall_performance(results: Dict[str, Any]):
     metrics_data = {
         'Metric': ['Accuracy', 'Precision', 'Recall', 'F1-Score'],
         'Gloss': [
-            overall['gloss_accuracy'],
-            overall['gloss_precision'],
-            overall['gloss_recall'],
-            overall['gloss_f1_score']
+            overall.get('gloss_accuracy', 0.0) if 'error' not in overall else 0.0,
+            overall.get('gloss_precision', 0.0) if 'error' not in overall else 0.0,
+            overall.get('gloss_recall', 0.0) if 'error' not in overall else 0.0,
+            overall.get('gloss_f1_score', 0.0) if 'error' not in overall else 0.0
         ],
         'Category': [
-            overall['category_accuracy'],
-            overall['category_precision'],
-            overall['category_recall'],
-            overall['category_f1_score']
+            overall.get('category_accuracy', 0.0) if 'error' not in overall else 0.0,
+            overall.get('category_precision', 0.0) if 'error' not in overall else 0.0,
+            overall.get('category_recall', 0.0) if 'error' not in overall else 0.0,
+            overall.get('category_f1_score', 0.0) if 'error' not in overall else 0.0
         ]
     }
     
@@ -374,16 +374,16 @@ def render_occlusion_analysis(results: Dict[str, Any]):
     comparison_data = {
         'Metric': ['Accuracy', 'Precision', 'Recall', 'F1-Score'],
         'Occluded': [
-            occluded['gloss_accuracy'],
-            occluded['gloss_precision'],
-            occluded['gloss_recall'],
-            occluded['gloss_f1_score']
+            occluded.get('gloss_accuracy', 0.0) if 'error' not in occluded else 0.0,
+            occluded.get('gloss_precision', 0.0) if 'error' not in occluded else 0.0,
+            occluded.get('gloss_recall', 0.0) if 'error' not in occluded else 0.0,
+            occluded.get('gloss_f1_score', 0.0) if 'error' not in occluded else 0.0
         ],
         'Non-Occluded': [
-            non_occluded['gloss_accuracy'],
-            non_occluded['gloss_precision'],
-            non_occluded['gloss_recall'],
-            non_occluded['gloss_f1_score']
+            non_occluded.get('gloss_accuracy', 0.0) if 'error' not in non_occluded else 0.0,
+            non_occluded.get('gloss_precision', 0.0) if 'error' not in non_occluded else 0.0,
+            non_occluded.get('gloss_recall', 0.0) if 'error' not in non_occluded else 0.0,
+            non_occluded.get('gloss_f1_score', 0.0) if 'error' not in non_occluded else 0.0
         ]
     }
     
@@ -422,10 +422,14 @@ def render_occlusion_analysis(results: Dict[str, Any]):
     diff_data = {
         'Metric': ['Accuracy', 'Precision', 'Recall', 'F1-Score'],
         'Difference': [
-            non_occluded['gloss_accuracy'] - occluded['gloss_accuracy'],
-            non_occluded['gloss_precision'] - occluded['gloss_precision'],
-            non_occluded['gloss_recall'] - occluded['gloss_recall'],
-            non_occluded['gloss_f1_score'] - occluded['gloss_f1_score']
+            (non_occluded.get('gloss_accuracy', 0.0) if 'error' not in non_occluded else 0.0) - 
+            (occluded.get('gloss_accuracy', 0.0) if 'error' not in occluded else 0.0),
+            (non_occluded.get('gloss_precision', 0.0) if 'error' not in non_occluded else 0.0) - 
+            (occluded.get('gloss_precision', 0.0) if 'error' not in occluded else 0.0),
+            (non_occluded.get('gloss_recall', 0.0) if 'error' not in non_occluded else 0.0) - 
+            (occluded.get('gloss_recall', 0.0) if 'error' not in occluded else 0.0),
+            (non_occluded.get('gloss_f1_score', 0.0) if 'error' not in non_occluded else 0.0) - 
+            (occluded.get('gloss_f1_score', 0.0) if 'error' not in occluded else 0.0)
         ]
     }
     
@@ -452,10 +456,10 @@ def render_validation_summary(results: Dict[str, Any]):
         st.metric("Model", model_info['model_type'].upper())
     
     with col2:
-        st.metric("Gloss Accuracy", f"{overall['gloss_accuracy']:.3f}")
+        st.metric("Gloss Accuracy", f"{overall.get('gloss_accuracy', 0.0):.3f}" if 'error' not in overall else "N/A")
     
     with col3:
-        st.metric("Category Accuracy", f"{overall['category_accuracy']:.3f}")
+        st.metric("Category Accuracy", f"{overall.get('category_accuracy', 0.0):.3f}" if 'error' not in overall else "N/A")
     
     with col4:
         st.metric("Validation Time", model_info['timestamp'])
@@ -483,10 +487,10 @@ def render_download_results(results: Dict[str, Any]):
         summary_data = {
             'Metric': ['Gloss Accuracy', 'Category Accuracy', 'Gloss F1-Score', 'Category F1-Score'],
             'Value': [
-                results['overall_results']['gloss_accuracy'],
-                results['overall_results']['category_accuracy'],
-                results['overall_results']['gloss_f1_score'],
-                results['overall_results']['category_f1_score']
+                results['overall_results'].get('gloss_accuracy', 0.0) if 'error' not in results['overall_results'] else 0.0,
+                results['overall_results'].get('category_accuracy', 0.0) if 'error' not in results['overall_results'] else 0.0,
+                results['overall_results'].get('gloss_f1_score', 0.0) if 'error' not in results['overall_results'] else 0.0,
+                results['overall_results'].get('category_f1_score', 0.0) if 'error' not in results['overall_results'] else 0.0
             ]
         }
         summary_df = pd.DataFrame(summary_data)

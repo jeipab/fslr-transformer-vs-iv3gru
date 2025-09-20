@@ -100,9 +100,14 @@ class ValidationDataset:
         data = np.load(sample['npz_path'])
         
         if self.model_type == 'transformer':
-            if 'X' not in data:
-                raise ValueError(f"NPZ file {sample['npz_path']} missing 'X' key for transformer")
-            X = torch.from_numpy(data['X']).float()
+            # Try to load the appropriate key based on expected input dimensions
+            # Check if this is a 2048-feature model or 156-keypoint model
+            if 'X2048' in data:
+                X = torch.from_numpy(data['X2048']).float()
+            elif 'X' in data:
+                X = torch.from_numpy(data['X']).float()
+            else:
+                raise ValueError(f"NPZ file {sample['npz_path']} missing both 'X' and 'X2048' keys for transformer")
             
             # Handle sequence length truncation
             if X.shape[0] > 300:
@@ -148,8 +153,21 @@ class ModelValidator:
     def _load_model(self):
         """Load the appropriate model architecture."""
         if self.model_type == 'transformer':
+            # Try to determine input_dim from checkpoint
+            checkpoint = torch.load(self.checkpoint_path, map_location='cpu')
+            state_dict = checkpoint.get('model_state_dict', checkpoint.get('state_dict', checkpoint.get('model', checkpoint)))
+            
+            # Check embedding layer shape to determine input_dim
+            if 'embedding.weight' in state_dict:
+                embedding_shape = state_dict['embedding.weight'].shape
+                input_dim = embedding_shape[1]  # embedding.weight is [emb_dim, input_dim]
+                print(f"Detected input_dim={input_dim} from checkpoint embedding layer")
+            else:
+                input_dim = 156  # Default fallback
+                print(f"Warning: Could not detect input_dim from checkpoint, using default {input_dim}")
+            
             model = SignTransformer(
-                input_dim=156,
+                input_dim=input_dim,
                 emb_dim=256,
                 n_heads=8,
                 n_layers=4,
