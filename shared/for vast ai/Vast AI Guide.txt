@@ -61,37 +61,7 @@ python -m training.train \
   --log-csv transformer_full_features_ultra_fine.csv \
   --output-dir trained_models/transformer/full_with_features_ultra_fine
 
-Train IV3-GRU (low gloss accuracy):
-python -m training.train \
-  --model iv3_gru \
-  --epochs 200 \
-  --batch-size 8 \
-  --lr 0.0001 \
-  --alpha 0.8 \
-  --beta 0.2 \
-  --num-gloss 105 \
-  --num-cat 10 \
-  --features-train data/processed/keypoints_train \
-  --features-val data/processed/keypoints_val \
-  --labels-train-csv data/processed/train_labels.csv \
-  --labels-val-csv data/processed/val_labels.csv \
-  --feature-key X2048 \
-  --hidden1 16 \
-  --hidden2 12 \
-  --dropout 0.3 \
-  --amp \
-  --augment \
-  --augment-noise-std 0.002 \
-  --augment-mask-prob 0.05 \
-  --augment-mask-ratio 0.05 \
-  --scheduler plateau \
-  --scheduler-patience 20 \
-  --early-stop 100 \
-  --weight-decay 1e-5 \
-  --log-csv iv3gru_full_final_fixed.csv \
-  --output-dir trained_models/iv3_gru/full_final_fixed
-
-Train IV3-GRU (???):
+Train IV3-GRU (70 gloss acc):
 python -m training.train \
   --model iv3_gru \
   --epochs 300 \
