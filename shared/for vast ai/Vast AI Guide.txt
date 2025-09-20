@@ -34,7 +34,7 @@ Run data split (greetings only):
 Run data split (full):
 	1. python data/splitting/data_split.py --processed-root data/processed --labels data/processed/labels.csv --out-root data/processed --copy --label-ref data/splitting/labels_reference.csv
 
-Train Tranformer:
+Train Tranformer (high accuracy):
 python -m training.train \
   --model transformer \
   --epochs 300 \
@@ -61,7 +61,7 @@ python -m training.train \
   --log-csv transformer_full_features_ultra_fine.csv \
   --output-dir trained_models/transformer/full_with_features_ultra_fine
 
-Train IV3-GRU:
+Train IV3-GRU (low gloss accuracy):
 python -m training.train \
   --model iv3_gru \
   --epochs 200 \
@@ -90,6 +90,37 @@ python -m training.train \
   --weight-decay 1e-5 \
   --log-csv iv3gru_full_final_fixed.csv \
   --output-dir trained_models/iv3_gru/full_final_fixed
+
+Train IV3-GRU (???):
+python -m training.train \
+  --model iv3_gru \
+  --epochs 300 \
+  --batch-size 16 \
+  --lr 0.0003 \
+  --alpha 0.8 \
+  --beta 0.2 \
+  --num-gloss 105 \
+  --num-cat 10 \
+  --features-train data/processed/keypoints_train \
+  --features-val data/processed/keypoints_val \
+  --labels-train-csv data/processed/train_labels.csv \
+  --labels-val-csv data/processed/val_labels.csv \
+  --feature-key X2048 \
+  --hidden1 32 \
+  --hidden2 24 \
+  --dropout 0.2 \
+  --no-freeze-backbone \
+  --amp \
+  --augment \
+  --augment-noise-std 0.001 \
+  --augment-mask-prob 0.03 \
+  --augment-mask-ratio 0.03 \
+  --scheduler plateau \
+  --scheduler-patience 25 \
+  --early-stop 150 \
+  --weight-decay 5e-6 \
+  --log-csv iv3gru_full_optimized.csv \
+  --output-dir trained_models/iv3_gru/full_optimized
 
 Add missing files:
 1. Data
