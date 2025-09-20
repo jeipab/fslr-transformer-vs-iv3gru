@@ -32,7 +32,7 @@ MODEL_CONFIG = {
     },
     'iv3_gru': {
         'enabled': True,
-        'checkpoint_path': 'trained_models/iv3_gru/latest-low_acc/InceptionV3GRU_best.pt',
+        'checkpoint_path': 'trained_models/iv3_gru/70-gloss_acc/InceptionV3GRU_best.pt',
         'model_type': 'iv3_gru',
         'num_gloss_classes': 105,
         'num_category_classes': 10,
