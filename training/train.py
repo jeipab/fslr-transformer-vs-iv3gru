@@ -105,6 +105,99 @@ class FSLFeatureFileDataset(Dataset):
             raise ValueError(f"Expected [T,2048] features in {path}, got shape {X.shape}")
         return X
 
+class FSLMultiModalDataset(Dataset):
+    """
+    Dataset for multi-modal data combining keypoints [T, 156] and features [T, 2048] from .npz files.
+    
+    Loads both X (keypoints) and X2048 (features) from the same .npz file and concatenates them
+    into a single tensor of shape [T, 2204] (156 + 2048).
+    
+    Args:
+        data_dir: Directory containing .npz files with both X and X2048 keys.
+        labels_csv: CSV file with columns: file, gloss, cat.
+        augment: Whether to apply temporal augmentation.
+        augment_params: Parameters for augmentation.
+        
+    Returns:
+        __getitem__ returns (combined_features[T,2204] float32, gloss long, cat long, length long).
+    """
+    def __init__(self, data_dir, labels_csv, augment=False, augment_params=None):
+        self.data_dir = data_dir
+        self.index = []  # list of (stem, gloss, cat)
+        self.augment = augment
+        self.training = True  # Will be set by DataLoader
+        if augment and augment_params:
+            self.augmentation = TemporalAugmentation(**augment_params)
+        elif augment:
+            self.augmentation = TemporalAugmentation()
+
+        if labels_csv is None:
+            raise ValueError("labels_csv must be provided for multi-modal dataset")
+
+        with open(labels_csv, newline='') as f:
+            reader = csv.DictReader(f)
+            required = {'file', 'gloss', 'cat'}
+            if not required.issubset(set(reader.fieldnames or [])):
+                raise ValueError(f"labels_csv must have columns: {required}")
+            for row in reader:
+                try:
+                    # accept values with or without extension
+                    stem = os.path.splitext(row['file'])[0]
+                    gloss = int(row['gloss'])
+                    cat = int(row['cat'])
+                    self.index.append((stem, gloss, cat))
+                except (ValueError, KeyError) as e:
+                    raise ValueError(f"Invalid data in row {row}: {e}")
+
+    def __len__(self):
+        return len(self.index)
+
+    def __getitem__(self, idx):
+        stem, gloss, cat = self.index[idx]
+        path = os.path.join(self.data_dir, stem + '.npz')
+        if not os.path.exists(path):
+            raise FileNotFoundError(f"Multi-modal file not found: {path}")
+        
+        # Load both keypoints and features
+        keypoints, features = self._load_npz_multimodal(path)
+        
+        # Concatenate along feature dimension: [T, 156] + [T, 2048] = [T, 2204]
+        combined_data = torch.cat([keypoints, features], dim=-1)
+        length = combined_data.shape[0]
+        
+        # Apply augmentation if enabled and in training mode
+        if self.augment and self.training and hasattr(self, 'augmentation'):
+            combined_data = self.augmentation(combined_data)
+        
+        return combined_data.float(), torch.tensor(gloss, dtype=torch.long), torch.tensor(cat, dtype=torch.long), torch.tensor(length, dtype=torch.long)
+
+    def _load_npz_multimodal(self, path):
+        """Load both keypoints (X) and features (X2048) from .npz file."""
+        with np.load(path, allow_pickle=True) as npz:
+            # Load keypoints (X)
+            if 'X' in npz:
+                keypoints = np.array(npz['X'])
+            else:
+                raise KeyError(f"'X' (keypoints) not found in {path}")
+            
+            # Load features (X2048)
+            if 'X2048' in npz:
+                features = np.array(npz['X2048'])
+            else:
+                raise KeyError(f"'X2048' (features) not found in {path}")
+        
+        # Validate shapes
+        if keypoints.ndim != 2 or keypoints.shape[-1] != 156:
+            raise ValueError(f"Expected [T,156] keypoints in {path}, got shape {keypoints.shape}")
+        if features.ndim != 2 or features.shape[-1] != 2048:
+            raise ValueError(f"Expected [T,2048] features in {path}, got shape {features.shape}")
+        
+        # Ensure temporal alignment
+        if keypoints.shape[0] != features.shape[0]:
+            raise ValueError(f"Temporal mismatch in {path}: keypoints {keypoints.shape[0]} vs features {features.shape[0]}")
+        
+        return torch.from_numpy(keypoints), torch.from_numpy(features)
+
 class FSLKeypointFileDataset(Dataset):
     """
     Dataset for precomputed keypoint sequences with shape [T, 156] stored as .npz.
@@ -1608,6 +1701,7 @@ def parse_args():
     """
     parser = argparse.ArgumentParser(description="Train Sign Language Recognition model (smoke-test ready)")
     parser.add_argument("--model", choices=["transformer", "iv3_gru"], default="transformer", help="Model to train")
+    parser.add_argument("--multimodal", action="store_true", help="Use multi-modal input (keypoints + features)")
     parser.add_argument("--epochs", type=int, default=20, help="Number of training epochs")
     parser.add_argument("--batch-size", type=int, default=32, help="Batch size")
     parser.add_argument("--alpha", type=float, default=0.5, help="Weight for gloss loss")
@@ -1625,6 +1719,9 @@ def parse_args():
     parser.add_argument("--keypoints-train", type=str, default=None, help="Directory of training .npz keypoints [T,156]")
     parser.add_argument("--keypoints-val", type=str, default=None, help="Directory of validation .npz keypoints [T,156]")
     parser.add_argument("--kp-key", type=str, default="X", help="Key in .npz containing [T,156] keypoints")
+    # Multi-modal dataset options
+    parser.add_argument("--multimodal-train", type=str, default=None, help="Directory of training .npz files with both X and X2048")
+    parser.add_argument("--multimodal-val", type=str, default=None, help="Directory of validation .npz files with both X and X2048")
     # IV3-GRU hyperparameters
     parser.add_argument("--hidden1", type=int, default=16, help="IV3-GRU first GRU hidden size")
     parser.add_argument("--hidden2", type=int, default=12, help="IV3-GRU second GRU hidden size")
@@ -1771,13 +1868,16 @@ if __name__ == "__main__":
     try:
         # If dataset directories are provided, use file-based datasets; otherwise synthetic
         use_feature_files = (
-            args.model == "iv3_gru" and args.features_train is not None and args.features_val is not None
+            args.model == "iv3_gru" and args.features_train is not None and args.features_val is not None and not args.multimodal
         )
         use_keypoint_files = (
-            args.model == "transformer" and args.keypoints_train is not None and args.keypoints_val is not None
+            args.model == "transformer" and args.keypoints_train is not None and args.keypoints_val is not None and not args.multimodal
         )
-        if not (use_feature_files or use_keypoint_files):
-            raise ValueError("No data files provided. Please specify either --features-train/--features-val for IV3-GRU model or --keypoints-train/--keypoints-val for Transformer model.")
+        use_multimodal_files = (
+            args.multimodal and args.multimodal_train is not None and args.multimodal_val is not None
+        )
+        if not (use_feature_files or use_keypoint_files or use_multimodal_files):
+            raise ValueError("No data files provided. Please specify either --features-train/--features-val for IV3-GRU model, --keypoints-train/--keypoints-val for Transformer model, or --multimodal-train/--multimodal-val for multi-modal training.")
         print(f"✓ Loaded data successfully")
         
         # Log dataset source information
@@ -1791,6 +1891,11 @@ if __name__ == "__main__":
             print(f"  - Training folder: {args.keypoints_train}")
             print(f"  - Validation folder: {args.keypoints_val}")
             print(f"  - Keypoint key: {args.kp_key}")
+        elif use_multimodal_files:
+            print(f"  - Dataset type: Multi-Modal (Keypoints + Features)")
+            print(f"  - Training folder: {args.multimodal_train}")
+            print(f"  - Validation folder: {args.multimodal_val}")
+            print(f"  - Model: {args.model}")
         
         print(f"  - Gloss classes: {args.num_gloss}")
         print(f"  - Category classes: {args.num_cat}")
@@ -1865,6 +1970,27 @@ if __name__ == "__main__":
         )
         train_loader = _make_dataloader(train_dataset, batch_size, True, args, collate_fn=collate_keypoints_with_padding)
         val_loader = _make_dataloader(val_dataset, batch_size, False, args, collate_fn=collate_keypoints_with_padding)
+    elif use_multimodal_files:
+        # Validate CSV files exist
+        if args.labels_train_csv is None or not os.path.exists(args.labels_train_csv):
+            raise FileNotFoundError(f"Training labels CSV not found: {args.labels_train_csv}")
+        if args.labels_val_csv is None or not os.path.exists(args.labels_val_csv):
+            raise FileNotFoundError(f"Validation labels CSV not found: {args.labels_val_csv}")
+        
+        train_dataset = FSLMultiModalDataset(
+            data_dir=args.multimodal_train,
+            labels_csv=args.labels_train_csv,
+            augment=args.augment,
+            augment_params=augment_params,
+        )
+        val_dataset = FSLMultiModalDataset(
+            data_dir=args.multimodal_val,
+            labels_csv=args.labels_val_csv,
+            augment=False,  # No augmentation for validation
+            augment_params=None,
+        )
+        train_loader = _make_dataloader(train_dataset, batch_size, True, args, collate_fn=collate_keypoints_with_padding)
+        val_loader = _make_dataloader(val_dataset, batch_size, False, args, collate_fn=collate_keypoints_with_padding)
     
     print(f"✓ Created datasets and data loaders")
     print(f"  - Batch size: {batch_size}")
@@ -1882,6 +2008,10 @@ if __name__ == "__main__":
         print(f"  - Training dataset size: {len(train_dataset)} samples")
         print(f"  - Validation dataset size: {len(val_dataset)} samples")
         print(f"  - Data format: [T, 156] keypoints")
+    elif use_multimodal_files:
+        print(f"  - Training dataset size: {len(train_dataset)} samples")
+        print(f"  - Validation dataset size: {len(val_dataset)} samples")
+        print(f"  - Data format: [T, 2204] multi-modal (156 keypoints + 2048 features)")
 
     # Model selection
     print("\n" + "="*60)
@@ -1893,8 +2023,12 @@ if __name__ == "__main__":
     print("- iv3_gru: InceptionV3 + GRU hybrid")
     
     if args.model == "transformer":
-        # Determine input dimension based on the data key being used
-        if args.kp_key == "X2048":
+        # Determine input dimension based on data type
+        if use_multimodal_files:
+            input_dim = 2204  # Multi-modal: 156 keypoints + 2048 features
+        elif use_feature_files:
+            input_dim = 2048  # Features
+        elif args.kp_key == "X2048":
             input_dim = 2048
         else:
             input_dim = 156  # Default for keypoints
@@ -1941,7 +2075,10 @@ if __name__ == "__main__":
             return m(X, mask=mask)
     else:
         def forward_fn(m, X, lengths=None):
-            return m(X, lengths=lengths, features_already=True)
+            if use_multimodal_files:
+                return m(X, lengths=lengths, multimodal=True)
+            else:
+                return m(X, lengths=lengths, features_already=True)
 
     # Training execution
     print("\n" + "="*60)

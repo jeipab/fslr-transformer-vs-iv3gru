@@ -101,9 +101,11 @@ class InceptionV3GRU(nn.Module):
         frames_or_feats:
             - If features_already=False: Tensor (B, T, 3, H, W)
             - If features_already=True: Tensor (B, T, 2048)
+            - If multimodal=True: Tensor (B, T, 2204) - combined keypoints + features
         lengths: Optional 1D Tensor (B,) with true sequence lengths.
         return_probs: If True, return probabilities; otherwise logits.
         features_already: Set True when passing precomputed 2048-D features.
+        multimodal: Set True when passing multi-modal 2204-D features.
 
     Returns:
         Tuple[Tensor, Tensor]: (gloss, category) tensors of shape (B, num_classes).
@@ -123,8 +125,10 @@ class InceptionV3GRU(nn.Module):
             pretrained=pretrained_backbone, freeze=freeze_backbone
         )
         self.input_dim = self.feat_extractor.out_dim  # 2048
+        # For multi-modal: input_dim will be 2204 (156 + 2048)
+        self.multimodal_input_dim = 2204  # 156 keypoints + 2048 features
         # Two GRU layers with different hidden sizes (stacked modules)
-        self.gru1 = nn.GRU(input_size=self.input_dim, hidden_size=hidden1, num_layers=1, batch_first=True)
+        self.gru1 = nn.GRU(input_size=self.multimodal_input_dim, hidden_size=hidden1, num_layers=1, batch_first=True)
         self.gru2 = nn.GRU(input_size=hidden1, hidden_size=hidden2, num_layers=1, batch_first=True)
         self.do1 = nn.Dropout(dropout)
         self.do2 = nn.Dropout(dropout)
@@ -170,22 +174,30 @@ class InceptionV3GRU(nn.Module):
         lengths: Optional[torch.Tensor] = None,
         return_probs: bool = False,
         features_already: bool = False,
+        multimodal: bool = False,
     ) -> Tuple[torch.Tensor, torch.Tensor]:
         """
-        Forward pass with either raw frames or precomputed features.
+        Forward pass with either raw frames, precomputed features, or multi-modal input.
 
         Args:
-            frames_or_feats: (B, T, 3, H, W) if features_already=False, else (B, T, 2048).
+            frames_or_feats: (B, T, 3, H, W) if features_already=False, 
+                           (B, T, 2048) if features_already=True,
+                           (B, T, 2204) if multimodal=True.
             lengths: Optional true lengths (B,) for packed-sequence processing.
             return_probs: If True, return softmax probabilities instead of logits.
             features_already: Whether `frames_or_feats` are 2048-D features.
+            multimodal: Whether `frames_or_feats` are multi-modal (2204-D) features.
 
         Returns:
             Tuple[Tensor, Tensor]: (gloss, category) logits or probabilities of
             shapes (B, num_gloss) and (B, num_cat).
         """
-        # Build (B, T, 2048) sequence
-        if features_already:
+        # Build sequence based on input type
+        if multimodal:
+            seq = frames_or_feats  # (B, T, 2204)
+            if seq.shape[-1] != 2204:
+                raise ValueError(f"Expected multi-modal features with 2204 dimensions, got {seq.shape[-1]}")
+        elif features_already:
             seq = frames_or_feats  # (B, T, 2048)
             if seq.shape[-1] != 2048:
                 raise ValueError(f"Expected features with 2048 dimensions, got {seq.shape[-1]}")

@@ -330,7 +330,7 @@ class SignTransformer(nn.Module):
         - Category classification (semantic class/group)
 
     Args:
-        input_dim: Input feature dimension per frame (default 156).
+        input_dim: Input feature dimension per frame (default 2204).
         emb_dim: Embedding dimension E.
         n_heads: Number of attention heads H.
         n_layers: Number of encoder layers.
@@ -342,12 +342,12 @@ class SignTransformer(nn.Module):
         pooling_method: One of 'mean' | 'max' | 'cls'.
         
     Note:
-        Input sequences are expected to have shape [B, T, 156] where 156 is the
-        number of keypoint features (78 keypoints × 2 coordinates).
+        Input sequences are expected to have shape [B, T, 2204] where 2204 is the
+        combined dimension of keypoints (156) + features (2048).
     """
     
     def __init__(self,
-                    input_dim=156,     # 78 keypoints × 2 coords
+                    input_dim=2204,    # 156 keypoints + 2048 features = 2204
                     emb_dim=256,       # embedding dimension
                     n_heads=8,         # number of attention heads
                     n_layers=4,        # number of encoder layers
@@ -361,7 +361,7 @@ class SignTransformer(nn.Module):
         super(SignTransformer, self).__init__()
 
         # ----- Input embedding -----
-        # Linear projection from raw keypoints (156) → model embedding (E)
+        # Linear projection from combined features (2204) → model embedding (E)
         self.embedding = nn.Linear(input_dim, emb_dim)
 
         # Positional encoding (adds temporal order info)
