@@ -15,7 +15,7 @@ sys.path.insert(0, str(project_root))
 
 from ..components.utils import detect_file_type, check_npz_compatibility, create_npz_bytes, extract_occlusion_flag, interpret_occlusion_flag
 from ..components.visualization import (
-    render_sequence_overview, render_animated_keypoints, 
+    render_consolidated_file_info, render_animated_keypoints, 
     render_feature_charts, render_topk_table
 )
 from ..components.components import render_predictions_section
@@ -477,44 +477,12 @@ def render_visualization_tabs(cfg: Dict):
             npz_data = st.session_state.processed_data[filename]
             metadata = st.session_state.file_metadata[filename]
             
-            # File info
-            st.markdown(f"### {filename}")
-            
-            col1, col2, col3, col4, col5 = st.columns(5)
-            with col1:
-                st.metric("Frames", metadata['frame_count'])
-            with col2:
-                compatibility = metadata['compatibility']
-                # Count only individual model compatibility, not 'both' flag
-                compatible_count = sum(compatibility[key] for key in ['transformer', 'iv3_gru'])
-                st.metric("Compatible Models", compatible_count)
-            with col3:
-                st.metric("File Type", metadata['file_type'].upper())
-            with col4:
-                source_type = metadata.get('source_type', 'original')
-                st.metric("Source", source_type.title())
-            with col5:
-                # Extract and display occlusion status
-                occlusion_flag = extract_occlusion_flag(npz_data)
-                occlusion_status = interpret_occlusion_flag(occlusion_flag)
-                st.metric("Occluded", occlusion_status)
-            
-            # Show compatibility info
-            compatible_models = []
-            if compatibility['transformer']:
-                compatible_models.append("Transformer")
-            if compatibility['iv3_gru']:
-                compatible_models.append("IV3-GRU")
-            
-            if compatible_models:
-                st.info(f"Compatible with: {', '.join(compatible_models)}")
-            
-            # Generate and render predictions first
-            render_predictions_section(cfg, npz_data, filename)
-            
-            # Render visualizations
+            # Render consolidated file info (includes sequence overview data)
             try:
-                X_pad, mask, meta = render_sequence_overview(npz_data, cfg["sequence_length"])
+                X_pad, mask, meta = render_consolidated_file_info(filename, npz_data, metadata, cfg["sequence_length"])
+                
+                # Generate and render predictions
+                render_predictions_section(cfg, npz_data, filename)
                 
                 # Side-by-side layout for Keypoint Visualization and Feature Analysis
                 st.markdown('<div class="viz-side-by-side">', unsafe_allow_html=True)

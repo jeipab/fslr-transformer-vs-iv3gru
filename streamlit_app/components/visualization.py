@@ -24,6 +24,168 @@ except ImportError:
     CV2_AVAILABLE = False
 
 
+def render_consolidated_file_info(filename: str, npz_data: Dict, metadata: Dict, sequence_length: int) -> Tuple[np.ndarray, np.ndarray, Dict]:
+    """Render consolidated file info with integrated sequence overview data.
+
+    Args:
+        filename: Name of the file
+        npz_data: NpzFile-like dict from numpy.load
+        metadata: File metadata dictionary
+        sequence_length: Target T for padding/trimming
+
+    Returns:
+        (X_pad, mask, meta_dict)
+    """
+    if "X" not in npz_data:
+        raise KeyError("Uploaded .npz must contain key 'X' with shape [T, 156]")
+
+    X_raw = np.array(npz_data["X"])  # [T, 156]
+    mask = np.array(npz_data.get("mask", []))
+    timestamps_ms = np.array(npz_data.get("timestamps_ms", []))
+    X2048 = np.array(npz_data.get("X2048", [])) if "X2048" in npz_data else None
+
+    raw_length, raw_features = X_raw.shape[0], X_raw.shape[1] if X_raw.ndim == 2 else (0, 0)
+    
+    # Parse metadata
+    meta_raw = npz_data.get("meta")
+    meta_parsed: Dict = {}
+    if meta_raw is not None:
+        try:
+            if isinstance(meta_raw, (str, bytes)):
+                meta_parsed = json.loads(meta_raw)
+            else:
+                meta_parsed = json.loads(str(meta_raw))
+        except Exception:
+            meta_parsed = {"info": "Unparsed meta"}
+
+    # File title
+    st.markdown(f"### {filename}")
+    
+    # Add CSS to reduce spacing between columns and after filename
+    st.markdown("""
+    <style>
+    .stMetric {
+        margin-bottom: 0 !important;
+    }
+    .stMetric > div {
+        margin-bottom: 0 !important;
+    }
+    .element-container {
+        margin-bottom: 0 !important;
+    }
+    h3 {
+        margin-bottom: -1rem !important;
+    }
+    </style>
+    """, unsafe_allow_html=True)
+    
+    # Row 1: Core features (Frames, Keypoints, X2048 Features)
+    col1, col2, col3 = st.columns(3)
+    
+    with col1:
+        st.markdown("<div style='text-align: center;'>", unsafe_allow_html=True)
+        st.metric("Frames", raw_length)
+        if raw_features == 156:
+            st.markdown("<span class='status-good'>✓ Valid keypoints</span>", unsafe_allow_html=True)
+        else:
+            st.markdown("<span class='status-warning'>⚠ Unexpected shape</span>", unsafe_allow_html=True)
+        st.markdown("</div>", unsafe_allow_html=True)
+    
+    with col2:
+        st.markdown("<div style='text-align: center;'>", unsafe_allow_html=True)
+        # Display "Keypoints" when feature dimension is 156, otherwise "Features"
+        label = "Keypoints" if raw_features == 156 else "Features"
+        st.metric(label, raw_features)
+        # Show transformer readiness
+        model_type = meta_parsed.get('model_type') if meta_parsed else None
+        if raw_features == 156 and (model_type in ['T', 'B'] or model_type is None):
+            st.markdown("<span class='status-good'>✓ Transformer ready</span>", unsafe_allow_html=True)
+        elif model_type == 'I':
+            st.markdown("<span class='status-good'>✓ IV3-GRU ready</span>", unsafe_allow_html=True)
+        st.markdown("</div>", unsafe_allow_html=True)
+    
+    with col3:
+        st.markdown("<div style='text-align: center;'>", unsafe_allow_html=True)
+        if X2048 is not None and isinstance(X2048, np.ndarray) and X2048.size > 0:
+            st.metric("X2048 Features", "Present")
+            st.markdown("<span class='status-good'>✓ IV3-GRU ready</span>", unsafe_allow_html=True)
+        else:
+            st.metric("X2048 Features", "Missing")
+            st.markdown("<span class='status-warning'>⚠ Transformer only</span>", unsafe_allow_html=True)
+        st.markdown("</div>", unsafe_allow_html=True)
+    
+    # Row 2: Additional file metadata
+    col4, col5, col6, col7 = st.columns(4)
+    
+    with col4:
+        st.markdown("<div style='text-align: center;'>", unsafe_allow_html=True)
+        if timestamps_ms.size > 0:
+            duration_s = (timestamps_ms[-1] - timestamps_ms[0]) / 1000.0 if timestamps_ms.size > 1 else 0.0
+            if duration_s > 0:
+                fps = raw_length / duration_s if duration_s > 0 else 0
+                st.metric("Duration", f"{duration_s:.2f}s", help=f"~{fps:.1f} FPS")
+            else:
+                st.metric("Duration", f"{duration_s:.2f}s")
+        else:
+            st.metric("Duration", "N/A")
+        st.markdown("</div>", unsafe_allow_html=True)
+    
+    with col5:
+        st.markdown("<div style='text-align: center;'>", unsafe_allow_html=True)
+        st.metric("File Type", metadata['file_type'].upper())
+        st.markdown("</div>", unsafe_allow_html=True)
+    
+    with col6:
+        st.markdown("<div style='text-align: center;'>", unsafe_allow_html=True)
+        source_type = metadata.get('source_type', 'original')
+        st.metric("Source", source_type.title())
+        st.markdown("</div>", unsafe_allow_html=True)
+    
+    with col7:
+        st.markdown("<div style='text-align: center;'>", unsafe_allow_html=True)
+        # Extract and display occlusion status
+        from .utils import extract_occlusion_flag, interpret_occlusion_flag
+        occlusion_flag = extract_occlusion_flag(npz_data)
+        occlusion_status = interpret_occlusion_flag(occlusion_flag)
+        st.metric("Occluded", occlusion_status)
+        st.markdown("</div>", unsafe_allow_html=True)
+
+    # Optional expanders for detailed info - side by side
+    exp_col1, exp_col2 = st.columns(2)
+    
+    with exp_col1:
+        with st.expander("Metadata", expanded=False):
+            if meta_parsed:
+                st.json(meta_parsed)
+            else:
+                st.write("No metadata available")
+    
+    with exp_col2:
+        with st.expander("Data checks", expanded=False):
+            issues = []
+            if not (X_raw.ndim == 2 and X_raw.shape[1] == 156):
+                issues.append(f"X shape expected [T,156], got {getattr(X_raw, 'shape', None)}")
+            if mask.size > 0:
+                if mask.ndim == 2 and mask.shape[1] == 78:
+                    coverage = float(mask.mean() * 100.0)
+                    st.caption(f"Mask coverage: {coverage:.1f}% of keypoints marked visible")
+                else:
+                    issues.append(f"mask shape expected [T,78], got {getattr(mask, 'shape', None)}")
+            if timestamps_ms.size > 1:
+                mono = bool((timestamps_ms[1:] >= timestamps_ms[:-1]).all())
+                if not mono:
+                    issues.append("timestamps_ms not monotonic nondecreasing")
+            if X2048 is not None and isinstance(X2048, np.ndarray) and X2048.size > 0:
+                if not (X2048.ndim == 2 and X2048.shape[1] == 2048):
+                    issues.append(f"X2048 shape expected [T,2048], got {getattr(X2048, 'shape', None)}")
+            if issues:
+                st.warning("\n".join(f"- {m}" for m in issues))
+
+    from .utils import pad_or_trim
+    X_pad = pad_or_trim(X_raw, sequence_length)
+    return X_pad, mask, meta_parsed
+
+
 def render_sequence_overview(npz_dict: Dict, sequence_length: int) -> Tuple[np.ndarray, np.ndarray, Dict]:
     """Show metadata and return processed sequence and related info.
 
@@ -65,7 +227,9 @@ def render_sequence_overview(npz_dict: Dict, sequence_length: int) -> Tuple[np.n
         st.metric("Frames", str(raw_length), delta=None)
     
     with col2:
-        st.metric("Features", str(raw_features), delta=None)
+        # Display "Keypoints" when feature dimension is 156, otherwise "Features"
+        label = "Keypoints" if raw_features == 156 else "Features"
+        st.metric(label, str(raw_features), delta=None)
         if raw_features == 156:
             st.markdown("<span class='status-good'>✓ Valid keypoints</span>", unsafe_allow_html=True)
             # Check model_type to determine what to display
