@@ -161,11 +161,32 @@ class ModelValidator:
             )
         elif self.model_type == 'iv3_gru':
             from models.iv3_gru import InceptionV3GRU
+            
+            # Try to determine hidden sizes from checkpoint
+            try:
+                checkpoint = torch.load(self.checkpoint_path, map_location='cpu')
+                state_dict = checkpoint.get('model_state_dict', checkpoint.get('state_dict', checkpoint.get('model', checkpoint)))
+                
+                # Detect GRU hidden sizes from checkpoint weights
+                if 'gru1.weight_hh_l0' in state_dict and 'gru2.weight_hh_l0' in state_dict:
+                    # GRU weight_hh has shape [3*hidden, hidden] for each layer
+                    gru1_hidden = state_dict['gru1.weight_hh_l0'].shape[0] // 3
+                    gru2_hidden = state_dict['gru2.weight_hh_l0'].shape[0] // 3
+                    print(f"Detected GRU hidden sizes from checkpoint: hidden1={gru1_hidden}, hidden2={gru2_hidden}")
+                else:
+                    gru1_hidden = 16  # Default fallback
+                    gru2_hidden = 12  # Default fallback
+                    print(f"Warning: Could not detect GRU hidden sizes from checkpoint, using defaults: hidden1={gru1_hidden}, hidden2={gru2_hidden}")
+            except Exception as e:
+                gru1_hidden = 16  # Default fallback
+                gru2_hidden = 12  # Default fallback
+                print(f"Warning: Could not load checkpoint to detect GRU hidden sizes, using defaults: hidden1={gru1_hidden}, hidden2={gru2_hidden}: {e}")
+            
             model = InceptionV3GRU(
                 num_gloss=105,
                 num_cat=10,
-                hidden1=16,
-                hidden2=12,
+                hidden1=gru1_hidden,
+                hidden2=gru2_hidden,
                 dropout=0.3,
                 pretrained_backbone=True,
                 freeze_backbone=True
