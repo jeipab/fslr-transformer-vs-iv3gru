@@ -25,6 +25,7 @@ from typing import Optional, Tuple, Callable
 import numpy as np
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 import torch.optim as optim
 from torch.utils.data import DataLoader, Dataset
 
@@ -46,10 +47,16 @@ class FSLFeatureFileDataset(Dataset):
     Returns:
         __getitem__ returns (X[T,2048] float32, gloss long, cat long, length long).
     """
-    def __init__(self, features_dir, labels_csv, feature_key='X2048'):
+    def __init__(self, features_dir, labels_csv, feature_key='X2048', augment=False, augment_params=None):
         self.features_dir = features_dir
         self.feature_key = feature_key
         self.index = []  # list of (stem, gloss, cat)
+        self.augment = augment
+        self.training = True  # Will be set by DataLoader
+        if augment and augment_params:
+            self.augmentation = TemporalAugmentation(**augment_params)
+        elif augment:
+            self.augmentation = TemporalAugmentation()
 
         if labels_csv is None:
             raise ValueError("labels_csv must be provided for feature dataset")
@@ -79,6 +86,11 @@ class FSLFeatureFileDataset(Dataset):
             raise FileNotFoundError(f"Feature file not found: {path}")
         data = torch.from_numpy(self._load_npz_features(path))  # [T, 2048]
         length = data.shape[0]
+        
+        # Apply augmentation if enabled and in training mode
+        if self.augment and self.training and hasattr(self, 'augmentation'):
+            data = self.augmentation(data)
+        
         return data.float(), torch.tensor(gloss, dtype=torch.long), torch.tensor(cat, dtype=torch.long), torch.tensor(length, dtype=torch.long)
 
     def _load_npz_features(self, path):
@@ -109,10 +121,16 @@ class FSLKeypointFileDataset(Dataset):
     Returns:
         __getitem__ returns (X[T,156] float32, gloss long, cat long, length long).
     """
-    def __init__(self, keypoints_dir, labels_csv, kp_key='X'):
+    def __init__(self, keypoints_dir, labels_csv, kp_key='X', augment=False, augment_params=None):
         self.keypoints_dir = keypoints_dir
         self.kp_key = kp_key
         self.index = []  # list of (stem, gloss, cat)
+        self.augment = augment
+        self.training = True  # Will be set by DataLoader
+        if augment and augment_params:
+            self.augmentation = TemporalAugmentation(**augment_params)
+        elif augment:
+            self.augmentation = TemporalAugmentation()
 
         if labels_csv is None:
             raise ValueError("labels_csv must be provided for keypoint dataset")
@@ -141,6 +159,11 @@ class FSLKeypointFileDataset(Dataset):
             raise FileNotFoundError(f"Keypoint file not found: {path}")
         data = torch.from_numpy(self._load_npz_keypoints(path))  # [T, 156]
         length = data.shape[0]
+        
+        # Apply augmentation if enabled and in training mode
+        if self.augment and self.training and hasattr(self, 'augmentation'):
+            data = self.augmentation(data)
+        
         return data.float(), torch.tensor(gloss, dtype=torch.long), torch.tensor(cat, dtype=torch.long), torch.tensor(length, dtype=torch.long)
 
     def _load_npz_keypoints(self, path):
@@ -615,6 +638,180 @@ class CurriculumScheduler:
             else:
                 return "Balanced phase"
 
+class FocalLoss(nn.Module):
+    """
+    Focal Loss implementation for addressing class imbalance.
+    
+    Focal Loss = -alpha * (1-pt)^gamma * log(pt)
+    where pt is the predicted probability for the true class.
+    """
+    
+    def __init__(self, alpha=1.0, gamma=2.0, reduction='mean'):
+        super(FocalLoss, self).__init__()
+        self.alpha = alpha
+        self.gamma = gamma
+        self.reduction = reduction
+    
+    def forward(self, inputs, targets):
+        """
+        Args:
+            inputs: (N, C) logits
+            targets: (N,) class indices
+        """
+        ce_loss = F.cross_entropy(inputs, targets, reduction='none')
+        pt = torch.exp(-ce_loss)
+        focal_loss = self.alpha * (1 - pt) ** self.gamma * ce_loss
+        
+        if self.reduction == 'mean':
+            return focal_loss.mean()
+        elif self.reduction == 'sum':
+            return focal_loss.sum()
+        else:
+            return focal_loss
+
+class LabelSmoothingCrossEntropy(nn.Module):
+    """
+    Label Smoothing CrossEntropy Loss for better generalization.
+    
+    Combines hard target loss with uniform distribution loss.
+    """
+    
+    def __init__(self, smoothing=0.1, reduction='mean'):
+        super(LabelSmoothingCrossEntropy, self).__init__()
+        self.smoothing = smoothing
+        self.reduction = reduction
+    
+    def forward(self, x, target):
+        """
+        Args:
+            x: (N, C) logits
+            target: (N,) class indices
+        """
+        confidence = 1. - self.smoothing
+        logprobs = F.log_softmax(x, dim=-1)
+        nll_loss = -logprobs.gather(dim=-1, index=target.unsqueeze(1))
+        nll_loss = nll_loss.squeeze(1)
+        smooth_loss = -logprobs.mean(dim=-1)
+        loss = confidence * nll_loss + self.smoothing * smooth_loss
+        
+        if self.reduction == 'mean':
+            return loss.mean()
+        elif self.reduction == 'sum':
+            return loss.sum()
+        else:
+            return loss
+
+class TemporalAugmentation:
+    """
+    Temporal augmentation for sequence data to improve generalization.
+    """
+    
+    def __init__(self, noise_std=0.01, time_mask_prob=0.1, time_mask_ratio=0.1):
+        self.noise_std = noise_std
+        self.time_mask_prob = time_mask_prob
+        self.time_mask_ratio = time_mask_ratio
+    
+    def __call__(self, sequence):
+        """
+        Apply temporal augmentation to a sequence.
+        
+        Args:
+            sequence: (T, D) tensor
+            
+        Returns:
+            Augmented sequence of same shape
+        """
+        # Add Gaussian noise
+        if random.random() < 0.3:
+            noise = torch.randn_like(sequence) * self.noise_std
+            sequence = sequence + noise
+        
+        # Time masking (mask random frames)
+        if random.random() < self.time_mask_prob:
+            seq_len = sequence.shape[0]
+            mask_len = max(1, int(seq_len * self.time_mask_ratio))
+            start_idx = random.randint(0, max(0, seq_len - mask_len))
+            sequence[start_idx:start_idx + mask_len] = 0
+        
+        return sequence
+
+class WarmupCosineScheduler:
+    """
+    Learning rate scheduler with warmup followed by cosine annealing.
+    """
+    
+    def __init__(self, optimizer, warmup_epochs, total_epochs, base_lr, min_lr_ratio=0.01):
+        self.optimizer = optimizer
+        self.warmup_epochs = warmup_epochs
+        self.total_epochs = total_epochs
+        self.base_lr = base_lr
+        self.min_lr = base_lr * min_lr_ratio
+        
+        # Warmup scheduler
+        self.warmup_scheduler = torch.optim.lr_scheduler.LinearLR(
+            optimizer, start_factor=0.1, total_iters=warmup_epochs
+        )
+        
+        # Cosine scheduler for remaining epochs
+        self.cosine_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
+            optimizer, T_max=total_epochs - warmup_epochs, eta_min=self.min_lr
+        )
+    
+    def step(self, epoch):
+        """Step the scheduler for the given epoch."""
+        if epoch < self.warmup_epochs:
+            self.warmup_scheduler.step()
+        else:
+            self.cosine_scheduler.step()
+
+class EMA:
+    """
+    Exponential Moving Average for model parameters to improve stability.
+    """
+    
+    def __init__(self, model, decay=0.999):
+        self.model = model
+        self.decay = decay
+        self.shadow = {}
+        self.backup = {}
+        self.registered = False
+    
+    def register(self):
+        """Register parameters for EMA."""
+        if not self.registered:
+            for name, param in self.model.named_parameters():
+                if param.requires_grad:
+                    self.shadow[name] = param.data.clone()
+            self.registered = True
+    
+    def update(self):
+        """Update shadow parameters with current model parameters."""
+        if not self.registered:
+            self.register()
+        
+        for name, param in self.model.named_parameters():
+            if param.requires_grad:
+                self.shadow[name] = self.decay * self.shadow[name] + (1 - self.decay) * param.data
+    
+    def apply_shadow(self):
+        """Apply shadow parameters to model."""
+        if not self.registered:
+            return
+        
+        for name, param in self.model.named_parameters():
+            if param.requires_grad:
+                self.backup[name] = param.data
+                param.data = self.shadow[name]
+    
+    def restore(self):
+        """Restore original model parameters."""
+        if not self.registered:
+            return
+        
+        for name, param in self.model.named_parameters():
+            if param.requires_grad:
+                param.data = self.backup[name]
+
 class LossWeightingStrategy:
     """
     Base class for loss weighting strategies.
@@ -856,6 +1053,7 @@ def train_model(
     grad_clip=None,
     scheduler_type=None,
     scheduler_patience=5,
+    warmup_epochs=5,
     early_stop_patience=None,
     resume_path=None,
     log_csv_path=None,
@@ -871,6 +1069,12 @@ def train_model(
     uncertainty_init=1.0,
     gradnorm_alpha=1.5,
     gradnorm_update_freq=1,
+    loss_type="ce",
+    focal_gamma=2.0,
+    focal_alpha=1.0,
+    label_smoothing=0.1,
+    use_ema=False,
+    ema_decay=0.999,
 ):
     """
     Train a model with multi-task loss on gloss and category predictions.
@@ -972,7 +1176,16 @@ def train_model(
         except Exception as e:
             print(f"⚠ Model compilation failed: {e}")
     
-    criterion = nn.CrossEntropyLoss()
+    # Initialize loss function based on type
+    if loss_type == "focal":
+        criterion = FocalLoss(alpha=focal_alpha, gamma=focal_gamma)
+        print(f"✓ Using Focal Loss (alpha={focal_alpha}, gamma={focal_gamma})")
+    elif loss_type == "label_smoothing":
+        criterion = LabelSmoothingCrossEntropy(smoothing=label_smoothing)
+        print(f"✓ Using Label Smoothing CrossEntropy (smoothing={label_smoothing})")
+    else:
+        criterion = nn.CrossEntropyLoss()
+        print("✓ Using standard CrossEntropy Loss")
     
     # Add uncertainty parameters to optimizer if using uncertainty weighting
     if loss_weighting_strategy == "uncertainty" and isinstance(loss_weighting, UncertaintyWeighting):
@@ -997,10 +1210,23 @@ def train_model(
 
     if scheduler_type == "plateau":
         scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='max', factor=0.5, patience=scheduler_patience)
+        print(f"✓ Using ReduceLROnPlateau scheduler (patience={scheduler_patience})")
     elif scheduler_type == "cosine":
         scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=max(1, epochs))
+        print(f"✓ Using CosineAnnealingLR scheduler")
+    elif scheduler_type == "warmup_cosine":
+        scheduler = WarmupCosineScheduler(optimizer, warmup_epochs, epochs, lr)
+        print(f"✓ Using WarmupCosineScheduler (warmup_epochs={warmup_epochs})")
     else:
         scheduler = None
+        print("✓ No learning rate scheduler")
+
+    # Initialize EMA if requested
+    ema = None
+    if use_ema:
+        ema = EMA(model, decay=ema_decay)
+        ema.register()
+        print(f"✓ EMA enabled (decay={ema_decay})")
 
     # Resume support
     start_epoch = 0
@@ -1131,6 +1357,10 @@ def train_model(
         total_loss += loss.item() * gradient_accumulation_steps
         num_batches += 1
         
+        # Update EMA if enabled
+        if ema is not None:
+            ema.update()
+        
         # Clear intermediate variables to save memory
         del X, gloss, cat, gloss_pred, cat_pred, loss, loss_gloss, loss_cat
         if lengths is not None:
@@ -1155,9 +1385,17 @@ def train_model(
         # Clear memory before validation
         clear_gpu_memory()
         
+        # Apply EMA for validation if enabled
+        if ema is not None:
+            ema.apply_shadow()
+        
         # Validation
         val_start_time = time.time()
         val_loss, val_gloss_acc, val_cat_acc = evaluate_with_forward(model, val_loader, criterion, device, forward_fn, alpha=current_alpha, beta=current_beta)
+        
+        # Restore original parameters after validation
+        if ema is not None:
+            ema.restore()
         val_time = time.time() - val_start_time
         
         avg_train_loss = total_loss / num_batches
@@ -1202,6 +1440,8 @@ def train_model(
         if scheduler is not None:
             if isinstance(scheduler, optim.lr_scheduler.ReduceLROnPlateau):
                 scheduler.step(val_gloss_acc)
+            elif isinstance(scheduler, WarmupCosineScheduler):
+                scheduler.step(epoch)
             else:
                 scheduler.step()
         current_lr = optimizer.param_groups[0]['lr']
@@ -1372,8 +1612,9 @@ def parse_args():
     parser.add_argument("--weight-decay", type=float, default=0.0, help="Weight decay")
     parser.add_argument("--amp", action="store_true", help="Enable mixed precision training (AMP)")
     parser.add_argument("--grad-clip", type=float, default=None, help="Gradient clipping max norm")
-    parser.add_argument("--scheduler", type=str, default=None, choices=["plateau", "cosine"], help="LR scheduler type")
+    parser.add_argument("--scheduler", type=str, default=None, choices=["plateau", "cosine", "warmup_cosine"], help="LR scheduler type")
     parser.add_argument("--scheduler-patience", type=int, default=5, help="Patience for plateau scheduler")
+    parser.add_argument("--warmup-epochs", type=int, default=5, help="Warmup epochs for warmup_cosine scheduler")
     parser.add_argument("--early-stop", type=int, default=None, help="Early stopping patience (epochs)")
     parser.add_argument("--resume", type=str, default=None, help="Path to checkpoint to resume from")
     parser.add_argument("--log-csv", type=str, default=None, help="Path to CSV log file for metrics")
@@ -1419,6 +1660,20 @@ def parse_args():
                        help="Alpha parameter for GradNorm weighting")
     parser.add_argument("--gradnorm-update-freq", type=int, default=1, 
                        help="Update frequency for GradNorm (every N epochs)")
+    # Advanced loss functions
+    parser.add_argument("--loss-type", type=str, default="ce", choices=["ce", "focal", "label_smoothing"], 
+                       help="Loss function type: ce (CrossEntropy), focal, or label_smoothing")
+    parser.add_argument("--focal-gamma", type=float, default=2.0, help="Focal loss gamma parameter")
+    parser.add_argument("--focal-alpha", type=float, default=1.0, help="Focal loss alpha parameter")
+    parser.add_argument("--label-smoothing", type=float, default=0.1, help="Label smoothing factor (0.0-1.0)")
+    # Data augmentation
+    parser.add_argument("--augment", action="store_true", help="Enable temporal data augmentation")
+    parser.add_argument("--augment-noise-std", type=float, default=0.01, help="Standard deviation for noise augmentation")
+    parser.add_argument("--augment-mask-prob", type=float, default=0.1, help="Probability of time masking")
+    parser.add_argument("--augment-mask-ratio", type=float, default=0.1, help="Ratio of sequence length to mask")
+    # EMA (Exponential Moving Average)
+    parser.add_argument("--ema-decay", type=float, default=0.999, help="EMA decay rate (0.0-1.0)")
+    parser.add_argument("--use-ema", action="store_true", help="Enable Exponential Moving Average")
     return parser.parse_args()
 
 if __name__ == "__main__":
@@ -1527,6 +1782,15 @@ if __name__ == "__main__":
         batch_size = calculate_optimal_batch_size(model, device, args.batch_size)
         print(f"✓ Auto-calculated optimal batch size: {batch_size}")
 
+    # Prepare augmentation parameters (shared for both datasets)
+    augment_params = None
+    if args.augment:
+        augment_params = {
+            'noise_std': args.augment_noise_std,
+            'time_mask_prob': args.augment_mask_prob,
+            'time_mask_ratio': args.augment_mask_ratio
+        }
+
     if use_feature_files:
         # Validate CSV files exist
         if args.labels_train_csv is None or not os.path.exists(args.labels_train_csv):
@@ -1538,11 +1802,15 @@ if __name__ == "__main__":
             features_dir=args.features_train,
             labels_csv=args.labels_train_csv,
             feature_key=args.feature_key,
+            augment=args.augment,
+            augment_params=augment_params,
         )
         val_dataset = FSLFeatureFileDataset(
             features_dir=args.features_val,
             labels_csv=args.labels_val_csv,
             feature_key=args.feature_key,
+            augment=False,  # No augmentation for validation
+            augment_params=None,
         )
         train_loader = _make_dataloader(train_dataset, batch_size, True, args, collate_fn=collate_features_with_padding)
         val_loader = _make_dataloader(val_dataset, batch_size, False, args, collate_fn=collate_features_with_padding)
@@ -1557,11 +1825,15 @@ if __name__ == "__main__":
             keypoints_dir=args.keypoints_train,
             labels_csv=args.labels_train_csv,
             kp_key=args.kp_key,
+            augment=args.augment,
+            augment_params=augment_params,
         )
         val_dataset = FSLKeypointFileDataset(
             keypoints_dir=args.keypoints_val,
             labels_csv=args.labels_val_csv,
             kp_key=args.kp_key,
+            augment=False,  # No augmentation for validation
+            augment_params=None,
         )
         train_loader = _make_dataloader(train_dataset, batch_size, True, args, collate_fn=collate_keypoints_with_padding)
         val_loader = _make_dataloader(val_dataset, batch_size, False, args, collate_fn=collate_keypoints_with_padding)
@@ -1570,6 +1842,8 @@ if __name__ == "__main__":
     print(f"  - Batch size: {batch_size}")
     print(f"  - Training batches: {len(train_loader)}")
     print(f"  - Validation batches: {len(val_loader)}")
+    if args.augment:
+        print(f"  - Data augmentation: Enabled (noise_std={args.augment_noise_std}, mask_prob={args.augment_mask_prob})")
     
     # Log dataset details
     if use_feature_files:
@@ -1655,6 +1929,7 @@ if __name__ == "__main__":
         grad_clip=args.grad_clip,
         scheduler_type=args.scheduler,
         scheduler_patience=args.scheduler_patience,
+        warmup_epochs=args.warmup_epochs,
         early_stop_patience=args.early_stop,
         resume_path=args.resume,
         log_csv_path=args.log_csv,
@@ -1670,4 +1945,10 @@ if __name__ == "__main__":
         uncertainty_init=args.uncertainty_init,
         gradnorm_alpha=args.gradnorm_alpha,
         gradnorm_update_freq=args.gradnorm_update_freq,
+        loss_type=args.loss_type,
+        focal_gamma=args.focal_gamma,
+        focal_alpha=args.focal_alpha,
+        label_smoothing=args.label_smoothing,
+        use_ema=args.use_ema,
+        ema_decay=args.ema_decay,
     )
