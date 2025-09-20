@@ -12,6 +12,85 @@ Set-up code base:
 	Install dependencies:
 		5. pip install -r requirements.txt
 
+
+Upload zipped NPZ:
+	Change directory
+		1. cd workspace/fslr-transformer-vs-iv3gru/data/processed
+	Install gdown
+		2. pip install gdown
+	Download zip file
+		3. gdown https://drive.google.com/uc?id=1C_td2Jqb07Z19t-uaoE3m3y7cAnHOZwI
+	Extract zip file
+		4. unzip *.zip
+
+Assign gloss and cat labels:
+	Go back to project root
+		1. cd ../../
+		2. python data/splitting/assign.py
+
+Run data split (greetings only):
+	1. python data/splitting/data_split.py --processed-root data/processed --labels data/processed/labels.csv --out-root data/processed --copy --cats greeting --label-ref data/splitting/labels_reference.csv
+
+Run data split (full):
+	1. python data/splitting/data_split.py --processed-root data/processed --labels data/processed/labels.csv --out-root data/processed --copy --label-ref data/splitting/labels_reference.csv
+
+Train Tranformer:
+python -m training.train \
+  --model transformer \
+  --epochs 300 \
+  --batch-size 8 \
+  --lr 0.00006 \
+  --alpha 0.8 \
+  --beta 0.2 \
+  --num-gloss 105 \
+  --num-cat 10 \
+  --keypoints-train data/processed/keypoints_train \
+  --keypoints-val data/processed/keypoints_val \
+  --labels-train-csv data/processed/train_labels.csv \
+  --labels-val-csv data/processed/val_labels.csv \
+  --kp-key X2048 \
+  --amp \
+  --augment \
+  --augment-noise-std 0.001 \
+  --augment-mask-prob 0.03 \
+  --augment-mask-ratio 0.03 \
+  --scheduler warmup_cosine \
+  --warmup-epochs 20 \
+  --early-stop 150 \
+  --weight-decay 1.1e-4 \
+  --log-csv transformer_full_features_ultra_fine.csv \
+  --output-dir trained_models/transformer/full_with_features_ultra_fine
+
+Train IV3-GRU:
+python -m training.train \
+  --model iv3_gru \
+  --epochs 200 \
+  --batch-size 8 \
+  --lr 0.0005 \
+  --alpha 0.8 \
+  --beta 0.2 \
+  --num-gloss 105 \
+  --num-cat 10 \
+  --features-train data/processed/keypoints_train \
+  --features-val data/processed/keypoints_val \
+  --labels-train-csv data/processed/train_labels.csv \
+  --labels-val-csv data/processed/val_labels.csv \
+  --feature-key X2048 \
+  --hidden1 16 \
+  --hidden2 12 \
+  --dropout 0.3 \
+  --amp \
+  --augment \
+  --augment-noise-std 0.002 \
+  --augment-mask-prob 0.05 \
+  --augment-mask-ratio 0.05 \
+  --scheduler plateau \
+  --scheduler-patience 15 \
+  --early-stop 50 \
+  --weight-decay 1e-5 \
+  --log-csv iv3gru_full_final.csv \
+  --output-dir trained_models/iv3_gru/full_final
+
 Add missing files:
 1. Data
 2. Trained models
