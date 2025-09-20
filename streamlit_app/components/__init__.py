@@ -29,6 +29,7 @@ from .utils import (
     interpret_occlusion_flag
 )
 from .visualization import (
+    render_consolidated_file_info,
     render_sequence_overview,
     render_animated_keypoints,
     render_feature_charts,
@@ -64,6 +65,7 @@ __all__ = [
     'interpret_occlusion_flag',
     
     # Visualization
+    'render_consolidated_file_info',
     'render_sequence_overview',
     'render_animated_keypoints',
     'render_feature_charts',
