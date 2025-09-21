@@ -2,7 +2,7 @@
 
 ## Overview
 
-The preprocessing pipeline includes hand-head occlusion detection for sign language video analysis. The system uses computer vision techniques based on MediaPipe keypoints and detection algorithms.
+The preprocessing pipeline includes hand-head occlusion detection for Filipino sign language recognition. The system uses computer vision techniques based on MediaPipe keypoints to identify when hands obscure facial features during signing.
 
 ## Quick Start
 
@@ -30,7 +30,7 @@ python preprocessing/multi_preprocess.py video.mp4 output/ --write-keypoints --o
 
 The occlusion detection system implements computer vision-based detection with:
 
-- **5-Region Head Partitioning**: Divides the head into linguistically significant regions (forehead, cheeks, nose, mouth, neck)
+- **5-Region Head Partitioning**: Divides the head into regions (forehead, cheeks, nose, mouth, neck)
 - **Multi-Method Detection**: Uses ellipse intersection, proximity analysis, trajectory tracking, and orientation detection
 - **Consecutive Frame Filtering**: Requires 5 consecutive frames with occlusion detection (confidence ≥ 0.2) with tolerance for 1-2 missed frames
 - **Balanced Thresholds**: Designed to minimize false negatives while maintaining accuracy
@@ -39,7 +39,7 @@ The occlusion detection system implements computer vision-based detection with:
 
 ### Head Regions
 
-The system divides the head into 5 regions based on the Suvi dictionary:
+The system divides the head into 5 regions:
 
 - **Forehead**: Top of the head area
 - **Cheeks**: Including eyes and ears
@@ -218,11 +218,11 @@ This will provide frame-by-frame analysis in the metadata.
 
 ## Research Background
 
-This implementation is based on research in hand-head occlusion detection for sign language video analysis, incorporating:
+This implementation incorporates:
 
 - Computer vision techniques for detection
 - Temporal consistency filtering
 - Multi-region analysis for linguistic relevance
 - Conservative thresholds for production use
 
-The system is designed to be both accurate and reliable for sign language recognition applications.
+The system is designed to be both accurate and reliable for Filipino sign language recognition applications.

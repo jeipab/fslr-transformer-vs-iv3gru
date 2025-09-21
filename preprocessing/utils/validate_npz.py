@@ -1,17 +1,17 @@
 """
-Validator for preprocessed `.npz`/`.parquet` datasets.
+Validator for preprocessed .npz/.parquet datasets.
 
-Purpose:
-- Quickly check that extracted clips match model training requirements.
+This module validates that extracted clips match model training requirements
+for both Transformer and IV3-GRU models.
 
 Usage:
-- Validate all `.npz` under a directory:
+- Validate all .npz files in directory:
     python -m preprocessing.validate_npz data/processed/keypoints_val
-- Validate for both Transformer (`X`) and IV3-GRU (`X2048`):
+- Validate for both models:
     python -m preprocessing.validate_npz data/processed/keypoints_val --check-transformer --check-iv3
-- Require `X2048` [T,2048] to be present:
+- Require X2048 features:
     python -m preprocessing.validate_npz data/processed/keypoints_val --require-x2048
-- Skip parquet checks (no pyarrow/fastparquet):
+- Skip parquet validation:
     python -m preprocessing.validate_npz data/processed/keypoints_val --skip-parquet
 
 Exit code is non-zero if any file has issues.
@@ -35,7 +35,17 @@ except Exception:  # pragma: no cover
 
 
 def _load_meta(meta_any) -> dict:
-    """Parse the `meta` field stored as a JSON string in `.npz`."""
+    """Parse the meta field stored as JSON string in .npz file.
+    
+    Args:
+        meta_any: Meta field from .npz file
+        
+    Returns:
+        Parsed metadata dictionary
+        
+    Raises:
+        ValueError: If meta field cannot be parsed
+    """
     try:
         if hasattr(meta_any, "item"):
             meta_any = meta_any.item()
@@ -55,10 +65,17 @@ def validate_npz_file(
     check_transformer: bool,
     check_iv3: bool,
 ) -> List[str]:
-    """Validate one `.npz` file (and `.parquet` if present/required).
+    """Validate one .npz file and optional .parquet file.
+
+    Args:
+        npz_path: Path to .npz file
+        require_x2048: Whether X2048 is required
+        check_parquet: Whether to check .parquet file
+        check_transformer: Whether to check Transformer requirements
+        check_iv3: Whether to check IV3-GRU requirements
 
     Returns:
-        List[str]: list of human-readable issues. Empty list means the file is OK.
+        List of human-readable issues. Empty list means file is OK.
     """
     errors: List[str] = []
     try:
@@ -176,11 +193,18 @@ def validate_directory(
     check_transformer: bool,
     check_iv3: bool,
 ) -> Tuple[int, list]:
-    """Validate all `.npz` files under `root_dir` recursively.
+    """Validate all .npz files under root_dir recursively.
+
+    Args:
+        root_dir: Root directory to scan
+        require_x2048: Whether X2048 is required
+        skip_parquet: Whether to skip .parquet validation
+        check_transformer: Whether to check Transformer requirements
+        check_iv3: Whether to check IV3-GRU requirements
 
     Returns:
-        (num_files_checked, issues) where `issues` is a list of
-        `(file_path, [error_strings...])`.
+        Tuple of (num_files_checked, issues) where issues is a list of
+        (file_path, [error_strings...])
     """
     npz_files = glob.glob(os.path.join(root_dir, "**", "*.npz"), recursive=True)
     issues: List[Tuple[str, List[str]]] = []
@@ -198,6 +222,7 @@ def validate_directory(
 
 
 def main(argv: List[str] | None = None) -> int:
+    """Main function for command-line validation."""
     parser = argparse.ArgumentParser(description="Validate preprocessed .npz/.parquet files")
     parser.add_argument("root", help="Root directory to scan recursively for .npz files")
     parser.add_argument(

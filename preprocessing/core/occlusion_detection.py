@@ -1,9 +1,8 @@
 """
-Hand-Head Occlusion Detection System for Sign Language Video Analysis
-Based on the paper "Detecting Hand-Head Occlusions in Sign Language Video"
+Hand-head occlusion detection for Filipino sign language recognition.
 
-This module provides sophisticated computer vision-based occlusion detection
-for sign language video analysis using MediaPipe keypoints and computer vision techniques.
+This module provides computer vision-based occlusion detection using MediaPipe keypoints
+and detection algorithms to identify when hands obscure facial features during signing.
 """
 
 import numpy as np
@@ -14,8 +13,15 @@ import warnings
 
 
 def _point_in_ellipse(px: float, py: float, cx: float, cy: float, ax: float, by: float) -> bool:
-    """Check if point (px, py) lies inside or on the ellipse centered at (cx, cy)
-    with semi-axes (ax, by). Coordinates are normalized to [0,1].
+    """Check if point lies inside ellipse.
+    
+    Args:
+        px, py: Point coordinates
+        cx, cy: Ellipse center coordinates
+        ax, by: Ellipse semi-axes
+        
+    Returns:
+        True if point is inside ellipse
     """
     if ax <= 0.0 or by <= 0.0:
         return False
@@ -25,11 +31,16 @@ def _point_in_ellipse(px: float, py: float, cx: float, cy: float, ax: float, by:
 
 
 def _hand_centers_and_tips(frame_xy: np.ndarray, frame_mask: np.ndarray, hand_start: int, hand_len: int) -> tuple[tuple[float, float] | None, list[tuple[float, float]]]:
-    """Return (palm_center, fingertip_points) for one hand with validation.
-
-    Uses MediaPipe Hands indexing (21 landmarks). Palm center is the mean of MCP
-    joints (5, 9, 13, 17) when available, else the wrist (0) if visible.
-    Fingertips are indices [4, 8, 12, 16, 20] when visible.
+    """Extract palm center and fingertip coordinates for one hand.
+    
+    Args:
+        frame_xy: Keypoint coordinates array
+        frame_mask: Visibility mask array
+        hand_start: Starting index for hand keypoints
+        hand_len: Number of hand keypoints
+        
+    Returns:
+        Tuple of (palm_center, fingertip_list)
     """
     mcp_rel = [5, 9, 13, 17]  # MCP joints
     fingertip_rel = [4, 8, 12, 16, 20]  # fingertips
@@ -79,8 +90,7 @@ def _hand_centers_and_tips(frame_xy: np.ndarray, frame_mask: np.ndarray, hand_st
 
 def _validate_face_landmarks(face_coords: List[Tuple[float, float]], 
                            face_indices: List[int]) -> Tuple[List[Tuple[float, float]], List[int]]:
-    """
-    Validate and clean face landmarks for better reliability.
+    """Validate face landmark coordinates and indices.
     
     Args:
         face_coords: List of face landmark coordinates
@@ -104,8 +114,7 @@ def _validate_face_landmarks(face_coords: List[Tuple[float, float]],
 
 
 def _is_valid_landmark_position(coord: Tuple[float, float], landmark_idx: int) -> bool:
-    """
-    Check if landmark position is reasonable based on landmark type.
+    """Check if landmark position is reasonable.
     
     Args:
         coord: Landmark coordinate (x, y)
@@ -137,7 +146,11 @@ def _is_valid_landmark_position(coord: Tuple[float, float], landmark_idx: int) -
 
 
 def _check_dependencies() -> bool:
-    """Check if required dependencies are available."""
+    """Check if required dependencies are available.
+    
+    Returns:
+        True if all dependencies are available
+    """
     try:
         import cv2
         import mediapipe as mp
@@ -151,34 +164,36 @@ def _check_dependencies() -> bool:
 
 @dataclass
 class Point2D:
-    """Represents a 2D point with x, y coordinates"""
+    """Represents a 2D point with x, y coordinates."""
     x: float
     y: float
     
     def to_tuple(self) -> Tuple[float, float]:
+        """Convert to tuple."""
         return (self.x, self.y)
     
     def distance_to(self, other: 'Point2D') -> float:
+        """Calculate distance to another point."""
         return np.sqrt((self.x - other.x)**2 + (self.y - other.y)**2)
 
 
 @dataclass
 class Gridlet:
-    """A set of tracked points with topology"""
+    """A set of tracked points with topology."""
     points: List[Point2D]
     neighbors: Dict[int, List[int]]  # Adjacency list
     reference_frame: int
     tracking_cost: float = 0.0
     
     def get_center(self) -> Point2D:
-        """Get the centroid of the gridlet"""
+        """Get the centroid of the gridlet."""
         x = sum(p.x for p in self.points) / len(self.points)
         y = sum(p.y for p in self.points) / len(self.points)
         return Point2D(x, y)
 
 
 class HeadRegion:
-    """Defines the five head regions from Suvi dictionary"""
+    """Defines the five head regions for occlusion detection."""
     FOREHEAD = 0
     CHEEKS = 1
     NOSE = 2
@@ -192,7 +207,11 @@ class HandHeadOcclusionDetector:
     """Hand-head occlusion detector using computer vision techniques."""
     
     def __init__(self, use_global_tracking: bool = True):
-        """Initialize the detector."""
+        """Initialize the detector.
+        
+        Args:
+            use_global_tracking: Whether to use global tracking
+        """
         if not _check_dependencies():
             raise ImportError(
                 "Occlusion detection requires additional dependencies. "
@@ -239,7 +258,14 @@ class HandHeadOcclusionDetector:
         self.occlusion_history = deque(maxlen=self.tracking_window_size)
     
     def detect_skin_pixels(self, image: np.ndarray) -> np.ndarray:
-        """Detect skin pixels using color-based segmentation."""
+        """Detect skin pixels using color-based segmentation.
+        
+        Args:
+            image: Input image array
+            
+        Returns:
+            Binary mask of skin pixels
+        """
         import cv2
         
         # Convert to YCrCb color space
@@ -260,7 +286,14 @@ class HandHeadOcclusionDetector:
         return skin_mask
     
     def get_facial_landmarks(self, image: np.ndarray) -> Optional[Dict]:
-        """Extract facial landmarks using MediaPipe Holistic (compatible with preprocessing pipeline)."""
+        """Extract facial landmarks using MediaPipe Holistic.
+        
+        Args:
+            image: Input image array
+            
+        Returns:
+            Dictionary of facial landmarks or None
+        """
         import cv2
         import mediapipe as mp
         
@@ -309,7 +342,15 @@ class HandHeadOcclusionDetector:
         return landmark_dict
     
     def partition_head_regions(self, landmarks: Dict, image_shape: tuple = (256, 256)) -> Dict[int, np.ndarray]:
-        """Partition the head area into 5 regions based on facial landmarks."""
+        """Partition the head area into 5 regions based on facial landmarks.
+        
+        Args:
+            landmarks: Dictionary of facial landmarks
+            image_shape: Image dimensions (height, width)
+            
+        Returns:
+            Dictionary mapping region IDs to polygon arrays
+        """
         import cv2
         
         regions = {}
@@ -373,7 +414,16 @@ class HandHeadOcclusionDetector:
     
     def classify_occlusions(self, occlusion_mask: np.ndarray, 
                           landmarks: Dict, image_shape: tuple = (256, 256)) -> Dict[int, int]:
-        """Classify occlusions by head region."""
+        """Classify occlusions by head region.
+        
+        Args:
+            occlusion_mask: Binary occlusion mask
+            landmarks: Dictionary of facial landmarks
+            image_shape: Image dimensions (height, width)
+            
+        Returns:
+            Dictionary mapping region IDs to occlusion counts
+        """
         import cv2
         
         regions = self.partition_head_regions(landmarks, image_shape)
@@ -403,7 +453,14 @@ class HandHeadOcclusionDetector:
         return occlusion_counts
     
     def temporal_filter(self, occlusion_counts: Dict[int, int]) -> Dict[int, bool]:
-        """Apply temporal filtering to reduce noise."""
+        """Apply temporal filtering to reduce noise.
+        
+        Args:
+            occlusion_counts: Dictionary of occlusion counts by region
+            
+        Returns:
+            Dictionary of filtered occlusion detections by region
+        """
         self.occlusion_history.append(occlusion_counts)
         
         if len(self.occlusion_history) < self.tracking_window_size:
@@ -424,7 +481,16 @@ class HandHeadOcclusionDetector:
     
     def process_frame(self, frame: np.ndarray, frame_idx: int,
                      prev_frame: Optional[np.ndarray] = None) -> Dict:
-        """Process a single frame for occlusion detection."""
+        """Process a single frame for occlusion detection.
+        
+        Args:
+            frame: Input frame array
+            frame_idx: Frame index
+            prev_frame: Previous frame (optional)
+            
+        Returns:
+            Dictionary with occlusion detection results
+        """
         import cv2
         
         h, w = frame.shape[:2]
