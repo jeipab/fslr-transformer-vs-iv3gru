@@ -1,16 +1,18 @@
 """
-Splitter & organizer for preprocessed `.npz`/`.parquet` datasets.
+Data splitting utility for Filipino sign language recognition datasets.
 
-Purpose:
-- Take a `labels.csv` and corresponding preprocessed clip files.
-- Verify required columns: `file`, `gloss`, `cat`, `occluded`.
-- Encode `cat` values to zero-based integer IDs (writes `cat_mapping.csv`).
-- Split into train/val sets (use provided `split` column if present, else shuffle and split by ratio).
-- Move or copy `.npz` (and matching `.parquet`) files into `keypoints_train/` and `keypoints_val/`.
-- Generate `train_labels.csv` and `val_labels.csv` containing only `file,gloss,cat,occluded`.
+This module organizes preprocessed .npz files into train/validation splits
+with proper stratified sampling and file management.
+
+Features:
+- Stratified splitting by gloss and category
+- Automatic category ID encoding
+- File collision handling
+- Support for filtering by specific categories/glosses
+- Optional parquet file synchronization
 
 Usage:
-- Split with default 80/20 ratio (copy files):
+- Default 80/20 split:
     python data/splitting/data_split.py \
         --processed-root data/processed \
         --labels data/processed/labels.csv \
@@ -18,37 +20,15 @@ Usage:
         --copy \
         --train-ratio 0.8
 
-- Split with custom ratio (copy files):
+- Filtered split:
     python data/splitting/data_split.py \
         --processed-root data/processed \
         --labels data/processed/labels.csv \
         --out-root data/processed \
         --copy \
-        --train-ratio 0.8 \
         --cats greeting survival number \
         --gloss yes no wrong \
         --label-ref data/splitting/labels_reference.csv
-
-Options:
-- `--processed-root` : Path to directory of preprocessed `.npz`/`.parquet` files (required).
-- `--labels`         : Path to `labels.csv` with columns `file,gloss,cat,occluded` (required).
-- `--out-root`       : Destination root directory (default = `processed-root`).
-- `--copy`           : Copy files instead of moving them.
-- `--train-ratio`    : Train split ratio if no `split` column is present (default = 0.8).
-- `--cats`           : Restrict to specific categories (by ID or name).
-                      Examples:
-                        --cats 0 1 2
-                        --cats greeting survival number
-                        --cats "daily routine" "sports"    # use quotes if the name has spaces or punctuation
-
-- `--gloss`          : Restrict to specific glosses (by ID or name).
-                      Examples:
-                        --gloss 0 1 2
-                        --gloss yes no wrong
-                        --gloss "good morning" "thank you" "don't understand" # use quotes if the name has spaces or punctuation
-
-- `--label-ref` data/splitting/labels_reference.csv      : Path to label_reference.csv (required if using names instead of numeric IDs for --cats or --gloss).
-
 """
 
 import argparse
@@ -63,9 +43,17 @@ import numpy as np
 from sklearn.model_selection import StratifiedShuffleSplit
 
 def _resolve_npz_path(processed_root: Path, file_entry: str) -> Path:
-    """
-    Resolve a .npz path for a given 'file' entry.
-    Accepts values with or without '.npz', with or without subfolder prefixes like '0/'.
+    """Resolve .npz file path from CSV file entry.
+    
+    Args:
+        processed_root: Root directory containing .npz files
+        file_entry: File entry from CSV (with or without .npz extension)
+        
+    Returns:
+        Path to the actual .npz file
+        
+    Raises:
+        FileNotFoundError: If .npz file cannot be found
     """
     fe = str(file_entry).strip()
     if fe.lower().endswith(".npz"):
@@ -87,10 +75,14 @@ def _resolve_npz_path(processed_root: Path, file_entry: str) -> Path:
     raise FileNotFoundError(f"Could not resolve path for file entry '{file_entry}' under {processed_root}")
 
 def _coerce_or_encode_cat(series: pd.Series, out_map_path: Path) -> pd.Series:
-    """
-    Ensure 'cat' is integer ids starting at 0.
-    - If series is already integer-like, keep as-is (but reindex to int).
-    - Else, encode unique sorted category strings to ids and write cat_mapping.csv.
+    """Convert category values to zero-based integer IDs.
+    
+    Args:
+        series: Pandas series with category values
+        out_map_path: Path to save category mapping CSV
+        
+    Returns:
+        Series with integer category IDs starting from 0
     """
     # Try to treat as integer
     try:
@@ -113,13 +105,19 @@ def _coerce_or_encode_cat(series: pd.Series, out_map_path: Path) -> pd.Series:
         return series.map(lambda x: mapping[str(x)])
 
 def _stable_h8(path: Path) -> str:
+    """Generate stable 8-character hash from file path."""
     return hashlib.md5(str(path).encode("utf-8")).hexdigest()[:8]
 
 def _move_or_copy_unique(src_npz: Path, dst_dir: Path, do_copy: bool) -> str:
-    """
-    Move/copy src_npz to dst_dir, avoiding basename collisions.
-    Returns the final basename (stem) without extension to be written in CSV.
-    Keeps a sibling .parquet in sync if present.
+    """Copy .npz file to destination directory with collision handling.
+    
+    Args:
+        src_npz: Source .npz file path
+        dst_dir: Destination directory
+        do_copy: If True, copy files; if False, move files
+        
+    Returns:
+        Final basename (without extension) for CSV entry
     """
     dst_dir.mkdir(parents=True, exist_ok=True)
     stem = src_npz.stem
@@ -139,6 +137,12 @@ def _move_or_copy_unique(src_npz: Path, dst_dir: Path, do_copy: bool) -> str:
     return stem
 
 def _write_csv(path: Path, rows):
+    """Write label rows to CSV file.
+    
+    Args:
+        path: Output CSV file path
+        rows: List of dictionaries with file, gloss, cat, occluded keys
+    """
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("w", newline="") as f:
         writer = csv.writer(f)

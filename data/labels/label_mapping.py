@@ -1,8 +1,8 @@
 """
-Label mapping utility for Sign Language Recognition predictions.
+Label mapping utility for Filipino sign language recognition.
 
 This module provides functions to map class IDs to human-readable labels
-using the labels reference CSV file.
+and format prediction results with proper label names.
 """
 
 import pandas as pd
@@ -10,11 +10,13 @@ import os
 from pathlib import Path
 
 def load_label_mappings():
-    """
-    Load gloss and category mappings from the labels reference CSV.
+    """Load gloss and category mappings from labels reference CSV.
     
     Returns:
-        tuple: (gloss_mapping, category_mapping) dictionaries
+        Tuple of (gloss_mapping, category_mapping) dictionaries
+        
+    Raises:
+        FileNotFoundError: If labels reference file is not found
     """
     # Path to the labels reference CSV
     csv_path = Path(__file__).parent.parent.parent / "data" / "splitting" / "labels_reference.csv"
@@ -33,16 +35,15 @@ def load_label_mappings():
     return gloss_mapping, category_mapping
 
 def format_prediction_results(results, gloss_mapping=None, category_mapping=None):
-    """
-    Format prediction results with compact human-readable labels.
+    """Format prediction results with human-readable labels.
     
     Args:
-        results (dict): Raw prediction results from model
-        gloss_mapping (dict): Optional gloss ID to label mapping
-        category_mapping (dict): Optional category ID to label mapping
+        results: Raw prediction results from model
+        gloss_mapping: Optional gloss ID to label mapping
+        category_mapping: Optional category ID to label mapping
     
     Returns:
-        dict: Compact formatted results with embedded IDs in labels
+        Dictionary with formatted prediction results
     """
     if gloss_mapping is None or category_mapping is None:
         gloss_mapping, category_mapping = load_label_mappings()
@@ -81,13 +82,12 @@ def format_prediction_results(results, gloss_mapping=None, category_mapping=None
     return formatted
 
 def print_prediction_summary(results, gloss_mapping=None, category_mapping=None):
-    """
-    Print a formatted summary of prediction results.
+    """Print formatted summary of prediction results.
     
     Args:
-        results (dict): Raw prediction results from model
-        gloss_mapping (dict): Optional gloss ID to label mapping
-        category_mapping (dict): Optional category ID to label mapping
+        results: Raw prediction results from model
+        gloss_mapping: Optional gloss ID to label mapping
+        category_mapping: Optional category ID to label mapping
     """
     if gloss_mapping is None or category_mapping is None:
         gloss_mapping, category_mapping = load_label_mappings()
@@ -112,11 +112,10 @@ def print_prediction_summary(results, gloss_mapping=None, category_mapping=None)
         print(f"\nFrames extracted: {formatted['frames_extracted']}")
 
 def get_all_labels():
-    """
-    Get all available gloss and category labels.
+    """Get all available gloss and category labels.
     
     Returns:
-        tuple: (gloss_labels, category_labels) lists
+        Tuple of (gloss_labels, category_labels) sorted lists
     """
     gloss_mapping, category_mapping = load_label_mappings()
     
