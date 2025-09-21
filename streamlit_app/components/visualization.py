@@ -688,7 +688,7 @@ def render_animated_keypoints(sequence: np.ndarray, mask: Optional[np.ndarray] =
         )
     )
     
-    st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(fig, use_container_width=True, key=f"keypoint_plot_{key_suffix}")
     
     # Add frame information
     col1, col2, col3 = st.columns(3)
@@ -789,7 +789,7 @@ def render_feature_charts(sequence: np.ndarray, mask: Optional[np.ndarray] = Non
             height=600
         )
         
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, use_container_width=True, key=f"feature_line_plot_{key_suffix}")
         
     else:  # Heatmap
         # Create heatmap of features over time
@@ -801,7 +801,7 @@ def render_feature_charts(sequence: np.ndarray, mask: Optional[np.ndarray] = Non
             title=f"{selected_group} - {coord_type} Heatmap"
         )
         fig.update_layout(height=600)
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, use_container_width=True, key=f"feature_heatmap_{key_suffix}")
     
     # Statistics summary
     with st.expander("📊 Feature Statistics", expanded=False):

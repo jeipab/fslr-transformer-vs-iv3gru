@@ -124,6 +124,9 @@ def render_video_files_list(all_files_to_show: List):
         metadata = st.session_state.file_metadata.get(filename, {})
         file_size = metadata.get('file_size_formatted', 'Unknown')
         
+        # Create unique key for this file instance using index to handle duplicates
+        unique_key_suffix = f"{filename}_{i}"
+        
         # Status emoji
         status_emoji = {
             'pending': '⏳',
@@ -159,7 +162,7 @@ def render_video_files_list(all_files_to_show: List):
                         data=npz_bytes,
                         file_name=download_filename,
                         mime="application/octet-stream",
-                        key=f"download_{filename}",
+                        key=f"download_{unique_key_suffix}",
                         help="Download NPZ file",
                         disabled=is_processing
                     )
@@ -170,11 +173,11 @@ def render_video_files_list(all_files_to_show: List):
                 button_disabled = is_processing or not has_extraction_options
                 button_help = "Preprocess this video file" if has_extraction_options else "Select at least one extraction option to enable preprocessing"
                 
-                if st.button("Preprocess", key=f"preprocess_{filename}", help=button_help, type="primary", disabled=button_disabled):
+                if st.button("Preprocess", key=f"preprocess_{unique_key_suffix}", help=button_help, type="primary", disabled=button_disabled):
                     preprocess_single_video(uploaded_file, filename)
                     st.rerun()
             elif status == 'completed':
-                if st.button("View", key=f"view_{filename}", help="View preprocessed file", type="secondary", disabled=is_processing):
+                if st.button("View", key=f"view_{unique_key_suffix}", help="View preprocessed file", type="secondary", disabled=is_processing):
                     # Move to predictions stage and set as current tab
                     st.session_state.workflow_stage = 'predictions'
                     st.session_state.current_tab = filename
@@ -183,13 +186,13 @@ def render_video_files_list(all_files_to_show: List):
                 button_disabled = is_processing or not has_extraction_options
                 button_help = "Retry preprocessing" if has_extraction_options else "Select at least one extraction option to enable preprocessing"
                 
-                if st.button("Retry", key=f"retry_{filename}", help=button_help, type="primary", disabled=button_disabled):
+                if st.button("Retry", key=f"retry_{unique_key_suffix}", help=button_help, type="primary", disabled=button_disabled):
                     preprocess_single_video(uploaded_file, filename)
                     st.rerun()
         
         # Remove button with confirmation
         with col6:
-            if st.button("Remove", key=f"remove_{filename}", help="Remove this file", type="secondary", disabled=is_processing):
+            if st.button("Remove", key=f"remove_{unique_key_suffix}", help="Remove this file", type="secondary", disabled=is_processing):
                 if file_type == 'video':
                     remove_file_from_stage(filename, 'video')
                 else:
@@ -722,5 +725,6 @@ def create_bulk_download_button(preprocessed_files: List):
         mime="application/zip",
         type="primary",
         help="Download all preprocessed NPZ files as a ZIP archive",
-        disabled=is_processing
+        disabled=is_processing,
+        key="download_all_zip_preprocessing"
     )

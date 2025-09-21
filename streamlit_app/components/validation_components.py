@@ -479,7 +479,8 @@ def render_download_results(results: Dict[str, Any]):
             label="Download Results (JSON)",
             data=json_str,
             file_name=f"validation_results_{results['model_info']['model_type']}_{results['model_info']['timestamp'].replace(':', '-')}.json",
-            mime="application/json"
+            mime="application/json",
+            key="download_validation_results_json"
         )
     
     with col2:
@@ -499,7 +500,8 @@ def render_download_results(results: Dict[str, Any]):
             label="Download Summary (CSV)",
             data=csv_str,
             file_name=f"validation_summary_{results['model_info']['model_type']}_{results['model_info']['timestamp'].replace(':', '-')}.csv",
-            mime="text/csv"
+            mime="text/csv",
+            key="download_validation_summary_csv"
         )
 
 
@@ -625,5 +627,6 @@ def render_detailed_predictions(results: Dict[str, Any]):
         label="Download Filtered Predictions (CSV)",
         data=csv_str,
         file_name=f"detailed_predictions_{results['model_info']['model_type']}_{results['model_info']['timestamp'].replace(':', '-')}.csv",
-        mime="text/csv"
+        mime="text/csv",
+        key="download_detailed_predictions_csv"
     )

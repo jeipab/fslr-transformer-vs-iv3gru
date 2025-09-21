@@ -265,6 +265,9 @@ def render_npz_files_management(all_npz_files: List):
         metadata = st.session_state.file_metadata.get(filename, {})
         file_size = metadata.get('file_size_formatted', 'Unknown')
         
+        # Create unique key for this file instance using index to handle duplicates
+        unique_key_suffix = f"{filename}_{i}"
+        
         # Status and type emojis
         status_emoji = {
             'pending': '⏳',
@@ -288,24 +291,24 @@ def render_npz_files_management(all_npz_files: List):
         with col3:
             st.markdown(f"**Status:** {status_emoji.get(status, '❓')} {status.title()}")
         
-        # Action buttons
+        # Action buttons with unique keys
         with col4:
             if status == 'completed':
-                if st.button("View", key=f"view_{filename}", help="View this file", type="secondary"):
+                if st.button("View", key=f"view_{unique_key_suffix}", help="View this file", type="secondary"):
                     st.session_state.current_tab = filename
                     st.rerun()
             elif status == 'pending':
-                if st.button("Process", key=f"process_{filename}", help="Process this file", type="primary"):
+                if st.button("Process", key=f"process_{unique_key_suffix}", help="Process this file", type="primary"):
                     process_single_npz_file(uploaded_file, filename)
                     st.rerun()
             elif status == 'error':
-                if st.button("Retry", key=f"retry_{filename}", help="Retry processing", type="primary"):
+                if st.button("Retry", key=f"retry_{unique_key_suffix}", help="Retry processing", type="primary"):
                     process_single_npz_file(uploaded_file, filename)
                     st.rerun()
         
         # Remove button with confirmation
         with col5:
-            if st.button("Remove", key=f"remove_{filename}", help="Remove this file", type="secondary"):
+            if st.button("Remove", key=f"remove_{unique_key_suffix}", help="Remove this file", type="secondary"):
                 remove_file_from_predictions(filename)
                 st.rerun()
         
@@ -489,10 +492,12 @@ def render_visualization_tabs(cfg: Dict):
                 viz_col1, viz_col2 = st.columns([1, 1])
                 
                 with viz_col1:
-                    render_animated_keypoints(X_pad, mask if mask.size > 0 else None, key_suffix=filename, meta_dict=meta)
+                    # Create unique key suffix to handle duplicate filenames
+                    unique_key_suffix = f"{filename}_{i}"
+                    render_animated_keypoints(X_pad, mask if mask.size > 0 else None, key_suffix=unique_key_suffix, meta_dict=meta)
                 
                 with viz_col2:
-                    render_feature_charts(X_pad, mask if mask.size > 0 else None, key_suffix=filename)
+                    render_feature_charts(X_pad, mask if mask.size > 0 else None, key_suffix=unique_key_suffix)
                 
                 st.markdown('</div>', unsafe_allow_html=True)
                 
@@ -503,7 +508,8 @@ def render_visualization_tabs(cfg: Dict):
                     label=f"Download {filename}",
                     data=npz_bytes,
                     file_name=filename,
-                    mime="application/octet-stream"
+                    mime="application/octet-stream",
+                    key=f"download_npz_{unique_key_suffix}"
                 )
                 
             except Exception as e:
@@ -650,7 +656,8 @@ def create_batch_download(summary_data):
         data=zip_buffer.getvalue(),
         file_name="processed_files_with_summary.zip",
         mime="application/zip",
-        type="primary"
+        type="primary",
+        key="download_all_zip_predictions"
     )
 
 
