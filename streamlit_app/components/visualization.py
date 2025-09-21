@@ -299,27 +299,12 @@ def render_sequence_overview(npz_dict: Dict, sequence_length: int) -> Tuple[np.n
     return X_pad, mask, meta_parsed
 
 
-def render_keypoint_video(sequence: np.ndarray, mask: Optional[np.ndarray] = None, key_suffix: str = "") -> None:
+def render_keypoint_video(sequence: np.ndarray, mask: Optional[np.ndarray] = None, key_suffix: str = "", show_skeleton: bool = True, fps: int = 15) -> None:
     """Generate and display a video with keypoint animation."""
     time_steps, feature_dim = sequence.shape
     keypoints_2d = sequence.reshape(time_steps, 78, 2)
     
-    # Video settings
-    col1, col2, col3 = st.columns([2, 1, 1])
-    with col1:
-        fps = st.slider(
-            "FPS", 
-            min_value=5, 
-            max_value=30, 
-            value=15, 
-            step=1,
-            help="Frames per second for video", 
-            key=f"video_fps_{key_suffix}"
-        )
-    with col2:
-        show_skeleton = st.checkbox("Show Skeleton", value=True, help="Display skeleton connections", key=f"video_skeleton_{key_suffix}")
-    with col3:
-        show_visibility = st.checkbox("Show Visibility", value=True, help="Color points by visibility", key=f"video_visibility_{key_suffix}")
+    # Video settings - FPS is now controlled from main controls
     
     # Background options
     col4, col5 = st.columns(2)
@@ -343,6 +328,7 @@ def render_keypoint_video(sequence: np.ndarray, mask: Optional[np.ndarray] = Non
             # Show standard size options for other backgrounds
             video_size_options = ["512x512", "768x768", "1024x1024"]
         
+        # Add right margin and remove top margin to align with background dropdown
         video_size = st.selectbox("Video Size", video_size_options, key=f"video_size_{key_suffix}")
     
     # Handle original size option
@@ -360,12 +346,12 @@ def render_keypoint_video(sequence: np.ndarray, mask: Optional[np.ndarray] = Non
     # Video control buttons with Download Video right-aligned to dropdown and Generate Video with gap
     col_empty1, col_empty2, col_empty3, col_empty4, col_empty5, col_gen, col_gap, col_download = st.columns([2, 2, 1, 1, 1, 2, 0.25, 2])
     
-    with col_gen:
+    with col_download:
         if st.button("Generate Video", key=f"generate_video_{key_suffix}"):
             with st.spinner("Generating keypoint video..."):
                 video_path = create_keypoint_animation_video(
                     keypoints_2d, mask, fps, width, height, 
-                    show_skeleton, show_visibility, bg_type, key_suffix
+                    show_skeleton, bg_type, key_suffix
                 )
                 
                 if video_path and os.path.exists(video_path):
@@ -375,7 +361,7 @@ def render_keypoint_video(sequence: np.ndarray, mask: Optional[np.ndarray] = Non
                 else:
                     st.toast("Failed to generate video", icon="❌")
     
-    with col_download:
+    with col_gen:
         # Download button (moved here to be next to generate video button)
         if f"video_path_{key_suffix}" in st.session_state:
             video_path = st.session_state[f"video_path_{key_suffix}"]
@@ -474,18 +460,6 @@ def render_animated_keypoints(sequence: np.ndarray, mask: Optional[np.ndarray] =
                 is_occluded = result.get('occlusion_detected', False)
                 frame_occlusion_data[frame_idx] = is_occluded
     
-    # Video generation option
-    col1, col2, col3 = st.columns([2, 1, 1])
-    with col1:
-        st.markdown("**Choose visualization method:**")
-    with col2:
-        st.markdown("")  # Empty space for alignment
-    with col3:
-        use_video = st.checkbox("Generate Video", value=False, help="Create an MP4 video with keypoint animation", key=f"use_video_{key_suffix}")
-    
-    if use_video:
-        render_keypoint_video(sequence, mask, key_suffix)
-        return
     
     # Define skeleton connections for MediaPipe Holistic based on actual preprocessing layout
     # Layout: Pose(0-24), Left Hand(25-45), Right Hand(46-66), Face(67-77)
@@ -549,25 +523,40 @@ def render_animated_keypoints(sequence: np.ndarray, mask: Optional[np.ndarray] =
         ]
     }
     
-    # Simple frame selection
-    col1, col2, col3 = st.columns([2, 1, 1])
+    # Combined controls in one row
+    col1, col2, col3 = st.columns([3, 1, 1])
+    
+    with col3:
+        use_video = st.checkbox("Generate Video", value=False, help="Create an MP4 video with keypoint animation", key=f"use_video_{key_suffix}")
     
     with col1:
-        frame_idx = st.slider(
-            "Frame", 
-            min_value=0, 
-            max_value=time_steps-1, 
-            value=0, 
-            step=1,
-            help="Drag to see keypoints at different time steps",
-            key=f"frame_slider_{key_suffix}"
-        )
+        if use_video:
+            fps = st.slider(
+                "FPS", 
+                min_value=5, 
+                max_value=30, 
+                value=15, 
+                step=1,
+                help="Frames per second for video",
+                key=f"fps_slider_{key_suffix}"
+            )
+        else:
+            frame_idx = st.slider(
+                "Frame", 
+                min_value=0, 
+                max_value=time_steps-1, 
+                value=0, 
+                step=1,
+                help="Drag to see keypoints at different time steps",
+                key=f"frame_slider_{key_suffix}"
+            )
     
     with col2:
         show_skeleton = st.checkbox("Show Skeleton", value=True, help="Display skeleton connections", key=f"skeleton_checkbox_{key_suffix}")
     
-    with col3:
-        show_visibility = st.checkbox("Show Visibility", value=True, help="Color points by visibility", key=f"visibility_checkbox_{key_suffix}")
+    if use_video:
+        render_keypoint_video(sequence, mask, key_suffix, show_skeleton, fps)
+        return
     
     # Get current frame keypoints
     current_keypoints = keypoints_2d[frame_idx]  # [78, 2]
@@ -601,14 +590,8 @@ def render_animated_keypoints(sequence: np.ndarray, mask: Optional[np.ndarray] =
         valid_keypoints = part_keypoints[valid_mask]
         
         if len(valid_keypoints) > 0:  # Only plot if there are valid keypoints
-            # Plot individual points
-            if show_visibility and mask is not None and mask.size > 0:
-                # Use visibility mask for coloring, filtered for valid points
-                visibility = mask[frame_idx, start_idx:end_idx] if mask.shape[1] >= end_idx else np.ones(end_idx - start_idx, dtype=bool)
-                valid_visibility = visibility[valid_mask]
-                point_colors = ['rgba(255,0,0,1)' if v else 'rgba(255,0,0,0.3)' for v in valid_visibility]
-            else:
-                point_colors = [colors[part_name]] * len(valid_keypoints)
+            # Plot individual points with solid colors
+            point_colors = [colors[part_name]] * len(valid_keypoints)
             
             # Create hover text with keypoint numbers
             hover_texts = []
@@ -654,7 +637,7 @@ def render_animated_keypoints(sequence: np.ndarray, mask: Optional[np.ndarray] =
                     ))
     
     # Update layout with frame-specific occlusion indicator
-    title_text = f"Keypoint Visualization - Frame {frame_idx}/{time_steps-1}"
+    title_text = f"Frame {frame_idx}/{time_steps-1}"
     
     # Check if current frame is occluded
     current_frame_occluded = False
@@ -679,10 +662,11 @@ def render_animated_keypoints(sequence: np.ndarray, mask: Optional[np.ndarray] =
         width=600,
         height=600,
         showlegend=True,
+        margin=dict(l=0, r=30, t=60, b=110),  # Reduce top margin to minimize gap
         legend=dict(
             orientation="h",
             yanchor="bottom",
-            y=1.02,
+            y=0.98,  # Move legend down (closer to chart)
             xanchor="right",
             x=1
         )
@@ -709,9 +693,6 @@ def render_animated_keypoints(sequence: np.ndarray, mask: Optional[np.ndarray] =
 def render_feature_charts(sequence: np.ndarray, mask: Optional[np.ndarray] = None, key_suffix: str = "") -> None:
     """Render interactive feature visualization."""
     st.markdown("<div class='section-header'>Feature Analysis</div>", unsafe_allow_html=True)
-    
-    # Add spacing to align with Keypoint Visualization
-    st.markdown("<div style='height: 60px;'></div>", unsafe_allow_html=True)
     
     time_steps, feature_dim = sequence.shape
 
@@ -789,7 +770,8 @@ def render_feature_charts(sequence: np.ndarray, mask: Optional[np.ndarray] = Non
             xaxis_title="Frame",
             yaxis_title="Normalized Coordinate",
             hovermode='x unified',
-            height=600
+            height=600,
+            margin=dict(l=0, r=10, t=70, b=110)  # Match Keypoint Visualization margins
         )
         
         st.plotly_chart(fig, use_container_width=True, key=f"feature_line_plot_{key_suffix}")
@@ -803,13 +785,16 @@ def render_feature_charts(sequence: np.ndarray, mask: Optional[np.ndarray] = Non
             labels={'x': 'Frame', 'y': 'Feature Index', 'color': 'Value'},
             title=f"{selected_group} - {coord_type} Heatmap"
         )
-        fig.update_layout(height=600)
+        fig.update_layout(
+            height=600,
+            margin=dict(l=0, r=10, t=70, b=110)  # Match Keypoint Visualization margins
+        )
         st.plotly_chart(fig, use_container_width=True, key=f"feature_heatmap_{key_suffix}")
 
 
 def create_keypoint_animation_video(keypoints_2d: np.ndarray, mask: Optional[np.ndarray], 
                                    fps: int, width: int, height: int, show_skeleton: bool, 
-                                   show_visibility: bool, bg_type: str, key_suffix: str) -> str:
+                                   bg_type: str, key_suffix: str) -> str:
     """Create an animated video with keypoint visualization."""
     if not CV2_AVAILABLE:
         st.error("OpenCV not available. Cannot create video.")
@@ -1007,12 +992,8 @@ def create_keypoint_animation_video(keypoints_2d: np.ndarray, mask: Optional[np.
                 # Draw keypoints
                 for i, (point, is_valid) in enumerate(zip(part_keypoints, part_valid)):
                     if is_valid:
-                        # Determine point color based on visibility
-                        if show_visibility and mask is not None and frame_idx < mask.shape[0]:
-                            visibility = mask[frame_idx, start_idx + i] if start_idx + i < mask.shape[1] else True
-                            point_color = colors[part_name] if visibility else tuple(c // 2 for c in colors[part_name])
-                        else:
-                            point_color = colors[part_name]
+                        # Use solid colors for all points
+                        point_color = colors[part_name]
                         
                         # Different sizes for different body parts
                         # Add white outline for better visibility on video backgrounds
