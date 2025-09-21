@@ -255,16 +255,39 @@ def render_npz_files_management(all_npz_files: List):
     # Add small space at top
     st.markdown("<div style='height: 8px;'></div>", unsafe_allow_html=True)
     
-    # File rows
-    for i, uploaded_file in enumerate(all_npz_files):
+    # Pagination controls
+    files_per_page = 5
+    total_pages = (len(all_npz_files) - 1) // files_per_page + 1
+    
+    # Initialize current page in session state if not exists
+    if "current_file_page" not in st.session_state:
+        st.session_state.current_file_page = 1
+    
+    current_page = st.session_state.current_file_page
+    
+    # Reset page to 1 if only one page
+    if total_pages <= 1:
+        current_page = 1
+        if "current_file_page" in st.session_state:
+            st.session_state.current_file_page = 1
+    
+    # Calculate file range for current page
+    start_idx = (current_page - 1) * files_per_page
+    end_idx = min(start_idx + files_per_page, len(all_npz_files))
+    page_files = all_npz_files[start_idx:end_idx]
+    
+    # File rows for current page
+    for i, uploaded_file in enumerate(page_files):
+        # Adjust index for unique keys
+        actual_index = start_idx + i
         filename = uploaded_file.name
         status = st.session_state.file_status.get(filename, 'completed')
         file_type = detect_file_type(uploaded_file)
         metadata = st.session_state.file_metadata.get(filename, {})
         file_size = metadata.get('file_size_formatted', 'Unknown')
         
-        # Create unique key for this file instance using index to handle duplicates
-        unique_key_suffix = f"{filename}_{i}"
+        # Create unique key for this file instance using actual index to handle duplicates
+        unique_key_suffix = f"{filename}_{actual_index}"
         
         # Status and type emojis
         status_emoji = {
@@ -310,8 +333,8 @@ def render_npz_files_management(all_npz_files: List):
                 remove_file_from_predictions(filename)
                 st.rerun()
         
-        # Add separator line only if not the last file
-        if i < len(all_npz_files) - 1:
+        # Add separator line only if not the last file on current page
+        if i < len(page_files) - 1:
             st.markdown("---")
     
     # Batch operations
@@ -319,7 +342,29 @@ def render_npz_files_management(all_npz_files: List):
     col1, col2, col3, col4, col5 = st.columns([3, 1, 1, 1, 1])
     
     with col1:
-        st.markdown("")  # Empty space to align with file names
+        # Pagination controls (only show if multiple pages)
+        if total_pages > 1:
+            pag_col1, pag_col2, pag_col3, pag_col4, pag_col5 = st.columns([1, 1, 1, 1, 1])
+            with pag_col1:
+                st.markdown("")  # Empty space for centering
+            with pag_col2:
+                if st.button("← Previous", disabled=(current_page == 1), key="prev_page"):
+                    st.session_state.current_file_page = max(1, current_page - 1)
+                    # Reset file selector to Summary when changing pages
+                    st.session_state.file_selector = "Summary"
+                    st.rerun()
+            with pag_col3:
+                st.markdown(f"**Page {current_page} of {total_pages}**")
+            with pag_col4:
+                if st.button("Next →", disabled=(current_page == total_pages), key="next_page"):
+                    st.session_state.current_file_page = min(total_pages, current_page + 1)
+                    # Reset file selector to Summary when changing pages
+                    st.session_state.file_selector = "Summary"
+                    st.rerun()
+            with pag_col5:
+                st.markdown("")  # Empty space for centering
+        else:
+            st.markdown("")  # Empty space to align with file names
     
     with col2:
         st.markdown("")  # Empty space to align with size column
@@ -453,15 +498,34 @@ def render_visualization_tabs(cfg: Dict):
         # Clear the current_tab after switching
         st.session_state.current_tab = None
     
-    # File selector
+    # File selector with Summary as default
+    default_index = len(file_options) - 1  # Summary is the last option
     selected_file = st.selectbox(
         "View results for:",
         options=file_options,
+        index=default_index,
         key="file_selector",
         help="Choose a processed file to view its visualization results"
     )
     
     st.divider()
+    
+    # Auto-navigate to page containing selected file
+    if selected_file != "Summary":
+        selected_uploaded_file = file_mapping.get(selected_file)
+        if selected_uploaded_file:
+            # Calculate pagination parameters
+            files_per_page = 5
+            current_page = st.session_state.get("current_file_page", 1)
+            
+            # Find which page contains this file
+            file_index = completed_files.index(selected_uploaded_file)
+            target_page = (file_index // files_per_page) + 1
+            
+            # If file is not on current page, navigate to correct page
+            if target_page != current_page:
+                st.session_state.current_file_page = target_page
+                st.rerun()
     
     # Render selected file or summary
     if selected_file == "Summary":
