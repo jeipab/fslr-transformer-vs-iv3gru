@@ -710,6 +710,9 @@ def render_feature_charts(sequence: np.ndarray, mask: Optional[np.ndarray] = Non
     """Render interactive feature visualization."""
     st.markdown("<div class='section-header'>Feature Analysis</div>", unsafe_allow_html=True)
     
+    # Add spacing to align with Keypoint Visualization
+    st.markdown("<div style='height: 60px;'></div>", unsafe_allow_html=True)
+    
     time_steps, feature_dim = sequence.shape
 
     # Feature selection with better organization
@@ -802,18 +805,6 @@ def render_feature_charts(sequence: np.ndarray, mask: Optional[np.ndarray] = Non
         )
         fig.update_layout(height=600)
         st.plotly_chart(fig, use_container_width=True, key=f"feature_heatmap_{key_suffix}")
-    
-    # Statistics summary
-    with st.expander("📊 Feature Statistics", expanded=False):
-        stats_df = pd.DataFrame({
-            'Mean': data_slice.mean(axis=0),
-            'Std': data_slice.std(axis=0),
-            'Min': data_slice.min(axis=0),
-            'Max': data_slice.max(axis=0),
-            'Range': data_slice.max(axis=0) - data_slice.min(axis=0)
-        }).round(4)
-        
-        st.dataframe(stats_df, use_container_width=True)
 
 
 def create_keypoint_animation_video(keypoints_2d: np.ndarray, mask: Optional[np.ndarray], 
