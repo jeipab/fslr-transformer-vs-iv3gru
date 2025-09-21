@@ -1,0 +1,103 @@
+IV3-GRU Model Analysis Results - Original (Overfitted) Model
+================================================================
+Analysis Date: December 19, 2024
+Model: InceptionV3GRU (70-gloss_acc)
+Checkpoint: trained_models/iv3_gru/70-gloss_acc/InceptionV3GRU_best.pt
+Training: 285 epochs (stopped early)
+
+MODEL ARCHITECTURE
+==================
+Parameters: 25,319,187
+GRU Hidden Sizes: 32 → 24
+Architecture: InceptionV3 + 2 GRU layers
+Input Features: 2048-dim (IV3 features)
+
+TRAINING CONFIGURATION
+======================
+Epochs: 300 (completed)
+Batch Size: 16
+Learning Rate: 0.0003
+Dropout: 0.2
+Weight Decay: 5e-6
+Early Stop: 150
+Scheduler Patience: 25
+
+PERFORMANCE RESULTS - CORRECTED
+===============================
+Best Gloss Accuracy: 71.83% (Epoch 285) - HIGH PERFORMANCE!
+Best Category Accuracy: 99.53% (Epoch 285) - EXCELLENT!
+Final Gloss Accuracy: 70.89% (Epoch 300) - HIGH PERFORMANCE!
+Final Category Accuracy: 98.83% (Epoch 300) - EXCELLENT!
+
+TOP 5 PERFORMANCE EPOCHS:
+=========================
+1. Epoch 285: 71.83% gloss, 99.53% category - BEST OVERALL
+2. Epoch 291: 71.60% gloss, 98.83% category
+3. Epoch 287: 71.60% gloss, 99.30% category
+4. Epoch 288: 71.60% gloss, 99.30% category
+5. Epoch 247: 71.36% gloss, 99.30% category
+
+Status: High performance but overfitted weights
+
+WEIGHT STATISTICS (OVERFITTING INDICATORS)
+==========================================
+gru1.weight_ih_l0: torch.Size([96, 2048]) | Mean: 0.0003 | Std: 0.0489 | Norm: 21.6894
+gru1.weight_hh_l0: torch.Size([96, 32]) | Mean: 0.0005 | Std: 0.1403 | Norm: 7.7757
+gru1.bias_ih_l0: torch.Size([96]) | Mean: 0.0141 | Std: 0.0712 | Norm: 0.7080
+gru1.bias_hh_l0: torch.Size([96]) | Mean: 0.0153 | Std: 0.0736 | Norm: 0.7324
+
+🚨 PROBLEMATIC LAYERS (OVERFITTING):
+gru2.weight_ih_l0: torch.Size([72, 32]) | Mean: -0.0104 | Std: 0.2277 | Norm: 10.9384
+gru2.weight_hh_l0: torch.Size([72, 24]) | Mean: 0.0168 | Std: 0.2432 | Norm: 10.1315
+gru2.bias_ih_l0: torch.Size([72]) | Mean: 0.1854 | Std: 0.2479 | Norm: 2.6155
+gru2.bias_hh_l0: torch.Size([72]) | Mean: 0.1957 | Std: 0.2398 | Norm: 2.6155
+
+🚨 OUTPUT LAYERS (OVERFITTING):
+gloss_head.weight: torch.Size([105, 24]) | Mean: -0.0001 | Std: 0.4932 | Norm: 24.7557
+gloss_head.bias: torch.Size([105]) | Mean: -0.0177 | Std: 0.1083 | Norm: 1.1189
+category_head.weight: torch.Size([10, 24]) | Mean: 0.0055 | Std: 0.5845 | Norm: 9.0363
+category_head.bias: torch.Size([10]) | Mean: -0.0034 | Std: 0.1677 | Norm: 0.5033
+
+SUMMARY METRICS
+===============
+Average Weight Norm: 7.7184
+Average Weight Mean: 0.0335
+Total Parameters: 25,319,187
+
+OVERFITTING INDICATORS
+======================
+✅ GRU1 Layer: Reasonable (Std: 0.0489-0.1403)
+🚨 GRU2 Layer: EXTREME VALUES (Std: 0.2277-0.2432, Biases: 0.1854-0.1957)
+🚨 Output Layers: VERY HIGH VARIANCE (Std: 0.4932-0.5845, Norm: 24.7557)
+
+TRAINING LOG ANALYSIS
+=====================
+Initial Loss: ~4.2-4.3 (very high)
+Initial Accuracy: ~0.7-1.6% (extremely low)
+Final Status: Stopped early at epoch 285
+
+ASSESSMENT
+==========
+Status: OVERFITTED
+Issues:
+- Extreme weight values in GRU2 layer
+- Very high output layer weights (norm: 24.7557)
+- Large bias values indicating strong preferences
+- High variance in final layers
+
+RECOMMENDATIONS FOR NEW MODEL
+=============================
+- Higher regularization (dropout: 0.2 → 0.4)
+- Stronger weight decay (5e-6 → 1e-4)
+- Smaller learning rate (0.0003 → 0.0001)
+- Smaller hidden sizes (32→24, 24→16)
+- Earlier stopping (150 → 100)
+- More data augmentation
+
+COMPARISON BASELINE
+==================
+Use these metrics to compare with your new regularized IV3-GRU model:
+- Target: Lower weight norms (< 7.72)
+- Target: Lower output layer std (< 0.4932)
+- Target: Smaller GRU biases (< 0.1854)
+- Target: Better training convergence

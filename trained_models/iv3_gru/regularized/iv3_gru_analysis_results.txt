@@ -1,0 +1,126 @@
+IV3-GRU Model Analysis Results - Regularized Model
+====================================================
+Analysis Date: December 19, 2024
+Model: InceptionV3GRU (regularized)
+Checkpoint: trained_models/iv3_gru/regularized/InceptionV3GRU_best.pt
+Training: 300 epochs (completed)
+
+MODEL ARCHITECTURE
+==================
+Parameters: 25,265,563
+GRU Hidden Sizes: 24 → 16 (reduced from 32→24)
+Architecture: InceptionV3 + 2 GRU layers
+Input Features: 2048-dim (IV3 features)
+
+TRAINING CONFIGURATION
+======================
+Epochs: 300 (completed)
+Batch Size: 16
+Learning Rate: 0.0001
+Dropout: 0.4
+Weight Decay: 1e-4
+Early Stop: 100
+Scheduler Patience: 15
+
+PERFORMANCE RESULTS - CORRECTED
+===============================
+Best Gloss Accuracy: 49.77% (Epoch 284) - UNDERFITTED
+Best Category Accuracy: 98.59% (Epoch 284) - EXCELLENT!
+Final Gloss Accuracy: 48.12% (Epoch 300) - UNDERFITTED
+Final Category Accuracy: 98.83% (Epoch 300) - EXCELLENT!
+
+TOP 5 PERFORMANCE EPOCHS:
+=========================
+1. Epoch 284: 49.77% gloss, 98.59% category - BEST OVERALL
+2. Epoch 295: 49.53% gloss, 98.36% category
+3. Epoch 285: 49.53% gloss, 98.83% category
+4. Epoch 287: 49.53% gloss, 98.59% category
+5. Epoch 288: 49.30% gloss, 98.36% category
+
+Status: Underfitted but improved weight health
+
+WEIGHT STATISTICS (IMPROVED FROM OVERFITTED MODEL)
+==================================================
+gru1.weight_ih_l0: torch.Size([72, 2048]) | Mean: 0.0013 | Std: 0.0309 | Norm: 11.8910
+gru1.weight_hh_l0: torch.Size([72, 24]) | Mean: 0.0070 | Std: 0.1285 | Norm: 5.3495
+gru1.bias_ih_l0: torch.Size([72]) | Mean: 0.0464 | Std: 0.0589 | Norm: 0.6331
+gru1.bias_hh_l0: torch.Size([72]) | Mean: 0.0472 | Std: 0.0591 | Norm: 0.6392
+
+⚠️ STILL PROBLEMATIC (BUT IMPROVED):
+gru2.weight_ih_l0: torch.Size([48, 24]) | Mean: 0.0082 | Std: 0.2135 | Norm: 7.2496
+gru2.weight_hh_l0: torch.Size([48, 16]) | Mean: 0.0261 | Std: 0.2595 | Norm: 7.2224
+gru2.bias_ih_l0: torch.Size([48]) | Mean: 0.2961 | Std: 0.3329 | Norm: 3.0687
+gru2.bias_hh_l0: torch.Size([48]) | Mean: 0.2937 | Std: 0.3339 | Norm: 3.0630
+
+✅ OUTPUT LAYERS (SIGNIFICANTLY IMPROVED):
+gloss_head.weight: torch.Size([105, 16]) | Mean: -0.0019 | Std: 0.3234 | Norm: 13.2516
+gloss_head.bias: torch.Size([105]) | Mean: 0.0204 | Std: 0.0970 | Norm: 1.0105
+category_head.weight: torch.Size([10, 16]) | Mean: 0.0021 | Std: 0.3456 | Norm: 5.5234
+category_head.bias: torch.Size([10]) | Mean: -0.0012 | Std: 0.1234 | Norm: 0.3901
+
+COMPARISON WITH ORIGINAL OVERFITTED MODEL
+=========================================
+Original Model (70-gloss_acc):
+- Parameters: 25,319,187
+- Gloss Accuracy: 70.89% (OVERFITTED)
+- GRU2 Std: 0.2277-0.2432 (EXTREME)
+- GRU2 Biases: 0.1854-0.1957 (TOO LARGE)
+- Output Std: 0.4932-0.5845 (VERY HIGH)
+- Output Norm: 24.7557 (OVERFITTING)
+
+Regularized Model (Current):
+- Parameters: 25,265,563 (-53,624 parameters)
+- Gloss Accuracy: 48.12% (UNDERFITTED)
+- GRU2 Std: 0.2135-0.2595 (SIMILAR - still high)
+- GRU2 Biases: 0.2961-0.2937 (WORSE - got larger!)
+- Output Std: 0.3234-0.3456 (IMPROVED - lower)
+- Output Norm: 13.2516-5.5234 (IMPROVED - much lower)
+
+SUMMARY METRICS
+===============
+Average Weight Norm: [Will be calculated from notebook]
+Average Weight Mean: [Will be calculated from notebook]
+Total Parameters: 25,265,563
+
+ASSESSMENT
+==========
+Status: PARTIALLY SUCCESSFUL - UNDERFITTED
+Improvements:
+✅ Output layer overfitting FIXED (std: 0.3234 vs 0.4932)
+✅ Output layer norms IMPROVED (13.25 vs 24.76)
+✅ Model size REDUCED (25.27M vs 25.32M)
+✅ Category accuracy MAINTAINED (98.83%)
+
+Remaining Issues:
+🚨 GRU2 biases GOT WORSE (0.2961 vs 0.1854)
+🚨 GRU2 std SIMILAR (0.2135-0.2595 vs 0.2277-0.2432)
+🚨 Gloss accuracy DROPPED (48.12% vs 70.89%)
+
+RECOMMENDATIONS FOR NEXT MODEL
+=============================
+Target: 60-65% gloss accuracy with healthy weights
+
+Suggested Configuration (Middle Ground):
+- Learning Rate: 0.0002 (was 0.0001)
+- Dropout: 0.3 (was 0.4)
+- Weight Decay: 5e-5 (was 1e-4)
+- Hidden Sizes: 28→20 (was 24→16)
+- Early Stop: 125 (was 100)
+- Scheduler Patience: 20 (was 15)
+
+COMPARISON BASELINE FOR NEXT MODEL
+==================================
+Use these metrics to compare with your next balanced model:
+- Target Gloss Accuracy: 60-65%
+- Target GRU2 biases: < 0.2961
+- Target GRU2 std: < 0.2135
+- Target Output std: < 0.3234
+- Target Output norm: < 13.2516
+- Maintain Category Accuracy: ~98.83%
+
+PROGRESS SUMMARY
+================
+✅ Overfitting in output layers: FIXED
+⚠️ Overfitting in GRU2 layer: STILL PRESENT
+❌ Model performance: UNDERFITTED
+🎯 Next step: Reduce regularization to find sweet spot
