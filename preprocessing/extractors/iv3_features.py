@@ -1,14 +1,16 @@
 """
-InceptionV3 feature extraction utilities (PyTorch/torchvision).
+InceptionV3 feature extraction for Filipino sign language recognition.
 
-What this provides:
-- Single-frame feature extraction that returns a 2048-D ImageNet embedding.
-- A simple video processor that can write both keypoints (`X`) and IV3 features (`X2048`).
+This module provides:
+- Single-frame InceptionV3 feature extraction (2048D vectors)
+- Video processing with both keypoints and CNN features
+- ImageNet pretrained weights for robust feature extraction
 
-Key facts:
-- Input frame format: OpenCV BGR image.
-- Output feature: NumPy array of shape (2048,) with dtype float32.
-- Matches the training stack (torchvision InceptionV3, global average pooling).
+Input: OpenCV BGR image
+Output: 2048-dimensional feature vector (float32)
+
+The InceptionV3 model uses ImageNet pretrained weights and global average pooling
+to produce consistent feature representations suitable for temporal modeling.
 """
 import argparse
 import cv2
@@ -30,29 +32,29 @@ from ..extractors.keypoints_features import (
     MPModels,
 )
 
-# Initialize a single global InceptionV3 backbone (ImageNet weights).
+# Global InceptionV3 model initialization
 _iv3_weights = Inception_V3_Weights.IMAGENET1K_V1
 _iv3_model = inception_v3(weights=_iv3_weights)
 _iv3_model.aux_logits = False
-_iv3_model.fc = nn.Identity()  # return (N, 2048)
+_iv3_model.fc = nn.Identity()  # Return 2048D features instead of classification
 _iv3_model.eval()
 for p in _iv3_model.parameters():
     p.requires_grad = False
 
-# ImageNet normalization constants (standard values) - will be moved to device as needed
+# ImageNet normalization constants
 _IMAGENET_MEAN = torch.tensor([0.485, 0.456, 0.406]).view(3, 1, 1)
 _IMAGENET_STD = torch.tensor([0.229, 0.224, 0.225]).view(3, 1, 1)
 
 def extract_iv3_features(frame_bgr, image_size=(299, 299), device=None):
-    """Extract a 2048-D InceptionV3 feature for a single BGR frame.
-
+    """Extract InceptionV3 features from a BGR frame.
+    
     Args:
-        frame_bgr: OpenCV BGR image (H, W, 3), uint8 in [0, 255].
-        image_size: Spatial size used for InceptionV3 (default: 299x299).
-        device: Optional torch.device; CUDA is used if available.
-
+        frame_bgr: OpenCV BGR image (H, W, 3) in [0, 255]
+        image_size: Target image size for InceptionV3 (default: 299x299)
+        device: PyTorch device (default: CPU)
+        
     Returns:
-        np.ndarray of shape (2048,) and dtype float32.
+        Feature vector [2048] as float32 numpy array
     """
     if device is None:
         device = torch.device("cpu")
@@ -77,17 +79,20 @@ def extract_iv3_features(frame_bgr, image_size=(299, 299), device=None):
     return feats.squeeze(0).cpu().numpy()
 
 def ensure_dir(p):
+    """Create directory if it doesn't exist."""
     os.makedirs(p, exist_ok=True)
 
 def to_npz(out_path, X, X2048, mask, timestamps_ms, meta, also_parquet=True):
-    """Write a single clip to `.npz` (and optional `.parquet`).
-
-    Saves keys:
-    - X: [T,156] float32
-    - X2048: [T,2048] float32
-    - mask: [T,78] bool
-    - timestamps_ms: [T] int64
-    - meta: JSON string
+    """Save processed video data to compressed .npz file.
+    
+    Args:
+        out_path: Base path for output files (without extension)
+        X: Keypoint coordinates [T, 156] as float32
+        X2048: InceptionV3 features [T, 2048] as float32
+        mask: Keypoint visibility mask [T, 78] as bool
+        timestamps_ms: Frame timestamps [T] as int64
+        meta: Metadata dictionary (converted to JSON string)
+        also_parquet: If True, also create .parquet file for inspection
     """
     np.savez_compressed(out_path + ".npz", X=X, X2048=X2048, mask=mask, timestamps_ms=timestamps_ms, meta=json.dumps(meta))
     if also_parquet:
@@ -102,7 +107,7 @@ def to_npz(out_path, X, X2048, mask, timestamps_ms, meta, also_parquet=True):
             print("[INFO] Install pyarrow or fastparquet for parquet support: pip install pyarrow")
 
 def read_or_create_labels_csv(label_file):
-    """Read `labels.csv` if present; otherwise create an empty one with header."""
+    """Read labels CSV or create empty file with headers."""
     if os.path.exists(label_file):
         return pd.read_csv(label_file)
     else:
@@ -112,34 +117,31 @@ def read_or_create_labels_csv(label_file):
         return df
 
 def update_labels_csv(label_file, video_file, gloss, cat):
-    """Append or update one row in `labels.csv` for the given clip."""
+    """Add or update a row in the labels CSV file."""
     df = read_or_create_labels_csv(label_file)
     new_row = pd.DataFrame({"file": [video_file], "gloss": [gloss], "cat": [cat]})
     df = pd.concat([df, new_row], ignore_index=True)
     df.to_csv(label_file, index=False)
 
 def process_video(video_path, out_dir, label_file=None, target_fps=30, out_size=256, conf_thresh=0.5, max_gap=5, write_keypoints=True, write_iv3_features=True, feature_key='X2048', gloss=None, cat=None):
-    """Process one video into a training-ready `.npz`.
-
-    Extracts per-frame keypoints (`X` [T,156]) and/or IV3 features (`X2048` [T,2048]),
-    plus `mask` [T,78], `timestamps_ms` [T], and `meta`.
-
+    """Process a single video file and extract features.
+    
+    Extracts MediaPipe keypoints and/or InceptionV3 features from video frames.
+    Performs gap interpolation and saves results as .npz file.
+    
     Args:
-        video_path: Path to the input video file.
-        out_dir: Output root directory (files are saved under `<out_dir>/0/`).
-        label_file: Optional CSV to update (`file,gloss,cat`). Defaults to `<out_dir>/labels.csv`.
-        target_fps: Sampling fps for frames.
-        out_size: Side length used to resize frames for keypoint extraction.
-        conf_thresh: Confidence/visibility threshold for keypoints.
-        max_gap: Max gap (frames) to interpolate for missing keypoints.
-        write_keypoints: If True, write `X` and `mask`.
-        write_iv3_features: If True, write `X2048`.
-        feature_key: Unused here (kept for compatibility).
-        gloss: Optional gloss id (written to labels CSV if provided).
-        cat: Optional category id (written to labels CSV if provided).
-
-    Returns:
-        None. Writes `<basename>.npz` (and `.parquet` if available) to disk.
+        video_path: Path to input video file
+        out_dir: Output directory for processed files
+        label_file: Path to labels CSV file (default: out_dir/labels.csv)
+        target_fps: Target frame sampling rate
+        out_size: Image resize dimension for keypoint extraction
+        conf_thresh: Confidence threshold for keypoint detection
+        max_gap: Maximum gap size for interpolation
+        write_keypoints: Extract MediaPipe keypoints (156D vectors)
+        write_iv3_features: Extract InceptionV3 features (2048D vectors)
+        feature_key: Unused parameter (kept for compatibility)
+        gloss: Gloss class ID for labeling
+        cat: Category class ID for labeling
     """
     basename = os.path.splitext(os.path.basename(video_path))[0]
     output_npz_folder = os.path.join(out_dir, '0')  # Assuming input vids are in '0' subfolder

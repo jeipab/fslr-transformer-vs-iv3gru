@@ -1,17 +1,21 @@
 """
-Keypoint preprocessing utilities using MediaPipe Holistic.
+MediaPipe keypoint extraction utilities for Filipino sign language recognition.
 
-What this provides:
-- Landmark index sets and constants used to build the 156-D vector.
-- Model lifecycle helpers (`create_models`, `close_models`).
-- Per-frame extraction of 78 keypoints → `X` (156 floats) and `mask` (78 bools).
-- Small-gap interpolation to fill missing keypoints in time.
+This module provides:
+- MediaPipe Holistic model management
+- Keypoint extraction from RGB frames (pose, hands, face)
+- Gap interpolation for missing keypoints
+- Normalized coordinate output in [0,1] range
 
-Input/Output overview:
-- Input image is RGB (H, W, 3), float/uint8 in standard OpenCV format.
-- `extract_keypoints_from_frame` returns:
-  - `vec156`: np.float32 shape (156,) with values in [0,1].
-  - `mask78`: np.bool_ shape (78,) visibility per keypoint.
+Keypoint structure (156 dimensions):
+- Pose landmarks: 25 points × 2 coordinates = 50 dims
+- Left hand: 21 points × 2 coordinates = 42 dims  
+- Right hand: 21 points × 2 coordinates = 42 dims
+- Face mesh: 11 points × 2 coordinates = 22 dims
+Total: 156 dimensions
+
+Input: RGB frame (H, W, 3)
+Output: vec156 [156] float32, mask78 [78] bool
 """
 
 from dataclasses import dataclass
@@ -19,7 +23,7 @@ import numpy as np
 import mediapipe as mp
 
 # ----------------------------
-# Config: landmark index sets
+# Keypoint Configuration
 # ----------------------------
 POSE_UPPER_25 = list(range(0, 11)) + list(range(11, 17)) + list(range(17, 23)) + [23, 24]
 N_HAND = 21
@@ -27,7 +31,7 @@ FACEMESH_11 = [1, 33, 263, 133, 362, 61, 291, 105, 334, 199, 4]
 
 
 # ----------------------------
-# MediaPipe wrappers
+# MediaPipe Model Management
 # ----------------------------
 mp_hands = mp.solutions.hands
 mp_face_mesh = mp.solutions.face_mesh
@@ -37,11 +41,22 @@ mp_pose = mp.solutions.pose
 
 @dataclass
 class MPModels:
-    seg: any
-    hol: any
+    """Container for MediaPipe models."""
+    seg: any  # Selfie segmentation model
+    hol: any  # Holistic model
 
 
 def create_models(seg_model=1, detection_conf=0.5, tracking_conf=0.5):
+    """Initialize MediaPipe models for keypoint extraction.
+    
+    Args:
+        seg_model: Selfie segmentation model selection (0 or 1)
+        detection_conf: Minimum detection confidence threshold
+        tracking_conf: Minimum tracking confidence threshold
+        
+    Returns:
+        MPModels: Container with initialized models
+    """
     seg = mp.solutions.selfie_segmentation.SelfieSegmentation(model_selection=seg_model)
     hol = mp.solutions.holistic.Holistic(
         model_complexity=1,
@@ -54,31 +69,45 @@ def create_models(seg_model=1, detection_conf=0.5, tracking_conf=0.5):
 
 
 def close_models(models: MPModels):
+    """Close MediaPipe models to free resources."""
     models.seg.close()
     models.hol.close()
 
 
 def xy_from_landmark(lm, w, h):
-    """Convert a MediaPipe landmark to normalized (x, y) in [0, 1]."""
+    """Convert MediaPipe landmark to normalized coordinates.
+    
+    Args:
+        lm: MediaPipe landmark object
+        w: Image width (unused, kept for compatibility)
+        h: Image height (unused, kept for compatibility)
+        
+    Returns:
+        Tuple of (x, y) coordinates clamped to [0, 1]
+    """
     x = float(lm.x)
     y = float(lm.y)
     return max(0.0, min(1.0, x)), max(0.0, min(1.0, y))
 
 
 def _lerp(a, b, t):
+    """Linear interpolation between two values."""
     return a + (b - a) * t
 
 
 def interpolate_gaps(X, mask, max_gap=5):
-    """Linearly interpolate short missing spans in a keypoint sequence.
-
+    """Interpolate missing keypoints in temporal sequences.
+    
+    Fills gaps in keypoint sequences using linear interpolation.
+    Only interpolates gaps within the specified maximum length.
+    
     Args:
-        X: [T,156] float32 keypoint coordinates (x1, y1, x2, y2, ...).
-        mask: [T,78] bool visibility mask.
-        max_gap: Interpolate only gaps with length in [1, max_gap].
-
+        X: Keypoint coordinates [T, 156] as float32
+        mask: Keypoint visibility mask [T, 78] as bool
+        max_gap: Maximum gap length to interpolate
+        
     Returns:
-        Tuple (X_filled, mask_filled) with the same shapes.
+        Tuple of (X_filled, mask_filled) with interpolated values
     """
     T = X.shape[0]
     K = mask.shape[1]
@@ -114,18 +143,19 @@ def interpolate_gaps(X, mask, max_gap=5):
 
 
 def extract_keypoints_from_frame(img_rgb, models: MPModels, conf_thresh=0.5):
-    """Extract 78 keypoints and a visibility mask from one RGB frame.
-
-    Keypoint order: `pose25,left_hand21,right_hand21,face11`.
-
+    """Extract keypoints from a single RGB frame.
+    
+    Extracts pose, hand, and face landmarks using MediaPipe Holistic.
+    Returns normalized coordinates and visibility mask.
+    
     Args:
-        img_rgb: RGB frame (H, W, 3).
-        models: MPModels with initialized holistic and segmentation models.
-        conf_thresh: Minimum visibility (pose) to mark keypoint as present.
-
+        img_rgb: RGB frame (H, W, 3)
+        models: Initialized MediaPipe models
+        conf_thresh: Confidence threshold for keypoint detection
+        
     Returns:
-        vec156: np.float32 (156,) normalized coordinates in [0,1].
-        mask78: np.bool_ (78,) True where the keypoint is considered visible.
+        vec156: Keypoint coordinates [156] as float32 in [0,1]
+        mask78: Visibility mask [78] as bool
     """
     H, W, _ = img_rgb.shape
     res = models.hol.process(img_rgb)

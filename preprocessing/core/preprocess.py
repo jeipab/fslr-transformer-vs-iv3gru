@@ -1,20 +1,19 @@
 """
-Preprocessor for raw sign-language video clips → `.npz` / `.parquet`.
+Video preprocessing pipeline for Filipino sign language recognition.
 
-Purpose:
-- Extract pose, hand, and face keypoints using MediaPipe.
-- Compute optional InceptionV3 (2048-D) CNN features.
-- Detect occlusions from keypoint visibility.
-- Save per-clip outputs (`X`, `mask`, `timestamps_ms`, `meta`, `X2048`) as compressed `.npz` (+ optional `.parquet`).
-- Maintain/update a `labels.csv` with columns: `file,gloss,cat,occluded`.
+This module processes raw video files to extract:
+- MediaPipe keypoints (pose, hands, face) → 156-dimensional vectors
+- InceptionV3 CNN features → 2048-dimensional vectors  
+- Occlusion detection flags
+- Frame timestamps and metadata
+
+Outputs are saved as compressed .npz files with optional .parquet files for inspection.
 
 Usage:
-- Preprocess a single video:
-    python preprocessing/preprocess.py input.mp4 data/processed/keypoints_all 
-    --write-keypoints --write-iv3-features --id 12
-- Preprocess all videos in a directory (copy labels to `labels.csv`):
-    python preprocessing/preprocess.py data/raw/ data/processed/keypoints_all 
-    --write-keypoints --write-iv3-features --id 12
+- Single video:
+    python preprocessing/preprocess.py video.mp4 output_dir --write-keypoints --write-iv3-features --id 12
+- Directory of videos:
+    python preprocessing/preprocess.py input_dir output_dir --write-keypoints --write-iv3-features --id 12
 """
 
 import os, sys, glob, json, math, argparse, time
@@ -53,13 +52,15 @@ def ensure_dir(p):
 
 
 def to_npz(out_path, X, mask, timestamps_ms, meta, also_parquet=True):
-    """Write keys (`X`, `mask`, `timestamps_ms`, `meta`) to `<out_path>.npz`.
-
-    - X: [T,156] float32
-    - mask: [T,78] bool
-    - timestamps_ms: [T] int64
-    - meta: JSON string
-    Optionally writes a `.parquet` for quick inspection.
+    """Save processed data to compressed .npz file.
+    
+    Args:
+        out_path: Base path for output files (without extension)
+        X: Keypoint coordinates [T, 156] as float32
+        mask: Keypoint visibility mask [T, 78] as bool
+        timestamps_ms: Frame timestamps [T] as int64
+        meta: Metadata dictionary (converted to JSON string)
+        also_parquet: If True, also create .parquet file for inspection
     """
     np.savez_compressed(out_path + ".npz", X=X, mask=mask, timestamps_ms=timestamps_ms, meta=json.dumps(meta))
     if also_parquet:
@@ -86,12 +87,13 @@ mp_drawing = mp.solutions.drawing_utils
 mp_pose = mp.solutions.pose
 
  
-
-
 def _ensure_labels_csv(path, include_occluded_col=True, overwrite=False):
-    """Create or upgrade a labels CSV.
-
-    If overwrite=True, rewrites header. If file exists and is missing 'occluded', add it with default 0.
+    """Create or update labels CSV file with required columns.
+    
+    Args:
+        path: Path to CSV file
+        include_occluded_col: Add 'occluded' column if missing
+        overwrite: If True, overwrite existing file header
     """
     os.makedirs(os.path.dirname(path) or '.', exist_ok=True)
     if overwrite or not os.path.exists(path):
@@ -109,9 +111,14 @@ def _ensure_labels_csv(path, include_occluded_col=True, overwrite=False):
 
 
 def _append_label_row(path, file_entry, gloss_id, cat_id, occluded_flag=0):
-    """Append one row (file,gloss,cat,occluded) into labels CSV.
-
-    'file' can be a basename or a relative subpath and may include extension.
+    """Add a new row to the labels CSV file.
+    
+    Args:
+        path: Path to CSV file
+        file_entry: Filename (can include extension)
+        gloss_id: Gloss class ID
+        cat_id: Category class ID  
+        occluded_flag: Occlusion flag (0 or 1)
     """
     try:
         new_row = {"file": str(file_entry), "gloss": int(gloss_id), "cat": int(cat_id)}
@@ -131,23 +138,26 @@ def _append_label_row(path, file_entry, gloss_id, cat_id, occluded_flag=0):
 
 def process_video(video_path, out_dir, target_fps=30, out_size=256, conf_thresh=0.5, max_gap=5, write_keypoints=True, write_iv3_features=True, feature_key='X2048',
                  compute_occlusion=True, occ_detailed=False, labels_csv_path=None, gloss_id=None, cat_id=None):
-    """Process one video and save a `.npz` with keypoints and/or IV3 features.
-
-    Extracts keypoints `X` [T,156] with visibility `mask` [T,78] using MediaPipe,
-    optionally extracts `X2048` [T,2048] using torchvision InceptionV3, and writes
-    `timestamps_ms` plus a concise `meta` description. Values are clipped and short
-    gaps are interpolated in `X` using `interpolate_gaps`.
-
+    """Process a single video file and extract features.
+    
+    Extracts MediaPipe keypoints and/or InceptionV3 features from video frames.
+    Performs gap interpolation and occlusion detection. Saves results as .npz file.
+    
     Args:
-        video_path: Input video file path.
-        out_dir: Output directory root (files are stored under `<out_dir>/0/`).
-        target_fps: Target sampling frames-per-second.
-        out_size: Square resize used for keypoint extraction.
-        conf_thresh: Keypoint visibility/pose confidence threshold.
-        max_gap: Max consecutive missing frames to interpolate per keypoint.
-        write_keypoints: If True, compute and write `X` and `mask`.
-        write_iv3_features: If True, compute and write `X2048`.
-        feature_key: Kept for CLI compatibility (not used).
+        video_path: Path to input video file
+        out_dir: Output directory for processed files
+        target_fps: Target frame sampling rate
+        out_size: Image resize dimension for keypoint extraction
+        conf_thresh: Confidence threshold for keypoint detection
+        max_gap: Maximum gap size for interpolation
+        write_keypoints: Extract MediaPipe keypoints (156D vectors)
+        write_iv3_features: Extract InceptionV3 features (2048D vectors)
+        feature_key: Unused parameter (kept for compatibility)
+        compute_occlusion: Enable occlusion detection
+        occ_detailed: Return detailed occlusion analysis
+        labels_csv_path: Path to labels CSV file
+        gloss_id: Gloss class ID for labeling
+        cat_id: Category class ID for labeling
     """
     basename = os.path.splitext(os.path.basename(video_path))[0]
     output_npz_folder = os.path.join(out_dir)
