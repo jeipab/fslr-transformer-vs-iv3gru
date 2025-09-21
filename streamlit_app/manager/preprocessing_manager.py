@@ -69,7 +69,7 @@ def render_preprocessing_stage():
         else:
             st.markdown("")  # Empty space
     
-    st.markdown("### Ready for Preprocessing")
+    st.markdown("<div class='main-section-header'>READY FOR PREPROCESSING</div>", unsafe_allow_html=True)
     
     video_files = st.session_state.video_files
     
@@ -193,10 +193,7 @@ def render_video_files_list(all_files_to_show: List):
         # Remove button with confirmation
         with col6:
             if st.button("Remove", key=f"remove_{unique_key_suffix}", help="Remove this file", type="secondary", disabled=is_processing):
-                if file_type == 'video':
-                    remove_file_from_stage(filename, 'video')
-                else:
-                    remove_file_from_stage(filename, 'preprocessed')
+                remove_specific_file_instance_preprocessing(uploaded_file, file_type)
                 st.rerun()
         
         # Add separator line only if not the last file
@@ -691,8 +688,9 @@ def create_bulk_download_button(preprocessed_files: List):
     zip_buffer = io.BytesIO()
     
     with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zip_file:
-        # Add all preprocessed NPZ files
+        # Add all preprocessed NPZ files with unique names to handle duplicates
         files_added = 0
+        used_names = set()
         for preprocessed_file in preprocessed_files:
             filename = preprocessed_file.name
             npz_data = st.session_state.processed_data.get(filename)
@@ -700,7 +698,18 @@ def create_bulk_download_button(preprocessed_files: List):
                 npz_bytes = create_npz_bytes(npz_data)
                 # Create descriptive filename for ZIP contents
                 base_name = Path(filename).stem  # Remove original extension
-                npz_filename = f"{base_name}_preprocessed.npz"
+                base_npz_filename = f"{base_name}_preprocessed.npz"
+                
+                # Handle duplicate names by adding (1), (2), etc.
+                npz_filename = base_npz_filename
+                counter = 1
+                while npz_filename in used_names:
+                    name_without_ext = Path(base_npz_filename).stem
+                    ext = Path(base_npz_filename).suffix
+                    npz_filename = f"{name_without_ext}({counter}){ext}"
+                    counter += 1
+                
+                used_names.add(npz_filename)
                 zip_file.writestr(npz_filename, npz_bytes)
                 files_added += 1
             else:
@@ -728,3 +737,33 @@ def create_bulk_download_button(preprocessed_files: List):
         disabled=is_processing,
         key="download_all_zip_preprocessing"
     )
+
+
+def remove_specific_file_instance_preprocessing(file_obj, file_type: str):
+    """Remove a specific file instance from preprocessing stage."""
+    filename = file_obj.name
+    
+    # Remove from appropriate file list by object reference
+    if file_type == 'video':
+        st.session_state.video_files = [f for f in st.session_state.video_files if f is not file_obj]
+    else:  # preprocessed
+        st.session_state.preprocessed_files = [f for f in st.session_state.preprocessed_files if f is not file_obj]
+    
+    # Remove from general uploaded files
+    st.session_state.uploaded_files = [f for f in st.session_state.uploaded_files if f is not file_obj]
+    
+    # Only clear status/metadata if this is the last file with this name
+    remaining_files_with_same_name = []
+    for file_list in [st.session_state.video_files, st.session_state.preprocessed_files, st.session_state.uploaded_files]:
+        remaining_files_with_same_name.extend([f for f in file_list if f.name == filename])
+    
+    if not remaining_files_with_same_name:
+        # This was the last file with this name, clear the status/metadata
+        if filename in st.session_state.file_status:
+            del st.session_state.file_status[filename]
+        if filename in st.session_state.processed_data:
+            del st.session_state.processed_data[filename]
+        if filename in st.session_state.file_metadata:
+            del st.session_state.file_metadata[filename]
+        if filename in st.session_state.original_file_data:
+            del st.session_state.original_file_data[filename]

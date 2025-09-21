@@ -24,6 +24,147 @@ except ImportError:
     CV2_AVAILABLE = False
 
 
+def render_summary_stats_horizontal(completed_files: List) -> None:
+    """Render summary statistics in horizontal layout for Summary selection."""
+    if not completed_files:
+        return
+    
+    # Calculate summary statistics
+    total_files = len(completed_files)
+    
+    # Count file types
+    original_files = sum(1 for f in completed_files 
+                       if st.session_state.file_metadata[f.name].get('source_type', 'original') == 'original')
+    preprocessed_files = sum(1 for f in completed_files 
+                           if st.session_state.file_metadata[f.name].get('source_type') == 'video')
+    
+    # Count compatibility
+    transformer_compatible = 0
+    iv3_compatible = 0
+    
+    for uploaded_file in completed_files:
+        filename = uploaded_file.name
+        if filename in st.session_state.file_metadata:
+            compatibility = st.session_state.file_metadata[filename].get('compatibility', {})
+            if compatibility.get('transformer', False):
+                transformer_compatible += 1
+            if compatibility.get('iv3_gru', False):
+                iv3_compatible += 1
+    
+    # Calculate occlusion statistics
+    occluded_count = 0
+    for uploaded_file in completed_files:
+        filename = uploaded_file.name
+        if filename in st.session_state.processed_data:
+            npz_data = st.session_state.processed_data[filename]
+            from .utils import extract_occlusion_flag, interpret_occlusion_flag
+            occlusion_flag = extract_occlusion_flag(npz_data)
+            occlusion_status = interpret_occlusion_flag(occlusion_flag)
+            if occlusion_status == "Yes":
+                occluded_count += 1
+    
+    # Horizontal layout: Total Files, Original NPZ, Preprocessed Videos, Transformer Compatible, IV3-GRU Compatible, Occluded
+    summary_col1, summary_col2, summary_col3, summary_col4, summary_col5, summary_col6 = st.columns(6)
+    
+    with summary_col1:
+        st.markdown("<div style='text-align: center;'>", unsafe_allow_html=True)
+        st.metric("Total Files", total_files)
+        st.markdown("</div>", unsafe_allow_html=True)
+    
+    with summary_col2:
+        st.markdown("<div style='text-align: center;'>", unsafe_allow_html=True)
+        st.metric("Original NPZ", original_files)
+        st.markdown("</div>", unsafe_allow_html=True)
+    
+    with summary_col3:
+        st.markdown("<div style='text-align: center;'>", unsafe_allow_html=True)
+        st.metric("Preprocessed Videos", preprocessed_files)
+        st.markdown("</div>", unsafe_allow_html=True)
+    
+    with summary_col4:
+        st.markdown("<div style='text-align: center;'>", unsafe_allow_html=True)
+        st.metric("Transformer Compatible", transformer_compatible)
+        st.markdown("</div>", unsafe_allow_html=True)
+    
+    with summary_col5:
+        st.markdown("<div style='text-align: center;'>", unsafe_allow_html=True)
+        st.metric("IV3-GRU Compatible", iv3_compatible)
+        st.markdown("</div>", unsafe_allow_html=True)
+    
+    with summary_col6:
+        st.markdown("<div style='text-align: center;'>", unsafe_allow_html=True)
+        st.metric("Occluded", occluded_count)
+        st.markdown("</div>", unsafe_allow_html=True)
+
+
+def render_file_details_horizontal(filename: str, npz_data: Dict, metadata: Dict) -> None:
+    """Render file details in horizontal layout for combined Results section."""
+    X_raw = np.array(npz_data["X"])  # [T, 156]
+    X2048 = np.array(npz_data.get("X2048", [])) if "X2048" in npz_data else None
+    raw_length, raw_features = X_raw.shape[0], X_raw.shape[1] if X_raw.ndim == 2 else (0, 0)
+    
+    # Parse metadata
+    meta_parsed = None
+    if 'meta' in npz_data:
+        try:
+            meta_raw = npz_data['meta']
+            if isinstance(meta_raw, str):
+                meta_parsed = json.loads(meta_raw)
+            elif isinstance(meta_raw, dict):
+                meta_parsed = meta_raw
+            else:
+                # Handle numpy array or other types
+                meta_parsed = None
+        except:
+            meta_parsed = None
+    
+    # Horizontal layout: Frames, Keypoints, Features, Occluded
+    detail_col1, detail_col2, detail_col3, detail_col4 = st.columns(4)
+    
+    with detail_col1:
+        st.markdown("<div style='text-align: center;'>", unsafe_allow_html=True)
+        st.metric("Frames", raw_length)
+        if raw_features == 156:
+            st.markdown("<span class='status-good'>✓ Valid keypoints</span>", unsafe_allow_html=True)
+        else:
+            st.markdown("<span class='status-warning'>⚠ Unexpected shape</span>", unsafe_allow_html=True)
+        st.markdown("</div>", unsafe_allow_html=True)
+    
+    with detail_col2:
+        st.markdown("<div style='text-align: center;'>", unsafe_allow_html=True)
+        # Display "Keypoints" when feature dimension is 156, otherwise "Features"
+        label = "Keypoints" if raw_features == 156 else "Features"
+        st.metric(label, raw_features)
+        # Show transformer readiness
+        model_type = meta_parsed.get('model_type') if meta_parsed else None
+        if raw_features == 156 and (model_type in ['T', 'B'] or model_type is None):
+            st.markdown("<span class='status-good'>✓ Transformer ready</span>", unsafe_allow_html=True)
+        elif model_type == 'I':
+            st.markdown("<span class='status-good'>✓ IV3-GRU ready</span>", unsafe_allow_html=True)
+        st.markdown("</div>", unsafe_allow_html=True)
+    
+    with detail_col3:
+        st.markdown("<div style='text-align: center;'>", unsafe_allow_html=True)
+        if X2048 is not None and isinstance(X2048, np.ndarray) and X2048.size > 0:
+            # Show actual number of features instead of "Present"
+            feature_count = X2048.shape[1] if X2048.ndim == 2 else 0
+            st.metric("Features", feature_count)
+            st.markdown("<span class='status-good'>✓ IV3-GRU ready</span>", unsafe_allow_html=True)
+        else:
+            st.metric("Features", "Missing")
+            st.markdown("<span class='status-warning'>⚠ Transformer only</span>", unsafe_allow_html=True)
+        st.markdown("</div>", unsafe_allow_html=True)
+    
+    with detail_col4:
+        st.markdown("<div style='text-align: center;'>", unsafe_allow_html=True)
+        # Extract and display occlusion status
+        from .utils import extract_occlusion_flag, interpret_occlusion_flag
+        occlusion_flag = extract_occlusion_flag(npz_data)
+        occlusion_status = interpret_occlusion_flag(occlusion_flag)
+        st.metric("Occluded", occlusion_status)
+        st.markdown("</div>", unsafe_allow_html=True)
+
+
 def render_consolidated_file_info(filename: str, npz_data: Dict, metadata: Dict, sequence_length: int) -> Tuple[np.ndarray, np.ndarray, Dict]:
     """Render consolidated file info with integrated sequence overview data.
 
@@ -58,10 +199,9 @@ def render_consolidated_file_info(filename: str, npz_data: Dict, metadata: Dict,
         except Exception:
             meta_parsed = {"info": "Unparsed meta"}
 
-    # File title
-    st.markdown(f"### {filename}")
+    # Skip filename header - removed as requested
     
-    # Add CSS to reduce spacing between columns and after filename
+    # Add CSS to reduce spacing between columns
     st.markdown("""
     <style>
     .stMetric {
@@ -78,79 +218,7 @@ def render_consolidated_file_info(filename: str, npz_data: Dict, metadata: Dict,
     }
     </style>
     """, unsafe_allow_html=True)
-    
-    # Row 1: Core features (Frames, Keypoints, X2048 Features)
-    col1, col2, col3 = st.columns(3)
-    
-    with col1:
-        st.markdown("<div style='text-align: center;'>", unsafe_allow_html=True)
-        st.metric("Frames", raw_length)
-        if raw_features == 156:
-            st.markdown("<span class='status-good'>✓ Valid keypoints</span>", unsafe_allow_html=True)
-        else:
-            st.markdown("<span class='status-warning'>⚠ Unexpected shape</span>", unsafe_allow_html=True)
-        st.markdown("</div>", unsafe_allow_html=True)
-    
-    with col2:
-        st.markdown("<div style='text-align: center;'>", unsafe_allow_html=True)
-        # Display "Keypoints" when feature dimension is 156, otherwise "Features"
-        label = "Keypoints" if raw_features == 156 else "Features"
-        st.metric(label, raw_features)
-        # Show transformer readiness
-        model_type = meta_parsed.get('model_type') if meta_parsed else None
-        if raw_features == 156 and (model_type in ['T', 'B'] or model_type is None):
-            st.markdown("<span class='status-good'>✓ Transformer ready</span>", unsafe_allow_html=True)
-        elif model_type == 'I':
-            st.markdown("<span class='status-good'>✓ IV3-GRU ready</span>", unsafe_allow_html=True)
-        st.markdown("</div>", unsafe_allow_html=True)
-    
-    with col3:
-        st.markdown("<div style='text-align: center;'>", unsafe_allow_html=True)
-        if X2048 is not None and isinstance(X2048, np.ndarray) and X2048.size > 0:
-            st.metric("X2048 Features", "Present")
-            st.markdown("<span class='status-good'>✓ IV3-GRU ready</span>", unsafe_allow_html=True)
-        else:
-            st.metric("X2048 Features", "Missing")
-            st.markdown("<span class='status-warning'>⚠ Transformer only</span>", unsafe_allow_html=True)
-        st.markdown("</div>", unsafe_allow_html=True)
-    
-    # Row 2: Additional file metadata
-    col4, col5, col6, col7 = st.columns(4)
-    
-    with col4:
-        st.markdown("<div style='text-align: center;'>", unsafe_allow_html=True)
-        if timestamps_ms.size > 0:
-            duration_s = (timestamps_ms[-1] - timestamps_ms[0]) / 1000.0 if timestamps_ms.size > 1 else 0.0
-            if duration_s > 0:
-                fps = raw_length / duration_s if duration_s > 0 else 0
-                st.metric("Duration", f"{duration_s:.2f}s", help=f"~{fps:.1f} FPS")
-            else:
-                st.metric("Duration", f"{duration_s:.2f}s")
-        else:
-            st.metric("Duration", "N/A")
-        st.markdown("</div>", unsafe_allow_html=True)
-    
-    with col5:
-        st.markdown("<div style='text-align: center;'>", unsafe_allow_html=True)
-        st.metric("File Type", metadata['file_type'].upper())
-        st.markdown("</div>", unsafe_allow_html=True)
-    
-    with col6:
-        st.markdown("<div style='text-align: center;'>", unsafe_allow_html=True)
-        source_type = metadata.get('source_type', 'original')
-        st.metric("Source", source_type.title())
-        st.markdown("</div>", unsafe_allow_html=True)
-    
-    with col7:
-        st.markdown("<div style='text-align: center;'>", unsafe_allow_html=True)
-        # Extract and display occlusion status
-        from .utils import extract_occlusion_flag, interpret_occlusion_flag
-        occlusion_flag = extract_occlusion_flag(npz_data)
-        occlusion_status = interpret_occlusion_flag(occlusion_flag)
-        st.metric("Occluded", occlusion_status)
-        st.markdown("</div>", unsafe_allow_html=True)
 
-    # Optional expanders for detailed info - side by side
     exp_col1, exp_col2 = st.columns(2)
     
     with exp_col1:
@@ -313,8 +381,18 @@ def render_keypoint_video(sequence: np.ndarray, mask: Optional[np.ndarray] = Non
         background_options = ["White", "Black", "Grid"]
         
         # Check if this is a processed video file with original video data
-        if key_suffix and key_suffix in st.session_state.get('original_file_data', {}):
-            original_data = st.session_state.original_file_data[key_suffix]
+        # Extract filename from key_suffix (format: filename_objectid)
+        if key_suffix:
+            # Split by underscore and take all parts except the last one (object id)
+            parts = key_suffix.split('_')
+            if len(parts) > 1:
+                filename = '_'.join(parts[:-1])  # All parts except the last (object id)
+            else:
+                filename = key_suffix
+        else:
+            filename = ""
+        if filename and filename in st.session_state.get('original_file_data', {}):
+            original_data = st.session_state.original_file_data[filename]
             if original_data.get('type', '').startswith('video/'):
                 background_options.append("Original Video")
         
@@ -852,10 +930,20 @@ def create_keypoint_animation_video(keypoints_2d: np.ndarray, mask: Optional[np.
     original_video_frames = []
     
     # If we need original video dimensions, get them first
-    if bg_type == "Original Video" and key_suffix in st.session_state.get('original_file_data', {}):
+    # Extract filename from key_suffix (format: filename_objectid)
+    if key_suffix:
+        # Split by underscore and take all parts except the last one (object id)
+        parts = key_suffix.split('_')
+        if len(parts) > 1:
+            filename = '_'.join(parts[:-1])  # All parts except the last (object id)
+        else:
+            filename = key_suffix
+    else:
+        filename = ""
+    if bg_type == "Original Video" and filename in st.session_state.get('original_file_data', {}):
         try:
             # Get original video data
-            original_data = st.session_state.original_file_data[key_suffix]
+            original_data = st.session_state.original_file_data[filename]
             video_data = original_data.get('data')
             
             if video_data:

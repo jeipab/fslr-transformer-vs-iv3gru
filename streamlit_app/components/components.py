@@ -29,6 +29,15 @@ def set_page() -> None:
         margin: 1.5rem 0 1rem 0;
     }
     
+    .main-section-header {
+        font-size: 2rem;
+        font-weight: bold;
+        color: #ffffff;
+        border-bottom: 2px solid #3498db;
+        padding-bottom: 0.5rem;
+        margin: 1.5rem 0 1rem 0;
+    }
+    
     /* ===== METRIC CARDS ===== */
     .metric-card {
         background-color: rgba(255, 255, 255, 0.1);
@@ -993,12 +1002,7 @@ def render_predictions_section(cfg: Dict, npz_data: Dict = None, filename: str =
     """Render predictions section with enhanced layout."""
     st.markdown("<div class='section-header'>Predictions</div>", unsafe_allow_html=True)
     
-    # Model info
-    model_info_col1, model_info_col2 = st.columns(2)
-    with model_info_col1:
-        st.info(f"**Model**: {cfg['model_choice']}")
-    with model_info_col2:
-        st.info(f"**Input**: Features (X2048)")
+    # Model info removed as requested
     
     # Generate real predictions if NPZ data is available
     if npz_data is not None:

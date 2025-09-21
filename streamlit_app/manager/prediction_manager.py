@@ -16,7 +16,8 @@ sys.path.insert(0, str(project_root))
 from ..components.utils import detect_file_type, check_npz_compatibility, create_npz_bytes, extract_occlusion_flag, interpret_occlusion_flag
 from ..components.visualization import (
     render_consolidated_file_info, render_animated_keypoints, 
-    render_feature_charts, render_topk_table
+    render_feature_charts, render_topk_table, render_file_details_horizontal,
+    render_summary_stats_horizontal
 )
 from ..components.components import render_predictions_section
 from .upload_manager import remove_file_from_stage
@@ -209,7 +210,7 @@ def render_predictions_stage(cfg: Dict):
         else:
             st.markdown("")  # Empty space
     
-    st.markdown("### Ready for Inference")
+    st.markdown("<div class='main-section-header'>READY FOR INFERENCE</div>", unsafe_allow_html=True)
     
     # Get all NPZ files (original + preprocessed)
     all_npz_files = get_all_npz_files()
@@ -289,24 +290,19 @@ def render_npz_files_management(all_npz_files: List):
         # Create unique key for this file instance using actual index to handle duplicates
         unique_key_suffix = f"{filename}_{actual_index}"
         
-        # Status and type emojis
+        # Status emojis only
         status_emoji = {
             'pending': '⏳',
             'processing': '🔄', 
             'completed': '✅',
             'error': '❌'
         }
-        type_emoji = '📄' if file_type == 'npz' else '🎥'
-        
-        # Source indicator
-        source_type = metadata.get('source_type', 'original')
-        source_emoji = '🎥' if source_type == 'video' else '📄'
         
         # Create compact file row
         col1, col2, col3, col4, col5 = st.columns([3, 1, 1, 1, 1])
         
         with col1:
-            st.markdown(f"**{type_emoji} {filename}** {source_emoji}")
+            st.markdown(f"**{filename}**")
         with col2:
             st.markdown(f"**Size:** {file_size}")
         with col3:
@@ -330,7 +326,7 @@ def render_npz_files_management(all_npz_files: List):
         # Remove button with confirmation
         with col5:
             if st.button("Remove", key=f"remove_{unique_key_suffix}", help="Remove this file", type="secondary"):
-                remove_file_from_predictions(filename)
+                remove_specific_file_instance(uploaded_file, 'predictions')
                 st.rerun()
         
         # Add separator line only if not the last file on current page
@@ -471,16 +467,27 @@ def render_visualization_tabs(cfg: Dict):
         return
     
     # Create file selection interface
-    st.markdown("### Results")
+    st.markdown("<div style='height: 20px;'></div>", unsafe_allow_html=True)
+    st.markdown("<div class='main-section-header'>RESULTS</div>", unsafe_allow_html=True)
     
     # File selection dropdown
     file_options = []
     file_mapping = {}
     
+    # Track filename counts to handle duplicates
+    filename_counts = {}
+    
     for uploaded_file in completed_files:
         filename = uploaded_file.name
         
-        display_name = filename
+        # Create unique display name for duplicates
+        if filename in filename_counts:
+            filename_counts[filename] += 1
+            display_name = f"{filename} ({filename_counts[filename]})"
+        else:
+            filename_counts[filename] = 1
+            display_name = filename
+        
         file_options.append(display_name)
         file_mapping[display_name] = uploaded_file
     
@@ -498,17 +505,34 @@ def render_visualization_tabs(cfg: Dict):
         # Clear the current_tab after switching
         st.session_state.current_tab = None
     
-    # File selector with Summary as default
-    default_index = len(file_options) - 1  # Summary is the last option
-    selected_file = st.selectbox(
-        "View results for:",
-        options=file_options,
-        index=default_index,
-        key="file_selector",
-        help="Choose a processed file to view its visualization results"
-    )
+    # Combined Results and File Details in same row
+    col_left, col_right = st.columns([1, 3])
     
-    st.divider()
+    with col_left:
+        # File selector with Summary as default
+        default_index = len(file_options) - 1  # Summary is the last option
+        selected_file = st.selectbox(
+            "View results for:",
+            options=file_options,
+            index=default_index,
+            key="file_selector",
+            help="Choose a processed file to view its visualization results"
+        )
+    
+    with col_right:
+        # Render file details if a file is selected, or summary stats if Summary is selected
+        if selected_file != "Summary":
+            selected_uploaded_file = file_mapping.get(selected_file)
+            if selected_uploaded_file:
+                filename = selected_uploaded_file.name
+                npz_data = st.session_state.processed_data[filename]
+                metadata = st.session_state.file_metadata[filename]
+                
+                # Render file details in compact horizontal layout
+                render_file_details_horizontal(filename, npz_data, metadata)
+        else:
+            # Render summary statistics in the right column
+            render_summary_stats_horizontal(completed_files)
     
     # Auto-navigate to page containing selected file
     if selected_file != "Summary":
@@ -527,8 +551,10 @@ def render_visualization_tabs(cfg: Dict):
                 st.session_state.current_file_page = target_page
                 st.rerun()
     
-    # Render selected file or summary
+    # Render selected file or summary content
     if selected_file == "Summary":
+        # For Summary, show the statistics in the right column (already rendered above)
+        # Also render the important summary sections like batch download and predictions table
         render_batch_summary_tab(cfg)
     else:
         # Find the selected file
@@ -550,8 +576,8 @@ def render_visualization_tabs(cfg: Dict):
                 viz_col1, viz_col2 = st.columns([1, 1])
                 
                 with viz_col1:
-                    # Create unique key suffix to handle duplicate filenames
-                    unique_key_suffix = f"{filename}_selected"
+                    # Create unique key suffix using file object id to handle duplicate filenames
+                    unique_key_suffix = f"{filename}_{id(selected_uploaded_file)}"
                     render_animated_keypoints(X_pad, mask if mask.size > 0 else None, key_suffix=unique_key_suffix, meta_dict=meta)
                 
                 with viz_col2:
@@ -562,10 +588,12 @@ def render_visualization_tabs(cfg: Dict):
                 # Download button
                 st.markdown("### Download")
                 npz_bytes = create_npz_bytes(npz_data)
+                # Ensure filename has .npz extension
+                npz_filename = filename if filename.endswith('.npz') else f"{Path(filename).stem}.npz"
                 st.download_button(
-                    label=f"Download {filename}",
+                    label=f"Download {npz_filename}",
                     data=npz_bytes,
-                    file_name=filename,
+                    file_name=npz_filename,
                     mime="application/octet-stream",
                     key=f"download_npz_{unique_key_suffix}"
                 )
@@ -576,7 +604,8 @@ def render_visualization_tabs(cfg: Dict):
 
 def render_batch_summary_tab(cfg: Dict):
     """Render batch summary tab with statistics and predictions."""
-    st.markdown("### Summary")
+    # Remove Summary header and reduce gap
+    st.markdown("<div style='height: 5px;'></div>", unsafe_allow_html=True)
     
     all_npz_files = get_all_npz_files()
     completed_files = [f for f in all_npz_files 
@@ -624,56 +653,12 @@ def render_batch_summary_tab(cfg: Dict):
         
         summary_data.append({
             'File': filename,
-            'Type': metadata['file_type'].upper(),
-            'Source': source_type.title(),
-            'Frames': metadata['frame_count'],
-            'Transformer': 'Yes' if compatibility['transformer'] else 'No',
-            'IV3-GRU': 'Yes' if compatibility['iv3_gru'] else 'No',
             'Top Gloss': top_gloss,
             'Top Category': top_category,
-            'Occluded': occlusion_status,
-            'Status': st.session_state.file_status[filename]
+            'Occluded': occlusion_status
         })
     
     st.dataframe(summary_data, use_container_width=True)
-    
-    # Statistics
-    st.markdown("### Statistics")
-    col1, col2, col3, col4, col5, col6 = st.columns(6)
-    
-    with col1:
-        total_files = len(completed_files)
-        st.metric("Total Files", total_files)
-    
-    with col2:
-        original_files = sum(1 for f in completed_files 
-                           if st.session_state.file_metadata[f.name].get('source_type', 'original') == 'original')
-        st.metric("Original NPZ", original_files)
-    
-    with col3:
-        preprocessed_files = sum(1 for f in completed_files 
-                               if st.session_state.file_metadata[f.name].get('source_type') == 'video')
-        st.metric("Preprocessed Videos", preprocessed_files)
-    
-    with col4:
-        transformer_compatible = sum(1 for f in completed_files 
-                                   if st.session_state.file_metadata[f.name]['compatibility']['transformer'])
-        st.metric("Transformer Compatible", transformer_compatible)
-    
-    with col5:
-        iv3_compatible = sum(1 for f in completed_files 
-                           if st.session_state.file_metadata[f.name]['compatibility']['iv3_gru'])
-        st.metric("IV3-GRU Compatible", iv3_compatible)
-    
-    with col6:
-        # Count occluded files
-        occluded_count = 0
-        for f in completed_files:
-            npz_data = st.session_state.processed_data[f.name]
-            occlusion_flag = extract_occlusion_flag(npz_data)
-            if occlusion_flag == 1:  # Only count explicitly occluded files
-                occluded_count += 1
-        st.metric("Occluded", occluded_count)
     
     # Batch download
     st.markdown("### Batch Download")
@@ -685,15 +670,42 @@ def create_batch_download(summary_data):
     import zipfile
     import io
     import pandas as pd
+    from pathlib import Path
     
     # Create ZIP in memory
     zip_buffer = io.BytesIO()
     
     with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zip_file:
-        # Add all NPZ files
-        for filename, npz_data in st.session_state.processed_data.items():
-            npz_bytes = create_npz_bytes(npz_data)
-            zip_file.writestr(filename, npz_bytes)
+        # Add all NPZ files with unique names to handle duplicates
+        used_names = set()
+        file_counter = 0
+        
+        # Get all completed files from both preprocessing and inference
+        all_npz_files = get_all_npz_files()
+        completed_files = [f for f in all_npz_files 
+                          if st.session_state.file_status.get(f.name) == 'completed']
+        
+        for uploaded_file in completed_files:
+            filename = uploaded_file.name
+            if filename in st.session_state.processed_data:
+                npz_data = st.session_state.processed_data[filename]
+                npz_bytes = create_npz_bytes(npz_data)
+                
+                # Ensure filename has .npz extension
+                base_npz_filename = filename if filename.endswith('.npz') else f"{Path(filename).stem}.npz"
+                
+                # Handle duplicate names by adding (1), (2), etc.
+                npz_filename = base_npz_filename
+                counter = 1
+                while npz_filename in used_names:
+                    name_without_ext = Path(base_npz_filename).stem
+                    ext = Path(base_npz_filename).suffix
+                    npz_filename = f"{name_without_ext}({counter}){ext}"
+                    counter += 1
+                
+                used_names.add(npz_filename)
+                zip_file.writestr(npz_filename, npz_bytes)
+                file_counter += 1
         
         # Add summary table as CSV
         if summary_data:
@@ -734,6 +746,36 @@ def remove_file_from_predictions(filename: str):
         remove_file_from_stage(filename, 'preprocessed')
 
 
+def remove_specific_file_instance(file_obj, stage: str):
+    """Remove a specific file instance from the specified stage."""
+    filename = file_obj.name
+    
+    if stage == 'predictions':
+        # Remove from all file lists by object reference
+        if hasattr(st.session_state, 'npz_files'):
+            st.session_state.npz_files = [f for f in st.session_state.npz_files if f is not file_obj]
+        if hasattr(st.session_state, 'video_files'):
+            st.session_state.video_files = [f for f in st.session_state.video_files if f is not file_obj]
+        if hasattr(st.session_state, 'preprocessed_files'):
+            st.session_state.preprocessed_files = [f for f in st.session_state.preprocessed_files if f is not file_obj]
+        
+        # Only clear status/metadata if this is the last file with this name
+        remaining_files_with_same_name = []
+        for file_list in [st.session_state.npz_files, st.session_state.video_files, st.session_state.preprocessed_files]:
+            remaining_files_with_same_name.extend([f for f in file_list if f.name == filename])
+        
+        if not remaining_files_with_same_name:
+            # This was the last file with this name, clear the status/metadata
+            if filename in st.session_state.file_status:
+                del st.session_state.file_status[filename]
+            if filename in st.session_state.processed_data:
+                del st.session_state.processed_data[filename]
+            if filename in st.session_state.file_metadata:
+                del st.session_state.file_metadata[filename]
+            if filename in st.session_state.original_file_data:
+                del st.session_state.original_file_data[filename]
+
+
 def reset_processed_files():
     """Reset all processed files back to pending status."""
     reset_count = 0
@@ -742,21 +784,22 @@ def reset_processed_files():
     if 'original_file_data' not in st.session_state:
         st.session_state.original_file_data = {}
     
-    # Collect all filenames that need to be reset
-    files_to_reset = set()
+    # Collect all file objects that need to be reset
+    files_to_reset = []
     
     # Add all preprocessed files (these are video files that were processed)
     for preprocessed_file in st.session_state.preprocessed_files:
-        files_to_reset.add(preprocessed_file.name)
+        files_to_reset.append(preprocessed_file)
     
     # Add all NPZ files that have been processed
     for npz_file in st.session_state.npz_files:
         filename = npz_file.name
         if st.session_state.file_status.get(filename) in ['completed', 'error']:
-            files_to_reset.add(filename)
+            files_to_reset.append(npz_file)
     
     # Reset each file
-    for filename in files_to_reset:
+    for file_obj in files_to_reset:
+        filename = file_obj.name
         # Check if this is a video file (from preprocessed_files)
         is_video_file = any(f.name == filename for f in st.session_state.preprocessed_files)
         
@@ -775,9 +818,11 @@ def reset_processed_files():
                     size=original_data['size']
                 )
                 
-                # Add to video_files if not already there
-                if not any(f.name == filename for f in st.session_state.video_files):
-                    st.session_state.video_files.append(file_obj)
+                # Always add to video_files (handles duplicates properly)
+                st.session_state.video_files.append(file_obj)
+                
+                # Remove from preprocessed_files
+                st.session_state.preprocessed_files = [f for f in st.session_state.preprocessed_files if f is not file_obj]
                 
                 # Reset status and clear processed data
                 st.session_state.file_status[filename] = 'pending'
@@ -808,9 +853,11 @@ def reset_processed_files():
                         break
                 
                 if file_obj:
-                    # Add to video_files if not already there
-                    if not any(f.name == filename for f in st.session_state.video_files):
-                        st.session_state.video_files.append(file_obj)
+                    # Always add to video_files (handles duplicates properly)
+                    st.session_state.video_files.append(file_obj)
+                    
+                    # Remove from preprocessed_files
+                    st.session_state.preprocessed_files = [f for f in st.session_state.preprocessed_files if f is not file_obj]
                     
                     # Reset status and clear processed data
                     st.session_state.file_status[filename] = 'pending'

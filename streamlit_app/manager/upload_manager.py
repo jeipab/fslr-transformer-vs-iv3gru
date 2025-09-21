@@ -61,7 +61,7 @@ def initialize_upload_session_state():
 
 def render_upload_stage():
     """Render the upload stage with file uploader and proceed button."""
-    st.markdown("### Upload Data")
+    st.markdown("<div class='main-section-header'>UPLOAD DATA</div>", unsafe_allow_html=True)
     
     # File uploader
     uploaded_files = render_file_upload()
