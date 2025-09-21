@@ -25,6 +25,236 @@ except ImportError:
     CV2_AVAILABLE = False
 
 
+def render_summary_stats_horizontal(completed_files: List) -> None:
+    """Render summary statistics in horizontal layout for Summary selection."""
+    if not completed_files:
+        return
+    
+    # Calculate summary statistics
+    total_files = len(completed_files)
+    
+    # Count file types
+    original_files = sum(1 for f in completed_files 
+                       if st.session_state.file_metadata[f.name].get('source_type', 'original') == 'original')
+    preprocessed_files = sum(1 for f in completed_files 
+                           if st.session_state.file_metadata[f.name].get('source_type') == 'video')
+    
+    # Count compatibility
+    transformer_compatible = 0
+    iv3_compatible = 0
+    
+    for uploaded_file in completed_files:
+        filename = uploaded_file.name
+        if filename in st.session_state.file_metadata:
+            compatibility = st.session_state.file_metadata[filename].get('compatibility', {})
+            if compatibility.get('transformer', False):
+                transformer_compatible += 1
+            if compatibility.get('iv3_gru', False):
+                iv3_compatible += 1
+    
+    # Calculate occlusion statistics
+    occluded_count = 0
+    for uploaded_file in completed_files:
+        filename = uploaded_file.name
+        if filename in st.session_state.processed_data:
+            npz_data = st.session_state.processed_data[filename]
+            from .utils import extract_occlusion_flag, interpret_occlusion_flag
+            occlusion_flag = extract_occlusion_flag(npz_data)
+            occlusion_status = interpret_occlusion_flag(occlusion_flag)
+            if occlusion_status == "Yes":
+                occluded_count += 1
+    
+    # Horizontal layout: Total Files, Original NPZ, Preprocessed Videos, Transformer Compatible, IV3-GRU Compatible, Occluded
+    summary_col1, summary_col2, summary_col3, summary_col4, summary_col5, summary_col6 = st.columns(6)
+    
+    with summary_col1:
+        st.markdown("<div style='text-align: center;'>", unsafe_allow_html=True)
+        st.metric("Total Files", total_files)
+        st.markdown("</div>", unsafe_allow_html=True)
+    
+    with summary_col2:
+        st.markdown("<div style='text-align: center;'>", unsafe_allow_html=True)
+        st.metric("Original NPZ", original_files)
+        st.markdown("</div>", unsafe_allow_html=True)
+    
+    with summary_col3:
+        st.markdown("<div style='text-align: center;'>", unsafe_allow_html=True)
+        st.metric("Preprocessed Videos", preprocessed_files)
+        st.markdown("</div>", unsafe_allow_html=True)
+    
+    with summary_col4:
+        st.markdown("<div style='text-align: center;'>", unsafe_allow_html=True)
+        st.metric("Transformer Compatible", transformer_compatible)
+        st.markdown("</div>", unsafe_allow_html=True)
+    
+    with summary_col5:
+        st.markdown("<div style='text-align: center;'>", unsafe_allow_html=True)
+        st.metric("IV3-GRU Compatible", iv3_compatible)
+        st.markdown("</div>", unsafe_allow_html=True)
+    
+    with summary_col6:
+        st.markdown("<div style='text-align: center;'>", unsafe_allow_html=True)
+        st.metric("Occluded", occluded_count)
+        st.markdown("</div>", unsafe_allow_html=True)
+
+
+def render_file_details_horizontal(filename: str, npz_data: Dict, metadata: Dict) -> None:
+    """Render file details in horizontal layout for combined Results section."""
+    X_raw = np.array(npz_data["X"])  # [T, 156]
+    X2048 = np.array(npz_data.get("X2048", [])) if "X2048" in npz_data else None
+    raw_length, raw_features = X_raw.shape[0], X_raw.shape[1] if X_raw.ndim == 2 else (0, 0)
+    
+    # Parse metadata
+    meta_parsed = None
+    if 'meta' in npz_data:
+        try:
+            meta_raw = npz_data['meta']
+            if isinstance(meta_raw, str):
+                meta_parsed = json.loads(meta_raw)
+            elif isinstance(meta_raw, dict):
+                meta_parsed = meta_raw
+            else:
+                # Handle numpy array or other types
+                meta_parsed = None
+        except:
+            meta_parsed = None
+    
+    # Horizontal layout: Frames, Keypoints, Features, Occluded
+    detail_col1, detail_col2, detail_col3, detail_col4 = st.columns(4)
+    
+    with detail_col1:
+        st.markdown("<div style='text-align: center;'>", unsafe_allow_html=True)
+        st.metric("Frames", raw_length)
+        if raw_features == 156:
+            st.markdown("<span class='status-good'>✓ Valid keypoints</span>", unsafe_allow_html=True)
+        else:
+            st.markdown("<span class='status-warning'>⚠ Unexpected shape</span>", unsafe_allow_html=True)
+        st.markdown("</div>", unsafe_allow_html=True)
+    
+    with detail_col2:
+        st.markdown("<div style='text-align: center;'>", unsafe_allow_html=True)
+        # Display "Keypoints" when feature dimension is 156, otherwise "Features"
+        label = "Keypoints" if raw_features == 156 else "Features"
+        st.metric(label, raw_features)
+        # Show transformer readiness
+        model_type = meta_parsed.get('model_type') if meta_parsed else None
+        if raw_features == 156 and (model_type in ['T', 'B'] or model_type is None):
+            st.markdown("<span class='status-good'>✓ Transformer ready</span>", unsafe_allow_html=True)
+        elif model_type == 'I':
+            st.markdown("<span class='status-good'>✓ IV3-GRU ready</span>", unsafe_allow_html=True)
+        st.markdown("</div>", unsafe_allow_html=True)
+    
+    with detail_col3:
+        st.markdown("<div style='text-align: center;'>", unsafe_allow_html=True)
+        if X2048 is not None and isinstance(X2048, np.ndarray) and X2048.size > 0:
+            # Show actual number of features instead of "Present"
+            feature_count = X2048.shape[1] if X2048.ndim == 2 else 0
+            st.metric("Features", feature_count)
+            st.markdown("<span class='status-good'>✓ IV3-GRU ready</span>", unsafe_allow_html=True)
+        else:
+            st.metric("Features", "Missing")
+            st.markdown("<span class='status-warning'>⚠ Transformer only</span>", unsafe_allow_html=True)
+        st.markdown("</div>", unsafe_allow_html=True)
+    
+    with detail_col4:
+        st.markdown("<div style='text-align: center;'>", unsafe_allow_html=True)
+        # Extract and display occlusion status
+        from .utils import extract_occlusion_flag, interpret_occlusion_flag
+        occlusion_flag = extract_occlusion_flag(npz_data)
+        occlusion_status = interpret_occlusion_flag(occlusion_flag)
+        st.metric("Occluded", occlusion_status)
+        st.markdown("</div>", unsafe_allow_html=True)
+
+
+def render_consolidated_file_info(filename: str, npz_data: Dict, metadata: Dict, sequence_length: int) -> Tuple[np.ndarray, np.ndarray, Dict]:
+    """Render consolidated file info with integrated sequence overview data.
+
+    Args:
+        filename: Name of the file
+        npz_data: NpzFile-like dict from numpy.load
+        metadata: File metadata dictionary
+        sequence_length: Target T for padding/trimming
+
+    Returns:
+        (X_pad, mask, meta_dict)
+    """
+    if "X" not in npz_data:
+        raise KeyError("Uploaded .npz must contain key 'X' with shape [T, 156]")
+
+    X_raw = np.array(npz_data["X"])  # [T, 156]
+    mask = np.array(npz_data.get("mask", []))
+    timestamps_ms = np.array(npz_data.get("timestamps_ms", []))
+    X2048 = np.array(npz_data.get("X2048", [])) if "X2048" in npz_data else None
+
+    raw_length, raw_features = X_raw.shape[0], X_raw.shape[1] if X_raw.ndim == 2 else (0, 0)
+    
+    # Parse metadata
+    meta_raw = npz_data.get("meta")
+    meta_parsed: Dict = {}
+    if meta_raw is not None:
+        try:
+            if isinstance(meta_raw, (str, bytes)):
+                meta_parsed = json.loads(meta_raw)
+            else:
+                meta_parsed = json.loads(str(meta_raw))
+        except Exception:
+            meta_parsed = {"info": "Unparsed meta"}
+
+    # Skip filename header - removed as requested
+    
+    # Add CSS to reduce spacing between columns
+    st.markdown("""
+    <style>
+    .stMetric {
+        margin-bottom: 0 !important;
+    }
+    .stMetric > div {
+        margin-bottom: 0 !important;
+    }
+    .element-container {
+        margin-bottom: 0 !important;
+    }
+    h3 {
+        margin-bottom: -1rem !important;
+    }
+    </style>
+    """, unsafe_allow_html=True)
+
+    exp_col1, exp_col2 = st.columns(2)
+    
+    with exp_col1:
+        with st.expander("Metadata", expanded=False):
+            if meta_parsed:
+                st.json(meta_parsed)
+            else:
+                st.write("No metadata available")
+    
+    with exp_col2:
+        with st.expander("Data checks", expanded=False):
+            issues = []
+            if not (X_raw.ndim == 2 and X_raw.shape[1] == 156):
+                issues.append(f"X shape expected [T,156], got {getattr(X_raw, 'shape', None)}")
+            if mask.size > 0:
+                if mask.ndim == 2 and mask.shape[1] == 78:
+                    coverage = float(mask.mean() * 100.0)
+                    st.caption(f"Mask coverage: {coverage:.1f}% of keypoints marked visible")
+                else:
+                    issues.append(f"mask shape expected [T,78], got {getattr(mask, 'shape', None)}")
+            if timestamps_ms.size > 1:
+                mono = bool((timestamps_ms[1:] >= timestamps_ms[:-1]).all())
+                if not mono:
+                    issues.append("timestamps_ms not monotonic nondecreasing")
+            if X2048 is not None and isinstance(X2048, np.ndarray) and X2048.size > 0:
+                if not (X2048.ndim == 2 and X2048.shape[1] == 2048):
+                    issues.append(f"X2048 shape expected [T,2048], got {getattr(X2048, 'shape', None)}")
+            if issues:
+                st.warning("\n".join(f"- {m}" for m in issues))
+
+    from .utils import pad_or_trim
+    X_pad = pad_or_trim(X_raw, sequence_length)
+    return X_pad, mask, meta_parsed
+
+
 def render_sequence_overview(npz_dict: Dict, sequence_length: int) -> Tuple[np.ndarray, np.ndarray, Dict]:
     """Show metadata and return processed sequence and related info.
 
@@ -66,7 +296,9 @@ def render_sequence_overview(npz_dict: Dict, sequence_length: int) -> Tuple[np.n
         st.metric("Frames", str(raw_length), delta=None)
     
     with col2:
-        st.metric("Features", str(raw_features), delta=None)
+        # Display "Keypoints" when feature dimension is 156, otherwise "Features"
+        label = "Keypoints" if raw_features == 156 else "Features"
+        st.metric(label, str(raw_features), delta=None)
         if raw_features == 156:
             st.markdown("<span class='status-good'>✓ Valid keypoints</span>", unsafe_allow_html=True)
             # Check model_type to determine what to display
@@ -202,7 +434,7 @@ def render_keypoint_video(sequence: np.ndarray, mask: Optional[np.ndarray] = Non
             with st.spinner("Generating keypoint video..."):
                 video_path = create_keypoint_animation_video(
                     keypoints_2d, mask, fps, width, height, 
-                    show_skeleton, show_visibility, bg_type, key_suffix
+                    show_skeleton, bg_type, key_suffix
                 )
                 
                 if video_path and os.path.exists(video_path):
@@ -283,7 +515,7 @@ def render_keypoint_video(sequence: np.ndarray, mask: Optional[np.ndarray] = Non
             """, unsafe_allow_html=True)
 
 
-def render_animated_keypoints(sequence: np.ndarray, mask: Optional[np.ndarray] = None, key_suffix: str = "") -> None:
+def render_animated_keypoints(sequence: np.ndarray, mask: Optional[np.ndarray] = None, key_suffix: str = "", meta_dict: Optional[Dict] = None) -> None:
     """Render animated keypoint visualization with skeleton overlay."""
     st.markdown("<div class='section-header'>Keypoint Visualization</div>", unsafe_allow_html=True)
     
@@ -298,6 +530,18 @@ def render_animated_keypoints(sequence: np.ndarray, mask: Optional[np.ndarray] =
     
     # Reshape keypoints to [T, 78, 2] for easier handling
     keypoints_2d = sequence.reshape(time_steps, 78, 2)
+    
+    # Extract frame-by-frame occlusion information from metadata
+    frame_occlusion_data = None
+    if meta_dict:
+        occlusion_details = meta_dict.get('occlusion_results', None)
+        if occlusion_details and 'detailed_results' in occlusion_details:
+            # Create a mapping of frame index to occlusion status
+            frame_occlusion_data = {}
+            for result in occlusion_details['detailed_results']:
+                frame_idx = result.get('frame_idx', -1)
+                is_occluded = result.get('occlusion_detected', False)
+                frame_occlusion_data[frame_idx] = is_occluded
     
     # Video generation option
     col1, col2, col3 = st.columns([2, 1, 1])
@@ -370,25 +614,40 @@ def render_animated_keypoints(sequence: np.ndarray, mask: Optional[np.ndarray] =
         ]
     }
     
-    # Simple frame selection
-    col1, col2, col3 = st.columns([2, 1, 1])
+    # Combined controls in one row
+    col1, col2, col3 = st.columns([3, 1, 1])
+    
+    with col3:
+        use_video = st.checkbox("Generate Video", value=False, help="Create an MP4 video with keypoint animation", key=f"use_video_{key_suffix}")
     
     with col1:
-        frame_idx = st.slider(
-            "Frame", 
-            min_value=0, 
-            max_value=time_steps-1, 
-            value=0, 
-            step=1,
-            help="Drag to see keypoints at different time steps",
-            key=f"frame_slider_{key_suffix}"
-        )
+        if use_video:
+            fps = st.slider(
+                "FPS", 
+                min_value=5, 
+                max_value=30, 
+                value=15, 
+                step=1,
+                help="Frames per second for video",
+                key=f"fps_slider_{key_suffix}"
+            )
+        else:
+            frame_idx = st.slider(
+                "Frame", 
+                min_value=0, 
+                max_value=time_steps-1, 
+                value=0, 
+                step=1,
+                help="Drag to see keypoints at different time steps",
+                key=f"frame_slider_{key_suffix}"
+            )
     
     with col2:
         show_skeleton = st.checkbox("Show Skeleton", value=True, help="Display skeleton connections", key=f"skeleton_checkbox_{key_suffix}")
     
-    with col3:
-        show_visibility = st.checkbox("Show Visibility", value=True, help="Color points by visibility", key=f"visibility_checkbox_{key_suffix}")
+    if use_video:
+        render_keypoint_video(sequence, mask, key_suffix, show_skeleton, fps)
+        return
     
     # Get current frame keypoints
     current_keypoints = keypoints_2d[frame_idx]  # [78, 2]
@@ -422,14 +681,8 @@ def render_animated_keypoints(sequence: np.ndarray, mask: Optional[np.ndarray] =
         valid_keypoints = part_keypoints[valid_mask]
         
         if len(valid_keypoints) > 0:  # Only plot if there are valid keypoints
-            # Plot individual points
-            if show_visibility and mask is not None and mask.size > 0:
-                # Use visibility mask for coloring, filtered for valid points
-                visibility = mask[frame_idx, start_idx:end_idx] if mask.shape[1] >= end_idx else np.ones(end_idx - start_idx, dtype=bool)
-                valid_visibility = visibility[valid_mask]
-                point_colors = ['rgba(255,0,0,1)' if v else 'rgba(255,0,0,0.3)' for v in valid_visibility]
-            else:
-                point_colors = [colors[part_name]] * len(valid_keypoints)
+            # Plot individual points with solid colors
+            point_colors = [colors[part_name]] * len(valid_keypoints)
             
             # Create hover text with keypoint numbers
             hover_texts = []
@@ -474,9 +727,19 @@ def render_animated_keypoints(sequence: np.ndarray, mask: Optional[np.ndarray] =
                         hoverinfo='skip'
                     ))
     
-    # Update layout
+    # Update layout with frame-specific occlusion indicator
+    title_text = f"Frame {frame_idx}/{time_steps-1}"
+    
+    # Check if current frame is occluded
+    current_frame_occluded = False
+    if frame_occlusion_data is not None:
+        current_frame_occluded = frame_occlusion_data.get(frame_idx, False)
+    
+    if current_frame_occluded:
+        title_text += " 🔴 [OCCLUDED]"
+    
     fig.update_layout(
-        title=f"Keypoint Visualization - Frame {frame_idx}/{time_steps-1}",
+        title=title_text,
         xaxis=dict(
             title="X Coordinate",
             scaleanchor="y",
@@ -490,16 +753,17 @@ def render_animated_keypoints(sequence: np.ndarray, mask: Optional[np.ndarray] =
         width=600,
         height=600,
         showlegend=True,
+        margin=dict(l=0, r=30, t=60, b=110),  # Reduce top margin to minimize gap
         legend=dict(
             orientation="h",
             yanchor="bottom",
-            y=1.02,
+            y=0.98,  # Move legend down (closer to chart)
             xanchor="right",
             x=1
         )
     )
     
-    st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(fig, use_container_width=True, key=f"keypoint_plot_{key_suffix}")
     
     # Add frame information
     col1, col2, col3 = st.columns(3)
@@ -596,10 +860,11 @@ def render_feature_charts(sequence: np.ndarray, mask: Optional[np.ndarray] = Non
             xaxis_title="Frame",
             yaxis_title="Normalized Coordinate",
             hovermode='x unified',
-            height=600
+            height=600,
+            margin=dict(l=0, r=10, t=70, b=110)  # Match Keypoint Visualization margins
         )
         
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, use_container_width=True, key=f"feature_line_plot_{key_suffix}")
         
     else:  # Heatmap
         # Create heatmap of features over time
@@ -610,8 +875,11 @@ def render_feature_charts(sequence: np.ndarray, mask: Optional[np.ndarray] = Non
             labels={'x': 'Frame', 'y': 'Feature Index', 'color': 'Value'},
             title=f"{selected_group} - {coord_type} Heatmap"
         )
-        fig.update_layout(height=600)
-        st.plotly_chart(fig, use_container_width=True)
+        fig.update_layout(
+            height=600,
+            margin=dict(l=0, r=10, t=70, b=110)  # Match Keypoint Visualization margins
+        )
+        st.plotly_chart(fig, use_container_width=True, key=f"feature_heatmap_{key_suffix}")
     
     # Statistics summary
     with st.expander("📊 Feature Statistics", expanded=False):
@@ -628,7 +896,7 @@ def render_feature_charts(sequence: np.ndarray, mask: Optional[np.ndarray] = Non
 
 def create_keypoint_animation_video(keypoints_2d: np.ndarray, mask: Optional[np.ndarray], 
                                    fps: int, width: int, height: int, show_skeleton: bool, 
-                                   show_visibility: bool, bg_type: str, key_suffix: str) -> str:
+                                   bg_type: str, key_suffix: str) -> str:
     """Create an animated video with keypoint visualization using FFmpeg."""
     if not CV2_AVAILABLE:
         st.error("OpenCV not available. Cannot create video.")
@@ -691,10 +959,20 @@ def create_keypoint_animation_video(keypoints_2d: np.ndarray, mask: Optional[np.
     original_fps = 30  # Default fallback
     
     # If we need original video dimensions, get them first
-    if bg_type == "Original Video" and key_suffix in st.session_state.get('original_file_data', {}):
+    # Extract filename from key_suffix (format: filename_objectid)
+    if key_suffix:
+        # Split by underscore and take all parts except the last one (object id)
+        parts = key_suffix.split('_')
+        if len(parts) > 1:
+            filename = '_'.join(parts[:-1])  # All parts except the last (object id)
+        else:
+            filename = key_suffix
+    else:
+        filename = ""
+    if bg_type == "Original Video" and filename in st.session_state.get('original_file_data', {}):
         try:
             # Get original video data
-            original_data = st.session_state.original_file_data[key_suffix]
+            original_data = st.session_state.original_file_data[filename]
             video_data = original_data.get('data')
             
             if video_data:
@@ -710,7 +988,7 @@ def create_keypoint_animation_video(keypoints_2d: np.ndarray, mask: Optional[np.
                     # Get original video dimensions and properties
                     width = int(original_video_cap.get(cv2.CAP_PROP_FRAME_WIDTH))
                     height = int(original_video_cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-                    original_fps = int(original_video_cap.get(cv2.CAP_PROP_FPS))
+                    original_fps = original_video_cap.get(cv2.CAP_PROP_FPS)
                     total_frames = int(original_video_cap.get(cv2.CAP_PROP_FRAME_COUNT))
                     
                     # Extract all frames from original video (no resizing needed)
@@ -789,13 +1067,13 @@ def create_keypoint_animation_video(keypoints_2d: np.ndarray, mask: Optional[np.
             # Draw keypoints and skeleton for each body part
             for part_name, connections in skeleton_connections.items():
                 if part_name == "pose":
-                    start_idx, end_idx = 0, 25
+                    start_idx, end_idx = 0, 25  # 25 pose landmarks (0-24)
                 elif part_name == "left_hand":
-                    start_idx, end_idx = 25, 46
+                    start_idx, end_idx = 25, 46  # 21 hand landmarks (25-45)
                 elif part_name == "right_hand":
-                    start_idx, end_idx = 46, 67
+                    start_idx, end_idx = 46, 67  # 21 hand landmarks (46-66)
                 elif part_name == "face":
-                    start_idx, end_idx = 67, 78
+                    start_idx, end_idx = 67, 78  # 11 face landmarks (67-77)
                 
                 part_keypoints = pixel_points[start_idx:end_idx]
                 part_valid = valid_mask[start_idx:end_idx]
@@ -824,12 +1102,8 @@ def create_keypoint_animation_video(keypoints_2d: np.ndarray, mask: Optional[np.
                 # Draw keypoints
                 for i, (point, is_valid) in enumerate(zip(part_keypoints, part_valid)):
                     if is_valid:
-                        # Determine point color based on visibility
-                        if show_visibility and mask is not None and frame_idx < mask.shape[0]:
-                            visibility = mask[frame_idx, start_idx + i] if start_idx + i < mask.shape[1] else True
-                            point_color = colors[part_name] if visibility else tuple(c // 2 for c in colors[part_name])
-                        else:
-                            point_color = colors[part_name]
+                        # Use solid colors for all points
+                        point_color = colors[part_name]
                         
                         # Different sizes for different body parts
                         # Add white outline for better visibility on video backgrounds
