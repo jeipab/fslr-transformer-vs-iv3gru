@@ -252,8 +252,6 @@ def render_npz_files_management(all_npz_files: List):
     if not all_npz_files:
         return
         
-    st.markdown("**NPZ Files Ready for Inference:**")
-    
     # Add small space at top
     st.markdown("<div style='height: 8px;'></div>", unsafe_allow_html=True)
     
@@ -419,7 +417,7 @@ def process_all_pending_npz_files(all_npz_files: List):
 
 
 def render_visualization_tabs(cfg: Dict):
-    """Render visualization tabs for processed files."""
+    """Render visualization interface for processed files."""
     all_npz_files = get_all_npz_files()
     completed_files = [f for f in all_npz_files 
                       if st.session_state.file_status.get(f.name) == 'completed']
@@ -427,56 +425,52 @@ def render_visualization_tabs(cfg: Dict):
     if not completed_files:
         return
     
-    # Create tabs
-    tab_names = []
+    # Create file selection interface
+    st.markdown("### Results")
+    
+    # File selection dropdown
+    file_options = []
+    file_mapping = {}
+    
     for uploaded_file in completed_files:
         filename = uploaded_file.name
-        file_type = detect_file_type(uploaded_file)
-        icon = "📄" if file_type == 'npz' else "🎥"
         
-        # Add source indicator
-        metadata = st.session_state.file_metadata.get(filename, {})
-        source_type = metadata.get('source_type', 'original')
-        source_emoji = '🎥' if source_type == 'video' else '📄'
-        
-        tab_names.append(f"{icon} {filename} {source_emoji}")
+        display_name = filename
+        file_options.append(display_name)
+        file_mapping[display_name] = uploaded_file
     
-    # Add batch summary tab
-    tab_names.append("📊 Summary")
+    # Add summary option
+    file_options.append("Summary")
     
-    # Create tabs
-    tabs = st.tabs(tab_names)
-    
-    # Handle programmatic tab switching
+    # Handle programmatic file switching before creating selectbox
     if st.session_state.current_tab:
-        # Find the index of the current tab
-        target_tab_index = None
-        for i, uploaded_file in enumerate(completed_files):
+        # Find the file and set it as selected
+        for display_name, uploaded_file in file_mapping.items():
             if uploaded_file.name == st.session_state.current_tab:
-                target_tab_index = i
+                st.session_state.file_selector = display_name
                 break
         
-        if target_tab_index is not None:
-            # Use JavaScript to switch to the target tab
-            switch_tab_script = f"""
-            <script>
-                setTimeout(function() {{
-                    var tabs = window.parent.document.querySelectorAll('button[data-baseweb="tab"]');
-                    if (tabs.length > {target_tab_index}) {{
-                        tabs[{target_tab_index}].click();
-                    }}
-                }}, 100);
-            </script>
-            """
-            components.html(switch_tab_script, height=0)
-            
-            # Clear the current_tab after switching
-            st.session_state.current_tab = None
+        # Clear the current_tab after switching
+        st.session_state.current_tab = None
     
-    # Individual file tabs
-    for i, uploaded_file in enumerate(completed_files):
-        with tabs[i]:
-            filename = uploaded_file.name
+    # File selector
+    selected_file = st.selectbox(
+        "View results for:",
+        options=file_options,
+        key="file_selector",
+        help="Choose a processed file to view its visualization results"
+    )
+    
+    st.divider()
+    
+    # Render selected file or summary
+    if selected_file == "Summary":
+        render_batch_summary_tab(cfg)
+    else:
+        # Find the selected file
+        selected_uploaded_file = file_mapping.get(selected_file)
+        if selected_uploaded_file:
+            filename = selected_uploaded_file.name
             npz_data = st.session_state.processed_data[filename]
             metadata = st.session_state.file_metadata[filename]
             
@@ -493,7 +487,7 @@ def render_visualization_tabs(cfg: Dict):
                 
                 with viz_col1:
                     # Create unique key suffix to handle duplicate filenames
-                    unique_key_suffix = f"{filename}_{i}"
+                    unique_key_suffix = f"{filename}_selected"
                     render_animated_keypoints(X_pad, mask if mask.size > 0 else None, key_suffix=unique_key_suffix, meta_dict=meta)
                 
                 with viz_col2:
@@ -514,10 +508,6 @@ def render_visualization_tabs(cfg: Dict):
                 
             except Exception as e:
                 st.toast(f"Visualization error: {str(e)}", icon="⚠️", duration=5000)
-    
-    # Batch summary tab
-    with tabs[-1]:
-        render_batch_summary_tab(cfg)
 
 
 def render_batch_summary_tab(cfg: Dict):
