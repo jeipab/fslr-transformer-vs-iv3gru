@@ -17,29 +17,26 @@ Available Processors:
 - Feature extraction utilities for both keypoints and CNN features
 
 Usage:
-    from preprocessing import preprocess_video, validate_dataset
+    from preprocessing import process_video, process_videos_multiprocess
     
-    # Process single video
+    # Process single video (sequential)
     python -m preprocessing.core.preprocess input.mp4 output_dir --write-keypoints --write-iv3-features
     
-    # Multi-process batch processing
-    python -m preprocessing.core.multi_preprocess input_dir output_dir --write-keypoints --write-iv3-features
+    # Batch processing (parallel)
+    python -m preprocessing.core.preprocess input_dir output_dir --write-keypoints --write-iv3-features --workers 8
     
     # Validate processed dataset
     python -m preprocessing.utils.validate_npz processed_dir
 """
 
 # Core preprocessing functionality
-# Note: preprocess.py doesn't have a main function, it's designed to be run as a script
-# from .core.preprocess import main as preprocess_main  # This doesn't exist
-
-# Conditional imports to avoid errors when dependencies are missing
 try:
-    from .core.multi_preprocess import main as multi_preprocess_main
-    MULTI_PREPROCESS_AVAILABLE = True
+    from .core.preprocess import process_video, process_videos_multiprocess
+    PREPROCESS_AVAILABLE = True
 except ImportError:
-    MULTI_PREPROCESS_AVAILABLE = False
-    multi_preprocess_main = None
+    PREPROCESS_AVAILABLE = False
+    process_video = None
+    process_videos_multiprocess = None
 
 # Feature extractors
 try:
@@ -100,8 +97,8 @@ except ImportError:
 # Build __all__ list dynamically based on what's available
 __all__ = []
 
-if MULTI_PREPROCESS_AVAILABLE:
-    __all__.append('multi_preprocess_main')
+if PREPROCESS_AVAILABLE:
+    __all__.extend(['process_video', 'process_videos_multiprocess'])
 
 if IV3_FEATURES_AVAILABLE:
     __all__.append('extract_iv3_features')

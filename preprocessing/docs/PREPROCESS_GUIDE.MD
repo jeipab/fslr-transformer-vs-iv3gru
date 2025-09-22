@@ -2,7 +2,7 @@
 
 Convert raw sign language videos to training-ready data for both Transformer and IV3-GRU models.
 
-> **For faster processing**: Use [Multi-Process Preprocessing Guide](MULTI_PREPROCESS_GUIDE.md) for 30-50x speedup.
+> **Performance**: Use `--workers` parameter for 30-50x faster parallel processing.
 
 ## Overview
 
@@ -46,17 +46,27 @@ This generates a new `labels.csv` in `data/processed/keypoints_all/` with rename
 
 ## Processing Videos
 
-Two processing options available:
+## Preprocessing Module
 
-- `preprocessing/preprocess.py` — single video or directory processing
-- `preprocessing/iv3_features.py` — single video with labeling
+The `preprocessing/preprocess.py` module provides both sequential and parallel processing:
+
+- **Sequential Processing**: `--workers 1` (default) - Process videos one by one
+- **Parallel Processing**: `--workers N` - Process N videos simultaneously with GPU optimization
+- **Batch GPU Processing**: Automatic batched InceptionV3 inference for efficiency
+- **Legacy Support**: `preprocessing/iv3_features.py` — single video with labeling
 
 ### Single Video
 
 ```bash
-# Extract both keypoints and CNN features
+# Extract both keypoints and CNN features (sequential)
 python preprocessing/preprocess.py \
   --write-keypoints --write-iv3-features \
+  /path/to/video.mp4 /path/to/out_dir
+
+# Extract with parallel processing (8 workers)
+python preprocessing/preprocess.py \
+  --write-keypoints --write-iv3-features \
+  --workers 8 --batch-size 32 \
   /path/to/video.mp4 /path/to/out_dir
 
 # Extract with labels (0-based integers)
@@ -76,6 +86,44 @@ python -m preprocessing.preprocess data/raw/videos data/processed/keypoints_all 
 ```
 
 After batch processing, split files using `data_split.py`.
+
+## Performance Optimization
+
+### Multi-Process Parallel Processing (30-50x Speedup)
+
+For large datasets, use parallel processing with optimized parameters:
+
+```bash
+# High-performance configuration (RTX 4090/5090)
+python preprocessing/preprocess.py data/raw data/processed \
+  --write-keypoints --write-iv3-features \
+  --workers 12 --batch-size 64 --target-fps 15 --disable-parquet
+
+# Balanced configuration (RTX 3080/4080)
+python preprocessing/preprocess.py data/raw data/processed \
+  --write-keypoints --write-iv3-features \
+  --workers 8 --batch-size 32 --target-fps 20
+
+# CPU-only processing
+python preprocessing/preprocess.py data/raw data/processed \
+  --write-keypoints --write-iv3-features \
+  --workers 4 --batch-size 8 --target-fps 30
+```
+
+### Parameter Guidelines
+
+- **`--workers`**: Number of parallel processes (recommended: CPU cores - 2)
+- **`--batch-size`**: GPU batch size for InceptionV3 (32 for 16GB VRAM, 64 for 24GB+)
+- **`--target-fps`**: Lower FPS = faster processing (15 recommended for training)
+- **`--disable-parquet`**: Skip parquet files for maximum I/O speed
+
+### Expected Performance
+
+| Hardware               | Workers | Batch Size | Videos/Hour |
+| ---------------------- | ------- | ---------- | ----------- |
+| RTX 5090 + 12-core CPU | 12      | 64         | 800-1200    |
+| RTX 4090 + 8-core CPU  | 8       | 48         | 600-900     |
+| RTX 3080 + 6-core CPU  | 6       | 32         | 400-600     |
 
 ## NPZ File Contents
 

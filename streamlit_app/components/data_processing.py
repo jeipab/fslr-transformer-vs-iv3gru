@@ -231,13 +231,13 @@ def process_multiple_videos(uploaded_files, target_fps: int = 30, out_size: int 
         st.error("Preprocessing module not available. Please ensure all dependencies are installed.")
         return {}
     
-    # Import multi-preprocessing function
+    # Import unified preprocessing functions
     try:
-        from preprocessing.core.multi_preprocess import process_videos_multiprocess
+        from preprocessing.core.preprocess import process_videos_multiprocess
         MULTI_PREPROCESSING_AVAILABLE = True
     except ImportError:
         MULTI_PREPROCESSING_AVAILABLE = False
-        st.warning("Multi-preprocessing not available. Falling back to sequential processing.")
+        st.warning("Multi-processing not available. Falling back to sequential processing.")
     
     # Save uploaded files temporarily
     temp_paths = []

@@ -12,8 +12,8 @@ The preprocessing pipeline includes hand-head occlusion detection for Filipino s
 # Enable occlusion detection (default when keypoints are written)
 python preprocessing/preprocess.py video.mp4 output/ --write-keypoints --occ-enable
 
-# Multi-processing version
-python preprocessing/multi_preprocess.py video.mp4 output/ --write-keypoints --occ-enable
+# Multi-processing version (unified module)
+python preprocessing/preprocess.py video.mp4 output/ --write-keypoints --occ-enable --workers 8
 ```
 
 ### Detailed Results
@@ -22,8 +22,8 @@ python preprocessing/multi_preprocess.py video.mp4 output/ --write-keypoints --o
 # Get detailed occlusion analysis
 python preprocessing/preprocess.py video.mp4 output/ --write-keypoints --occ-enable --occ-detailed
 
-# Multi-processing with detailed results
-python preprocessing/multi_preprocess.py video.mp4 output/ --write-keypoints --occ-enable --occ-detailed
+# Multi-processing with detailed results (unified module)
+python preprocessing/preprocess.py video.mp4 output/ --write-keypoints --occ-enable --occ-detailed --workers 8
 ```
 
 ## How It Works

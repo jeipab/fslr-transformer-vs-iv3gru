@@ -87,7 +87,7 @@ fslr-transformer-vs-iv3gru/
 **Multi-Process (Recommended - 30-50x faster):**
 
 ```bash
-python -m preprocessing.core.multi_preprocess \
+python -m preprocessing.core.preprocess \
   data/raw/videos data/processed \
   --write-keypoints --write-iv3-features \
   --workers 10 --batch-size 64 --target-fps 15 --disable-parquet
@@ -170,8 +170,7 @@ python -m training.train --model iv3_gru --smoke-test --num-gloss 105 --num-cat 
 ### 🔧 Development & Training
 
 - **[Data Guide](data/DATA_GUIDE.md)** - File formats and data structures
-- **[Preprocessing Guide](preprocessing/docs/PREPROCESS_GUIDE.MD)** - Video to NPZ conversion
-- **[Multi-Process Guide](preprocessing/docs/MULTI_PREPROCESS_GUIDE.md)** - 30-50x faster preprocessing
+- **[Preprocessing Guide](preprocessing/docs/PREPROCESS_GUIDE.MD)** - Video preprocessing
 - **[Occlusion Guide](preprocessing/docs/OCCLUSION_GUIDE.md)** - Hand occlusion detection and handling
 - **[Model Guide](models/MODEL_GUIDE.md)** - Architecture details and usage
 - **[Training Guide](training/TRAINING_GUIDE.md)** - Model training instructions
