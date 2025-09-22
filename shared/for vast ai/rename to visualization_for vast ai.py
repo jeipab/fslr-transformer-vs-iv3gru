@@ -868,18 +868,6 @@ def render_feature_charts(sequence: np.ndarray, mask: Optional[np.ndarray] = Non
             margin=dict(l=0, r=10, t=70, b=110)  # Match Keypoint Visualization margins
         )
         st.plotly_chart(fig, use_container_width=True, key=f"feature_heatmap_{key_suffix}")
-    
-    # Statistics summary
-    with st.expander("📊 Feature Statistics", expanded=False):
-        stats_df = pd.DataFrame({
-            'Mean': data_slice.mean(axis=0),
-            'Std': data_slice.std(axis=0),
-            'Min': data_slice.min(axis=0),
-            'Max': data_slice.max(axis=0),
-            'Range': data_slice.max(axis=0) - data_slice.min(axis=0)
-        }).round(4)
-        
-        st.dataframe(stats_df, use_container_width=True)
 
 
 def create_keypoint_animation_video(keypoints_2d: np.ndarray, mask: Optional[np.ndarray], 
