@@ -45,7 +45,7 @@ if __package__ in (None, ""):
     sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 
 # Project-specific imports
-from ..extractors.iv3_features import extract_iv3_features  # InceptionV3 CNN feature extraction (2048D vectors)
+from ..extractors.iv3_features import extract_iv3_features, BatchedInceptionV3Processor  # InceptionV3 CNN feature extraction
 from ..core.occlusion_detection import compute_occlusion_detection  # Detect when keypoints are blocked/occluded
 from ..extractors.keypoints_features import (
     POSE_UPPER_25,        # Upper body pose keypoint indices (25 points)
@@ -105,86 +105,6 @@ def to_npz(out_path, X, mask, timestamps_ms, meta, also_parquet=True):
         except Exception as e:
             print(f"[WARN] Could not save parquet file: {e}")
             print("[INFO] Install pyarrow or fastparquet for parquet support: pip install pyarrow")
-
-
-# ----------------------------
-# Batched InceptionV3 Processing for GPU Efficiency
-# ----------------------------
-
-class BatchedInceptionV3Processor:
-    """Batched InceptionV3 feature extraction for efficient GPU processing.
-    
-    This class provides GPU-optimized batch processing of video frames through InceptionV3,
-    significantly improving throughput compared to single-frame processing. Key features:
-    - Batch processing reduces GPU kernel launch overhead
-    - Automatic device management for multi-GPU systems
-    - ImageNet-pretrained features for robust visual representation
-    - Memory-efficient processing with configurable batch sizes
-    """
-    
-    def __init__(self, device=None, batch_size=32):
-        """Initialize the batched InceptionV3 processor.
-        
-        Args:
-            device: PyTorch device (auto-detects GPU if available)
-            batch_size: Number of frames to process simultaneously (32 is optimal for most GPUs)
-        """
-        self.device = device or torch.device("cuda" if torch.cuda.is_available() else "cpu")
-        self.batch_size = batch_size
-        self._init_model()
-    
-    def _init_model(self):
-        """Initialize InceptionV3 model with ImageNet weights for feature extraction."""
-        from torchvision.models import inception_v3, Inception_V3_Weights
-        import torch.nn as nn
-        
-        # Load pre-trained InceptionV3 model
-        self.weights = Inception_V3_Weights.IMAGENET1K_V1
-        self.model = inception_v3(weights=self.weights)
-        
-        # Configure model for feature extraction
-        self.model.aux_logits = False  # Disable auxiliary classifier outputs
-        self.model.fc = nn.Identity()  # Replace final classifier with identity (returns 2048D features)
-        self.model.eval()  # Set to evaluation mode
-        
-        # Freeze all parameters for inference-only mode
-        for p in self.model.parameters():
-            p.requires_grad = False
-        
-        # Move model to target device
-        self.model = self.model.to(self.device)
-        
-        # Pre-compute ImageNet normalization constants
-        self.mean = torch.tensor([0.485, 0.456, 0.406]).view(3, 1, 1).to(self.device)
-        self.std = torch.tensor([0.229, 0.224, 0.225]).view(3, 1, 1).to(self.device)
-    
-    def preprocess_frame(self, frame_bgr, image_size=(299, 299)):
-        """Preprocess a single BGR frame for InceptionV3 input."""
-        # Convert BGR to RGB
-        frame_rgb = cv2.cvtColor(frame_bgr, cv2.COLOR_BGR2RGB)
-        # Resize to InceptionV3 input dimensions
-        img_resized = cv2.resize(frame_rgb, image_size)
-        # Convert to PyTorch tensor and normalize to [0, 1]
-        tensor = torch.from_numpy(img_resized).permute(2, 0, 1).float() / 255.0
-        # Move to device and apply ImageNet normalization
-        tensor = tensor.to(self.device)
-        tensor = (tensor - self.mean) / self.std
-        return tensor
-    
-    def extract_batch_features(self, frames_bgr, image_size=(299, 299)):
-        """Extract InceptionV3 features for a batch of frames efficiently."""
-        if not frames_bgr:
-            return np.array([])
-        
-        # Batch preprocessing
-        tensors = [self.preprocess_frame(frame, image_size) for frame in frames_bgr]
-        batch_tensor = torch.stack(tensors).to(self.device)
-        
-        # Batch inference
-        with torch.no_grad():
-            features = self.model(batch_tensor)
-        
-        return features.cpu().numpy()
 
 
 # ----------------------------

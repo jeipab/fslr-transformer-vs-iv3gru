@@ -40,11 +40,12 @@ except ImportError:
 
 # Feature extractors
 try:
-    from .extractors.iv3_features import extract_iv3_features
+    from .extractors.iv3_features import extract_iv3_features, BatchedInceptionV3Processor
     IV3_FEATURES_AVAILABLE = True
 except ImportError:
     IV3_FEATURES_AVAILABLE = False
     extract_iv3_features = None
+    BatchedInceptionV3Processor = None
 
 try:
     from .extractors.keypoints_features import (
@@ -101,7 +102,7 @@ if PREPROCESS_AVAILABLE:
     __all__.extend(['process_video', 'process_videos_multiprocess'])
 
 if IV3_FEATURES_AVAILABLE:
-    __all__.append('extract_iv3_features')
+    __all__.extend(['extract_iv3_features', 'BatchedInceptionV3Processor'])
 
 if KEYPOINTS_FEATURES_AVAILABLE:
     __all__.extend(['extract_keypoints_from_frame', 'interpolate_gaps', 'create_models', 'close_models'])
