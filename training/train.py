@@ -1,77 +1,150 @@
 """
-Training entrypoint for sign language recognition.
+Training entrypoint for sign language recognition models.
 
-This module provides:
-- Multi-task training (gloss and category classification) with configurable loss weights
-- Dataset preparation for file-based features/keypoints or synthetic data (smoke tests)
-- Model selection (Transformer or InceptionV3+GRU), evaluation, and checkpointing
-- Resume support, optional LR schedulers, AMP, early stopping, and CSV logging
+This comprehensive training module supports:
+
+1. MULTI-TASK TRAINING:
+   - Joint gloss and category classification with configurable loss weights
+   - Advanced loss weighting strategies (static, grid-search, uncertainty, gradnorm)
+   - Curriculum learning with different strategies (gloss-first, category-first, dynamic)
+
+2. MODEL SUPPORT:
+   - SignTransformer: Multi-head attention transformer for keypoint sequences
+   - InceptionV3GRU: Hybrid CNN-RNN model for visual features
+   - Automatic model compilation and parallel processing optimization
+
+3. DATA HANDLING:
+   - File-based datasets from preprocessed .npz files
+   - Support for both keypoints [T, 156] and features [T, 2048]
+   - Temporal data augmentation (noise, masking)
+   - Variable-length sequence padding and batching
+
+4. TRAINING FEATURES:
+   - Automatic Mixed Precision (AMP) for faster training
+   - Learning rate scheduling (plateau, cosine, warmup-cosine)
+   - Early stopping and checkpointing
+   - Resume training from checkpoints
+   - Comprehensive CSV logging with performance metrics
+   - Exponential Moving Average (EMA) for model stability
+
+5. ADVANCED LOSS FUNCTIONS:
+   - Standard CrossEntropy
+   - Focal Loss for class imbalance
+   - Label Smoothing for better generalization
 
 Usage:
-    python training/train.py
+    # Basic training
+    python training/train.py --model transformer --epochs 50
+    
+    # Advanced training with curriculum learning
+    python training/train.py --model iv3_gru --curriculum gloss-first --epochs 100
+    
+    # Smoke test
+    python training/train.py --smoke-test
 """
 
-import os
-import csv
-import random
-import argparse
-import time
-import psutil
-import sys
-import platform
+# Standard library imports
+import os, csv, random, argparse, time, sys, platform
 from datetime import datetime
-from typing import Optional, Tuple, Callable
+from typing import Tuple, Callable
 
+# Third-party imports
 import numpy as np
+import psutil
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
 from torch.utils.data import DataLoader, Dataset
 
+# Local imports
 from models import InceptionV3GRU, SignTransformer
 
 class FSLFeatureFileDataset(Dataset):
     """
-    Dataset for precomputed visual features with shape [T, 2048] stored as .npz files.
-
-    Expects a labels CSV mapping column 'file' (stem or with extension) to
-    'gloss' and 'cat'. The .npz must contain the feature array under
-    `feature_key` (default: 'X2048'); if missing, it falls back to 'X'.
+    PyTorch Dataset for precomputed visual features from InceptionV3 backbone.
+    
+    This dataset loads pre-extracted features with shape [T, 2048] from .npz files,
+    where T is the temporal dimension (variable length sequences) and 2048 is the
+    feature dimension from InceptionV3's final layer.
+    
+    The dataset expects:
+    - A directory of .npz files containing feature arrays
+    - A CSV file mapping filenames to gloss and category labels
+    - Optional temporal augmentation for training data
+    
+    Data Flow:
+    1. Load CSV to build filename -> (gloss, category) mapping
+    2. For each sample, load corresponding .npz file
+    3. Extract feature array using specified key (default: 'X2048')
+    4. Apply temporal augmentation if enabled and in training mode
+    5. Return (features, gloss_label, category_label, sequence_length)
 
     Args:
-        features_dir: Directory containing .npz feature files.
-        labels_csv: CSV file with columns: file, gloss, cat.
-        feature_key: Key inside each .npz for the [T, 2048] array.
+        features_dir (str): Directory containing .npz feature files
+        labels_csv (str): CSV file with columns: file, gloss, cat
+        feature_key (str): Key in .npz files containing [T, 2048] features
+        augment (bool): Enable temporal data augmentation
+        augment_params (dict): Augmentation parameters (noise_std, mask_prob, etc.)
 
     Returns:
-        __getitem__ returns (X[T,2048] float32, gloss long, cat long, length long).
+        __getitem__ returns (features[T,2048] float32, gloss long, cat long, length long)
+        
+    Raises:
+        ValueError: If CSV format is invalid or required columns missing
+        FileNotFoundError: If feature file doesn't exist
+        KeyError: If expected feature key not found in .npz file
     """
     def __init__(self, features_dir, labels_csv, feature_key='X2048', augment=False, augment_params=None):
-        self.features_dir = features_dir
-        self.feature_key = feature_key
-        self.index = []  # list of (stem, gloss, cat)
-        self.augment = augment
-        self.training = True  # Will be set by DataLoader
+        """
+        Initialize the feature dataset.
+        
+        This method sets up the dataset by:
+        1. Storing configuration parameters
+        2. Setting up augmentation if enabled
+        3. Loading and parsing the labels CSV file
+        4. Building an index of (filename_stem, gloss_id, category_id) tuples
+        """
+        # Store dataset configuration
+        self.features_dir = features_dir  # Directory containing .npz feature files
+        self.feature_key = feature_key    # Key to extract features from .npz files
+        self.index = []                   # List of (stem, gloss, cat) tuples for indexing
+        self.augment = augment            # Whether to apply temporal augmentation
+        self.training = True              # Training mode flag (set by DataLoader)
+        
+        # Initialize temporal augmentation if enabled
         if augment and augment_params:
+            # Use custom augmentation parameters
             self.augmentation = TemporalAugmentation(**augment_params)
         elif augment:
+            # Use default augmentation parameters
             self.augmentation = TemporalAugmentation()
 
+        # Validate that labels CSV is provided
         if labels_csv is None:
             raise ValueError("labels_csv must be provided for feature dataset")
 
+        # Load and parse the labels CSV file
         with open(labels_csv, newline='') as f:
             reader = csv.DictReader(f)
+            
+            # Validate CSV structure - must have required columns
             required = {'file', 'gloss', 'cat'}
             if not required.issubset(set(reader.fieldnames or [])):
                 raise ValueError(f"labels_csv must have columns: {required}")
+            
+            # Parse each row and build the dataset index
             for row in reader:
                 try:
-                    # accept values with or without extension
+                    # Extract filename stem (without extension) for flexibility
+                    # This allows CSV to have filenames with or without .npz extension
                     stem = os.path.splitext(row['file'])[0]
-                    gloss = int(row['gloss'])
-                    cat = int(row['cat'])
+                    
+                    # Convert labels to integers (class indices)
+                    gloss = int(row['gloss'])  # Gloss class ID
+                    cat = int(row['cat'])       # Category class ID
+                    
+                    # Add to index for later retrieval
                     self.index.append((stem, gloss, cat))
                 except (ValueError, KeyError) as e:
                     raise ValueError(f"Invalid data in row {row}: {e}")
@@ -80,46 +153,120 @@ class FSLFeatureFileDataset(Dataset):
         return len(self.index)
 
     def __getitem__(self, idx):
+        """
+        Retrieve a single sample from the dataset.
+        
+        This method:
+        1. Gets the filename and labels from the index
+        2. Constructs the full path to the .npz file
+        3. Loads and validates the feature data
+        4. Applies temporal augmentation if enabled
+        5. Returns tensors in the expected format
+        
+        Args:
+            idx (int): Index of the sample to retrieve
+            
+        Returns:
+            tuple: (features[T,2048] float32, gloss_label long, cat_label long, length long)
+        """
+        # Get filename stem and labels from the pre-built index
         stem, gloss, cat = self.index[idx]
+        
+        # Construct full path to the .npz feature file
         path = os.path.join(self.features_dir, stem + '.npz')
         if not os.path.exists(path):
             raise FileNotFoundError(f"Feature file not found: {path}")
-        data = torch.from_numpy(self._load_npz_features(path))  # [T, 2048]
-        length = data.shape[0]
         
-        # Apply augmentation if enabled and in training mode
+        # Load feature data from .npz file and convert to PyTorch tensor
+        data = torch.from_numpy(self._load_npz_features(path))  # Shape: [T, 2048]
+        length = data.shape[0]  # Temporal dimension (sequence length)
+        
+        # Apply temporal augmentation if enabled and in training mode
+        # Augmentation helps improve model generalization by adding noise/variations
         if self.augment and self.training and hasattr(self, 'augmentation'):
             data = self.augmentation(data)
         
-        return data.float(), torch.tensor(gloss, dtype=torch.long), torch.tensor(cat, dtype=torch.long), torch.tensor(length, dtype=torch.long)
+        # Return tensors with appropriate data types for PyTorch
+        return (
+            data.float(),                                    # Features as float32
+            torch.tensor(gloss, dtype=torch.long),          # Gloss label as int64
+            torch.tensor(cat, dtype=torch.long),            # Category label as int64
+            torch.tensor(length, dtype=torch.long)          # Sequence length as int64
+        )
 
     def _load_npz_features(self, path):
+        """
+        Load feature array from .npz file with validation.
+        
+        This method:
+        1. Opens the .npz file safely
+        2. Tries to load features using the specified key
+        3. Falls back to 'X' key if primary key not found
+        4. Validates the array shape and dimensions
+        5. Returns the validated feature array
+        
+        Args:
+            path (str): Path to the .npz file
+            
+        Returns:
+            np.ndarray: Feature array with shape [T, 2048]
+            
+        Raises:
+            KeyError: If neither the specified key nor 'X' key is found
+            ValueError: If array doesn't have expected shape [T, 2048]
+        """
+        # Load .npz file with allow_pickle=True for compatibility
         with np.load(path, allow_pickle=True) as npz:
+            # Try to load features using the specified key first
             if self.feature_key in npz:
                 X = np.array(npz[self.feature_key])
+            # Fall back to 'X' key if primary key not found
             elif 'X' in npz:
                 X = np.array(npz['X'])
             else:
                 raise KeyError(f"Neither '{self.feature_key}' nor 'X' found in {path}")
+        
+        # Validate array dimensions - must be 2D with 2048 features
         if X.ndim != 2 or X.shape[-1] != 2048:
             raise ValueError(f"Expected [T,2048] features in {path}, got shape {X.shape}")
+        
         return X
 
 class FSLKeypointFileDataset(Dataset):
     """
-    Dataset for precomputed keypoint sequences with shape [T, 156] stored as .npz.
-
-    Expects a labels CSV mapping column 'file' (stem or with extension) to
-    'gloss' and 'cat'. The .npz must contain the key specified by `kp_key`
-    (default: 'X').
+    PyTorch Dataset for precomputed keypoint sequences from pose estimation.
+    
+    This dataset loads keypoint sequences with shape [T, 156] from .npz files,
+    where T is the temporal dimension (variable length sequences) and 156 represents
+    the flattened keypoint coordinates (typically 52 keypoints × 3 coordinates = 156).
+    
+    The dataset supports both raw keypoints and processed features:
+    - Raw keypoints [T, 156]: Direct pose estimation output
+    - Processed features [T, 2048]: Keypoints processed through feature extraction
+    
+    Data Flow:
+    1. Load CSV to build filename -> (gloss, category) mapping
+    2. For each sample, load corresponding .npz file
+    3. Extract keypoint array using specified key (default: 'X')
+    4. Validate array dimensions based on key type
+    5. Apply temporal augmentation if enabled and in training mode
+    6. Return (keypoints, gloss_label, category_label, sequence_length)
 
     Args:
-        keypoints_dir: Directory containing .npz keypoint files.
-        labels_csv: CSV with columns: file, gloss, cat.
-        kp_key: Key inside each .npz for the [T, 156] array.
+        keypoints_dir (str): Directory containing .npz keypoint files
+        labels_csv (str): CSV file with columns: file, gloss, cat
+        kp_key (str): Key in .npz files containing keypoint data
+        augment (bool): Enable temporal data augmentation
+        augment_params (dict): Augmentation parameters (noise_std, mask_prob, etc.)
 
     Returns:
-        __getitem__ returns (X[T,156] float32, gloss long, cat long, length long).
+        __getitem__ returns (keypoints[T,D] float32, gloss long, cat long, length long)
+        where D is 156 for raw keypoints or 2048 for processed features
+        
+    Raises:
+        ValueError: If CSV format is invalid or array dimensions don't match key type
+        FileNotFoundError: If keypoint file doesn't exist
+        KeyError: If expected keypoint key not found in .npz file
     """
     def __init__(self, keypoints_dir, labels_csv, kp_key='X', augment=False, augment_params=None):
         self.keypoints_dir = keypoints_dir
@@ -184,24 +331,53 @@ class FSLKeypointFileDataset(Dataset):
 
 def collate_features_with_padding(batch):
     """
-    Pad variable-length feature sequences [T, 2048] to the max length in batch.
-
+    Collate function to batch variable-length feature sequences with padding.
+    
+    This function is used by PyTorch DataLoader to combine multiple samples into batches.
+    Since sequences have different lengths, we need to pad shorter sequences to match
+    the longest sequence in the batch.
+    
+    Process:
+    1. Separate sequences, labels, and lengths from batch items
+    2. Find the maximum sequence length in the batch
+    3. Create a padded tensor with shape [batch_size, max_length, feature_dim]
+    4. Copy each sequence into the padded tensor
+    5. Stack labels and lengths into tensors
+    
     Args:
-        batch: Iterable of (X[T,2048], gloss, cat, length) items.
+        batch: List of tuples, each containing (features[T,2048], gloss_label, cat_label, length)
 
     Returns:
-        tuple: (X_pad [B,Tmax,2048], gloss [B], cat [B], lengths [B])
+        tuple: (padded_features[B,Tmax,2048], gloss_labels[B], cat_labels[B], lengths[B])
+            - padded_features: Batch of padded feature sequences
+            - gloss_labels: Batch of gloss class labels
+            - cat_labels: Batch of category class labels  
+            - lengths: Original sequence lengths (needed for attention masking)
     """
+    # Unzip the batch to separate sequences, labels, and lengths
     sequences, gloss, cat, lengths = zip(*batch)
-    lengths = torch.stack(lengths, dim=0)
-    B = len(sequences)
-    Tmax = int(max(l.item() for l in lengths))
-    D = sequences[0].shape[-1]
+    
+    # Convert lengths to tensor and find maximum sequence length in batch
+    lengths = torch.stack(lengths, dim=0)  # Shape: [batch_size]
+    B = len(sequences)                     # Batch size
+    Tmax = int(max(l.item() for l in lengths))  # Maximum sequence length
+    D = sequences[0].shape[-1]             # Feature dimension (2048 for features)
+    
+    # Create padded tensor with zeros - shape [batch_size, max_length, feature_dim]
     X_pad = torch.zeros((B, Tmax, D), dtype=sequences[0].dtype)
+    
+    # Copy each sequence into the padded tensor
     for i, seq in enumerate(sequences):
-        t = seq.shape[0]
-        X_pad[i, :t] = seq
-    return X_pad, torch.stack(gloss, dim=0), torch.stack(cat, dim=0), lengths
+        t = seq.shape[0]  # Actual length of this sequence
+        X_pad[i, :t] = seq  # Copy sequence data, leaving remainder as zeros
+    
+    # Stack labels into tensors and return
+    return (
+        X_pad,                           # Padded features [B, Tmax, D]
+        torch.stack(gloss, dim=0),       # Gloss labels [B]
+        torch.stack(cat, dim=0),         # Category labels [B]
+        lengths                          # Original lengths [B]
+    )
 
 def collate_keypoints_with_padding(batch):
     """
@@ -226,43 +402,71 @@ def collate_keypoints_with_padding(batch):
 
 def _make_dataloader(dataset, batch_size, shuffle, args, collate_fn=None):
     """
-    Internal helper to build an optimized DataLoader with performance enhancements.
+    Build an optimized DataLoader with performance enhancements.
+    
+    This function creates a DataLoader with optimized settings for better training
+    performance, including automatic worker detection, memory pinning, and prefetching.
+    
+    Args:
+        dataset: PyTorch Dataset to load from
+        batch_size (int): Number of samples per batch
+        shuffle (bool): Whether to shuffle data each epoch
+        args: Training arguments containing DataLoader configuration
+        collate_fn (callable, optional): Function to collate batches
+        
+    Returns:
+        DataLoader: Optimized PyTorch DataLoader
     """
-    # Auto-detect optimal number of workers if not specified
+    # ============================================================================
+    # WORKER CONFIGURATION
+    # ============================================================================
+    # Auto-detect optimal number of workers for data loading
+    # More workers = faster data loading, but also more memory usage
     num_workers = args.num_workers
     if args.auto_workers or num_workers == 0:
-        # Use more aggressive worker count for better performance
-        cpu_count = psutil.cpu_count(logical=False)
-        # Use more workers but cap at reasonable limit
+        # Calculate optimal worker count based on CPU cores
+        cpu_count = psutil.cpu_count(logical=False)  # Physical cores only
+        # Use 1/2 of CPU cores, but cap between 2 and 8 for stability
         num_workers = min(8, max(2, cpu_count // 2))
         if args.auto_workers:
             print(f"Auto-detected {num_workers} DataLoader workers (from {cpu_count} CPU cores)")
     
-    # Optimize pin_memory based on device
+    # ============================================================================
+    # MEMORY PINNING CONFIGURATION
+    # ============================================================================
+    # pin_memory=True enables faster CPU-GPU data transfer by keeping data in pinned memory
     pin_memory = args.pin_memory
     if not hasattr(args, 'pin_memory') or args.pin_memory is None:
+        # Auto-enable pin_memory only if CUDA is available
         pin_memory = torch.cuda.is_available()
     
+    # ============================================================================
+    # DATALOADER CONFIGURATION
+    # ============================================================================
+    
+    # Build DataLoader configuration dictionary
     kwargs = {
         'batch_size': batch_size,
         'shuffle': shuffle,
         'num_workers': num_workers,
         'pin_memory': pin_memory,
-        'persistent_workers': num_workers > 0,  # Keep workers alive between epochs
+        'persistent_workers': num_workers > 0,  # Keep workers alive between epochs for efficiency
     }
     
+    # Add collate function if provided (needed for variable-length sequences)
     if collate_fn is not None:
         kwargs['collate_fn'] = collate_fn
     
-    # Set prefetch_factor for better data loading performance
+    # Configure prefetching for better data loading performance
+    # prefetch_factor determines how many batches each worker prefetches
     if num_workers > 0:
         prefetch_factor = getattr(args, 'prefetch_factor', None)
         if prefetch_factor is None:
-            # Auto-set prefetch factor based on available memory
+            # Auto-set prefetch factor based on device type and available memory
             if torch.cuda.is_available():
-                kwargs['prefetch_factor'] = 2  # Conservative for GPU
+                kwargs['prefetch_factor'] = 2  # Conservative for GPU (memory limited)
             else:
-                kwargs['prefetch_factor'] = 4  # More aggressive for CPU
+                kwargs['prefetch_factor'] = 4  # More aggressive for CPU (memory abundant)
         elif isinstance(prefetch_factor, int) and prefetch_factor > 0:
             kwargs['prefetch_factor'] = prefetch_factor
     
@@ -285,25 +489,52 @@ def save_checkpoint(state: dict, is_best: bool, output_dir: str, model_name: str
         torch.save(state, best_path)
 
 def get_optimal_device() -> torch.device:
-    """Get the optimal device for training with comprehensive CUDA optimization."""
+    """
+    Get the optimal device for training with comprehensive optimizations.
+    
+    This function automatically selects the best available device (CUDA > MPS > CPU)
+    and applies device-specific optimizations for maximum performance.
+    
+    CUDA Optimizations:
+    - Enables cuDNN benchmark mode for optimal convolution performance
+    - Sets memory allocation strategy to reduce fragmentation
+    
+    Returns:
+        torch.device: The optimal device for training
+    """
     if torch.cuda.is_available():
         device = torch.device("cuda")
-        # Enable CUDA optimizations
-        torch.backends.cudnn.benchmark = True
-        torch.backends.cudnn.enabled = True
+        
+        # Enable CUDA-specific optimizations
+        torch.backends.cudnn.benchmark = True  # Auto-tune cuDNN for optimal performance
+        torch.backends.cudnn.enabled = True    # Ensure cuDNN is enabled
+        
         # Set memory allocation strategy for better memory management
+        # max_split_size_mb limits the size of memory chunks to reduce fragmentation
         os.environ['PYTORCH_CUDA_ALLOC_CONF'] = 'max_split_size_mb:512'
+        
         return device
     elif hasattr(torch.backends, 'mps') and torch.backends.mps.is_available():
+        # Apple Metal Performance Shaders (M1/M2 Macs)
         return torch.device("mps")
     else:
+        # Fallback to CPU
         return torch.device("cpu")
 
 def print_device_info(device: torch.device) -> None:
-    """Print comprehensive device information."""
+    """
+    Print comprehensive device information for training setup.
+    
+    This function displays detailed information about the selected device,
+    including hardware specifications and current memory usage.
+    
+    Args:
+        device (torch.device): The device to display information for
+    """
     print(f"Using device: {device}")
     
     if device.type == 'cuda':
+        # CUDA-specific information
         print(f"CUDA device: {torch.cuda.get_device_name(0)}")
         props = torch.cuda.get_device_properties(0)
         print(f"CUDA memory: {props.total_memory / 1e9:.1f} GB")
@@ -312,8 +543,10 @@ def print_device_info(device: torch.device) -> None:
         print(f"CUDA memory allocated: {torch.cuda.memory_allocated(0) / 1e9:.2f} GB")
         print(f"CUDA memory cached: {torch.cuda.memory_reserved(0) / 1e9:.2f} GB")
     elif device.type == 'mps':
+        # Apple Metal Performance Shaders
         print("Using Apple Metal Performance Shaders (MPS)")
     else:
+        # CPU information
         print("Using CPU")
         print(f"CPU cores: {psutil.cpu_count(logical=False)} physical, {psutil.cpu_count(logical=True)} logical")
         print(f"Available RAM: {psutil.virtual_memory().total / 1e9:.1f} GB")
@@ -329,25 +562,40 @@ def optimize_model_for_parallel(model, device):
 
 
 def calculate_optimal_batch_size(model, device, base_batch_size=32):
-    """Calculate optimal batch size based on available memory."""
+    """
+    Calculate optimal batch size based on available hardware resources.
+    
+    This function analyzes the available memory and processing power to determine
+    the best batch size for training efficiency.
+    
+    Args:
+        model: The model being trained (for parameter estimation)
+        device (torch.device): The device to optimize for
+        base_batch_size (int): Default batch size to use as reference
+        
+    Returns:
+        int: Optimal batch size for the given hardware
+    """
     if device.type == 'cuda':
-        # Get GPU memory info
+        # GPU memory-based batch size optimization
         gpu_memory_gb = torch.cuda.get_device_properties(0).total_memory / 1e9
         
-        # Adjust batch size based on GPU memory
+        # Scale batch size based on available GPU memory
+        # More memory allows larger batches, which can improve training efficiency
         if gpu_memory_gb > 16:
-            optimal_batch_size = base_batch_size * 2  # 64
+            optimal_batch_size = base_batch_size * 2  # High-memory GPU: 64
         elif gpu_memory_gb > 8:
-            optimal_batch_size = base_batch_size      # 32
+            optimal_batch_size = base_batch_size      # Mid-range GPU: 32
         elif gpu_memory_gb > 4:
-            optimal_batch_size = base_batch_size // 2 # 16
+            optimal_batch_size = base_batch_size // 2 # Low-memory GPU: 16
         else:
-            optimal_batch_size = base_batch_size // 4 # 8
+            optimal_batch_size = base_batch_size // 4 # Very low memory: 8
         
         print(f"GPU Memory: {gpu_memory_gb:.1f} GB, Optimal batch size: {optimal_batch_size}")
         return optimal_batch_size
     else:
-        # CPU training - use smaller batches
+        # CPU training - optimize based on core count
+        # More cores can handle larger batches more efficiently
         cpu_count = psutil.cpu_count(logical=False)
         optimal_batch_size = min(base_batch_size, cpu_count * 4)
         print(f"CPU cores: {cpu_count}, Optimal batch size: {optimal_batch_size}")
@@ -1145,18 +1393,29 @@ def train_model(
         and `{ModelName}_best.pt` (best validation metric). Appends metrics to
         `log_csv_path` if provided.
     """
-    # Clear GPU memory before training
+    # ============================================================================
+    # INITIAL SETUP AND CONFIGURATION
+    # ============================================================================
+    
+    # Clear GPU memory cache to ensure clean start and prevent memory issues
     clear_gpu_memory()
     
-    # Initialize curriculum scheduler if strategy is provided
+    # ============================================================================
+    # CURRICULUM LEARNING SETUP
+    # ============================================================================
+    # Curriculum learning gradually introduces tasks to improve training stability
+    # and performance. This is especially useful for multi-task learning where
+    # balancing gloss and category classification can be challenging.
+    
     curriculum_scheduler = None
     if curriculum_strategy is not None:
+        # Initialize curriculum scheduler with specified strategy
         curriculum_scheduler = CurriculumScheduler(
-            strategy=curriculum_strategy,
-            curriculum_epochs=curriculum_epochs,
-            warmup_epochs=curriculum_warmup,
-            min_weight=curriculum_min_weight,
-            schedule_type=curriculum_schedule
+            strategy=curriculum_strategy,        # "gloss-first", "category-first", or "dynamic"
+            curriculum_epochs=curriculum_epochs, # How many epochs to spend on curriculum
+            warmup_epochs=curriculum_warmup,     # Warmup period for dynamic strategy
+            min_weight=curriculum_min_weight,    # Minimum weight for secondary task
+            schedule_type=curriculum_schedule    # "linear", "cosine", or "exponential"
         )
         print(f"✓ Curriculum training enabled: {curriculum_strategy}")
         print(f"  - Curriculum epochs: {curriculum_epochs}")
@@ -1165,9 +1424,16 @@ def train_model(
         print(f"  - Min weight: {curriculum_min_weight}")
         print(f"  - Schedule: {curriculum_schedule}")
     
-    # Initialize loss weighting strategy
+    # ============================================================================
+    # LOSS WEIGHTING STRATEGY SETUP
+    # ============================================================================
+    # Advanced loss weighting strategies help balance multiple tasks during training.
+    # This is crucial for multi-task learning where gloss and category classification
+    # may have different difficulty levels and learning dynamics.
+    
     loss_weighting = None
     if loss_weighting_strategy == "grid-search":
+        # Grid search: Try different weight combinations over epochs
         weight_combinations = parse_grid_search_weights(grid_search_weights)
         loss_weighting = create_loss_weighting_strategy(
             loss_weighting_strategy,
@@ -1178,14 +1444,15 @@ def train_model(
         print(f"  - Weight combinations: {weight_combinations}")
         print(f"  - Epochs per combination: {max(1, epochs // len(weight_combinations))}")
     else:
+        # Static, uncertainty, or gradnorm weighting strategies
         loss_weighting = create_loss_weighting_strategy(
             loss_weighting_strategy,
-            alpha=alpha,
-            beta=beta,
-            uncertainty_init=uncertainty_init,
-            gradnorm_alpha=gradnorm_alpha,
-            gradnorm_update_freq=gradnorm_update_freq,
-            device=str(device)
+            alpha=alpha,                    # Static gloss weight
+            beta=beta,                      # Static category weight
+            uncertainty_init=uncertainty_init,  # Initial uncertainty for uncertainty weighting
+            gradnorm_alpha=gradnorm_alpha,      # Alpha parameter for gradnorm
+            gradnorm_update_freq=gradnorm_update_freq,  # How often to update gradnorm weights
+            device=str(device)              # Device for uncertainty/gradnorm parameters
         )
         print(f"✓ Loss weighting strategy: {loss_weighting_strategy}")
         if loss_weighting_strategy == "uncertainty":
@@ -1194,7 +1461,12 @@ def train_model(
             print(f"  - Alpha: {gradnorm_alpha}")
             print(f"  - Update frequency: {gradnorm_update_freq}")
     
-    # Compile model for better performance if supported
+    # ============================================================================
+    # MODEL OPTIMIZATION AND LOSS FUNCTION SETUP
+    # ============================================================================
+    
+    # Model compilation (PyTorch 2.0+) for significant performance improvements
+    # This optimizes the model graph for faster execution, especially on modern GPUs
     if compile_model and hasattr(torch, 'compile'):
         try:
             model = torch.compile(model)
@@ -1202,7 +1474,11 @@ def train_model(
         except Exception as e:
             print(f"⚠ Model compilation failed: {e}")
     
-    # Initialize loss function based on type
+    # Initialize loss function based on specified type
+    # Different loss functions are suited for different scenarios:
+    # - CrossEntropy: Standard choice for most classification tasks
+    # - Focal Loss: Better for imbalanced datasets, focuses on hard examples
+    # - Label Smoothing: Improves generalization by preventing overconfidence
     if loss_type == "focal":
         criterion = FocalLoss(alpha=focal_alpha, gamma=focal_gamma)
         print(f"✓ Using Focal Loss (alpha={focal_alpha}, gamma={focal_gamma})")
@@ -1213,18 +1489,27 @@ def train_model(
         criterion = nn.CrossEntropyLoss()
         print("✓ Using standard CrossEntropy Loss")
     
-    # Add uncertainty parameters to optimizer if using uncertainty weighting
+    # ============================================================================
+    # OPTIMIZER AND AUTOMATIC MIXED PRECISION SETUP
+    # ============================================================================
+    
+    # Set up optimizer with model parameters
+    # For uncertainty weighting, we also need to optimize the uncertainty parameters
     if loss_weighting_strategy == "uncertainty" and isinstance(loss_weighting, UncertaintyWeighting):
+        # Include uncertainty parameters (log variance) in optimization
         optimizer = optim.Adam(
             list(model.parameters()) + [loss_weighting.log_var_gloss, loss_weighting.log_var_cat],
             lr=lr, weight_decay=weight_decay
         )
     else:
+        # Standard optimizer with only model parameters
         optimizer = optim.Adam(model.parameters(), lr=lr, weight_decay=weight_decay)
     
-    # Enable AMP only when running on CUDA to avoid CPU-only issues
+    # Automatic Mixed Precision (AMP) for faster training and lower memory usage
+    # AMP uses float16 for forward pass and float32 for backward pass
+    # Only enable on CUDA devices to avoid CPU-only compatibility issues
     amp_enabled = bool(use_amp and getattr(device, "type", "cpu") == "cuda")
-    scaler = torch.amp.GradScaler(enabled=amp_enabled)
+    scaler = torch.amp.GradScaler(enabled=amp_enabled)  # Handles gradient scaling for AMP
     
     # Print training configuration
     print(f"Training Configuration:")
@@ -1234,50 +1519,88 @@ def train_model(
     if device.type == 'cuda':
         print(f"  - CUDA memory before training: {torch.cuda.memory_allocated(0) / 1e9:.2f} GB")
 
+    # ============================================================================
+    # LEARNING RATE SCHEDULER SETUP
+    # ============================================================================
+    # Learning rate scheduling helps improve training stability and final performance
+    # Different schedulers are suited for different training scenarios
+    
     if scheduler_type == "plateau":
+        # Reduce LR when validation metric plateaus - good for stable training
         scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='max', factor=0.5, patience=scheduler_patience)
         print(f"✓ Using ReduceLROnPlateau scheduler (patience={scheduler_patience})")
     elif scheduler_type == "cosine":
+        # Cosine annealing - smooth LR decay over training
         scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=max(1, epochs))
         print(f"✓ Using CosineAnnealingLR scheduler")
     elif scheduler_type == "warmup_cosine":
+        # Warmup + cosine - gradual LR increase then cosine decay
         scheduler = WarmupCosineScheduler(optimizer, warmup_epochs, epochs, lr)
         print(f"✓ Using WarmupCosineScheduler (warmup_epochs={warmup_epochs})")
     else:
         scheduler = None
         print("✓ No learning rate scheduler")
 
-    # Initialize EMA if requested
+    # ============================================================================
+    # EXPONENTIAL MOVING AVERAGE (EMA) SETUP
+    # ============================================================================
+    # EMA maintains a running average of model parameters, which often leads to
+    # better generalization and more stable training. The EMA model is used for
+    # validation and final evaluation.
+    
     ema = None
     if use_ema:
-        ema = EMA(model, decay=ema_decay)
-        ema.register()
+        ema = EMA(model, decay=ema_decay)  # Higher decay = slower parameter updates
+        ema.register()  # Initialize EMA with current model parameters
         print(f"✓ EMA enabled (decay={ema_decay})")
 
-    # Resume support
+    # ============================================================================
+    # RESUME TRAINING SETUP
+    # ============================================================================
+    # Support for resuming training from a checkpoint. This loads the model state,
+    # optimizer state, scheduler state, and training progress.
+    
     start_epoch = 0
     best_metric = -float('inf')
     if resume_path is not None and os.path.isfile(resume_path):
+        print(f"Loading checkpoint from: {resume_path}")
         ckpt = torch.load(resume_path, map_location=device)
+        
+        # Restore model parameters
         model.load_state_dict(ckpt['model'])
+        
+        # Restore optimizer state (includes momentum, etc.)
         optimizer.load_state_dict(ckpt['optimizer'])
+        
+        # Restore AMP scaler state if using AMP
         if 'scaler' in ckpt and use_amp:
             scaler.load_state_dict(ckpt['scaler'])
+        
+        # Restore scheduler state if scheduler exists
         if 'scheduler' in ckpt and scheduler is not None and ckpt['scheduler'] is not None:
             scheduler.load_state_dict(ckpt['scheduler'])
+        
+        # Restore training progress
         start_epoch = ckpt.get('epoch', 0)
         best_metric = ckpt.get('best_metric', best_metric)
         print(f"Resumed from {resume_path} at epoch {start_epoch} (best_metric={best_metric:.4f})")
 
-    # CSV logging
+    # ============================================================================
+    # CSV LOGGING SETUP
+    # ============================================================================
+    # Set up CSV logging for tracking training metrics over time
+    # This allows for easy analysis and visualization of training progress
+    
     csv_fh = None
     if log_csv_path is not None:
+        # Create directory if it doesn't exist
         os.makedirs(os.path.dirname(log_csv_path) or '.', exist_ok=True)
         new_file = not os.path.exists(log_csv_path)
         csv_fh = open(log_csv_path, 'a', newline='')
         csv_writer = csv.writer(csv_fh)
+        
         if new_file:
-            # Write configuration header as comment
+            # Write configuration header as comments for reference
             config_header = [
                 f"# Training Configuration: epochs={epochs}, batch_size={batch_size}",
                 f"# Learning Rate: {lr}, Weight Decay: {weight_decay}, Alpha: {alpha}, Beta: {beta}",
@@ -1286,6 +1609,8 @@ def train_model(
             for header_line in config_header:
                 csv_writer.writerow([header_line])
             csv_writer.writerow([])  # Empty line separator
+            
+            # Write column headers based on training configuration
             if curriculum_scheduler is not None:
                 csv_writer.writerow(["epoch", "train_loss", "val_loss", "val_gloss_acc", "val_cat_acc", "lr", "epoch_time", "gpu_memory_allocated", "gpu_memory_reserved", "alpha", "beta", "curriculum_phase"])
             elif loss_weighting is not None and loss_weighting_strategy != "static":
@@ -1293,6 +1618,10 @@ def train_model(
             else:
                 csv_writer.writerow(["epoch", "train_loss", "val_loss", "val_gloss_acc", "val_cat_acc", "lr", "epoch_time", "gpu_memory_allocated", "gpu_memory_reserved"]) 
 
+    # ============================================================================
+    # TRAINING LOOP START
+    # ============================================================================
+    
     print(f"Training for {epochs} epochs...")
     if curriculum_scheduler is not None:
         print(f"Curriculum training: {curriculum_scheduler.get_phase_info(0)}")
@@ -1301,77 +1630,112 @@ def train_model(
     print("-" * 60)
 
     epochs_to_run = epochs
-    patience_counter = 0
+    patience_counter = 0  # Counter for early stopping
 
+    # Main training loop - iterate through epochs
     for epoch in range(start_epoch, start_epoch + epochs_to_run):
-        # Get current curriculum weights
+        # ========================================================================
+        # EPOCH INITIALIZATION
+        # ========================================================================
+        
+        # Get current loss weights based on curriculum or static strategy
         if curriculum_scheduler is not None:
+            # Dynamic weights from curriculum learning
             current_alpha, current_beta = curriculum_scheduler.get_weights(epoch, epochs)
             phase_info = curriculum_scheduler.get_phase_info(epoch)
         else:
+            # Static weights or weights from loss weighting strategy
             current_alpha, current_beta = alpha, beta
             phase_info = "Balanced training"
         
+        # Set model to training mode (enables dropout, batch norm updates, etc.)
         model.train()
-        total_loss = 0
-        num_batches = 0
-        epoch_start_time = time.time()
-
-        # Training phase with gradient accumulation
-        optimizer.zero_grad(set_to_none=True)
         
+        # Initialize epoch-level tracking variables
+        total_loss = 0        # Accumulator for total loss across all batches
+        num_batches = 0       # Counter for number of batches processed
+        epoch_start_time = time.time()  # Track epoch duration
+
+        # ========================================================================
+        # TRAINING PHASE - GRADIENT ACCUMULATION
+        # ========================================================================
+        # Gradient accumulation allows us to use larger effective batch sizes
+        # by accumulating gradients over multiple mini-batches before updating parameters
+        
+        optimizer.zero_grad(set_to_none=True)  # Clear gradients from previous epoch
+        
+        # Iterate through training batches
         for batch_idx, batch in enumerate(train_loader):
+            # Parse batch data - handle both 3-tuple and 4-tuple formats
             if len(batch) == 4:
                 X, gloss, cat, lengths = batch
-                lengths = lengths.to(device, non_blocking=True)
+                lengths = lengths.to(device, non_blocking=True)  # Sequence lengths for attention masking
             else:
                 X, gloss, cat = batch
-                lengths = None
+                lengths = None  # No length information available
             
-            # Move tensors to device with non_blocking for better performance
-            X = X.to(device, non_blocking=True)
-            gloss = gloss.to(device, non_blocking=True)
-            cat = cat.to(device, non_blocking=True)
+            # Move tensors to device with non_blocking=True for better performance
+            # non_blocking=True allows CPU-GPU transfer to overlap with computation
+            X = X.to(device, non_blocking=True)      # Input features/keypoints
+            gloss = gloss.to(device, non_blocking=True)  # Gloss class labels
+            cat = cat.to(device, non_blocking=True)      # Category class labels
 
+            # Forward pass with automatic mixed precision if enabled
             with torch.amp.autocast(device_type=getattr(device, "type", "cpu"), enabled=amp_enabled):
+                # Model forward pass - get predictions for both tasks
                 gloss_pred, cat_pred = forward_fn(model, X, lengths)
-                loss_gloss = criterion(gloss_pred, gloss)
-                loss_cat = criterion(cat_pred, cat)
                 
-                # Get dynamic weights from loss weighting strategy
+                # Calculate individual task losses
+                loss_gloss = criterion(gloss_pred, gloss)  # Gloss classification loss
+                loss_cat = criterion(cat_pred, cat)        # Category classification loss
+                
+                # Get dynamic weights from loss weighting strategy if available
                 if loss_weighting is not None:
                     dynamic_alpha, dynamic_beta = loss_weighting.get_weights(
                         epoch, batch_idx, loss_gloss.item(), loss_cat.item(), model, optimizer
                     )
-                    # Use curriculum weights if available, otherwise use loss weighting weights
+                    # Priority: curriculum > loss weighting > static
                     if curriculum_scheduler is not None:
-                        # Curriculum takes precedence over loss weighting
+                        # Curriculum learning takes precedence over loss weighting
                         loss = current_alpha * loss_gloss + current_beta * loss_cat
                     else:
                         # Use loss weighting strategy
                         if loss_weighting_strategy == "uncertainty":
+                            # Uncertainty weighting includes uncertainty penalty
                             loss = loss_weighting.get_uncertainty_loss(loss_gloss, loss_cat)
                         else:
+                            # Static or adaptive weighting
                             loss = dynamic_alpha * loss_gloss + dynamic_beta * loss_cat
                 else:
                     # Use curriculum weights or static weights
                     loss = current_alpha * loss_gloss + current_beta * loss_cat
                 
-                # Scale loss by accumulation steps
+                # Scale loss by gradient accumulation steps to maintain correct gradient magnitude
+                # This ensures that the effective learning rate remains consistent
                 loss = loss / gradient_accumulation_steps
 
+            # Backward pass with gradient scaling for AMP
             scaler.scale(loss).backward()
             
-            # Only step optimizer after accumulating gradients
+            # Gradient accumulation: only update parameters after accumulating N steps
             if (batch_idx + 1) % gradient_accumulation_steps == 0:
+                # Gradient clipping to prevent exploding gradients
                 if grad_clip is not None and grad_clip > 0:
-                    scaler.unscale_(optimizer)
+                    scaler.unscale_(optimizer)  # Unscale gradients before clipping
                     torch.nn.utils.clip_grad_norm_(model.parameters(), grad_clip)
-                scaler.step(optimizer)
-                scaler.update()
-                optimizer.zero_grad(set_to_none=True)
+                
+                # Update model parameters
+                scaler.step(optimizer)  # Apply gradients
+                scaler.update()         # Update AMP scaler
+                optimizer.zero_grad(set_to_none=True)  # Clear gradients for next accumulation
+        
+        # ========================================================================
+        # END-OF-EPOCH PROCESSING
+        # ========================================================================
         
         # Handle remaining gradients if last batch doesn't align with accumulation steps
+        # This ensures all gradients are processed even if the total number of batches
+        # is not divisible by gradient_accumulation_steps
         if len(train_loader) % gradient_accumulation_steps != 0:
             if grad_clip is not None and grad_clip > 0:
                 scaler.unscale_(optimizer)
@@ -1380,29 +1744,32 @@ def train_model(
             scaler.update()
             optimizer.zero_grad(set_to_none=True)
             
+        # Update loss tracking (scale back up to get true loss magnitude)
         total_loss += loss.item() * gradient_accumulation_steps
         num_batches += 1
         
-        # Update EMA if enabled
+        # Update Exponential Moving Average if enabled
+        # EMA maintains a smoothed version of model parameters for better generalization
         if ema is not None:
             ema.update()
         
-        # Clear intermediate variables to save memory
+        # Clear intermediate variables to save GPU memory
+        # This helps prevent memory accumulation over long training runs
         del X, gloss, cat, gloss_pred, cat_pred, loss, loss_gloss, loss_cat
         if lengths is not None:
             del lengths
 
-        # Handle case where training dataloader yields zero batches
+        # Handle edge case where training dataloader yields zero batches
         if num_batches == 0:
             print("No training batches were provided. Check your dataset and DataLoader settings.")
             if csv_fh is not None:
                 csv_fh.close()
             return
 
-        # Calculate average training loss
+        # Calculate average training loss across all batches
         avg_train_loss = total_loss / num_batches
         
-        # Update loss weighting strategy if needed
+        # Update loss weighting strategy if it has adaptive components
         if loss_weighting is not None and hasattr(loss_weighting, 'update_weights'):
             loss_weighting.update_weights(
                 epoch, 
@@ -1411,18 +1778,26 @@ def train_model(
                 optimizer
             )
         
-        # Clear memory before validation
+        # ========================================================================
+        # VALIDATION PHASE
+        # ========================================================================
+        
+        # Clear GPU memory cache before validation to ensure accurate memory reporting
         clear_gpu_memory()
         
-        # Apply EMA for validation if enabled
+        # Apply EMA parameters for validation if EMA is enabled
+        # EMA parameters often give better validation performance
         if ema is not None:
             ema.apply_shadow()
         
-        # Validation
+        # Run validation evaluation
         val_start_time = time.time()
-        val_loss, val_gloss_acc, val_cat_acc = evaluate_with_forward(model, val_loader, criterion, device, forward_fn, alpha=current_alpha, beta=current_beta)
+        val_loss, val_gloss_acc, val_cat_acc = evaluate_with_forward(
+            model, val_loader, criterion, device, forward_fn, 
+            alpha=current_alpha, beta=current_beta
+        )
         
-        # Restore original parameters after validation
+        # Restore original model parameters after validation
         if ema is not None:
             ema.restore()
         val_time = time.time() - val_start_time
@@ -1601,30 +1976,71 @@ def load_data(n_train_samples=100, n_val_samples=20, seq_length=50, input_dim=15
 
 def parse_args():
     """
-    Parse command-line arguments for training configuration.
+    Parse command-line arguments for comprehensive training configuration.
+    
+    This function sets up all command-line arguments needed for training sign language
+    recognition models, including model selection, data configuration, training parameters,
+    optimization settings, and advanced features like curriculum learning.
 
     Returns:
-        argparse.Namespace: Parsed arguments.
+        argparse.Namespace: Parsed command-line arguments
     """
-    parser = argparse.ArgumentParser(description="Train Sign Language Recognition model (smoke-test ready)")
-    parser.add_argument("--model", choices=["transformer", "iv3_gru"], default="transformer", help="Model to train")
-    parser.add_argument("--epochs", type=int, default=20, help="Number of training epochs")
-    parser.add_argument("--batch-size", type=int, default=32, help="Batch size")
-    parser.add_argument("--alpha", type=float, default=0.5, help="Weight for gloss loss")
-    parser.add_argument("--beta", type=float, default=0.5, help="Weight for category loss")
-    # Class counts
-    parser.add_argument("--num-gloss", type=int, default=105, help="Number of gloss classes")
-    parser.add_argument("--num-cat", type=int, default=10, help="Number of category classes")
-    # IV3-GRU feature dataset options
-    parser.add_argument("--features-train", type=str, default=None, help="Directory of training .npz 2048-d features")
-    parser.add_argument("--features-val", type=str, default=None, help="Directory of validation .npz 2048-d features")
-    parser.add_argument("--labels-train-csv", type=str, default=None, help="CSV with columns: file,gloss,cat for training")
-    parser.add_argument("--labels-val-csv", type=str, default=None, help="CSV with columns: file,gloss,cat for validation")
-    parser.add_argument("--feature-key", type=str, default="X2048", help="Key in .npz containing [T,2048] features")
-    # Transformer keypoint dataset options
-    parser.add_argument("--keypoints-train", type=str, default=None, help="Directory of training .npz keypoints [T,156]")
-    parser.add_argument("--keypoints-val", type=str, default=None, help="Directory of validation .npz keypoints [T,156]")
-    parser.add_argument("--kp-key", type=str, default="X", help="Key in .npz containing [T,156] keypoints")
+    parser = argparse.ArgumentParser(
+        description="Train Sign Language Recognition models with advanced features",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+Examples:
+  # Basic training
+  python training/train.py --model transformer --epochs 50
+  
+  # Advanced training with curriculum learning
+  python training/train.py --model iv3_gru --curriculum gloss-first --epochs 100
+  
+  # Quick smoke test
+  python training/train.py --smoke-test
+        """
+    )
+    # ============================================================================
+    # BASIC TRAINING CONFIGURATION
+    # ============================================================================
+    parser.add_argument("--model", choices=["transformer", "iv3_gru"], default="transformer", 
+                       help="Model architecture to train: 'transformer' for keypoints, 'iv3_gru' for features")
+    parser.add_argument("--epochs", type=int, default=20, 
+                       help="Number of training epochs to run")
+    parser.add_argument("--batch-size", type=int, default=32, 
+                       help="Number of samples per training batch")
+    parser.add_argument("--alpha", type=float, default=0.5, 
+                       help="Weight for gloss classification loss in multi-task training")
+    parser.add_argument("--beta", type=float, default=0.5, 
+                       help="Weight for category classification loss in multi-task training")
+    
+    # Class configuration
+    parser.add_argument("--num-gloss", type=int, default=105, 
+                       help="Number of gloss classes in the dataset")
+    parser.add_argument("--num-cat", type=int, default=10, 
+                       help="Number of category classes in the dataset")
+    # ============================================================================
+    # DATA CONFIGURATION - IV3-GRU FEATURES
+    # ============================================================================
+    parser.add_argument("--features-train", type=str, default=None, 
+                       help="Directory containing training .npz files with 2048-dimensional features")
+    parser.add_argument("--features-val", type=str, default=None, 
+                       help="Directory containing validation .npz files with 2048-dimensional features")
+    parser.add_argument("--labels-train-csv", type=str, default=None, 
+                       help="CSV file with columns: file,gloss,cat for training data labels")
+    parser.add_argument("--labels-val-csv", type=str, default=None, 
+                       help="CSV file with columns: file,gloss,cat for validation data labels")
+    parser.add_argument("--feature-key", type=str, default="X2048", 
+                       help="Key name in .npz files containing [T,2048] feature arrays")
+    # ============================================================================
+    # DATA CONFIGURATION - TRANSFORMER KEYPOINTS
+    # ============================================================================
+    parser.add_argument("--keypoints-train", type=str, default=None, 
+                       help="Directory containing training .npz files with keypoint sequences [T,156]")
+    parser.add_argument("--keypoints-val", type=str, default=None, 
+                       help="Directory containing validation .npz files with keypoint sequences [T,156]")
+    parser.add_argument("--kp-key", type=str, default="X", 
+                       help="Key name in .npz files containing [T,156] keypoint arrays")
     # IV3-GRU hyperparameters
     parser.add_argument("--hidden1", type=int, default=16, help="IV3-GRU first GRU hidden size")
     parser.add_argument("--hidden2", type=int, default=12, help="IV3-GRU second GRU hidden size")

@@ -135,56 +135,33 @@ clip_0161_thank you,28,2
 clip_0250_good morning,5,1
 ```
 
-## Recent Improvements & Fixes
+## Recent Improvements
 
-### ✅ **Critical Issues Fixed**
+### ✅ **Code Quality Enhancements**
 
-The training script has been completely overhauled with the following fixes:
+- **Comprehensive Documentation**: Added detailed comments explaining every step of training
+- **Clean Import Organization**: Consolidated imports for better readability
+- **Enhanced Error Messages**: Clear descriptions for debugging issues
+- **Improved Function Documentation**: Better docstrings for all functions and classes
 
-1. **CSV Logging Error** - Fixed undefined variable references in CSV logging
-2. **Gradient Accumulation** - Fixed edge case where remaining gradients weren't stepped
-3. **Auto Batch Size** - Fixed timing issue where batch size optimization occurred too late
-4. **Data Validation** - Added validation to ensure CSV files exist before training
-5. **Synthetic Data Removal** - Removed unused synthetic data logic for cleaner real data training
+### ✅ **Advanced Training Features**
 
-### ✅ **Enhanced Error Handling**
-
-- **File Validation**: Automatic validation of data files and CSV labels
-- **Clear Error Messages**: Descriptive error messages for missing files or invalid data
-- **Robust Training**: Improved gradient flow and memory management
-- **Better Logging**: Fixed CSV logging with proper parameter references
-
-### ✅ **New Curriculum Training Features**
-
-- **Task Scheduling**: Support for gloss-first, category-first, and dynamic curriculum strategies
-- **Weight Scheduling**: Linear, cosine, and exponential weight transition functions
-- **Progress Monitoring**: Real-time curriculum phase tracking and weight logging
-- **CSV Integration**: Curriculum weights and phases logged to CSV for analysis
-
-### ✅ **New Loss Weighting Strategies**
-
-- **Static Weights**: Traditional fixed alpha/beta weighting
-- **Grid Search**: Automatic exploration of multiple weight combinations
-- **Uncertainty Weighting**: Learnable uncertainty-based weighting (Kendall et al. 2018)
-- **GradNorm**: Gradient normalization for balanced task learning (Chen et al. 2018)
-- **Dynamic Monitoring**: Real-time weight tracking and adjustment
+- **Curriculum Learning**: Gloss-first, category-first, and dynamic strategies
+- **Loss Weighting**: Static, grid-search, uncertainty, and gradnorm approaches
+- **Performance Optimization**: Auto batch sizing, worker detection, and memory management
 
 ## Performance Optimizations
 
-### Automatic Optimizations
-
 The training script automatically optimizes for your hardware:
 
-- **Device Detection**: Automatically uses CUDA, MPS (Apple Silicon), or CPU
-- **Memory Management**: Optimized GPU memory allocation and cleanup
-- **DataLoader Optimization**: Auto-detects number of workers (up to 8) and prefetch settings
-- **Mixed Precision**: Automatic mixed precision (AMP) on CUDA devices
-- **Dynamic Batch Sizing**: Automatically calculates batch size based on available memory
-- **Multi-GPU Parallelization**: Automatically uses DataParallel when multiple GPUs detected
+- **Device Detection**: CUDA, MPS (Apple Silicon), or CPU
+- **Memory Management**: Optimized GPU memory allocation
+- **DataLoader Optimization**: Auto-detects workers (up to 8) and prefetch settings
+- **Mixed Precision**: AMP on CUDA devices
+- **Dynamic Batch Sizing**: Calculates batch size based on available memory
+- **Multi-GPU Support**: Automatic DataParallel when multiple GPUs detected
 
-### New Parallelization Features
-
-**Automatic Multi-GPU Support**:
+### Multi-GPU Training
 
 ```bash
 python training/train.py \
@@ -194,48 +171,30 @@ python training/train.py \
   --auto-workers
 ```
 
-**Dynamic Resource Adaptation**:
+**Resource Adaptation**:
 
-- **GPU Memory**: Adjusts batch size (8-64) based on GPU memory
-- **CPU Cores**: Uses up to 8 DataLoader workers based on CPU count
+- **GPU Memory**: Batch size adjusts (8-64) based on available memory
+- **CPU Cores**: Uses up to 8 DataLoader workers
 - **Multi-GPU**: Distributes training across available GPUs
 
-### Performance Tuning Examples
+### Performance Examples
 
-**Multi-GPU (Vast AI)**:
+**Multi-GPU**:
 
 ```bash
-python training/train.py \
-  --model transformer \
-  --batch-size 64 \
-  --amp \
-  --compile-model \
-  --auto-workers \
-  --auto-batch-size \
-  --enable-parallel \
-  --gradient-accumulation-steps 2
+python training/train.py --model transformer --batch-size 64 --amp --compile-model --auto-workers --auto-batch-size --enable-parallel --gradient-accumulation-steps 2
 ```
 
-**Limited GPU Memory**:
+**Limited Memory**:
 
 ```bash
-python training/train.py \
-  --model transformer \
-  --batch-size 16 \
-  --auto-batch-size \
-  --gradient-accumulation-steps 4 \
-  --amp \
-  --auto-workers
+python training/train.py --model transformer --batch-size 16 --auto-batch-size --gradient-accumulation-steps 4 --amp --auto-workers
 ```
 
-**CPU Training (Local Machine)**:
+**CPU Training**:
 
 ```bash
-python training/train.py \
-  --model transformer \
-  --batch-size 8 \
-  --auto-workers \
-  --auto-batch-size
+python training/train.py --model transformer --batch-size 8 --auto-workers --auto-batch-size
 ```
 
 ## Training Parameters
@@ -297,410 +256,120 @@ python training/train.py \
 
 ### Curriculum Training Parameters
 
-| Parameter                    | Description                                    | Default | Notes                                       |
-| ---------------------------- | ---------------------------------------------- | ------- | ------------------------------------------- |
-| `--curriculum`               | Curriculum strategy                            | `None`  | `gloss-first`, `category-first`, `dynamic`  |
-| `--curriculum-epochs`        | Number of epochs for curriculum phase          | `10`    | When to start balancing tasks               |
-| `--curriculum-warmup`        | Warmup epochs before curriculum (dynamic)      | `5`     | Only for dynamic strategy                   |
-| `--curriculum-min-weight`    | Minimum weight for secondary task              | `0.1`   | Range: 0.0-1.0                              |
-| `--curriculum-schedule`      | Weight scheduling function                     | `linear`| `linear`, `cosine`, `exponential`           |
+| Parameter                 | Description                               | Default  | Notes                                      |
+| ------------------------- | ----------------------------------------- | -------- | ------------------------------------------ |
+| `--curriculum`            | Curriculum strategy                       | `None`   | `gloss-first`, `category-first`, `dynamic` |
+| `--curriculum-epochs`     | Number of epochs for curriculum phase     | `10`     | When to start balancing tasks              |
+| `--curriculum-warmup`     | Warmup epochs before curriculum (dynamic) | `5`      | Only for dynamic strategy                  |
+| `--curriculum-min-weight` | Minimum weight for secondary task         | `0.1`    | Range: 0.0-1.0                             |
+| `--curriculum-schedule`   | Weight scheduling function                | `linear` | `linear`, `cosine`, `exponential`          |
 
 ## Curriculum Training
 
-### Overview
+Curriculum training focuses on one task initially, then gradually introduces the other task. Useful when tasks have different difficulty levels.
 
-Curriculum training helps improve convergence by focusing on one task initially and gradually introducing the other task. This is particularly beneficial when tasks have different difficulty levels or when you want to establish a strong foundation in one task before adding complexity.
+### Curriculum Examples
 
-### Curriculum Strategies
-
-#### 1. Gloss-First Strategy
-Train gloss classification first, then gradually add category classification:
+**Gloss-First**:
 
 ```bash
-python training/train.py \
-  --model transformer \
-  --keypoints-train data/processed/keypoints_train \
-  --keypoints-val data/processed/keypoints_val \
-  --labels-train-csv data/processed/train_labels.csv \
-  --labels-val-csv data/processed/val_labels.csv \
-  --num-gloss 105 --num-cat 10 \
-  --epochs 50 --batch-size 32 \
-  --curriculum gloss-first \
-  --curriculum-epochs 15 \
-  --curriculum-min-weight 0.1 \
-  --curriculum-schedule linear \
-  --amp --compile-model --auto-workers --auto-batch-size
+python training/train.py --model transformer --keypoints-train data/processed/keypoints_train --keypoints-val data/processed/keypoints_val --labels-train-csv data/processed/train_labels.csv --labels-val-csv data/processed/val_labels.csv --num-gloss 105 --num-cat 10 --epochs 50 --batch-size 32 --curriculum gloss-first --curriculum-epochs 15 --curriculum-min-weight 0.1 --curriculum-schedule linear --amp --compile-model --auto-workers --auto-batch-size
 ```
 
-#### 2. Category-First Strategy
-Train category classification first, then gradually add gloss classification:
+**Category-First**:
 
 ```bash
-python training/train.py \
-  --model iv3_gru \
-  --features-train data/processed/prepro_09-18 \
-  --features-val data/processed/prepro_09-18 \
-  --labels-train-csv data/processed/train_labels.csv \
-  --labels-val-csv data/processed/val_labels.csv \
-  --num-gloss 105 --num-cat 10 \
-  --epochs 50 --batch-size 32 \
-  --curriculum category-first \
-  --curriculum-epochs 20 \
-  --curriculum-min-weight 0.05 \
-  --curriculum-schedule cosine \
-  --amp --compile-model --auto-workers --auto-batch-size
+python training/train.py --model iv3_gru --features-train data/processed/prepro_09-18 --features-val data/processed/prepro_09-18 --labels-train-csv data/processed/train_labels.csv --labels-val-csv data/processed/val_labels.csv --num-gloss 105 --num-cat 10 --epochs 50 --batch-size 32 --curriculum category-first --curriculum-epochs 20 --curriculum-min-weight 0.05 --curriculum-schedule cosine --amp --compile-model --auto-workers --auto-batch-size
 ```
 
-#### 3. Dynamic Strategy
-Start with balanced weights, then gradually focus on one task, then balance again:
+**Dynamic**:
 
 ```bash
-python training/train.py \
-  --model transformer \
-  --keypoints-train data/processed/keypoints_train \
-  --keypoints-val data/processed/keypoints_val \
-  --labels-train-csv data/processed/train_labels.csv \
-  --labels-val-csv data/processed/val_labels.csv \
-  --num-gloss 105 --num-cat 10 \
-  --epochs 60 --batch-size 32 \
-  --curriculum dynamic \
-  --curriculum-warmup 5 \
-  --curriculum-epochs 20 \
-  --curriculum-min-weight 0.1 \
-  --curriculum-schedule exponential \
-  --amp --compile-model --auto-workers --auto-batch-size
+python training/train.py --model transformer --keypoints-train data/processed/keypoints_train --keypoints-val data/processed/keypoints_val --labels-train-csv data/processed/train_labels.csv --labels-val-csv data/processed/val_labels.csv --num-gloss 105 --num-cat 10 --epochs 60 --batch-size 32 --curriculum dynamic --curriculum-warmup 5 --curriculum-epochs 20 --curriculum-min-weight 0.1 --curriculum-schedule exponential --amp --compile-model --auto-workers --auto-batch-size
 ```
 
-### Weight Scheduling Functions
+### Weight Scheduling
 
-#### Linear Schedule
-Gradual linear increase from min_weight to 0.5:
-- **Best for**: Stable, predictable training
-- **Use case**: When you want consistent progress
+- **Linear**: Gradual increase from min_weight to 0.5
+- **Cosine**: Smooth transitions with slower initial changes
+- **Exponential**: Quick initial progress with rapid final balancing
 
-#### Cosine Schedule
-Cosine annealing from min_weight to 0.5:
-- **Best for**: Smooth transitions with slower initial changes
-- **Use case**: When tasks are very different in difficulty
-
-#### Exponential Schedule
-Exponential growth from min_weight to 0.5:
-- **Best for**: Quick initial progress with rapid final balancing
-- **Use case**: When you want to establish one task quickly
-
-### Curriculum Training Examples
-
-#### Multi-GPU Curriculum Training
-
-```bash
-python training/train.py \
-  --model transformer \
-  --keypoints-train data/processed/keypoints_train \
-  --keypoints-val data/processed/keypoints_val \
-  --labels-train-csv data/processed/train_labels.csv \
-  --labels-val-csv data/processed/val_labels.csv \
-  --num-gloss 105 --num-cat 10 \
-  --epochs 100 --batch-size 64 \
-  --curriculum gloss-first \
-  --curriculum-epochs 25 \
-  --curriculum-min-weight 0.1 \
-  --curriculum-schedule linear \
-  --amp --compile-model --auto-workers --auto-batch-size --enable-parallel \
-  --gradient-accumulation-steps 2 \
-  --grad-clip 1.0 \
-  --scheduler plateau --early-stop 15 \
-  --log-csv logs/curriculum_transformer.csv
-```
-
-#### Memory-Constrained Curriculum Training
-
-```bash
-python training/train.py \
-  --model iv3_gru \
-  --features-train data/processed/prepro_09-18 \
-  --features-val data/processed/prepro_09-18 \
-  --labels-train-csv data/processed/train_labels.csv \
-  --labels-val-csv data/processed/val_labels.csv \
-  --num-gloss 105 --num-cat 10 \
-  --epochs 40 --batch-size 16 \
-  --curriculum category-first \
-  --curriculum-epochs 15 \
-  --curriculum-min-weight 0.05 \
-  --curriculum-schedule cosine \
-  --gradient-accumulation-steps 4 \
-  --amp --auto-workers --auto-batch-size \
-  --scheduler plateau --scheduler-patience 3 \
-  --early-stop 8 \
-  --log-csv logs/curriculum_iv3_gru.csv
-```
-
-#### Development/Testing with Curriculum
-
-```bash
-python training/train.py \
-  --model transformer \
-  --keypoints-train data/processed/keypoints_train \
-  --keypoints-val data/processed/keypoints_val \
-  --labels-train-csv data/processed/train_labels.csv \
-  --labels-val-csv data/processed/val_labels.csv \
-  --num-gloss 105 --num-cat 10 \
-  --epochs 15 --batch-size 16 \
-  --curriculum dynamic \
-  --curriculum-warmup 3 \
-  --curriculum-epochs 8 \
-  --curriculum-min-weight 0.1 \
-  --curriculum-schedule linear \
-  --auto-workers --auto-batch-size \
-  --amp \
-  --log-csv logs/curriculum_test.csv
-```
-
-### Curriculum Training Benefits
-
-#### When to Use Curriculum Training
-
-1. **Task Difficulty Imbalance**: When one task is significantly harder than the other
-2. **Convergence Issues**: When balanced training struggles to converge
-3. **Feature Learning**: When you want to establish strong feature representations first
-4. **Multi-Task Learning**: When tasks might interfere with each other initially
-
-#### Expected Improvements
+### Benefits
 
 - **Better Convergence**: More stable training with fewer oscillations
 - **Higher Accuracy**: Often achieves better final performance
 - **Faster Training**: May converge faster than balanced training
-- **Robust Features**: Better learned representations for both tasks
+- **Use When**: Tasks have different difficulty levels or balanced training struggles
 
-### Monitoring Curriculum Training
+## Training Examples
 
-The training script provides detailed curriculum monitoring:
-
-```
-Epoch  1/50 | Train Loss: 2.1234 | Val Loss: 1.9876 | Val Gloss Acc: 0.234 | Val Cat Acc: 0.456 | Time: 45.2s
-  Curriculum: Gloss-first curriculum phase (epoch 1/15) | Weights: α=0.900, β=0.100
-
-Epoch  8/50 | Train Loss: 1.5432 | Val Loss: 1.4321 | Val Gloss Acc: 0.567 | Val Cat Acc: 0.678 | Time: 42.1s
-  Curriculum: Gloss-first curriculum phase (epoch 8/15) | Weights: α=0.533, β=0.467
-
-Epoch 16/50 | Train Loss: 1.2345 | Val Loss: 1.1234 | Val Gloss Acc: 0.789 | Val Cat Acc: 0.890 | Time: 41.8s
-  Curriculum: Balanced phase | Weights: α=0.500, β=0.500
-```
-
-### CSV Logging with Curriculum
-
-When curriculum training is enabled, the CSV log includes additional columns:
-
-```csv
-epoch,train_loss,val_loss,val_gloss_acc,val_cat_acc,lr,epoch_time,gpu_memory_allocated,gpu_memory_reserved,alpha,beta,curriculum_phase
-1,2.1234,1.9876,0.234,0.456,0.0001,45.2,2.1,2.5,0.900,0.100,Gloss-first curriculum phase (epoch 1/15)
-2,1.9876,1.8765,0.345,0.567,0.0001,43.1,2.1,2.5,0.867,0.133,Gloss-first curriculum phase (epoch 2/15)
-...
-```
-
-## Additional Training Examples
-
-### Multi-GPU Training (Vast AI)
+**Multi-GPU**:
 
 ```bash
-python training/train.py \
-  --model transformer \
-  --keypoints-train data/processed/keypoints_train \
-  --keypoints-val data/processed/keypoints_val \
-  --labels-train-csv data/processed/train_labels.csv \
-  --labels-val-csv data/processed/val_labels.csv \
-  --num-gloss 105 --num-cat 10 \
-  --epochs 100 --batch-size 64 \
-  --lr 5e-5 --weight-decay 1e-4 \
-  --amp --compile-model --auto-workers --auto-batch-size --enable-parallel \
-  --gradient-accumulation-steps 2 \
-  --grad-clip 1.0 \
-  --scheduler plateau --early-stop 15 \
-  --log-csv logs/transformer_multi_gpu.csv
+python training/train.py --model transformer --keypoints-train data/processed/keypoints_train --keypoints-val data/processed/keypoints_val --labels-train-csv data/processed/train_labels.csv --labels-val-csv data/processed/val_labels.csv --num-gloss 105 --num-cat 10 --epochs 100 --batch-size 64 --lr 5e-5 --amp --compile-model --auto-workers --auto-batch-size --enable-parallel --gradient-accumulation-steps 2 --grad-clip 1.0 --scheduler plateau --early-stop 15 --log-csv logs/transformer_multi_gpu.csv
 ```
 
-### Single GPU Training
+**Single GPU**:
 
 ```bash
-python training/train.py \
-  --model transformer \
-  --keypoints-train data/processed/keypoints_train \
-  --keypoints-val data/processed/keypoints_val \
-  --labels-train-csv data/processed/train_labels.csv \
-  --labels-val-csv data/processed/val_labels.csv \
-  --num-gloss 105 --num-cat 10 \
-  --epochs 50 --batch-size 32 \
-  --lr 3e-4 --weight-decay 1e-4 \
-  --amp --compile-model --auto-workers --auto-batch-size \
-  --gradient-accumulation-steps 2 \
-  --grad-clip 1.0 \
-  --scheduler cosine --early-stop 10 \
-  --log-csv logs/transformer_single_gpu.csv
+python training/train.py --model transformer --keypoints-train data/processed/keypoints_train --keypoints-val data/processed/keypoints_val --labels-train-csv data/processed/train_labels.csv --labels-val-csv data/processed/val_labels.csv --num-gloss 105 --num-cat 10 --epochs 50 --batch-size 32 --lr 3e-4 --amp --compile-model --auto-workers --auto-batch-size --gradient-accumulation-steps 2 --grad-clip 1.0 --scheduler cosine --early-stop 10 --log-csv logs/transformer_single_gpu.csv
 ```
 
-### Memory-Constrained Training
+**CPU Training**:
 
 ```bash
-python training/train.py \
-  --model iv3_gru \
-  --features-train data/processed/prepro_09-18 \
-  --features-val data/processed/prepro_09-18 \
-  --labels-train-csv data/processed/train_labels.csv \
-  --labels-val-csv data/processed/val_labels.csv \
-  --num-gloss 105 --num-cat 10 \
-  --epochs 40 --batch-size 16 \
-  --gradient-accumulation-steps 4 \
-  --amp --auto-workers --auto-batch-size \
-  --scheduler plateau --scheduler-patience 3 \
-  --early-stop 8 \
-  --log-csv logs/iv3_gru_efficient.csv
+python training/train.py --model transformer --keypoints-train data/processed/keypoints_train --keypoints-val data/processed/keypoints_val --labels-train-csv data/processed/train_labels.csv --labels-val-csv data/processed/val_labels.csv --num-gloss 105 --num-cat 10 --epochs 30 --batch-size 8 --auto-workers --auto-batch-size --scheduler plateau --log-csv logs/cpu_training.csv
 ```
 
-### CPU Training (Local Machine)
-
-```bash
-python training/train.py \
-  --model transformer \
-  --keypoints-train data/processed/keypoints_train \
-  --keypoints-val data/processed/keypoints_val \
-  --labels-train-csv data/processed/train_labels.csv \
-  --labels-val-csv data/processed/val_labels.csv \
-  --num-gloss 105 --num-cat 10 \
-  --epochs 30 --batch-size 8 \
-  --auto-workers --auto-batch-size \
-  --scheduler plateau \
-  --log-csv logs/cpu_training.csv
-```
-
-### Development/Testing
-
-```bash
-python training/train.py \
-  --model transformer \
-  --keypoints-train data/processed/keypoints_train \
-  --keypoints-val data/processed/keypoints_val \
-  --labels-train-csv data/processed/train_labels.csv \
-  --labels-val-csv data/processed/val_labels.csv \
-  --num-gloss 105 --num-cat 10 \
-  --epochs 10 --batch-size 16 \
-  --auto-workers --auto-batch-size \
-  --amp \
-  --log-csv logs/quick_test.csv
-```
-
-## Monitoring Training
-
-### Real-Time Monitoring
-
-The training script provides monitoring:
-
-- **Device Information**: GPU specs, memory, compute capability
-- **Performance Metrics**: Epoch time, validation time
-- **Memory Usage**: GPU memory allocation and reservation
-- **Training Progress**: Loss, accuracy, learning rate
+## Monitoring & Checkpointing
 
 ### CSV Logging
 
-Enable detailed logging with `--log-csv`:
+Enable detailed logging: `--log-csv logs/training_metrics.csv`
 
-```bash
---log-csv logs/training_metrics.csv
-```
-
-Logs include:
-
-- `epoch`: Epoch number
-- `train_loss`: Training loss
-- `val_loss`: Validation loss
-- `val_gloss_acc`: Gloss accuracy
-- `val_cat_acc`: Category accuracy
-- `lr`: Current learning rate
-- `epoch_time`: Time per epoch
-- `gpu_memory_allocated`: GPU memory used
-- `gpu_memory_reserved`: GPU memory reserved
-
-## Checkpointing
+Logs include: epoch, train_loss, val_loss, val_gloss_acc, val_cat_acc, lr, epoch_time, gpu_memory
 
 ### Automatic Checkpointing
-
-The training script automatically saves:
 
 - `{ModelName}_last.pt`: Latest checkpoint (every epoch)
 - `{ModelName}_best.pt`: Best checkpoint (highest validation accuracy)
 
-### Resuming Training
+### Resume Training
 
 ```bash
-python training/train.py \
-  --resume data/processed/SignTransformer_last.pt \
-  # ... other parameters
+python training/train.py --resume data/processed/SignTransformer_last.pt
 ```
 
 ## Smoke Tests
 
-Quick sanity checks without real data:
-
-### Transformer Smoke Test
+**Transformer**:
 
 ```bash
-python training/train.py \
-  --model transformer \
-  --smoke-test \
-  --num-gloss 105 --num-cat 10
+python training/train.py --model transformer --smoke-test --num-gloss 105 --num-cat 10
 ```
 
-### IV3-GRU Smoke Test
+**IV3-GRU**:
 
 ```bash
-python training/train.py \
-  --model iv3_gru \
-  --smoke-test \
-  --num-gloss 105 --num-cat 10 \
-  --no-pretrained-backbone
+python training/train.py --model iv3_gru --smoke-test --num-gloss 105 --num-cat 10 --no-pretrained-backbone
 ```
 
 ## Troubleshooting
 
 ### Common Issues
 
-**Out of Memory (OOM)**:
+**Out of Memory**: Reduce `--batch-size`, increase `--gradient-accumulation-steps`, use `--amp`
 
-- Reduce `--batch-size`
-- Increase `--gradient-accumulation-steps`
-- Use `--amp` for mixed precision
+**Slow Training**: Enable `--amp`, `--compile-model`, `--auto-workers`, `--auto-batch-size`, `--enable-parallel`
 
-**Slow Training**:
+**Data Issues**: Check file paths, CSV format (columns: file, gloss, cat), NPZ keys (X for keypoints, X2048 for features)
 
-- Enable `--amp` for GPU training
-- Use `--compile-model` (PyTorch 2.0+)
-- Enable `--auto-workers` for DataLoader (up to 8 workers)
-- Enable `--auto-batch-size` for batch sizing
-- Enable `--enable-parallel` for multi-GPU setups
-- Increase `--batch-size` if memory allows
-
-**Data Loading Issues**:
-
-- **Missing Data Files**: Ensure you provide either `--keypoints-train/--keypoints-val` for Transformer or `--features-train/--features-val` for IV3-GRU
-- **Missing CSV Files**: Ensure `--labels-train-csv` and `--labels-val-csv` files exist
-- **Check NPZ file keys**: Verify `--kp-key` (default: `X`) for keypoints or `--feature-key` (default: `X2048`) for features
-- **Verify CSV format**: Ensure CSV has columns `file`, `gloss`, `cat`
-- **File path consistency**: Ensure CSV file names match NPZ filenames (without extension)
-
-**Convergence Issues**:
-
-- Adjust learning rate (`--lr`)
-- Try different schedulers (`--scheduler`)
-- Adjust loss weights (`--alpha`, `--beta`)
-- Use gradient clipping (`--grad-clip`)
+**Convergence**: Adjust `--lr`, try `--scheduler`, adjust `--alpha`/`--beta`, use `--grad-clip`
 
 ### Data Validation
 
-Validate your data before training:
-
 ```bash
-# Validate keypoint NPZ files
 python -m preprocessing.validate_npz data/processed/keypoints_train
-
-# Validate feature NPZ files (require X2048 for IV3-GRU)
 python -m preprocessing.validate_npz data/processed/prepro_09-18 --require-x2048
 ```
 
@@ -708,102 +377,27 @@ python -m preprocessing.validate_npz data/processed/prepro_09-18 --require-x2048
 
 ### Training Strategy
 
-1. **Validate Data First**: Ensure all data files and CSV labels exist before training
-2. **Start Small**: Begin with a few epochs to verify setup and data loading
-3. **Monitor Memory**: Watch GPU memory usage during training
-4. **Use Validation**: Always use validation data for monitoring
-5. **Save Logs**: Enable CSV logging for analysis with `--log-csv`
-6. **Checkpoint**: Resume capability for long training runs with `--resume`
+1. Validate data files and CSV labels before training
+2. Start with few epochs to verify setup
+3. Monitor GPU memory usage
+4. Enable CSV logging with `--log-csv`
+5. Use `--resume` for long training runs
 
 ### Performance Tips
 
-1. **GPU Training**: Always use `--amp` for CUDA devices
-2. **Batch Size**: Use `--auto-batch-size` for memory utilization
-3. **Workers**: Use `--auto-workers` for DataLoader performance (up to 8 workers)
-4. **Multi-GPU**: Use `--enable-parallel` for automatic multi-GPU support
-5. **Compilation**: Use `--compile-model` for PyTorch 2.0+ performance boost
-6. **Memory**: Use gradient accumulation for larger effective batch sizes
-7. **Resource Configuration**: Combine `--auto-workers`, `--auto-batch-size`, and `--enable-parallel` for performance
+- **GPU**: Use `--amp`, `--compile-model`, `--auto-batch-size`, `--auto-workers`
+- **Multi-GPU**: Use `--enable-parallel` for automatic parallelization
+- **Memory**: Use gradient accumulation for larger effective batch sizes
 
 ### Hyperparameter Tuning
 
-1. **Learning Rate**: Start with 1e-4, adjust based on loss curves
-2. **Scheduler**: Use `plateau` for stable training, `cosine` for faster convergence
-3. **Early Stopping**: Set patience based on validation curve stability
-4. **Loss Weights**: Balance `--alpha` and `--beta` based on task priorities
+- **Learning Rate**: Start with 1e-4, adjust based on loss curves
+- **Scheduler**: Use `plateau` for stable training, `cosine` for faster convergence
+- **Loss Weights**: Balance `--alpha` and `--beta` based on task priorities
 
-## Model-Specific Notes
+## Model Notes
 
-### Transformer Model
+**Transformer**: Uses attention masks, benefits from larger batch sizes
+**IV3-GRU**: Uses InceptionV3 backbone, processes visual features efficiently
 
-- Uses attention masks for variable-length sequences
-- Benefits from larger batch sizes
-- Good for sequence modeling tasks
-
-### IV3-GRU Model
-
-- Uses InceptionV3 backbone (can be pretrained or frozen)
-- Processes visual features efficiently
-- Good for feature-based recognition
-
-Both models support multi-task learning with configurable loss weights for gloss and category classification.
-
-## Parallelization Benefits
-
-### Multi-GPU Training Advantages
-
-**Performance Improvements**:
-
-- **2-4x faster training** with multiple GPUs
-- **Near-linear scaling** with DataParallel
-- **Larger effective batch sizes** for gradient estimates
-- **Reduced training time** enables more experimentation
-
-**Accuracy Impact**:
-
-- ✅ **No negative impact** on model accuracy
-- ✅ **Same convergence** as single-GPU training
-- ✅ **Better gradient averaging** with parallel processing
-- ✅ **More stable training** with batch sizes
-
-### Resource Configuration
-
-**Automatic Adaptations**:
-
-- **GPU Memory**: Batch size adjusts from 8-64 based on available memory
-- **CPU Cores**: Uses up to 8 DataLoader workers for data loading
-- **Multi-GPU**: Distributes training across available GPUs
-- **Memory Management**: Prevents out-of-memory errors with dynamic sizing
-
-**Recommended Configurations**:
-
-**Vast AI (Multi-GPU)**:
-
-```bash
---enable-parallel --auto-batch-size --auto-workers --amp --compile-model
-```
-
-**Local Machine (CPU/Single GPU)**:
-
-```bash
---auto-workers --auto-batch-size --amp
-```
-
-### Training Time Estimates
-
-**With Parallelization**:
-
-- **Single GPU**: 2-3 hours for 50 epochs
-- **Multi-GPU (2x)**: 1-1.5 hours for 50 epochs
-- **Multi-GPU (4x)**: 30-45 minutes for 50 epochs
-
-**Without Parallelization**:
-
-- **Single GPU**: 4-6 hours for 50 epochs
-- **CPU**: 8-12 hours for 50 epochs
-
-The parallelization features enable faster experimentation and longer training runs, leading to model performance through hyperparameter optimization.
-
-```
-
-```
+Both support multi-task learning with configurable loss weights.
