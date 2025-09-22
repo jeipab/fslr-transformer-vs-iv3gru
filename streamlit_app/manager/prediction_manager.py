@@ -505,16 +505,18 @@ def render_visualization_tabs(cfg: Dict):
         # Clear the current_tab after switching
         st.session_state.current_tab = None
     
+    # Initialize file_selector in session state if not present
+    if "file_selector" not in st.session_state:
+        st.session_state.file_selector = "Summary"
+    
     # Combined Results and File Details in same row
     col_left, col_right = st.columns([1, 3])
     
     with col_left:
-        # File selector with Summary as default
-        default_index = len(file_options) - 1  # Summary is the last option
+        # File selector - let session state handle the selection
         selected_file = st.selectbox(
             "View results for:",
             options=file_options,
-            index=default_index,
             key="file_selector",
             help="Choose a processed file to view its visualization results"
         )
