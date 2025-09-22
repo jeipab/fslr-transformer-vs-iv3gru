@@ -1406,37 +1406,6 @@ def validate_occlusion_config(config: Dict) -> bool:
 
 
 # ----------------------------
-# Legacy Compatibility Functions
-# ----------------------------
-
-def compute_occlusion_flag_from_keypoints(
-    X: np.ndarray,
-    mask_bool_array: np.ndarray,
-    **kwargs
-) -> int:
-    """
-    Compute a clip-level occlusion flag using keypoint data (legacy compatibility).
-    
-    This function maintains backward compatibility with existing preprocessing pipelines
-    that expect the old simple interface. It internally uses the enhanced detection
-    method but returns only the binary result.
-    
-    Args:
-        X: Keypoint coordinates [T, 156] - normalized coordinates for all keypoints
-        mask_bool_array: Visibility mask [T, 78] - boolean flags for keypoint visibility
-        **kwargs: Additional parameters (passed to enhanced detection method)
-    
-    Returns:
-        int: Binary occlusion flag (0 = not occluded, 1 = occluded)
-    """
-    # Use enhanced detection method internally but return simple binary result
-    result = compute_occlusion_detection_from_keypoints(
-        X, mask_bool_array, output_format='compatible', **kwargs
-    )
-    return int(result)
-
-
-# ----------------------------
 # Public API Exports
 # ----------------------------
 
@@ -1445,7 +1414,6 @@ __all__ = [
     # Main detection functions
     'compute_occlusion_detection',              # Primary detection interface
     'compute_occlusion_detection_from_keypoints', # Keypoint-based detection
-    'compute_occlusion_flag_from_keypoints',    # Legacy compatibility function
     
     # Core classes
     'HandHeadOcclusionDetector',               # Main detector class
