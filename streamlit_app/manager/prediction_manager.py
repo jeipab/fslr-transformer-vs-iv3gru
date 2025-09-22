@@ -236,14 +236,21 @@ def get_back_destination() -> str:
 
 
 def get_all_npz_files() -> List:
-    """Get all NPZ files from both original uploads and preprocessed videos."""
+    """Get all NPZ files from both original uploads and preprocessed videos with object deduplication."""
     all_files = []
+    seen_objects = set()
     
-    # Add original NPZ files (regardless of status)
-    all_files.extend(st.session_state.npz_files)
+    # Add original NPZ files (deduplicate by object identity, not name)
+    for file_obj in st.session_state.npz_files:
+        if id(file_obj) not in seen_objects:
+            all_files.append(file_obj)
+            seen_objects.add(id(file_obj))
     
-    # Add preprocessed files
-    all_files.extend(st.session_state.preprocessed_files)
+    # Add preprocessed files (deduplicate by object identity, not name)  
+    for file_obj in st.session_state.preprocessed_files:
+        if id(file_obj) not in seen_objects:
+            all_files.append(file_obj)
+            seen_objects.add(id(file_obj))
     
     return all_files
 
@@ -252,7 +259,11 @@ def render_npz_files_management(all_npz_files: List):
     """Render NPZ files management interface."""
     if not all_npz_files:
         return
-        
+    
+    # Check for any files currently processing to prevent render conflicts
+    processing_files = [f for f in all_npz_files 
+                       if st.session_state.file_status.get(f.name, 'completed') == 'processing']
+    
     # Add small space at top
     st.markdown("<div style='height: 8px;'></div>", unsafe_allow_html=True)
     
@@ -287,8 +298,10 @@ def render_npz_files_management(all_npz_files: List):
         metadata = st.session_state.file_metadata.get(filename, {})
         file_size = metadata.get('file_size_formatted', 'Unknown')
         
-        # Create unique key for this file instance using actual index to handle duplicates
-        unique_key_suffix = f"{filename}_{actual_index}"
+        # Create unique key for this file instance using actual index and hash to handle duplicates
+        import hashlib
+        file_hash = hashlib.md5(f"{filename}_{actual_index}_{id(uploaded_file)}".encode()).hexdigest()[:8]
+        unique_key_suffix = f"{filename}_{actual_index}_{file_hash}"
         
         # Status emojis only
         status_emoji = {
@@ -317,11 +330,16 @@ def render_npz_files_management(all_npz_files: List):
             elif status == 'pending':
                 if st.button("Process", key=f"process_{unique_key_suffix}", help="Process this file", type="primary"):
                     process_single_npz_file(uploaded_file, filename)
+                    # Delay rerun to prevent button flicker during state transition
                     st.rerun()
             elif status == 'error':
                 if st.button("Retry", key=f"retry_{unique_key_suffix}", help="Retry processing", type="primary"):
                     process_single_npz_file(uploaded_file, filename)
+                    # Delay rerun to prevent button flicker during state transition
                     st.rerun()
+            elif status == 'processing':
+                # Show disabled button during processing to maintain layout stability
+                st.button("Processing...", key=f"processing_{unique_key_suffix}", disabled=True, help="File is being processed", type="secondary")
         
         # Remove button with confirmation
         with col5:
