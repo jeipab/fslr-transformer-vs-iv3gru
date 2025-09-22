@@ -107,11 +107,27 @@ def process_video_file(uploaded_file, target_fps: int = 30, out_size: int = 256,
             os.unlink(tmp_video_path)
 
 
+def ensure_cuda_multiprocessing_compatibility():
+    """Ensure proper multiprocessing setup for CUDA compatibility."""
+    import multiprocessing as mp
+    
+    # Set spawn method for CUDA compatibility if not already set
+    try:
+        current_method = mp.get_start_method(allow_none=True)
+        if current_method != 'spawn':
+            mp.set_start_method('spawn', force=True)
+    except RuntimeError:
+        pass  # Already set or unavailable
+
+
 def get_dynamic_resource_info():
     """Get real-time system resource information for dynamic optimization."""
     import torch
     import multiprocessing as mp
     import psutil
+    
+    # Ensure CUDA multiprocessing compatibility
+    ensure_cuda_multiprocessing_compatibility()
     
     # Basic hardware info
     cpu_count = mp.cpu_count()
@@ -254,8 +270,8 @@ def process_multiple_videos(uploaded_files, target_fps: int = 30, out_size: int 
         # Get real-time resource information
         resource_info = get_dynamic_resource_info()
         
-        # Display dynamic resource information
-        st.info("**Dynamic Resource Analysis:**")
+        # Display dynamic resource information with CUDA-specific optimizations
+        st.info("**Dynamic Resource Analysis (CUDA-Optimized):**")
         col1, col2, col3, col4 = st.columns(4)
         
         with col1:
@@ -267,15 +283,18 @@ def process_multiple_videos(uploaded_files, target_fps: int = 30, out_size: int 
             st.metric("Available RAM", f"{resource_info['memory_available_gb']:.1f} GB")
         
         with col3:
-            st.metric("CUDA Available", "Yes" if resource_info['cuda_available'] else "No")
+            cuda_status = "✅ Ready" if resource_info['cuda_available'] else "❌ Not Available"
+            st.metric("CUDA Status", cuda_status)
             st.metric("GPU Count", resource_info['gpu_count'])
         
         with col4:
             if resource_info['cuda_available'] and resource_info['gpu_count'] > 0:
                 gpu_mem = resource_info['gpu_memory_info'][0]
                 st.metric("GPU Memory", f"{gpu_mem['free']:.1f} GB free")
+                st.metric("Processing", "🚀 GPU Accelerated")
             else:
-                st.metric("Processing Type", "CPU Only")
+                st.metric("Processing Type", "💻 CPU Only")
+                st.metric("Status", "Ready")
         
         # Choose processing strategy based on dynamic resources
         if len(uploaded_files) == 1:
@@ -292,14 +311,15 @@ def process_multiple_videos(uploaded_files, target_fps: int = 30, out_size: int 
             optimal_batch_size = calculate_optimal_batch_size(resource_info, processing_type)
             
             # Display optimization results
-            st.info(f"**Adaptive Processing Configuration:**")
+            processing_emoji = "🚀" if processing_type == 'gpu' else "💻"
+            st.info(f"**Adaptive Processing Configuration (CUDA-Optimized):**")
             col1, col2, col3 = st.columns(3)
             with col1:
                 st.metric("Workers", optimal_workers)
             with col2:
                 st.metric("Batch Size", optimal_batch_size)
             with col3:
-                st.metric("Processing Type", processing_type.upper())
+                st.metric("Processing Type", f"{processing_emoji} {processing_type.upper()}")
             
             st.info(f"Processing {len(uploaded_files)} videos with {optimal_workers} workers...")
             
