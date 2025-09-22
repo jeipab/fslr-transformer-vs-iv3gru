@@ -2,11 +2,8 @@
 """
 Sign Language Recognition Model Validation Script
 
-This script provides comprehensive validation of trained Sign Language Recognition models
-on the validation dataset. It supports both Transformer and IV3-GRU models and provides
-detailed performance analysis including occlusion-based evaluation.
-
-For detailed usage instructions and examples, see VALIDATION_GUIDE.md
+This script validates trained Sign Language Recognition models on validation data.
+Supports both Transformer and IV3-GRU models with comprehensive performance analysis.
 
 Usage:
     python validate.py --model <model_type> --checkpoint <checkpoint_path> [options]
@@ -15,15 +12,17 @@ Example:
     python validate.py --model transformer --checkpoint transformer/model.pt --batch-size 32
 """
 
+# Standard library imports
 import argparse
 import json
 import os
 import sys
 import time
+import warnings
 from pathlib import Path
 from typing import Dict, List, Tuple, Any, Optional
-import warnings
 
+# Third-party imports
 import numpy as np
 import pandas as pd
 import torch
@@ -34,7 +33,7 @@ from sklearn.metrics import (
 )
 from tqdm import tqdm
 
-# Add project root to path for imports
+# Project imports - add project root to path
 project_root = Path(__file__).parent.parent
 sys.path.insert(0, str(project_root))
 
@@ -46,22 +45,34 @@ warnings.filterwarnings('ignore', category=UserWarning)
 
 
 class ValidationDataset:
-    """Dataset class for loading validation data efficiently."""
+    """
+    Dataset class for loading and managing validation data.
+    
+    This class handles loading NPZ files and labels CSV, filtering valid samples,
+    and providing data in the format expected by the models.
+    """
     
     def __init__(self, data_dir: str, labels_csv: str, model_type: str):
         """
-        Initialize validation dataset.
+        Initialize validation dataset by loading labels and filtering valid NPZ files.
+        
+        Steps:
+        1. Load labels CSV with multiple encoding fallbacks
+        2. Clean file names (remove .npz extension)
+        3. Filter to only include files that actually exist
+        4. Store metadata for each valid sample
         
         Args:
             data_dir: Directory containing NPZ files
             labels_csv: Path to labels CSV file
-            model_type: 'transformer' or 'iv3_gru'
+            model_type: 'transformer' or 'iv3_gru' (determines data format)
         """
         self.data_dir = Path(data_dir)
         self.labels_csv = labels_csv
         self.model_type = model_type
         
-        # Load labels with proper encoding handling
+        # Step 1: Load labels CSV with encoding fallbacks
+        # Try UTF-8 first, then fallback encodings for compatibility
         try:
             self.labels_df = pd.read_csv(labels_csv, encoding='utf-8')
         except UnicodeDecodeError:
@@ -69,19 +80,22 @@ class ValidationDataset:
                 self.labels_df = pd.read_csv(labels_csv, encoding='latin-1')
             except UnicodeDecodeError:
                 self.labels_df = pd.read_csv(labels_csv, encoding='cp1252')
+        
+        # Step 2: Clean file names (remove .npz extension if present)
         self.labels_df['file'] = self.labels_df['file'].str.replace('.npz', '')
         
-        # Filter files that exist
+        # Step 3: Filter to only include files that actually exist
         self.valid_files = []
         for _, row in self.labels_df.iterrows():
             npz_path = self.data_dir / f"{row['file']}.npz"
             if npz_path.exists():
+                # Store all metadata needed for validation
                 self.valid_files.append({
-                    'file': row['file'],
-                    'gloss': int(row['gloss']),
-                    'cat': int(row['cat']),
-                    'occluded': int(row['occluded']),
-                    'npz_path': str(npz_path)
+                    'file': row['file'],           # File identifier
+                    'gloss': int(row['gloss']),    # Ground truth gloss label
+                    'cat': int(row['cat']),        # Ground truth category label
+                    'occluded': int(row['occluded']),  # Occlusion flag (0/1)
+                    'npz_path': str(npz_path)      # Full path to NPZ file
                 })
         
         print(f"Loaded {len(self.valid_files)} valid samples from {len(self.labels_df)} total labels")
@@ -93,29 +107,45 @@ class ValidationDataset:
         return len(self.valid_files)
     
     def __getitem__(self, idx):
-        """Load a single sample."""
+        """
+        Load a single sample from the dataset.
+        
+        Steps:
+        1. Get sample metadata from valid_files list
+        2. Load NPZ data from disk
+        3. Extract appropriate features based on model type
+        4. Handle sequence length limits
+        5. Return data tensor and labels
+        
+        Args:
+            idx: Index of sample to load
+            
+        Returns:
+            Tuple of (features_tensor, gloss_label, category_label, occlusion_flag, filename)
+        """
         sample = self.valid_files[idx]
         
-        # Load NPZ data
+        # Step 1: Load NPZ data from disk
         data = np.load(sample['npz_path'])
         
         if self.model_type == 'transformer':
-            # Try to load the appropriate key based on expected input dimensions
-            # Check if this is a 2048-feature model or 156-keypoint model
+            # Step 2: Extract features for transformer model
+            # Transformer can use either 156-keypoint features or 2048-InceptionV3 features
             if 'X2048' in data:
-                X = torch.from_numpy(data['X2048']).float()
+                X = torch.from_numpy(data['X2048']).float()  # InceptionV3 features
             elif 'X' in data:
-                X = torch.from_numpy(data['X']).float()
+                X = torch.from_numpy(data['X']).float()      # Keypoint features
             else:
                 raise ValueError(f"NPZ file {sample['npz_path']} missing both 'X' and 'X2048' keys for transformer")
             
-            # Handle sequence length truncation
+            # Step 3: Handle sequence length truncation (max 300 frames)
             if X.shape[0] > 300:
                 X = X[:300, :]
             
             return X, sample['gloss'], sample['cat'], sample['occluded'], sample['file']
         
         elif self.model_type == 'iv3_gru':
+            # Step 2: Extract features for IV3-GRU model (requires InceptionV3 features)
             if 'X2048' not in data:
                 raise ValueError(f"NPZ file {sample['npz_path']} missing 'X2048' key for IV3-GRU")
             X = torch.from_numpy(data['X2048']).float()
@@ -126,63 +156,91 @@ class ValidationDataset:
 
 
 class ModelValidator:
-    """Main validation class for comprehensive model evaluation."""
+    """
+    Main validation class for comprehensive model evaluation.
+    
+    This class handles model loading, checkpoint restoration, and provides
+    methods for batch prediction and comprehensive validation analysis.
+    """
     
     def __init__(self, model_type: str, checkpoint_path: str, device: str = 'auto'):
         """
-        Initialize the validator.
+        Initialize the validator by loading model architecture and checkpoint.
+        
+        Steps:
+        1. Set device (GPU if available, otherwise CPU)
+        2. Load model architecture with auto-detected parameters
+        3. Load trained weights from checkpoint
+        4. Load label mappings for human-readable results
+        5. Set model to evaluation mode
         
         Args:
             model_type: 'transformer' or 'iv3_gru'
-            checkpoint_path: Path to model checkpoint
-            device: Device to use for inference
+            checkpoint_path: Path to model checkpoint (.pt file)
+            device: Device to use ('cpu', 'cuda', or 'auto')
         """
         self.model_type = model_type.lower()
         self.checkpoint_path = checkpoint_path
+        
+        # Step 1: Set device (GPU if available and not forced to CPU)
         self.device = torch.device('cuda' if torch.cuda.is_available() and device != 'cpu' else 'cpu')
         
-        # Load model and checkpoint
+        # Step 2: Load model architecture with auto-detected parameters
         self.model = self._load_model()
+        
+        # Step 3: Load trained weights from checkpoint
         self._load_checkpoint()
         
-        # Load label mappings
+        # Step 4: Load label mappings for human-readable results
         self.gloss_mapping, self.category_mapping = load_label_mappings()
         
         print(f"✓ Initialized {self.model_type} validator on {self.device}")
     
     def _load_model(self):
-        """Load the appropriate model architecture."""
+        """
+        Load the appropriate model architecture with auto-detected parameters.
+        
+        Steps:
+        1. Load checkpoint to inspect model parameters
+        2. Auto-detect architecture parameters from checkpoint weights
+        3. Create model instance with detected parameters
+        4. Move model to target device
+        
+        Returns:
+            Model instance ready for inference
+        """
         if self.model_type == 'transformer':
-            # Try to determine input_dim from checkpoint
+            # Step 1: Load checkpoint to inspect parameters
             checkpoint = torch.load(self.checkpoint_path, map_location='cpu')
             state_dict = checkpoint.get('model_state_dict', checkpoint.get('state_dict', checkpoint.get('model', checkpoint)))
             
-            # Check embedding layer shape to determine input_dim
+            # Step 2: Auto-detect input dimension from embedding layer
             if 'embedding.weight' in state_dict:
                 embedding_shape = state_dict['embedding.weight'].shape
                 input_dim = embedding_shape[1]  # embedding.weight is [emb_dim, input_dim]
                 print(f"Detected input_dim={input_dim} from checkpoint embedding layer")
             else:
-                input_dim = 156  # Default fallback
+                input_dim = 156  # Default fallback for keypoint features
                 print(f"Warning: Could not detect input_dim from checkpoint, using default {input_dim}")
             
+            # Step 3: Create transformer model with detected parameters
             model = SignTransformer(
-                input_dim=input_dim,
-                emb_dim=256,
-                n_heads=8,
-                n_layers=4,
-                num_gloss=105,
-                num_cat=10,
-                dropout=0.1,
-                max_len=300,
-                pooling_method='mean'
+                input_dim=input_dim,      # Auto-detected from checkpoint
+                emb_dim=256,             # Fixed architecture parameter
+                n_heads=8,              # Fixed architecture parameter
+                n_layers=4,             # Fixed architecture parameter
+                num_gloss=105,          # Fixed: number of sign classes
+                num_cat=10,             # Fixed: number of category classes
+                dropout=0.1,           # Fixed architecture parameter
+                max_len=300,           # Fixed: maximum sequence length
+                pooling_method='mean'   # Fixed: pooling method
             )
         elif self.model_type == 'iv3_gru':
-            # Try to determine hidden sizes from checkpoint
+            # Step 1: Load checkpoint to inspect parameters
             checkpoint = torch.load(self.checkpoint_path, map_location='cpu')
             state_dict = checkpoint.get('model_state_dict', checkpoint.get('state_dict', checkpoint.get('model', checkpoint)))
             
-            # Detect GRU hidden sizes from checkpoint weights
+            # Step 2: Auto-detect GRU hidden sizes from checkpoint weights
             if 'gru1.weight_hh_l0' in state_dict and 'gru2.weight_hh_l0' in state_dict:
                 # GRU weight_hh has shape [3*hidden, hidden] for each layer
                 gru1_hidden = state_dict['gru1.weight_hh_l0'].shape[0] // 3
@@ -193,60 +251,90 @@ class ModelValidator:
                 gru2_hidden = 12  # Default fallback
                 print(f"Warning: Could not detect GRU hidden sizes from checkpoint, using defaults: hidden1={gru1_hidden}, hidden2={gru2_hidden}")
             
+            # Step 3: Create IV3-GRU model with detected parameters
             model = InceptionV3GRU(
-                num_gloss=105,
-                num_cat=10,
-                hidden1=gru1_hidden,
-                hidden2=gru2_hidden,
-                dropout=0.3,
-                pretrained_backbone=True,
-                freeze_backbone=True
+                num_gloss=105,          # Fixed: number of sign classes
+                num_cat=10,             # Fixed: number of category classes
+                hidden1=gru1_hidden,   # Auto-detected from checkpoint
+                hidden2=gru2_hidden,   # Auto-detected from checkpoint
+                dropout=0.3,           # Fixed architecture parameter
+                pretrained_backbone=True,  # Fixed: use pretrained InceptionV3
+                freeze_backbone=True   # Fixed: freeze backbone weights
             )
         else:
             raise ValueError(f"Unknown model type: {self.model_type}")
         
+        # Step 4: Move model to target device
         return model.to(self.device)
     
     def _load_checkpoint(self):
-        """Load model checkpoint."""
+        """
+        Load trained model weights from checkpoint file.
+        
+        Steps:
+        1. Verify checkpoint file exists
+        2. Load checkpoint data to device
+        3. Handle different checkpoint formats (PyTorch Lightning, custom, etc.)
+        4. Load weights into model
+        5. Set model to evaluation mode
+        
+        Raises:
+            FileNotFoundError: If checkpoint file doesn't exist
+        """
+        # Step 1: Verify checkpoint file exists
         if not os.path.exists(self.checkpoint_path):
             raise FileNotFoundError(f"Checkpoint not found: {self.checkpoint_path}")
         
+        # Step 2: Load checkpoint data to device
         checkpoint = torch.load(self.checkpoint_path, map_location=self.device)
         
-        # Handle different checkpoint formats
+        # Step 3: Handle different checkpoint formats
+        # PyTorch Lightning format: {'model_state_dict': ...}
         if 'model_state_dict' in checkpoint:
             self.model.load_state_dict(checkpoint['model_state_dict'])
+        # Custom format: {'state_dict': ...}
         elif 'state_dict' in checkpoint:
             self.model.load_state_dict(checkpoint['state_dict'])
+        # Direct format: {'model': ...}
         elif 'model' in checkpoint:
             self.model.load_state_dict(checkpoint['model'])
+        # Raw format: direct state dict
         else:
             self.model.load_state_dict(checkpoint)
         
+        # Step 4: Set model to evaluation mode (disable dropout, batch norm updates)
         self.model.eval()
         print(f"✓ Loaded checkpoint from {self.checkpoint_path}")
     
     def predict_batch(self, batch_data: List[torch.Tensor]) -> Tuple[torch.Tensor, torch.Tensor]:
         """
-        Make predictions on a batch of data.
+        Make predictions on a batch of variable-length sequences.
+        
+        Steps:
+        1. Handle variable-length sequences by padding to same length
+        2. Create attention masks (transformer) or length tensors (GRU)
+        3. Move data to device
+        4. Run inference with no gradient computation
+        5. Return prediction logits
         
         Args:
-            batch_data: List of tensors (one per sample)
+            batch_data: List of tensors with shape [seq_len, features] (one per sample)
             
         Returns:
-            Tuple of (gloss_logits, category_logits)
+            Tuple of (gloss_logits, category_logits) with shape [batch_size, num_classes]
         """
         if self.model_type == 'transformer':
-            # Pad sequences to same length
+            # Step 1: Pad sequences to same length for transformer
             max_len = max(x.shape[0] for x in batch_data)
             padded_batch = []
             masks = []
             
             for x in batch_data:
                 if x.shape[0] < max_len:
+                    # Pad with zeros to max length
                     pad_len = max_len - x.shape[0]
                     padded_x = torch.cat([x, torch.zeros(pad_len, x.shape[1])], dim=0)
+                    # Create attention mask: 1 for real data, 0 for padding
                     mask = torch.cat([torch.ones(x.shape[0]), torch.zeros(pad_len)], dim=0)
                 else:
                     padded_x = x
@@ -255,29 +343,34 @@ class ModelValidator:
                 padded_batch.append(padded_x)
                 masks.append(mask)
             
-            X = torch.stack(padded_batch).to(self.device)
-            mask = torch.stack(masks).bool().to(self.device)
+            # Step 2: Stack into batch tensors and move to device
+            X = torch.stack(padded_batch).to(self.device)  # [batch_size, max_len, features]
+            mask = torch.stack(masks).bool().to(self.device)  # [batch_size, max_len]
             
+            # Step 3: Run inference
             with torch.no_grad():
                 gloss_logits, cat_logits = self.model(X, mask)
         
         elif self.model_type == 'iv3_gru':
-            # Get lengths and pad sequences
+            # Step 1: Get sequence lengths and pad sequences for GRU
             lengths = torch.tensor([x.shape[0] for x in batch_data], dtype=torch.long)
             max_len = max(x.shape[0] for x in batch_data)
             
             padded_batch = []
             for x in batch_data:
                 if x.shape[0] < max_len:
+                    # Pad with zeros to max length
                     pad_len = max_len - x.shape[0]
                     padded_x = torch.cat([x, torch.zeros(pad_len, x.shape[1])], dim=0)
                 else:
                     padded_x = x
                 padded_batch.append(padded_x)
             
-            X = torch.stack(padded_batch).to(self.device)
-            lengths = lengths.to(self.device)
+            # Step 2: Stack into batch tensors and move to device
+            X = torch.stack(padded_batch).to(self.device)  # [batch_size, max_len, features]
+            lengths = lengths.to(self.device)  # [batch_size]
             
+            # Step 3: Run inference (features_already=True means input is already InceptionV3 features)
             with torch.no_grad():
                 gloss_logits, cat_logits = self.model(X, lengths, features_already=True)
         
@@ -288,15 +381,25 @@ class ModelValidator:
         """
         Perform comprehensive validation on the dataset.
         
+        Steps:
+        1. Initialize validation session and display progress
+        2. Process dataset in batches for memory efficiency
+        3. Load batch data and make predictions
+        4. Extract predictions, probabilities, and top-k results
+        5. Store detailed results for each sample
+        6. Convert to numpy arrays for analysis
+        7. Compute comprehensive metrics
+        
         Args:
             dataset: ValidationDataset instance
-            batch_size: Batch size for evaluation
-            save_predictions: Whether to save individual predictions
+            batch_size: Batch size for evaluation (affects memory usage)
+            save_predictions: Whether to save individual predictions to JSON files
             output_dir: Output directory for results
             
         Returns:
-            Dictionary containing all validation results
+            Dictionary containing all validation results and metrics
         """
+        # Step 1: Initialize validation session
         print(f"\n{'='*60}")
         print(f"VALIDATING {self.model_type.upper()} MODEL")
         print(f"{'='*60}")
@@ -305,12 +408,12 @@ class ModelValidator:
         print(f"Device: {self.device}")
         
         # Initialize results storage
-        all_predictions = []
-        all_ground_truth = []
-        all_occlusions = []
-        all_files = []
+        all_predictions = []      # Detailed prediction results for each sample
+        all_ground_truth = []     # Ground truth labels
+        all_occlusions = []       # Occlusion flags
+        all_files = []            # File names
         
-        # Process in batches
+        # Step 2: Process dataset in batches for memory efficiency
         num_batches = (len(dataset) + batch_size - 1) // batch_size
         
         with tqdm(total=len(dataset), desc="Validating") as pbar:
@@ -318,12 +421,12 @@ class ModelValidator:
                 start_idx = batch_idx * batch_size
                 end_idx = min(start_idx + batch_size, len(dataset))
                 
-                # Load batch data
-                batch_data = []
-                batch_gloss = []
-                batch_cat = []
-                batch_occluded = []
-                batch_files = []
+                # Step 3: Load batch data from dataset
+                batch_data = []      # Feature tensors
+                batch_gloss = []     # Ground truth gloss labels
+                batch_cat = []       # Ground truth category labels
+                batch_occluded = []  # Occlusion flags
+                batch_files = []     # File names
                 
                 for i in range(start_idx, end_idx):
                     X, gloss, cat, occluded, file = dataset[i]
@@ -333,48 +436,49 @@ class ModelValidator:
                     batch_occluded.append(occluded)
                     batch_files.append(file)
                 
-                # Make predictions
+                # Step 4: Make predictions on batch
                 gloss_logits, cat_logits = self.predict_batch(batch_data)
                 
-                # Get predictions
-                gloss_preds = gloss_logits.argmax(dim=1).cpu().numpy()
-                cat_preds = cat_logits.argmax(dim=1).cpu().numpy()
+                # Step 5: Extract predictions and probabilities
+                gloss_preds = gloss_logits.argmax(dim=1).cpu().numpy()  # Predicted gloss classes
+                cat_preds = cat_logits.argmax(dim=1).cpu().numpy()      # Predicted category classes
                 
-                # Get probabilities
+                # Convert logits to probabilities
                 gloss_probs = F.softmax(gloss_logits, dim=1).cpu().numpy()
                 cat_probs = F.softmax(cat_logits, dim=1).cpu().numpy()
                 
-                # Store results
+                # Step 6: Store detailed results for each sample
                 for i in range(len(batch_data)):
                     all_predictions.append({
-                        'file': batch_files[i],
-                        'gloss_pred': int(gloss_preds[i]),
-                        'cat_pred': int(cat_preds[i]),
-                        'gloss_gt': batch_gloss[i],
-                        'cat_gt': batch_cat[i],
-                        'occluded': batch_occluded[i],
-                        'gloss_prob': float(gloss_probs[i][gloss_preds[i]]),
-                        'cat_prob': float(cat_probs[i][cat_preds[i]]),
-                        'gloss_top5': [(int(j), float(gloss_probs[i][j])) 
+                        'file': batch_files[i],                    # File identifier
+                        'gloss_pred': int(gloss_preds[i]),         # Predicted gloss class
+                        'cat_pred': int(cat_preds[i]),             # Predicted category class
+                        'gloss_gt': batch_gloss[i],                # Ground truth gloss class
+                        'cat_gt': batch_cat[i],                    # Ground truth category class
+                        'occluded': batch_occluded[i],             # Occlusion flag
+                        'gloss_prob': float(gloss_probs[i][gloss_preds[i]]),  # Prediction confidence
+                        'cat_prob': float(cat_probs[i][cat_preds[i]]),        # Prediction confidence
+                        'gloss_top5': [(int(j), float(gloss_probs[i][j]))     # Top 5 gloss predictions
                                      for j in np.argsort(gloss_probs[i])[-5:][::-1]],
-                        'cat_top3': [(int(j), float(cat_probs[i][j])) 
+                        'cat_top3': [(int(j), float(cat_probs[i][j]))         # Top 3 category predictions
                                    for j in np.argsort(cat_probs[i])[-3:][::-1]]
                     })
                 
+                # Store batch metadata
                 all_ground_truth.extend(list(zip(batch_gloss, batch_cat)))
                 all_occlusions.extend(batch_occluded)
                 all_files.extend(batch_files)
                 
                 pbar.update(end_idx - start_idx)
         
-        # Convert to numpy arrays for analysis
+        # Step 7: Convert to numpy arrays for analysis
         gloss_preds = np.array([p['gloss_pred'] for p in all_predictions])
         cat_preds = np.array([p['cat_pred'] for p in all_predictions])
         gloss_gts = np.array([p['gloss_gt'] for p in all_predictions])
         cat_gts = np.array([p['cat_gt'] for p in all_predictions])
         occlusions = np.array(all_occlusions)
         
-        # Compute comprehensive metrics
+        # Step 8: Compute comprehensive metrics
         results = self._compute_metrics(
             gloss_preds, cat_preds, gloss_gts, cat_gts, 
             occlusions, all_predictions, save_predictions, output_dir
