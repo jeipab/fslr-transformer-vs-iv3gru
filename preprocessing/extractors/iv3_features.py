@@ -12,46 +12,67 @@ Output: 2048-dimensional feature vector (float32)
 The InceptionV3 model uses ImageNet pretrained weights and global average pooling
 to produce consistent feature representations suitable for temporal modeling.
 """
-import argparse
-import cv2
-import numpy as np
-import torch
-import torch.nn as nn
-from torchvision.models import inception_v3, Inception_V3_Weights
-import os
-import pandas as pd
-import json
+# Standard library imports
+import argparse  # Command-line interface
+import os  # File system operations
+import json  # JSON serialization for metadata
 
+# Computer vision and numerical computing
+import cv2  # OpenCV for video processing and image operations
+import numpy as np  # Numerical arrays and mathematical operations
+import pandas as pd  # Data manipulation and CSV handling
+
+# Deep learning framework
+import torch  # PyTorch for deep learning
+import torch.nn as nn  # Neural network modules
+from torchvision.models import inception_v3, Inception_V3_Weights  # Pre-trained InceptionV3 model
+
+# Project-specific imports
 from ..extractors.keypoints_features import (
-    extract_keypoints_from_frame,
-    interpolate_gaps,
-    POSE_UPPER_25,
-    FACEMESH_11,
-    create_models,
-    close_models,
-    MPModels,
+    extract_keypoints_from_frame,  # Main keypoint extraction function
+    interpolate_gaps,     # Fill missing keypoints using interpolation
+    POSE_UPPER_25,        # Upper body pose keypoint indices (25 points)
+    FACEMESH_11,          # Face mesh keypoint indices (11 key facial points)
+    create_models,        # Initialize MediaPipe models
+    close_models,         # Clean up MediaPipe models
 )
 
-# Global InceptionV3 model initialization
+# ----------------------------
+# Global InceptionV3 Model Setup
+# ----------------------------
+# Initialize once at module import for efficiency across multiple calls
+
+# Load pre-trained InceptionV3 with ImageNet weights
 _iv3_weights = Inception_V3_Weights.IMAGENET1K_V1
 _iv3_model = inception_v3(weights=_iv3_weights)
-_iv3_model.aux_logits = False
-_iv3_model.fc = nn.Identity()  # Return 2048D features instead of classification
-_iv3_model.eval()
+
+# Configure model for feature extraction (not classification)
+_iv3_model.aux_logits = False  # Disable auxiliary classifier outputs
+_iv3_model.fc = nn.Identity()  # Replace final layer to return 2048D features
+_iv3_model.eval()  # Set to evaluation mode (disable dropout, batch norm updates)
+
+# Freeze all parameters for inference-only mode
 for p in _iv3_model.parameters():
     p.requires_grad = False
 
-# ImageNet normalization constants
+# ImageNet normalization constants (RGB channel means and standard deviations)
 _IMAGENET_MEAN = torch.tensor([0.485, 0.456, 0.406]).view(3, 1, 1)
 _IMAGENET_STD = torch.tensor([0.229, 0.224, 0.225]).view(3, 1, 1)
 
 def extract_iv3_features(frame_bgr, image_size=(299, 299), device=None):
-    """Extract InceptionV3 features from a BGR frame.
+    """Extract InceptionV3 features from a single BGR frame.
+    
+    This function performs the complete pipeline for CNN feature extraction:
+    1. Color space conversion (BGR to RGB)
+    2. Image resizing to InceptionV3 input size
+    3. Normalization using ImageNet statistics
+    4. Forward pass through pre-trained InceptionV3
+    5. Return 2048-dimensional feature vector
     
     Args:
-        frame_bgr: OpenCV BGR image (H, W, 3) in [0, 255]
+        frame_bgr: OpenCV BGR image (H, W, 3) in [0, 255] pixel range
         image_size: Target image size for InceptionV3 (default: 299x299)
-        device: PyTorch device (default: CPU)
+        device: PyTorch device for computation (default: CPU)
         
     Returns:
         Feature vector [2048] as float32 numpy array
@@ -59,221 +80,323 @@ def extract_iv3_features(frame_bgr, image_size=(299, 299), device=None):
     if device is None:
         device = torch.device("cpu")
 
-    # Convert BGR → RGB and resize to the expected InceptionV3 input size.
+    # STEP 1: Convert BGR (OpenCV) to RGB (PyTorch/ImageNet standard) and resize
     frame_rgb = cv2.cvtColor(frame_bgr, cv2.COLOR_BGR2RGB)
     img_resized = cv2.resize(frame_rgb, image_size)
 
-    # Convert to torch tensor in [0, 1] and normalize using ImageNet stats.
+    # STEP 2: Convert to PyTorch tensor and normalize pixel values to [0, 1]
     tensor = torch.from_numpy(img_resized).permute(2, 0, 1).float() / 255.0
-    tensor = tensor.unsqueeze(0).to(device)  # [1, 3, 299, 299]
+    tensor = tensor.unsqueeze(0).to(device)  # Add batch dimension: [1, 3, 299, 299]
     
-    # Move normalization constants to the same device
+    # STEP 3: Apply ImageNet normalization (move constants to target device)
     mean = _IMAGENET_MEAN.to(device)
     std = _IMAGENET_STD.to(device)
     tensor = (tensor - mean) / std
 
+    # STEP 4: Forward pass through InceptionV3 (no gradient computation needed)
     with torch.no_grad():
         # Ensure model is on the correct device
         model_on_device = _iv3_model.to(device)
-        feats = model_on_device(tensor)  # [1, 2048]
+        feats = model_on_device(tensor)  # Shape: [1, 2048]
+    
+    # STEP 5: Return as numpy array on CPU
     return feats.squeeze(0).cpu().numpy()
 
+# ----------------------------
+# Utility Functions
+# ----------------------------
+
 def ensure_dir(p):
-    """Create directory if it doesn't exist."""
+    """Create directory if it doesn't exist.
+    
+    Args:
+        p (str): Directory path to create
+    """
     os.makedirs(p, exist_ok=True)
 
 def to_npz(out_path, X, X2048, mask, timestamps_ms, meta, also_parquet=True):
-    """Save processed video data to compressed .npz file.
+    """Save processed video data (keypoints + CNN features) to compressed .npz file.
+    
+    This function saves the complete output of video processing: keypoint coordinates,
+    InceptionV3 features, visibility masks, timestamps, and metadata. The .npz format
+    is used for efficient storage and fast loading during training.
     
     Args:
         out_path: Base path for output files (without extension)
-        X: Keypoint coordinates [T, 156] as float32
-        X2048: InceptionV3 features [T, 2048] as float32
-        mask: Keypoint visibility mask [T, 78] as bool
-        timestamps_ms: Frame timestamps [T] as int64
-        meta: Metadata dictionary (converted to JSON string)
-        also_parquet: If True, also create .parquet file for inspection
+        X: Keypoint coordinates [T, 156] as float32 - flattened x,y coords for 78 keypoints
+        X2048: InceptionV3 features [T, 2048] as float32 - CNN feature vectors
+        mask: Keypoint visibility mask [T, 78] as bool - True if keypoint is visible/confident
+        timestamps_ms: Frame timestamps [T] as int64 - milliseconds from video start
+        meta: Metadata dictionary (converted to JSON string) - processing parameters
+        also_parquet: If True, also create .parquet file for inspection in spreadsheet tools
     """
-    np.savez_compressed(out_path + ".npz", X=X, X2048=X2048, mask=mask, timestamps_ms=timestamps_ms, meta=json.dumps(meta))
+    # Save primary .npz file with all data compressed (keypoints + CNN features)
+    np.savez_compressed(out_path + ".npz", X=X, X2048=X2048, mask=mask, 
+                       timestamps_ms=timestamps_ms, meta=json.dumps(meta))
+    
+    # Optionally create human-readable parquet file for data inspection
     if also_parquet:
         try:
-            # flatten per-frame records for quick debugging in spreadsheets
+            # Convert keypoint coordinates to DataFrame (each column = one coordinate)
             df = pd.DataFrame(X)
+            # Add timestamp column for temporal reference
             df["t_ms"] = timestamps_ms
+            # Convert visibility mask to compact binary string for easy inspection
             df["mask_bits"] = ["".join("1" if b else "0" for b in row) for row in mask]
             df.to_parquet(out_path + ".parquet")
         except Exception as e:
             print(f"[WARN] Could not save parquet file: {e}")
             print("[INFO] Install pyarrow or fastparquet for parquet support: pip install pyarrow")
 
+# ----------------------------
+# Labels CSV Management
+# ----------------------------
+
 def read_or_create_labels_csv(label_file):
-    """Read labels CSV or create empty file with headers."""
+    """Read existing labels CSV or create new file with headers.
+    
+    Args:
+        label_file: Path to labels CSV file
+        
+    Returns:
+        pd.DataFrame: Labels dataframe with columns [file, gloss, cat]
+    """
     if os.path.exists(label_file):
         return pd.read_csv(label_file)
     else:
-        # Create an empty dataframe and save it
+        # Create empty dataframe with required columns and save to file
         df = pd.DataFrame(columns=["file", "gloss", "cat"])
         df.to_csv(label_file, index=False)
         return df
 
 def update_labels_csv(label_file, video_file, gloss, cat):
-    """Add or update a row in the labels CSV file."""
+    """Add a new labeled data entry to the labels CSV file.
+    
+    This function appends a single row to the labels CSV, mapping a processed video file
+    to its classification labels. Used for building training datasets.
+    
+    Args:
+        label_file: Path to labels CSV file
+        video_file: Processed video filename (e.g., 'clip.npz')
+        gloss: Sign language gloss class ID
+        cat: Category class ID
+    """
+    # Read existing labels or create new file
     df = read_or_create_labels_csv(label_file)
+    # Create new row with video-to-label mapping
     new_row = pd.DataFrame({"file": [video_file], "gloss": [gloss], "cat": [cat]})
+    # Append to existing data and save
     df = pd.concat([df, new_row], ignore_index=True)
     df.to_csv(label_file, index=False)
 
+# ----------------------------
+# Main Video Processing Function
+# ----------------------------
+
 def process_video(video_path, out_dir, label_file=None, target_fps=30, out_size=256, conf_thresh=0.5, max_gap=5, write_keypoints=True, write_iv3_features=True, feature_key='X2048', gloss=None, cat=None):
-    """Process a single video file and extract features.
+    """Process a single video file and extract multi-modal features.
     
-    Extracts MediaPipe keypoints and/or InceptionV3 features from video frames.
-    Performs gap interpolation and saves results as .npz file.
+    This function performs the complete processing pipeline for a single video:
+    1. Video loading and frame sampling at target FPS
+    2. MediaPipe keypoint extraction (pose, hands, face)
+    3. InceptionV3 CNN feature extraction
+    4. Gap interpolation for missing keypoints
+    5. Data saving in compressed .npz format
+    6. Labels CSV updates for training data
     
     Args:
-        video_path: Path to input video file
-        out_dir: Output directory for processed files
+        video_path: Path to input video file (.mp4, .mov, .avi, .mkv)
+        out_dir: Output directory for processed .npz files
         label_file: Path to labels CSV file (default: out_dir/labels.csv)
-        target_fps: Target frame sampling rate
-        out_size: Image resize dimension for keypoint extraction
-        conf_thresh: Confidence threshold for keypoint detection
-        max_gap: Maximum gap size for interpolation
-        write_keypoints: Extract MediaPipe keypoints (156D vectors)
-        write_iv3_features: Extract InceptionV3 features (2048D vectors)
+        target_fps: Target frame sampling rate (downsamples high FPS videos)
+        out_size: Image resize dimension for keypoint extraction (256x256)
+        conf_thresh: Confidence threshold for keypoint detection (0.0-1.0)
+        max_gap: Maximum gap size for keypoint interpolation (frames)
+        write_keypoints: Extract MediaPipe keypoints (156D vectors per frame)
+        write_iv3_features: Extract InceptionV3 features (2048D vectors per frame)
         feature_key: Unused parameter (kept for compatibility)
-        gloss: Gloss class ID for labeling
+        gloss: Sign language gloss class ID for labeling
         cat: Category class ID for labeling
     """
-    basename = os.path.splitext(os.path.basename(video_path))[0]
-    output_npz_folder = os.path.join(out_dir, '0')  # Assuming input vids are in '0' subfolder
-    ensure_dir(output_npz_folder)
-    npz_out_path = os.path.join(output_npz_folder, basename)
+    # STEP 1: Setup output paths and directories
+    basename = os.path.splitext(os.path.basename(video_path))[0]  # Extract filename without extension
+    output_npz_folder = os.path.join(out_dir, '0')  # Output to '0' subfolder (dataset convention)
+    ensure_dir(output_npz_folder)  # Create output directory if it doesn't exist
+    npz_out_path = os.path.join(output_npz_folder, basename)  # Base path for output files
     
-    # Set default label_file to be in the output directory
+    # Set default labels CSV path if not specified
     if label_file is None:
         label_file = os.path.join(out_dir, "labels.csv")
 
+    # STEP 2: Initialize video capture and processing parameters
     cap = cv2.VideoCapture(video_path)
     if not cap.isOpened():
         print(f"[WARN] Cannot open {video_path}")
         return
 
+    # Get source video frame rate with fallback for corrupted metadata
     src_fps = cap.get(cv2.CAP_PROP_FPS)
     if not src_fps or src_fps < 1:
-        src_fps = 30.0  # fallback
+        src_fps = 30.0  # fallback for videos with invalid FPS metadata
 
-    step_s = 1.0 / target_fps
-    next_t = 0.0
+    # Calculate frame sampling parameters for target FPS
+    step_s = 1.0 / target_fps  # Time interval between sampled frames (seconds)
+    next_t = 0.0  # Next target timestamp for frame sampling
 
+    # Set device for InceptionV3 feature extraction (GPU if available)
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     
-    # Create MediaPipe models if keypoints are needed
+    # Initialize MediaPipe models for keypoint detection (only if needed)
     models = None
     if write_keypoints:
         models = create_models(seg_model=1, detection_conf=conf_thresh, tracking_conf=conf_thresh)
 
-    X_frames = []
-    M_frames = []
-    X2048_frames = []
-    T_ms = []
+    # STEP 3: Initialize data containers for collected features
+    X_frames = []      # Keypoint coordinates [frame_idx] -> [156] (78 keypoints * 2 coords)
+    M_frames = []      # Keypoint visibility masks [frame_idx] -> [78] (boolean visibility)
+    X2048_frames = []  # InceptionV3 CNN features [frame_idx] -> [2048] (deep features)
+    T_ms = []          # Frame timestamps [frame_idx] -> timestamp_ms
 
-    t0 = cap.get(cv2.CAP_PROP_POS_MSEC)
-    total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+    # Get video metadata for processing
+    t0 = cap.get(cv2.CAP_PROP_POS_MSEC)  # Starting timestamp (usually 0)
+    total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))  # Total frames in video
 
+    # STEP 4: Main video processing loop - extract features from sampled frames
     try:
         while True:
+            # Read next frame from video
             ret, frame_bgr = cap.read()
-            if not ret:
+            if not ret:  # End of video reached
                 break
-            ms = cap.get(cv2.CAP_PROP_POS_MSEC)
-            if ms < next_t * 1000.0:
+            
+            # Check if this frame should be sampled based on target FPS
+            ms = cap.get(cv2.CAP_PROP_POS_MSEC)  # Current timestamp in milliseconds
+            if ms < next_t * 1000.0:  # Skip frame if not at target sampling time
                 continue
 
+            # STEP 4a: Resize frame for consistent processing
             frame_bgr_resized = cv2.resize(frame_bgr, (out_size, out_size), interpolation=cv2.INTER_AREA)
 
-            # Extract features
+            # STEP 4b: Prepare RGB frame for MediaPipe keypoint extraction
             frame_rgb = cv2.cvtColor(frame_bgr_resized, cv2.COLOR_BGR2RGB)
 
+            # STEP 4c: Extract MediaPipe keypoints (if requested)
             if write_keypoints:
-                # Extract keypoints
+                # Returns 156D vector (78 keypoints * 2 coords) and 78D visibility mask
                 vec156, mask78 = extract_keypoints_from_frame(frame_rgb, models, conf_thresh=conf_thresh)
-                X_frames.append(vec156)
-                M_frames.append(mask78)
+                X_frames.append(vec156)    # Store keypoint coordinates
+                M_frames.append(mask78)    # Store visibility flags
 
+            # STEP 4d: Extract InceptionV3 CNN features (if requested)
             if write_iv3_features:
-                # Extract IV3 features
+                # Extract 2048-D InceptionV3 features from the original BGR frame
+                # Uses original frame (not resized) to preserve image quality for CNN
                 iv3_features = extract_iv3_features(frame_bgr, image_size=(299, 299), device=device)
                 X2048_frames.append(iv3_features)
 
+            # STEP 4e: Record frame timestamp and advance to next sampling time
             T_ms.append(ms)
-            next_t += step_s
+            next_t += step_s  # Advance to next target sampling time
     finally:
-        cap.release()
+        # STEP 5: Cleanup resources
+        cap.release()      # Release video capture object
         if models is not None:
-            close_models(models)
+            close_models(models)  # Clean up MediaPipe models
 
+    # STEP 6: Validate and post-process extracted features
     if len(X_frames) == 0:
         print(f"[WARN] No frames written for {video_path}")
         return
 
-    X = np.stack(X_frames, axis=0)
-    M = np.stack(M_frames, axis=0)
-    X2048 = np.stack(X2048_frames, axis=0)
-    T_ms = np.array(T_ms, dtype=np.int64)
+    # Convert lists to numpy arrays for efficient processing
+    X = np.stack(X_frames, axis=0)  # Shape: [T, 156] - keypoint coordinates over time
+    M = np.stack(M_frames, axis=0)  # Shape: [T, 78] - visibility masks over time
+    X2048 = np.stack(X2048_frames, axis=0) if X2048_frames else np.array([])  # Shape: [T, 2048] - CNN features
+    T_ms = np.array(T_ms, dtype=np.int64)  # Convert timestamps to numpy array
 
-    # Ensure alignment
-    assert X.shape[0] == X2048.shape[0], f"Mismatch in T (frames) between X and X2048: {X.shape[0]} vs {X2048.shape[0]}"
+    # Validate temporal consistency between keypoints and CNN features
+    if write_iv3_features and X2048.size > 0:
+        assert X.shape[0] == X2048.shape[0], f"Mismatch in T (frames) between X and X2048: {X.shape[0]} vs {X2048.shape[0]}"
     
-    # Handle missing X2048
-    if len(X2048_frames) == 0:
+    # Handle case where no CNN features were extracted
+    if write_iv3_features and len(X2048_frames) == 0:
         print("[WARN] No IV3 features extracted.")
 
+    # Fill gaps in keypoint sequences using interpolation
     X_filled, M_filled = interpolate_gaps(X, M, max_gap=max_gap)
-    # Ensure coordinate bounds
+    # Ensure keypoint coordinates stay within valid bounds [0, 1]
     X_filled = np.clip(X_filled, 0.0, 1.0).astype(np.float32)
+    # Note: Do not interpolate CNN features - keep raw temporal values
     X2048_filled = X2048
 
+    # STEP 7: Prepare comprehensive metadata for reproducibility
     meta = dict(
-        video=os.path.basename(video_path),
-        target_fps=target_fps,
-        out_size=out_size,
-        dims_per_frame=156,
-        keypoints_total=78,
-        order="pose25,left_hand21,right_hand21,face11",
-        pose_indices=POSE_UPPER_25,
-        face_indices=FACEMESH_11,
-        conf_thresh=conf_thresh,
-        interpolation_max_gap=max_gap,
-        gloss=gloss,
-        cat=cat
+        video=os.path.basename(video_path),      # Original video filename
+        target_fps=target_fps,                   # Frame sampling rate used
+        out_size=out_size,                       # Image resize dimension
+        dims_per_frame=156,                      # Keypoint vector dimension (78 points * 2 coords)
+        keypoints_total=78,                      # Total number of keypoints tracked
+        order="pose25,left_hand21,right_hand21,face11",  # Keypoint ordering in the 156D vector
+        pose_indices=POSE_UPPER_25,              # Which pose keypoints are used
+        face_indices=FACEMESH_11,                # Which face keypoints are used
+        conf_thresh=conf_thresh,                 # Confidence threshold used for detection
+        interpolation_max_gap=max_gap,           # Maximum gap size for interpolation
+        gloss=gloss,                             # Sign language gloss class ID
+        cat=cat                                  # Category class ID
     )
 
-    # Update labels.csv with gloss and category information
+    # STEP 8: Update training labels CSV with processed file information
     if gloss and cat:
         update_labels_csv(label_file, basename, gloss, cat)
 
-    # Write the output as .npz and .parquet
+    # STEP 9: Save final processed data with all features
     to_npz(npz_out_path, X_filled, X2048_filled, M_filled, T_ms, meta, also_parquet=True)
 
+    # Report successful processing
     print(f"[OK] {basename}: frames={len(X_frames)} saved: {npz_out_path}.npz (+ .parquet)")
 
-# CLI interface using argparse
+# ----------------------------
+# Command-line Interface
+# ----------------------------
+
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Preprocessing for Video Clips")
-    parser.add_argument('--write-keypoints', action='store_true', help='Write keypoints to output')
-    parser.add_argument('--write-iv3-features', action='store_true', help='Write IV3 features to output')
-    parser.add_argument('--fps', type=int, default=30, help='Target frames per second')
-    parser.add_argument('--image-size', type=int, default=256, help='Output image size for feature extraction')
-    parser.add_argument('--feature-key', type=str, default='X2048', help='Which feature key to use')
-    parser.add_argument('--gloss', type=str, help='Gloss (optional) for labeling')
-    parser.add_argument('--cat', type=str, help='Category (optional) for labeling')
-    parser.add_argument('--label-file', type=str, help='Path to the labels.csv file (default: output_dir/labels.csv)')
+    # COMMAND-LINE INTERFACE: Setup argument parser for single video processing
+    parser = argparse.ArgumentParser(description="Single video preprocessing with keypoints and InceptionV3 features")
+    
+    # Required arguments
     parser.add_argument('video_path', type=str, help='Path to the video file to process')
     parser.add_argument('out_dir', type=str, help='Directory to save the processed output')
     
+    # Feature extraction controls
+    parser.add_argument('--write-keypoints', action='store_true', help='Extract and save MediaPipe keypoints (156D vectors)')
+    parser.add_argument('--write-iv3-features', action='store_true', help='Extract and save InceptionV3 CNN features (2048D vectors)')
+    
+    # Processing parameters
+    parser.add_argument('--fps', type=int, default=30, help='Target frames per second for sampling (default: 30)')
+    parser.add_argument('--image-size', type=int, default=256, help='Output image size for keypoint extraction (default: 256)')
+    parser.add_argument('--feature-key', type=str, default='X2048', help='Feature key name for compatibility (default: X2048)')
+    
+    # Labeling controls
+    parser.add_argument('--gloss', type=str, help='Sign language gloss class ID for labeling')
+    parser.add_argument('--cat', type=str, help='Category class ID for labeling')
+    parser.add_argument('--label-file', type=str, help='Path to labels CSV file (default: output_dir/labels.csv)')
+    
     args = parser.parse_args()
     
-    # Set default label_file to be in the output directory if not specified
+    # SETUP: Set default label file path if not specified
     if args.label_file is None:
         args.label_file = os.path.join(args.out_dir, "labels.csv")
 
-    process_video(args.video_path, args.out_dir, label_file=args.label_file, target_fps=args.fps, out_size=args.image_size, write_keypoints=args.write_keypoints, write_iv3_features=args.write_iv3_features, feature_key=args.feature_key, gloss=args.gloss, cat=args.cat)
+    # MAIN PROCESSING: Process the single video file
+    process_video(
+        video_path=args.video_path,           # Input video file
+        out_dir=args.out_dir,                 # Output directory
+        label_file=args.label_file,           # Labels CSV file
+        target_fps=args.fps,                  # Frame sampling rate
+        out_size=args.image_size,             # Image resize dimension
+        write_keypoints=args.write_keypoints, # Extract MediaPipe keypoints
+        write_iv3_features=args.write_iv3_features,  # Extract CNN features
+        feature_key=args.feature_key,         # Feature naming (compatibility)
+        gloss=args.gloss,                     # Sign language class ID
+        cat=args.cat                          # Category class ID
+    )
