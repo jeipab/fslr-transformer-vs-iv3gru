@@ -17,15 +17,12 @@ Usage:
 """
 
 # Standard library imports
-import os, sys, glob, json, math, argparse, time  # File operations, system utilities, JSON handling
-import warnings  # Warning control
-from dataclasses import dataclass  # Data structure definitions
+import os, sys, json, math, argparse  # File operations, system utilities, JSON handling
 
 # Computer vision and numerical computing
 import cv2  # OpenCV for video processing and image operations
 import numpy as np  # Numerical arrays and mathematical operations
 import pandas as pd  # Data manipulation and CSV handling
-from tqdm import tqdm  # Progress bars for long operations
 
 # Machine learning frameworks
 import torch  # PyTorch for deep learning (InceptionV3 features)
@@ -38,7 +35,7 @@ if __package__ in (None, ""):
 
 # Project-specific imports
 from ..extractors.iv3_features import extract_iv3_features  # InceptionV3 CNN feature extraction (2048D vectors)
-from ..core.occlusion_detection import compute_occlusion_flag_from_keypoints, compute_occlusion_detection  # Detect when keypoints are blocked/occluded
+from ..core.occlusion_detection import compute_occlusion_detection  # Detect when keypoints are blocked/occluded
 from ..extractors.keypoints_features import (
     POSE_UPPER_25,        # Upper body pose keypoint indices (25 points)
     N_HAND,               # Number of hand keypoints per hand (21 points each)
