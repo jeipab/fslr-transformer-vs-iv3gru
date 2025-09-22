@@ -1,111 +1,158 @@
 """
 Hand-head occlusion detection for Filipino sign language recognition.
 
-This module provides computer vision-based occlusion detection using MediaPipe keypoints
-and detection algorithms to identify when hands obscure facial features during signing.
+This module provides comprehensive occlusion detection capabilities using multiple approaches:
+- Computer vision-based detection using MediaPipe keypoints
+- Multi-method detection algorithms (ellipse, proximity, trajectory analysis)
+- Temporal filtering for robust detection across video sequences
+- 5-region head partitioning (forehead, cheeks, nose, mouth, neck)
+- Adaptive thresholds and consecutive frame analysis
+
+The module supports both keypoint-based and raw video processing, with configurable
+parameters for different detection scenarios and quality requirements.
 """
 
-import numpy as np
-from typing import List, Tuple, Dict, Optional, Set, Union
-from dataclasses import dataclass
-from collections import deque
-import warnings
+# Standard library imports
+import warnings  # Warning system for error handling
+from collections import deque  # Efficient queue for temporal filtering
+from dataclasses import dataclass  # Data structure definitions
+from typing import List, Tuple, Dict, Optional, Set, Union  # Type hints for better code clarity
 
+# Numerical computing
+import numpy as np  # Numerical arrays and mathematical operations
+
+
+# ----------------------------
+# Geometric Utility Functions
+# ----------------------------
 
 def _point_in_ellipse(px: float, py: float, cx: float, cy: float, ax: float, by: float) -> bool:
-    """Check if point lies inside ellipse.
+    """Check if a point lies inside an ellipse using normalized coordinates.
+    
+    This function uses the standard ellipse equation: ((x-cx)/ax)² + ((y-cy)/by)² ≤ 1
+    to determine if a point is within the elliptical boundary.
     
     Args:
-        px, py: Point coordinates
+        px, py: Point coordinates to test
         cx, cy: Ellipse center coordinates
-        ax, by: Ellipse semi-axes
+        ax, by: Ellipse semi-axes (half-width, half-height)
         
     Returns:
-        True if point is inside ellipse
+        True if point is inside or on the ellipse boundary
     """
+    # Validate ellipse parameters
     if ax <= 0.0 or by <= 0.0:
         return False
+    
+    # Normalize point coordinates relative to ellipse
     dx = (px - cx) / ax
     dy = (py - cy) / by
+    
+    # Apply ellipse equation
     return (dx * dx + dy * dy) <= 1.0
 
 
+# ----------------------------
+# Hand Feature Extraction
+# ----------------------------
+
 def _hand_centers_and_tips(frame_xy: np.ndarray, frame_mask: np.ndarray, hand_start: int, hand_len: int) -> tuple[tuple[float, float] | None, list[tuple[float, float]]]:
-    """Extract palm center and fingertip coordinates for one hand.
+    """Extract palm center and fingertip coordinates for one hand from keypoint data.
+    
+    This function processes MediaPipe hand keypoints to extract key anatomical features:
+    - Palm center: Computed from MCP (metacarpophalangeal) joint positions
+    - Fingertips: All five fingertip positions with validation
     
     Args:
-        frame_xy: Keypoint coordinates array
-        frame_mask: Visibility mask array
-        hand_start: Starting index for hand keypoints
-        hand_len: Number of hand keypoints
+        frame_xy: Keypoint coordinates array [156] - flattened x,y coordinates
+        frame_mask: Visibility mask array [78] - boolean visibility flags
+        hand_start: Starting index for hand keypoints (25 for left, 46 for right)
+        hand_len: Number of hand keypoints (21)
         
     Returns:
-        Tuple of (palm_center, fingertip_list)
+        Tuple of (palm_center, fingertip_list) where:
+        - palm_center: (x, y) coordinates or None if insufficient data
+        - fingertip_list: List of (x, y) coordinates for visible fingertips
     """
-    mcp_rel = [5, 9, 13, 17]  # MCP joints
-    fingertip_rel = [4, 8, 12, 16, 20]  # fingertips
+    # MediaPipe hand landmark indices (relative to hand start)
+    mcp_rel = [5, 9, 13, 17]  # MCP joints (base of fingers, excluding thumb)
+    fingertip_rel = [4, 8, 12, 16, 20]  # All fingertips (thumb, index, middle, ring, pinky)
     mcp_coords: list[tuple[float, float]] = []
     
+    # STEP 1: Extract MCP joint coordinates for palm center calculation
     for r in mcp_rel:
-        if hand_len <= r:
+        if hand_len <= r:  # Skip if hand model doesn't have this keypoint
             continue
-        if bool(frame_mask[hand_start + r]):
-            idx = 2 * (hand_start + r)
-            coord = (float(frame_xy[idx]), float(frame_xy[idx + 1]))
-            # Validate coordinate is within reasonable bounds
+        if bool(frame_mask[hand_start + r]):  # Check if keypoint is visible
+            idx = 2 * (hand_start + r)  # Calculate flattened array index
+            coord = (float(frame_xy[idx]), float(frame_xy[idx + 1]))  # Extract (x, y)
+            # Validate coordinate is within normalized bounds [0, 1]
             if 0 <= coord[0] <= 1 and 0 <= coord[1] <= 1:
                 mcp_coords.append(coord)
     
+    # STEP 2: Calculate palm center from MCP joints or fallback to wrist
     palm_center: tuple[float, float] | None
-    if len(mcp_coords) >= 2:
+    if len(mcp_coords) >= 2:  # Need at least 2 MCP joints for reliable center
+        # Calculate centroid of visible MCP joints
         mx = sum(p[0] for p in mcp_coords) / float(len(mcp_coords))
         my = sum(p[1] for p in mcp_coords) / float(len(mcp_coords))
         palm_center = (mx, my)
     else:
-        # fallback to wrist if visible
-        if bool(frame_mask[hand_start + 0]):
-            idx0 = 2 * (hand_start + 0)
+        # Fallback: use wrist position if MCP joints are not available
+        if bool(frame_mask[hand_start + 0]):  # Check wrist visibility
+            idx0 = 2 * (hand_start + 0)  # Wrist is always at index 0
             wrist_coord = (float(frame_xy[idx0]), float(frame_xy[idx0 + 1]))
+            # Validate wrist coordinates
             if 0 <= wrist_coord[0] <= 1 and 0 <= wrist_coord[1] <= 1:
                 palm_center = wrist_coord
             else:
                 palm_center = None
         else:
-            palm_center = None
+            palm_center = None  # No reliable palm center available
     
-    # Fingertips with validation
+    # STEP 3: Extract fingertip coordinates with validation
     tips: list[tuple[float, float]] = []
     for r in fingertip_rel:
-        if hand_len <= r:
+        if hand_len <= r:  # Skip if hand model doesn't have this keypoint
             continue
-        if bool(frame_mask[hand_start + r]):
-            idx = 2 * (hand_start + r)
-            tip_coord = (float(frame_xy[idx]), float(frame_xy[idx + 1]))
-            # Validate coordinate is within reasonable bounds
+        if bool(frame_mask[hand_start + r]):  # Check if fingertip is visible
+            idx = 2 * (hand_start + r)  # Calculate flattened array index
+            tip_coord = (float(frame_xy[idx]), float(frame_xy[idx + 1]))  # Extract (x, y)
+            # Validate fingertip coordinates are within normalized bounds
             if 0 <= tip_coord[0] <= 1 and 0 <= tip_coord[1] <= 1:
                 tips.append(tip_coord)
     
     return palm_center, tips
 
 
+# ----------------------------
+# Face Landmark Validation
+# ----------------------------
+
 def _validate_face_landmarks(face_coords: List[Tuple[float, float]], 
                            face_indices: List[int]) -> Tuple[List[Tuple[float, float]], List[int]]:
-    """Validate face landmark coordinates and indices.
+    """Validate face landmark coordinates and indices for reliable occlusion detection.
+    
+    This function performs quality control on facial landmarks to ensure they are:
+    1. Within valid coordinate bounds [0, 1]
+    2. Positioned in anatomically reasonable locations
+    3. Suitable for accurate occlusion detection
     
     Args:
-        face_coords: List of face landmark coordinates
-        face_indices: List of face landmark indices
+        face_coords: List of face landmark coordinates [(x, y), ...]
+        face_indices: List of corresponding face landmark indices
         
     Returns:
-        Tuple of (validated_coords, validated_indices)
+        Tuple of (validated_coords, validated_indices) containing only reliable landmarks
     """
     validated_coords = []
     validated_indices = []
     
+    # Process each landmark coordinate and index pair
     for i, (coord, idx) in enumerate(zip(face_coords, face_indices)):
-        # Check if coordinates are within valid bounds
+        # STEP 1: Check if coordinates are within valid normalized bounds
         if 0 <= coord[0] <= 1 and 0 <= coord[1] <= 1:
-            # Check for reasonable landmark positions (basic sanity check)
+            # STEP 2: Check for anatomically reasonable landmark positions
             if _is_valid_landmark_position(coord, idx):
                 validated_coords.append(coord)
                 validated_indices.append(idx)
@@ -114,148 +161,240 @@ def _validate_face_landmarks(face_coords: List[Tuple[float, float]],
 
 
 def _is_valid_landmark_position(coord: Tuple[float, float], landmark_idx: int) -> bool:
-    """Check if landmark position is reasonable.
+    """Check if a facial landmark position is anatomically reasonable.
+    
+    This function performs sanity checks on facial landmark positions based on
+    typical facial anatomy in normalized coordinates [0, 1]. It helps filter out
+    erroneous detections that could lead to false occlusion alerts.
     
     Args:
-        coord: Landmark coordinate (x, y)
-        landmark_idx: Landmark index
+        coord: Landmark coordinate (x, y) in normalized space [0, 1]
+        landmark_idx: Landmark index from FACEMESH_11 mapping
         
     Returns:
-        True if position is reasonable
+        True if position is within reasonable anatomical bounds
     """
     x, y = coord
     
-    # Basic sanity checks for different landmark types
-    if landmark_idx == 0:  # nose_tip
+    # Anatomical validation based on landmark type (from FACEMESH_11 mapping)
+    if landmark_idx == 0:  # nose_tip (center of face)
         return 0.3 <= x <= 0.7 and 0.3 <= y <= 0.7
-    elif landmark_idx in [1, 2]:  # eye_outer
+    elif landmark_idx in [1, 2]:  # eye_outer (left/right eye corners)
         return 0.2 <= x <= 0.8 and 0.2 <= y <= 0.6
-    elif landmark_idx in [3, 4]:  # eye_inner
+    elif landmark_idx in [3, 4]:  # eye_inner (inner eye corners)
         return 0.3 <= x <= 0.7 and 0.2 <= y <= 0.6
-    elif landmark_idx in [5, 6]:  # mouth
+    elif landmark_idx in [5, 6]:  # mouth (left/right mouth corners)
         return 0.2 <= x <= 0.8 and 0.5 <= y <= 0.8
-    elif landmark_idx == 7:  # forehead
+    elif landmark_idx == 7:  # forehead (upper face)
         return 0.2 <= x <= 0.8 and 0.1 <= y <= 0.4
-    elif landmark_idx == 8:  # chin
+    elif landmark_idx == 8:  # chin (lower face)
         return 0.3 <= x <= 0.7 and 0.6 <= y <= 0.9
-    elif landmark_idx in [9, 10]:  # cheeks
+    elif landmark_idx in [9, 10]:  # cheeks (side face regions)
         return 0.1 <= x <= 0.9 and 0.3 <= y <= 0.7
     
-    # Default validation for unknown landmarks
+    # Default validation for unknown landmarks (generous bounds)
     return 0.1 <= x <= 0.9 and 0.1 <= y <= 0.9
 
 
+# ----------------------------
+# Dependency Management
+# ----------------------------
+
 def _check_dependencies() -> bool:
-    """Check if required dependencies are available.
+    """Check if required optional dependencies are available for advanced occlusion detection.
+    
+    This function verifies that additional computer vision and machine learning libraries
+    are installed for the full occlusion detection pipeline. If dependencies are missing,
+    the system will fall back to keypoint-only detection.
     
     Returns:
-        True if all dependencies are available
+        True if all advanced dependencies are available, False otherwise
     """
     try:
-        import cv2
-        import mediapipe as mp
-        from scipy import ndimage
-        from scipy.spatial import KDTree
-        from sklearn.cluster import DBSCAN
+        # Computer vision libraries
+        import cv2  # OpenCV for image processing
+        import mediapipe as mp  # MediaPipe for additional landmark detection
+        
+        # Scientific computing libraries for advanced algorithms
+        from scipy import ndimage  # Image processing algorithms
+        from scipy.spatial import KDTree  # Spatial data structures for neighbor search
+        from sklearn.cluster import DBSCAN  # Clustering algorithms for point grouping
+        
         return True
     except ImportError:
-        return False
+        return False  # Dependencies not available, use fallback methods
 
+
+# ----------------------------
+# Data Structures for Geometric Processing
+# ----------------------------
 
 @dataclass
 class Point2D:
-    """Represents a 2D point with x, y coordinates."""
+    """Represents a 2D point with x, y coordinates in normalized space.
+    
+    This class provides a convenient container for 2D coordinates with
+    utility methods for geometric calculations commonly used in occlusion detection.
+    
+    Attributes:
+        x: X-coordinate in normalized space [0, 1]
+        y: Y-coordinate in normalized space [0, 1]
+    """
     x: float
     y: float
     
     def to_tuple(self) -> Tuple[float, float]:
-        """Convert to tuple."""
+        """Convert point to tuple format for compatibility with other functions.
+        
+        Returns:
+            Tuple of (x, y) coordinates
+        """
         return (self.x, self.y)
     
     def distance_to(self, other: 'Point2D') -> float:
-        """Calculate distance to another point."""
+        """Calculate Euclidean distance to another point.
+        
+        Args:
+            other: Another Point2D instance
+            
+        Returns:
+            Euclidean distance between the two points
+        """
         return np.sqrt((self.x - other.x)**2 + (self.y - other.y)**2)
 
 
 @dataclass
 class Gridlet:
-    """A set of tracked points with topology."""
+    """A set of tracked points with topological relationships for motion analysis.
+    
+    Gridlets are used in advanced occlusion detection to track groups of related
+    points across frames, maintaining their spatial relationships and motion patterns.
+    
+    Attributes:
+        points: List of 2D points in the gridlet
+        neighbors: Adjacency list defining point relationships
+        reference_frame: Frame index where this gridlet was established
+        tracking_cost: Cost metric for tracking quality assessment
+    """
     points: List[Point2D]
-    neighbors: Dict[int, List[int]]  # Adjacency list
-    reference_frame: int
-    tracking_cost: float = 0.0
+    neighbors: Dict[int, List[int]]  # Adjacency list mapping point indices to neighbor indices
+    reference_frame: int              # Frame number for temporal reference
+    tracking_cost: float = 0.0       # Quality metric for tracking reliability
     
     def get_center(self) -> Point2D:
-        """Get the centroid of the gridlet."""
+        """Calculate the centroid (geometric center) of all points in the gridlet.
+        
+        Returns:
+            Point2D representing the centroid of the gridlet
+        """
+        if not self.points:
+            return Point2D(0.0, 0.0)
+        
         x = sum(p.x for p in self.points) / len(self.points)
         y = sum(p.y for p in self.points) / len(self.points)
         return Point2D(x, y)
 
 
 class HeadRegion:
-    """Defines the five head regions for occlusion detection."""
-    FOREHEAD = 0
-    CHEEKS = 1
-    NOSE = 2
-    MOUTH = 3
-    NECK = 4
+    """Defines the five anatomical head regions used for detailed occlusion analysis.
     
+    This class provides constants for the different facial regions that can be occluded
+    by hands during sign language communication. Each region has specific characteristics
+    and importance for sign language recognition.
+    
+    Region Definitions:
+    - FOREHEAD: Upper head area, important for facial expressions
+    - CHEEKS: Side face areas including eye regions, critical for visibility
+    - NOSE: Central face area, key reference point for detection
+    - MOUTH: Lower face area, essential for mouth shape recognition
+    - NECK: Below-chin area, relevant for hand positioning
+    """
+    FOREHEAD = 0  # Upper head region (forehead area)
+    CHEEKS = 1    # Side face regions (eye and cheek areas)
+    NOSE = 2      # Central face region (nose area)
+    MOUTH = 3     # Lower face region (mouth and jaw area)
+    NECK = 4      # Below-face region (neck area)
+    
+    # Human-readable names for each region (for reporting and debugging)
     NAMES = ['forehead', 'cheeks', 'nose', 'mouth', 'neck']
 
 
+# ----------------------------
+# Main Occlusion Detection Class
+# ----------------------------
+
 class HandHeadOcclusionDetector:
-    """Hand-head occlusion detector using computer vision techniques."""
+    """Comprehensive hand-head occlusion detector using advanced computer vision techniques.
+    
+    This class provides a complete occlusion detection system that combines:
+    - MediaPipe-based facial and hand landmark detection
+    - Multi-region head partitioning for detailed analysis
+    - Temporal filtering for robust detection across video sequences
+    - Skin color segmentation for enhanced accuracy
+    - Configurable parameters for different detection scenarios
+    
+    The detector processes video frames to identify when hands obscure facial features,
+    which is crucial for sign language recognition quality assessment.
+    """
     
     def __init__(self, use_global_tracking: bool = True):
-        """Initialize the detector.
+        """Initialize the occlusion detector with required dependencies and parameters.
         
         Args:
-            use_global_tracking: Whether to use global tracking
+            use_global_tracking: Enable advanced global tracking algorithms
+            
+        Raises:
+            ImportError: If required dependencies (scipy, scikit-learn) are not available
         """
+        # Check for optional dependencies needed for advanced features
         if not _check_dependencies():
             raise ImportError(
-                "Occlusion detection requires additional dependencies. "
-                "Please install: pip install scipy scikit-learn"
+                "Advanced occlusion detection requires additional dependencies. "
+                "Please install: pip install scipy scikit-learn opencv-python"
             )
         
         self.use_global_tracking = use_global_tracking
         
-        # Import dependencies
+        # Import required computer vision dependencies
         import cv2
         import mediapipe as mp
         
-        # Initialize MediaPipe for face and hand detection
+        # Initialize MediaPipe models for comprehensive detection
         self.mp_face_mesh = mp.solutions.face_mesh
         self.mp_hands = mp.solutions.hands
+        
+        # Configure face mesh detection for detailed facial landmarks
         self.face_mesh = self.mp_face_mesh.FaceMesh(
-            static_image_mode=False,
-            max_num_faces=1,
-            refine_landmarks=True,
-            min_detection_confidence=0.5,
-            min_tracking_confidence=0.5
+            static_image_mode=False,        # Video processing mode
+            max_num_faces=1,               # Expect single person in frame
+            refine_landmarks=True,         # Use refined face mesh for accuracy
+            min_detection_confidence=0.5,  # Balanced detection threshold
+            min_tracking_confidence=0.5    # Balanced tracking threshold
         )
+        
+        # Configure hand detection for both hands
         self.hands = self.mp_hands.Hands(
-            static_image_mode=False,
-            max_num_hands=2,
-            min_detection_confidence=0.5,
-            min_tracking_confidence=0.5
+            static_image_mode=False,        # Video processing mode
+            max_num_hands=2,               # Detect both hands
+            min_detection_confidence=0.5,  # Balanced detection threshold
+            min_tracking_confidence=0.5    # Balanced tracking threshold
         )
         
-        # Tracking parameters
-        self.gridlet_size = 4
-        self.gridlet_neighbors = 3
-        self.tracking_window_size = 5
-        self.motion_threshold = 10
+        # Advanced tracking and detection parameters
+        self.gridlet_size = 4              # Size of point groups for tracking
+        self.gridlet_neighbors = 3         # Number of neighbors per gridlet point
+        self.tracking_window_size = 5      # Temporal window for consistency filtering
+        self.motion_threshold = 10         # Threshold for motion detection
         
-        # Storage for tracking
-        self.unoccluded_face_points: Dict[int, Set[Tuple[int, int]]] = {}
-        self.outside_face_points: Dict[int, Set[Tuple[int, int]]] = {}
-        self.tracked_gridlets: List[Gridlet] = []
-        self.hand_blobs: List[Dict] = []
-        self.facial_prohibition_masks: Dict[int, np.ndarray] = {}
+        # Data storage for advanced tracking algorithms
+        self.unoccluded_face_points: Dict[int, Set[Tuple[int, int]]] = {}  # Face points not occluded
+        self.outside_face_points: Dict[int, Set[Tuple[int, int]]] = {}     # Points outside face region
+        self.tracked_gridlets: List[Gridlet] = []                         # Point groups being tracked
+        self.hand_blobs: List[Dict] = []                                   # Hand blob detection results
+        self.facial_prohibition_masks: Dict[int, np.ndarray] = {}          # Masks for face regions
         
-        # Occlusion history for temporal filtering
-        self.occlusion_history = deque(maxlen=self.tracking_window_size)
+        # Temporal filtering system for robust detection
+        self.occlusion_history = deque(maxlen=self.tracking_window_size)   # Rolling history window
     
     def detect_skin_pixels(self, image: np.ndarray) -> np.ndarray:
         """Detect skin pixels using color-based segmentation.
@@ -544,6 +683,10 @@ class HandHeadOcclusionDetector:
         return results
 
 
+# ----------------------------
+# Main Keypoint-Based Detection Function
+# ----------------------------
+
 def compute_occlusion_detection_from_keypoints(
     X: np.ndarray,
     mask: np.ndarray,
@@ -551,49 +694,59 @@ def compute_occlusion_detection_from_keypoints(
     **kwargs
 ) -> Union[int, Dict]:
     """
-    Compute occlusion detection using preprocessed keypoint data.
+    Compute comprehensive occlusion detection using preprocessed keypoint data.
     
-    Enhanced version with:
+    This is the primary detection function that analyzes MediaPipe keypoints to identify
+    hand-head occlusions. It employs multiple sophisticated detection methods:
+    
+    Enhanced Features:
     - 5-region head partitioning (forehead, cheeks, nose, mouth, neck)
-    - Multiple detection methods (ellipse, proximity, trajectory)
-    - Adaptive thresholds for better sensitivity
-    - Temporal consistency filtering
+    - Multi-method detection (ellipse intersection, proximity analysis, trajectory tracking)
+    - Adaptive thresholds based on face size and hand visibility
+    - Temporal consistency filtering with consecutive frame analysis
+    - Confidence scoring for detection reliability
     
     Args:
-        X: [T, 156] normalized keypoint coordinates
-        mask: [T, 78] visibility mask
-        output_format: 'compatible' or 'detailed'
-        **kwargs: Additional parameters
+        X: Keypoint coordinates [T, 156] - normalized coordinates for all keypoints
+        mask: Visibility mask [T, 78] - boolean flags for keypoint visibility
+        output_format: Output format ('compatible' for binary, 'detailed' for full results)
+        **kwargs: Additional configuration parameters
     
     Returns:
-        Binary flag or detailed results
+        Union[int, Dict]: Binary occlusion flag (0/1) or detailed results dictionary
     """
     try:
-        T = X.shape[0]
+        T = X.shape[0]  # Number of time steps (frames)
         
-        # Keypoint layout: pose25, left_hand21, right_hand21, face11
-        pose_len = 25
-        hand_len = 21
-        face_len = 11
-        face_start = pose_len + hand_len + hand_len  # 67
+        # STEP 1: Parse keypoint layout from preprocessing pipeline
+        # Layout: pose25, left_hand21, right_hand21, face11 = 78 total keypoints
+        pose_len = 25      # Upper body pose keypoints
+        hand_len = 21      # Hand keypoints per hand
+        face_len = 11      # Key facial landmarks
+        face_start = pose_len + hand_len + hand_len  # Starting index for face keypoints (67)
         
-        # Adaptive detection parameters for better sensitivity
-        min_face_points = 3  # Reduced for better coverage
-        min_hand_points = 3  # Reduced for better coverage
-        min_fingertips_inside = 1  # Reduced to catch subtle occlusions
-        proximity_multiplier = 1.5  # Increased for better detection
-        occlusion_threshold = 0.15  # Reduced for better sensitivity
+        # STEP 2: Configure adaptive detection parameters for optimal sensitivity
+        min_face_points = 3        # Minimum face keypoints required (reduced for coverage)
+        min_hand_points = 3        # Minimum hand keypoints required (reduced for coverage)
+        min_fingertips_inside = 1  # Minimum fingertips in face region (sensitive detection)
+        proximity_multiplier = 1.5 # Proximity radius multiplier (increased for better detection)
+        occlusion_threshold = 0.15 # Overall occlusion threshold (reduced for sensitivity)
         
-        results = []
-        hand_trajectories = {'left': [], 'right': []}  # Track hand movement
+        # STEP 3: Initialize detection data structures
+        results = []  # Store per-frame detection results
+        hand_trajectories = {'left': [], 'right': []}  # Track hand movement patterns
         
+        # STEP 4: Process each frame for occlusion detection
         for t in range(T):
-            frame_xy = X[t]
-            frame_mask = mask[t]
+            frame_xy = X[t]      # Keypoint coordinates for current frame [156]
+            frame_mask = mask[t] # Visibility mask for current frame [78]
             
-            # Extract face keypoints with relaxed requirements
-            face_mask = frame_mask[face_start:face_start + face_len]
-            if int(face_mask.sum()) < min_face_points:
+            # STEP 4a: Validate face keypoint availability
+            face_mask = frame_mask[face_start:face_start + face_len]  # Extract face visibility flags
+            visible_face_points = int(face_mask.sum())  # Count visible face keypoints
+            
+            # Skip frame if insufficient face keypoints are available
+            if visible_face_points < min_face_points:
                 results.append({
                     'frame_idx': t,
                     'occlusion_detected': False,
@@ -602,18 +755,22 @@ def compute_occlusion_detection_from_keypoints(
                 })
                 continue
             
-            # Get visible face coordinates with validation
-            face_coords = []
-            face_indices = []
+            # STEP 4b: Extract and validate face coordinates
+            face_coords = []   # Store face landmark coordinates
+            face_indices = []  # Store corresponding face landmark indices
+            
+            # Extract coordinates for visible face keypoints
             for i_rel in range(face_len):
-                if bool(face_mask[i_rel]):
-                    idx = 2 * (face_start + i_rel)
-                    face_coords.append((float(frame_xy[idx]), float(frame_xy[idx + 1])))
+                if bool(face_mask[i_rel]):  # Check if face keypoint is visible
+                    idx = 2 * (face_start + i_rel)  # Calculate flattened coordinate index
+                    coord = (float(frame_xy[idx]), float(frame_xy[idx + 1]))  # Extract (x, y)
+                    face_coords.append(coord)
                     face_indices.append(i_rel)
             
-            # Validate face landmarks for better reliability
+            # Apply quality validation to face landmarks
             validated_coords, validated_indices = _validate_face_landmarks(face_coords, face_indices)
             
+            # Skip frame if insufficient validated face landmarks
             if len(validated_coords) < min_face_points:
                 results.append({
                     'frame_idx': t,
@@ -623,38 +780,40 @@ def compute_occlusion_detection_from_keypoints(
                 })
                 continue
             
-            # Create enhanced face regions with validated landmarks
+            # STEP 4c: Create adaptive face regions based on validated landmarks
             face_regions = _create_enhanced_face_regions(validated_coords, validated_indices)
             
-            # Initialize detection results
-            occlusion_detected = False
-            occluded_regions = []
-            max_confidence = 0.0
+            # STEP 4d: Initialize frame-level detection results
+            occlusion_detected = False  # Overall occlusion flag for this frame
+            occluded_regions = []       # List of occluded region names
+            max_confidence = 0.0        # Maximum confidence score across all detections
             
-            # Check both hands with enhanced detection
-            for hand_side, hand_start in [('left', pose_len), ('right', pose_len + hand_len)]:
-                hand_mask = frame_mask[hand_start:hand_start + hand_len]
-                visible_points = int(hand_mask.sum())
+            # STEP 4e: Analyze both hands for occlusion patterns
+            for hand_side, hand_start_idx in [('left', pose_len), ('right', pose_len + hand_len)]:
+                hand_mask = frame_mask[hand_start_idx:hand_start_idx + hand_len]  # Extract hand visibility
+                visible_points = int(hand_mask.sum())  # Count visible hand keypoints
                 
+                # Process hand if sufficient keypoints are visible
                 if visible_points >= min_hand_points:
-                    palm_center, tips = _hand_centers_and_tips(frame_xy, frame_mask, hand_start, hand_len)
+                    # Extract hand anatomical features (palm center and fingertips)
+                    palm_center, tips = _hand_centers_and_tips(frame_xy, frame_mask, hand_start_idx, hand_len)
                     
-                    # Update hand trajectory
+                    # Update hand movement trajectory for temporal analysis
                     if palm_center is not None:
                         hand_trajectories[hand_side].append((t, palm_center))
-                        # Keep only recent trajectory (last 10 frames)
+                        # Maintain sliding window of recent positions (last 10 frames)
                         if len(hand_trajectories[hand_side]) > 10:
                             hand_trajectories[hand_side] = hand_trajectories[hand_side][-10:]
                     
-                    # Multi-method detection
+                    # Apply multi-method occlusion detection algorithms
                     region_results = _detect_occlusions_multi_method(
                         palm_center, tips, face_regions, hand_trajectories[hand_side], t,
                         min_fingertips_inside, proximity_multiplier
                     )
                     
-                    # Aggregate results with balanced threshold
+                    # Aggregate detection results across all methods
                     for region_name, confidence in region_results.items():
-                        if confidence > 0.4:  # Balanced threshold for better sensitivity
+                        if confidence > 0.4:  # Balanced confidence threshold for sensitivity
                             occlusion_detected = True
                             if region_name not in occluded_regions:
                                 occluded_regions.append(region_name)
@@ -1221,72 +1380,111 @@ def _compute_occlusion_from_video(
         return 0
 
 
-# Configuration for occlusion detection
+# ----------------------------
+# Configuration Management
+# ----------------------------
+
+# Default configuration for comprehensive occlusion detection
 DEFAULT_OCCLUSION_CONFIG = {
-    'use_global_tracking': True,
-    'gridlet_size': 4,
-    'tracking_window_size': 5,
-    'motion_threshold': 10,
-    'temporal_filtering': True,
-    'output_detailed_results': False,
-    # Enhanced detection parameters
-    'min_face_points': 3,
-    'min_hand_points': 3,
-    'min_fingertips_inside': 1,
-    'proximity_multiplier': 1.5,
-    'occlusion_threshold': 0.15,
-    'confidence_threshold': 0.4,
-    'temporal_confidence': 0.5,
-    # Consecutive frame detection parameters
-    'consecutive_window_size': 5,      # Require 5 consecutive frames
-    'max_consecutive_skips': 2,        # Allow up to 2 missed frames
-    'min_consecutive_confidence': 0.2  # Minimum confidence threshold
+    # Advanced tracking and processing options
+    'use_global_tracking': True,        # Enable sophisticated tracking algorithms
+    'gridlet_size': 4,                  # Size of point groups for motion tracking
+    'tracking_window_size': 5,          # Temporal window size for consistency
+    'motion_threshold': 10,             # Motion detection sensitivity threshold
+    'temporal_filtering': True,         # Enable temporal consistency filtering
+    'output_detailed_results': False,   # Control output verbosity
+    
+    # Core detection sensitivity parameters
+    'min_face_points': 3,              # Minimum face keypoints required for detection
+    'min_hand_points': 3,              # Minimum hand keypoints required for analysis
+    'min_fingertips_inside': 1,        # Minimum fingertips in face region for occlusion
+    'proximity_multiplier': 1.5,       # Proximity detection radius multiplier
+    'occlusion_threshold': 0.15,       # Overall occlusion detection threshold
+    'confidence_threshold': 0.4,       # Minimum confidence for positive detection
+    'temporal_confidence': 0.5,        # Temporal consistency confidence threshold
+    
+    # Consecutive frame analysis parameters (for robust detection)
+    'consecutive_window_size': 5,       # Require 5 consecutive frames for confirmation
+    'max_consecutive_skips': 2,         # Allow up to 2 missed frames within window
+    'min_consecutive_confidence': 0.2   # Minimum confidence for consecutive analysis
 }
 
 
 def get_occlusion_config() -> Dict:
-    """Get default configuration for occlusion detection."""
+    """Get a copy of the default configuration for occlusion detection.
+    
+    Returns:
+        Dict: Complete configuration dictionary with all parameters
+    """
     return DEFAULT_OCCLUSION_CONFIG.copy()
 
 
 def validate_occlusion_config(config: Dict) -> bool:
-    """Validate occlusion detection configuration."""
-    required_keys = ['use_global_tracking', 'gridlet_size', 'tracking_window_size', 'motion_threshold']
+    """Validate that an occlusion detection configuration contains required parameters.
+    
+    Args:
+        config: Configuration dictionary to validate
+        
+    Returns:
+        bool: True if configuration is valid, False otherwise
+    """
+    required_keys = [
+        'use_global_tracking', 'gridlet_size', 'tracking_window_size', 
+        'motion_threshold', 'min_face_points', 'min_hand_points'
+    ]
     return all(key in config for key in required_keys)
 
 
-# Legacy compatibility - maintain backward compatibility
+# ----------------------------
+# Legacy Compatibility Functions
+# ----------------------------
+
 def compute_occlusion_flag_from_keypoints(
     X: np.ndarray,
     mask_bool_array: np.ndarray,
     **kwargs
 ) -> int:
     """
-    Compute a clip-level occlusion flag using keypoint data.
+    Compute a clip-level occlusion flag using keypoint data (legacy compatibility).
     
-    This function maintains backward compatibility with the old simple method.
-    It now uses the enhanced detection method internally.
+    This function maintains backward compatibility with existing preprocessing pipelines
+    that expect the old simple interface. It internally uses the enhanced detection
+    method but returns only the binary result.
     
     Args:
-        X: [T, 156] normalized keypoint coordinates
-        mask_bool_array: [T, 78] visibility mask
-        **kwargs: Additional parameters (ignored for compatibility)
+        X: Keypoint coordinates [T, 156] - normalized coordinates for all keypoints
+        mask_bool_array: Visibility mask [T, 78] - boolean flags for keypoint visibility
+        **kwargs: Additional parameters (passed to enhanced detection method)
     
     Returns:
         int: Binary occlusion flag (0 = not occluded, 1 = occluded)
     """
-    result = compute_occlusion_detection_from_keypoints(X, mask_bool_array, output_format='compatible')
+    # Use enhanced detection method internally but return simple binary result
+    result = compute_occlusion_detection_from_keypoints(
+        X, mask_bool_array, output_format='compatible', **kwargs
+    )
     return int(result)
 
 
-# Export all public functions
+# ----------------------------
+# Public API Exports
+# ----------------------------
+
+# Export all public functions and classes for external use
 __all__ = [
-    'compute_occlusion_detection',
-    'compute_occlusion_detection_from_keypoints', 
-    'compute_occlusion_flag_from_keypoints',  # Legacy compatibility
-    'HandHeadOcclusionDetector',
-    'HeadRegion',
-    'get_occlusion_config',
-    'validate_occlusion_config',
-    'DEFAULT_OCCLUSION_CONFIG'
+    # Main detection functions
+    'compute_occlusion_detection',              # Primary detection interface
+    'compute_occlusion_detection_from_keypoints', # Keypoint-based detection
+    'compute_occlusion_flag_from_keypoints',    # Legacy compatibility function
+    
+    # Core classes
+    'HandHeadOcclusionDetector',               # Main detector class
+    'HeadRegion',                              # Region constants
+    'Point2D',                                 # Geometric utility class
+    'Gridlet',                                 # Advanced tracking class
+    
+    # Configuration utilities
+    'get_occlusion_config',                    # Get default configuration
+    'validate_occlusion_config',               # Validate configuration
+    'DEFAULT_OCCLUSION_CONFIG'                 # Default configuration constants
 ]
