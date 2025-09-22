@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """
 Sign Language Recognition Prediction Script
 
@@ -6,59 +5,32 @@ This script provides a command-line interface for making predictions using train
 Sign Language Recognition models. It supports both Transformer and IV3-GRU models
 and can process either preprocessed NPZ files or raw video files.
 
-COMMAND LINE USAGE:
-    # List all available model checkpoints
+Usage Examples:
     python predict.py --list-models
-
-    # Predict from NPZ file using Transformer model
-    python predict.py --model transformer --checkpoint transformer/transformer_low-acc_09-15/SignTransformer_best.pt --input data.npz
-
-    # Predict from video file using IV3-GRU model
-    python predict.py --model iv3_gru --checkpoint iv3_gru/model.pt --input video.mp4
-
-    # Save results to JSON file
-    python predict.py --model transformer --checkpoint transformer/transformer_low-acc_09-15/SignTransformer_best.pt --input data.npz --output results.json
-
-    # Force CPU usage
-    python predict.py --model transformer --checkpoint transformer/transformer_low-acc_09-15/SignTransformer_best.pt --input data.npz --device cpu
-
-REQUIRED ARGUMENTS:
-    --model: Model type ('transformer' or 'iv3_gru')
-    --checkpoint: Path to model checkpoint (.pt file)
-    --input: Input file (NPZ or video file)
-
-OPTIONAL ARGUMENTS:
-    --device: Device to use ('cpu', 'cuda', or 'auto')
-    --fps: Target FPS for video processing (default: 30)
-    --image-size: Image size for video processing (default: 256)
-    --output: Save results to JSON file
-    --list-models: List available model checkpoints
-
-MODEL COMPATIBILITY:
-    Both models support both NPZ files and raw video files:
-    - Transformer: NPZ with 'X' key (keypoints) OR video files (auto-extracts keypoints)
-    - IV3-GRU: NPZ with 'X2048' key (IV3 features) OR video files (auto-extracts IV3 features)
+    python predict.py --model transformer --checkpoint path/to/model.pt --input data.npz
+    python predict.py --model iv3_gru --checkpoint path/to/model.pt --input video.mp4
 """
 
-import argparse
-import os
-import sys
-import json
-import numpy as np
-import torch
-import cv2
+# Standard library imports
+import argparse, json, os, sys
 from pathlib import Path
 
-# Add project root to path for imports
-project_root = Path(__file__).parent.parent
+# Third-party imports
+import cv2, numpy as np, torch
+
+# Add project root to path for local imports
+project_root = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(project_root))
 
+# Local imports
 from models import SignTransformer, InceptionV3GRU
 from data import format_prediction_results, print_prediction_summary
+
+# Optional preprocessing imports for video processing
 try:
     from preprocessing import (
         create_models, close_models, extract_keypoints_from_frame, 
-        interpolate_gaps, extract_iv3_features
+        extract_iv3_features
     )
     PREPROCESSING_AVAILABLE = True
 except ImportError as e:
@@ -71,8 +43,11 @@ class ModelPredictor:
     """
     Unified predictor for both Transformer and IV3-GRU models.
     
-    This class handles loading trained models and making predictions on either
-    NPZ files (preprocessed data) or video files (raw videos).
+    This class handles the complete prediction pipeline:
+    1. Loads trained model architecture and weights
+    2. Processes input data (NPZ files or raw videos)
+    3. Makes predictions and returns formatted results
+    4. Manages resources and cleanup
     
     Example:
         predictor = ModelPredictor('transformer', 'path/to/checkpoint.pt')
@@ -84,6 +59,12 @@ class ModelPredictor:
         """
         Initialize the predictor with a trained model.
         
+        Steps performed:
+        1. Validate model type and set device
+        2. Load model architecture based on type
+        3. Load trained weights from checkpoint
+        4. Set model to evaluation mode
+        
         Args:
             model_type (str): Model type - 'transformer' or 'iv3_gru'
             checkpoint_path (str): Path to the model checkpoint (.pt file)
@@ -93,20 +74,28 @@ class ModelPredictor:
             ValueError: If model_type is not supported
             FileNotFoundError: If checkpoint file doesn't exist
         """
+        # Step 1: Validate inputs and set device
         self.model_type = model_type.lower()
         self.checkpoint_path = checkpoint_path
         self.device = device or torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         
-        # Load model and checkpoint
+        # Step 2: Load model architecture
         self.model = self._load_model()
+        
+        # Step 3: Load trained weights
         self._load_checkpoint()
         
-        # Initialize preprocessing models if needed
+        # Step 4: Initialize preprocessing models for video processing
         self.mp_models = None
         
     def _load_model(self):
         """
         Load the appropriate model architecture based on model_type.
+        
+        Process:
+        1. Determine model parameters from checkpoint (if possible)
+        2. Create model instance with detected/default parameters
+        3. Move model to specified device
         
         Returns:
             torch.nn.Module: Initialized model (not yet loaded with weights)
@@ -115,12 +104,12 @@ class ModelPredictor:
             ValueError: If model_type is not supported
         """
         if self.model_type == 'transformer':
-            # Try to determine input_dim from checkpoint
+            # Step 1: Auto-detect input dimensions from checkpoint
             try:
                 checkpoint = torch.load(self.checkpoint_path, map_location='cpu')
                 state_dict = checkpoint.get('model_state_dict', checkpoint.get('state_dict', checkpoint.get('model', checkpoint)))
                 
-                # Check embedding layer shape to determine input_dim
+                # Extract input_dim from embedding layer shape
                 if 'embedding.weight' in state_dict:
                     embedding_shape = state_dict['embedding.weight'].shape
                     input_dim = embedding_shape[1]  # embedding.weight is [emb_dim, input_dim]
@@ -132,25 +121,26 @@ class ModelPredictor:
                 input_dim = 156  # Default fallback
                 print(f"Warning: Could not load checkpoint to detect input_dim, using default {input_dim}: {e}")
             
-            # Default parameters from training log (105 gloss, 10 categories)
+            # Step 2: Create Transformer model with detected/default parameters
             model = SignTransformer(
-                input_dim=input_dim,
-                emb_dim=256,
-                n_heads=8,
-                n_layers=4,
-                num_gloss=105,
-                num_cat=10,
-                dropout=0.1,
-                max_len=300,
-                pooling_method='mean'
+                input_dim=input_dim,      # Input feature dimension (156 for keypoints, 2048 for IV3 features)
+                emb_dim=256,              # Embedding dimension
+                n_heads=8,                # Number of attention heads
+                n_layers=4,               # Number of transformer layers
+                num_gloss=105,            # Number of gloss classes
+                num_cat=10,               # Number of category classes
+                dropout=0.1,              # Dropout rate
+                max_len=300,              # Maximum sequence length
+                pooling_method='mean'     # Pooling method for sequence aggregation
             )
+            
         elif self.model_type == 'iv3_gru':
-            # Try to determine hidden sizes from checkpoint
+            # Step 1: Auto-detect GRU hidden sizes from checkpoint
             try:
                 checkpoint = torch.load(self.checkpoint_path, map_location='cpu')
                 state_dict = checkpoint.get('model_state_dict', checkpoint.get('state_dict', checkpoint.get('model', checkpoint)))
                 
-                # Detect GRU hidden sizes from checkpoint weights
+                # Extract GRU hidden sizes from weight shapes
                 if 'gru1.weight_hh_l0' in state_dict and 'gru2.weight_hh_l0' in state_dict:
                     # GRU weight_hh has shape [3*hidden, hidden] for each layer
                     gru1_hidden = state_dict['gru1.weight_hh_l0'].shape[0] // 3
@@ -165,24 +155,32 @@ class ModelPredictor:
                 gru2_hidden = 12  # Default fallback
                 print(f"Warning: Could not load checkpoint to detect GRU hidden sizes, using defaults: hidden1={gru1_hidden}, hidden2={gru2_hidden}: {e}")
             
-            # Default parameters for IV3-GRU
+            # Step 2: Create IV3-GRU model with detected/default parameters
             model = InceptionV3GRU(
-                num_gloss=105,
-                num_cat=10,
-                hidden1=gru1_hidden,
-                hidden2=gru2_hidden,
-                dropout=0.3,
-                pretrained_backbone=True,
-                freeze_backbone=True
+                num_gloss=105,            # Number of gloss classes
+                num_cat=10,               # Number of category classes
+                hidden1=gru1_hidden,     # First GRU hidden size
+                hidden2=gru2_hidden,      # Second GRU hidden size
+                dropout=0.3,              # Dropout rate
+                pretrained_backbone=True, # Use pretrained InceptionV3
+                freeze_backbone=True      # Freeze InceptionV3 weights
             )
         else:
             raise ValueError(f"Unknown model type: {self.model_type}")
         
+        # Step 3: Move model to specified device
         return model.to(self.device)
     
     def _load_checkpoint(self):
         """
         Load the model checkpoint and apply weights to the model.
+        
+        Process:
+        1. Verify checkpoint file exists
+        2. Load checkpoint data from file
+        3. Extract state dict from various checkpoint formats
+        4. Apply weights to model
+        5. Set model to evaluation mode
         
         Handles different checkpoint formats:
         - Training checkpoints with 'model' key
@@ -193,29 +191,44 @@ class ModelPredictor:
             FileNotFoundError: If checkpoint file doesn't exist
             RuntimeError: If checkpoint format is incompatible
         """
+        # Step 1: Verify checkpoint file exists
         if not os.path.exists(self.checkpoint_path):
             raise FileNotFoundError(f"Checkpoint not found: {self.checkpoint_path}")
         
+        # Step 2: Load checkpoint data from file
         checkpoint = torch.load(self.checkpoint_path, map_location=self.device)
         
-        # Handle different checkpoint formats
+        # Step 3: Extract state dict from various checkpoint formats
         if 'model_state_dict' in checkpoint:
-            self.model.load_state_dict(checkpoint['model_state_dict'])
+            # Standard PyTorch checkpoint format
+            state_dict = checkpoint['model_state_dict']
         elif 'state_dict' in checkpoint:
-            self.model.load_state_dict(checkpoint['state_dict'])
+            # Alternative checkpoint format
+            state_dict = checkpoint['state_dict']
         elif 'model' in checkpoint:
-            # Training checkpoint with model state dict
-            self.model.load_state_dict(checkpoint['model'])
+            # Training checkpoint format
+            state_dict = checkpoint['model']
         else:
-            # Assume the checkpoint is just the state dict
-            self.model.load_state_dict(checkpoint)
+            # Direct state dict checkpoint
+            state_dict = checkpoint
         
+        # Step 4: Apply weights to model
+        self.model.load_state_dict(state_dict)
+        
+        # Step 5: Set model to evaluation mode (disable dropout, batch norm updates)
         self.model.eval()
         print(f"✓ Loaded {self.model_type} model from {self.checkpoint_path}")
     
     def predict_from_npz(self, npz_path):
         """
         Make prediction from preprocessed NPZ file.
+        
+        Process:
+        1. Load NPZ data from file
+        2. Extract appropriate features based on model type
+        3. Prepare input tensors and masks
+        4. Run model inference
+        5. Process outputs and return formatted results
         
         Args:
             npz_path (str): Path to NPZ file containing preprocessed data
@@ -233,58 +246,72 @@ class ModelPredictor:
             ValueError: If NPZ file doesn't contain required keys
             FileNotFoundError: If NPZ file doesn't exist
         """
-        # Load NPZ data
+        # Step 1: Load NPZ data from file
         data = np.load(npz_path)
         
         if self.model_type == 'transformer':
+            # Step 2: Extract features for Transformer model
             # Try to load the appropriate key based on expected input dimensions
-            # Check if this is a 2048-feature model or 156-keypoint model
             if 'X2048' in data:
+                # Use IV3 features (2048-dimensional)
                 X = torch.from_numpy(data['X2048']).float().unsqueeze(0)
             elif 'X' in data:
+                # Use keypoint features (156-dimensional)
                 X = torch.from_numpy(data['X']).float().unsqueeze(0)
             else:
                 raise ValueError(f"NPZ file missing both 'X' and 'X2048' keys for transformer")
             
+            # Step 3: Prepare attention mask if available
             if 'mask' in data:
                 mask_data = data['mask']
+                # Convert per-keypoint mask to per-frame mask
                 seq_mask = torch.from_numpy(mask_data.any(axis=1)).bool().unsqueeze(0)
             else:
                 seq_mask = None
             
-            # Handle sequence length truncation
+            # Step 4: Handle sequence length truncation (max_len=300)
             if X.shape[1] > 300:
                 print(f"Warning: Sequence length {X.shape[1]} exceeds max_len=300, truncating...")
                 X = X[:, :300, :]
                 if seq_mask is not None:
                     seq_mask = seq_mask[:, :300]
             
+            # Move tensors to device
             X = X.to(self.device)
             if seq_mask is not None:
                 seq_mask = seq_mask.to(self.device)
             
+            # Step 5: Run model inference
             with torch.no_grad():
                 gloss_logits, cat_logits = self.model(X, seq_mask)
                 
         elif self.model_type == 'iv3_gru':
+            # Step 2: Extract features for IV3-GRU model
             if 'X2048' not in data:
                 raise ValueError("NPZ file must contain 'X2048' key for IV3-GRU model")
             
+            # Prepare input tensors
             X2048 = torch.from_numpy(data['X2048']).float().unsqueeze(0)
             lengths = torch.tensor([X2048.shape[1]], dtype=torch.long)
             
+            # Move tensors to device
             X2048 = X2048.to(self.device)
             lengths = lengths.to(self.device)
             
+            # Step 5: Run model inference
             with torch.no_grad():
                 gloss_logits, cat_logits = self.model(X2048, lengths, features_already=True)
         
+        # Step 6: Process model outputs
+        # Get predicted class indices
         gloss_pred = torch.argmax(gloss_logits, dim=-1).item()
         cat_pred = torch.argmax(cat_logits, dim=-1).item()
         
+        # Convert logits to probabilities
         gloss_probs = torch.softmax(gloss_logits, dim=-1).squeeze(0)
         cat_probs = torch.softmax(cat_logits, dim=-1).squeeze(0)
         
+        # Step 7: Return formatted results
         return {
             'gloss_prediction': int(gloss_pred),
             'category_prediction': int(cat_pred),
@@ -298,8 +325,13 @@ class ModelPredictor:
         """
         Make prediction from raw video file.
         
-        This method extracts features from the video and makes predictions.
-        Requires preprocessing modules (mediapipe, opencv-python) to be installed.
+        Process:
+        1. Check preprocessing dependencies are available
+        2. Initialize MediaPipe models for feature extraction
+        3. Extract features from video frames
+        4. Prepare input tensors based on model type
+        5. Run model inference
+        6. Process outputs and return formatted results
         
         Args:
             video_path (str): Path to video file
@@ -321,53 +353,69 @@ class ModelPredictor:
             ValueError: If video processing fails
             FileNotFoundError: If video file doesn't exist
         """
+        # Step 1: Check preprocessing dependencies are available
         if not PREPROCESSING_AVAILABLE:
             raise ImportError("Video processing requires preprocessing modules. Please install mediapipe and opencv-python.")
         
+        # Step 2: Initialize MediaPipe models for feature extraction
         if self.mp_models is None:
             self.mp_models = create_models()
         
+        # Step 3: Extract features from video frames
         frames, keypoints, iv3_features = self._extract_video_features(
             video_path, target_fps, image_size
         )
         
         if self.model_type == 'transformer':
+            # Step 4: Prepare input tensors for Transformer model
             # For the current Transformer model, we need 2048-D features (IV3 features)
             if iv3_features is None or len(iv3_features) == 0:
                 raise ValueError("Could not extract IV3 features from video")
             
+            # Stack features into sequence tensor
             X = np.stack(iv3_features, axis=0)
             X = torch.from_numpy(X).float().unsqueeze(0)
             
+            # Handle sequence length truncation (max_len=300)
             if X.shape[1] > 300:
                 print(f"Warning: Sequence length {X.shape[1]} exceeds max_len=300, truncating...")
                 X = X[:, :300, :]
             
+            # Move tensor to device
             X = X.to(self.device)
             
+            # Step 5: Run model inference
             with torch.no_grad():
                 gloss_logits, cat_logits = self.model(X)
                 
         elif self.model_type == 'iv3_gru':
+            # Step 4: Prepare input tensors for IV3-GRU model
             if iv3_features is None or len(iv3_features) == 0:
                 raise ValueError("Could not extract IV3 features from video")
             
+            # Stack features into sequence tensor
             X2048 = np.stack(iv3_features, axis=0)
             X2048 = torch.from_numpy(X2048).float().unsqueeze(0)
             lengths = torch.tensor([X2048.shape[1]], dtype=torch.long)
             
+            # Move tensors to device
             X2048 = X2048.to(self.device)
             lengths = lengths.to(self.device)
             
+            # Step 5: Run model inference
             with torch.no_grad():
                 gloss_logits, cat_logits = self.model(X2048, lengths, features_already=True)
         
+        # Step 6: Process model outputs
+        # Get predicted class indices
         gloss_pred = torch.argmax(gloss_logits, dim=-1).item()
         cat_pred = torch.argmax(cat_logits, dim=-1).item()
         
+        # Convert logits to probabilities
         gloss_probs = torch.softmax(gloss_logits, dim=-1).squeeze(0)
         cat_probs = torch.softmax(cat_logits, dim=-1).squeeze(0)
         
+        # Step 7: Return formatted results
         return {
             'gloss_prediction': int(gloss_pred),
             'category_prediction': int(cat_pred),
@@ -379,7 +427,28 @@ class ModelPredictor:
         }
     
     def _extract_video_features(self, video_path, target_fps, image_size):
-        """Extract keypoints and IV3 features from video."""
+        """
+        Extract keypoints and IV3 features from video.
+        
+        Process:
+        1. Open video file and get source FPS
+        2. Calculate frame sampling interval for target FPS
+        3. Iterate through video frames at target FPS
+        4. For each frame: resize, convert color, extract features
+        5. Return extracted features and frames
+        
+        Args:
+            video_path (str): Path to video file
+            target_fps (int): Target FPS for frame extraction
+            image_size (int): Size to resize frames
+            
+        Returns:
+            tuple: (frames, keypoints, iv3_features)
+                - frames: List of RGB frames
+                - keypoints: List of 156-dimensional keypoint vectors
+                - iv3_features: List of 2048-dimensional IV3 feature vectors
+        """
+        # Step 1: Open video file and get source FPS
         cap = cv2.VideoCapture(video_path)
         if not cap.isOpened():
             raise ValueError(f"Cannot open video: {video_path}")
@@ -388,30 +457,36 @@ class ModelPredictor:
         if not src_fps or src_fps < 1:
             src_fps = 30.0
         
-        step_s = 1.0 / target_fps
-        next_t = 0.0
+        # Step 2: Calculate frame sampling interval for target FPS
+        step_s = 1.0 / target_fps  # Time interval between frames in seconds
+        next_t = 0.0  # Next frame timestamp
         
+        # Initialize storage lists
         frames = []
         keypoints = []
         iv3_features = []
         
         try:
+            # Step 3: Iterate through video frames at target FPS
             while True:
                 ret, frame_bgr = cap.read()
                 if not ret:
                     break
                 
+                # Check if we should process this frame based on target FPS
                 ms = cap.get(cv2.CAP_PROP_POS_MSEC)
                 if ms < next_t * 1000.0:
                     continue
                 
-                # Resize frame
+                # Step 4: Process frame
+                # Resize frame to target size
                 frame_bgr_resized = cv2.resize(frame_bgr, (image_size, image_size))
+                # Convert BGR to RGB for MediaPipe
                 frame_rgb = cv2.cvtColor(frame_bgr_resized, cv2.COLOR_BGR2RGB)
                 
                 frames.append(frame_rgb)
                 
-                # Extract keypoints
+                # Extract keypoints using MediaPipe
                 try:
                     vec156, mask78 = extract_keypoints_from_frame(frame_rgb, self.mp_models)
                     keypoints.append(vec156)
@@ -419,7 +494,7 @@ class ModelPredictor:
                     print(f"Warning: Could not extract keypoints from frame: {e}")
                     keypoints.append(np.zeros(156, dtype=np.float32))
                 
-                # Extract IV3 features
+                # Extract IV3 features using InceptionV3
                 try:
                     iv3_feat = extract_iv3_features(frame_bgr_resized, device=self.device)
                     iv3_features.append(iv3_feat)
@@ -427,9 +502,11 @@ class ModelPredictor:
                     print(f"Warning: Could not extract IV3 features from frame: {e}")
                     iv3_features.append(np.zeros(2048, dtype=np.float32))
                 
+                # Update next frame timestamp
                 next_t += step_s
                 
         finally:
+            # Step 5: Clean up video capture
             cap.release()
         
         return frames, keypoints, iv3_features
@@ -437,6 +514,10 @@ class ModelPredictor:
     def cleanup(self):
         """
         Clean up resources and close any open models.
+        
+        Process:
+        1. Close MediaPipe models if initialized
+        2. Free up memory resources
         
         Call this method when done with the predictor to free up resources,
         especially MediaPipe models used for video processing.
@@ -450,10 +531,15 @@ def list_available_models():
     """
     List all available model checkpoints in the trained_models directory.
     
+    Process:
+    1. Scan trained_models directory for subdirectories
+    2. Find all .pt files in each subdirectory
+    3. Display organized list by model type
+    
     Scans the trained_models directory for .pt files and displays them
     organized by model type.
     """
-    trained_models_dir = Path(__file__).parent
+    trained_models_dir = Path(__file__).parent.parent.parent / "trained_models"
     
     print("Available model checkpoints:")
     print("=" * 50)
@@ -470,9 +556,19 @@ def main():
     """
     Main function for command-line interface.
     
-    Parses command-line arguments and runs the prediction pipeline.
+    Process:
+    1. Parse command-line arguments
+    2. Handle special commands (list models)
+    3. Validate required arguments
+    4. Determine device (CPU/GPU)
+    5. Initialize model predictor
+    6. Make prediction based on input type
+    7. Display and optionally save results
+    8. Clean up resources
+    
     Returns exit code 0 on success, 1 on error.
     """
+    # Step 1: Parse command-line arguments
     parser = argparse.ArgumentParser(
         description="Sign Language Recognition Prediction",
         formatter_class=argparse.RawDescriptionHelpFormatter,
@@ -510,14 +606,16 @@ Examples:
     
     args = parser.parse_args()
     
+    # Step 2: Handle special commands
     if args.list_models:
         list_available_models()
-        return
+        return 0
     
+    # Step 3: Validate required arguments
     if not args.model or not args.checkpoint or not args.input:
         parser.error("--model, --checkpoint, and --input are required")
     
-    # Determine device
+    # Step 4: Determine device (CPU/GPU)
     if args.device == 'auto':
         device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     else:
@@ -525,14 +623,14 @@ Examples:
     
     print(f"Using device: {device}")
     
-    # Initialize predictor
+    # Step 5: Initialize model predictor
     try:
         predictor = ModelPredictor(args.model, args.checkpoint, device)
     except Exception as e:
         print(f"Error loading model: {e}")
         return 1
     
-    # Make prediction
+    # Step 6: Make prediction based on input type
     try:
         input_path = Path(args.input)
         if not input_path.exists():
@@ -540,16 +638,18 @@ Examples:
             return 1
         
         if input_path.suffix.lower() == '.npz':
+            # Predict from preprocessed NPZ file
             print(f"Predicting from NPZ file: {args.input}")
             results = predictor.predict_from_npz(args.input)
         else:
+            # Predict from raw video file
             print(f"Predicting from video file: {args.input}")
             results = predictor.predict_from_video(args.input, args.fps, args.image_size)
         
-        # Print results with human-readable labels
+        # Step 7: Display results with human-readable labels
         print_prediction_summary(results)
         
-        # Save results if requested
+        # Step 8: Save results if requested
         if args.output:
             # Save both raw and formatted results
             formatted_results = format_prediction_results(results)
@@ -562,6 +662,7 @@ Examples:
         print(f"Error during prediction: {e}")
         return 1
     finally:
+        # Clean up resources
         predictor.cleanup()
     
     return 0
