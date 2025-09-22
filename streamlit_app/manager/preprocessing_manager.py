@@ -50,24 +50,41 @@ def render_preprocessing_stage():
     with col3:
         st.markdown("")  # Empty space
     with col4:
-        # Check if we can show Go to Inference button
+        # Always show Go to Inference button - check for any available files
         all_files_to_show = get_all_files_to_show()
+        
+        # Check preprocessing status and available files
+        has_pending_videos = False
+        has_completed_preprocessing = False
+        
         if all_files_to_show:
-            # Check if all video files are completed
-            all_completed = True
             for (file_type, uploaded_file, status) in all_files_to_show:
-                if status not in ['completed']:
-                    all_completed = False
-                    break
-            
-            button_disabled = not all_completed
-            button_help = "Proceed to inference with all processed files" if all_completed else "Complete all video preprocessing first"
-            
-            if st.button("Go to Inference →", type="primary", help=button_help, disabled=button_disabled):
-                st.session_state.workflow_stage = 'predictions'
-                st.rerun()
+                if status == 'pending' or status == 'processing':
+                    has_pending_videos = True
+                elif status == 'completed':
+                    has_completed_preprocessing = True
+        
+        has_npz_files = bool(st.session_state.npz_files)
+        
+        # Disable button if there are pending video files, even if NPZ files are available
+        if has_pending_videos:
+            button_disabled = True
+            button_help = "Complete all video preprocessing first before proceeding to inference"
+        elif has_completed_preprocessing or has_npz_files:
+            button_disabled = False
+            if has_completed_preprocessing and has_npz_files:
+                button_help = "Proceed to inference with all available files (preprocessed + NPZ)"
+            elif has_completed_preprocessing:
+                button_help = "Proceed to inference with preprocessed files"
+            else:
+                button_help = "Proceed to inference with NPZ files"
         else:
-            st.markdown("")  # Empty space
+            button_disabled = True
+            button_help = "No files available for inference - complete preprocessing or upload NPZ files"
+        
+        if st.button("Go to Inference →", type="primary", help=button_help, disabled=button_disabled):
+            st.session_state.workflow_stage = 'predictions'
+            st.rerun()
     
     st.markdown("<div class='main-section-header'>READY FOR PREPROCESSING</div>", unsafe_allow_html=True)
     
@@ -79,15 +96,8 @@ def render_preprocessing_stage():
     if not all_files_to_show:
         st.info("No video files to preprocess.")
         
-        # Check if we have NPZ files to proceed to predictions
-        if st.session_state.npz_files:
-            st.markdown("---")
-            col1, col2, col3 = st.columns([4, 1, 1])
-            with col3:
-                if st.button("Go to Inference", type="primary", help="Proceed to inference stage"):
-                    st.session_state.workflow_stage = 'predictions'
-                    st.rerun()
-        else:
+        # Check if we should redirect to upload (no files at all)
+        if not st.session_state.npz_files:
             # If no video files and no NPZ files, automatically go back to upload
             st.info("All video files have been cleared. Redirecting to upload stage...")
             st.session_state.workflow_stage = 'upload'
