@@ -23,36 +23,6 @@ import numpy as np  # Numerical arrays and mathematical operations
 
 
 # ----------------------------
-# Geometric Utility Functions
-# ----------------------------
-
-def _point_in_ellipse(px: float, py: float, cx: float, cy: float, ax: float, by: float) -> bool:
-    """Check if a point lies inside an ellipse using normalized coordinates.
-    
-    This function uses the standard ellipse equation: ((x-cx)/ax)² + ((y-cy)/by)² ≤ 1
-    to determine if a point is within the elliptical boundary.
-    
-    Args:
-        px, py: Point coordinates to test
-        cx, cy: Ellipse center coordinates
-        ax, by: Ellipse semi-axes (half-width, half-height)
-        
-    Returns:
-        True if point is inside or on the ellipse boundary
-    """
-    # Validate ellipse parameters
-    if ax <= 0.0 or by <= 0.0:
-        return False
-    
-    # Normalize point coordinates relative to ellipse
-    dx = (px - cx) / ax
-    dy = (py - cy) / by
-    
-    # Apply ellipse equation
-    return (dx * dx + dy * dy) <= 1.0
-
-
-# ----------------------------
 # Hand Feature Extraction
 # ----------------------------
 
