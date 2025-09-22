@@ -4,7 +4,7 @@ import streamlit as st
 from typing import List, Dict
 from pathlib import Path
 from ..components.utils import detect_file_type, format_file_size
-from ..components.data_processing import process_video_file, process_multiple_videos
+from ..components.data_processing import process_videos_unified
 from .upload_manager import remove_file_from_stage
 from ..core.config import PROCESSING_CONFIG
 
@@ -304,16 +304,18 @@ def preprocess_single_video(uploaded_file, filename: str):
         # Get default preprocessing options
         options = get_default_preprocessing_options()
         
-        # Process video file
+        # Process video file using unified processing (with GPU acceleration)
         with st.spinner(f"Preprocessing {filename}..."):
-            npz_data = process_video_file(
-                uploaded_file,
+            processed_results = process_videos_unified(
+                [uploaded_file],  # Pass as list for unified processing
                 target_fps=options['target_fps'],
                 out_size=options['out_size'],
                 write_keypoints=options['write_keypoints'],
                 write_iv3_features=options['write_iv3_features'],
                 occ_detailed=options['occ_detailed']
             )
+            # Extract single result
+            npz_data = processed_results.get(Path(uploaded_file.name).stem, {})
         
         # Check compatibility
         from ..components.utils import check_npz_compatibility
@@ -416,9 +418,9 @@ def preprocess_multiple_videos_batch(uploaded_files):
         for uploaded_file in uploaded_files:
             st.session_state.file_status[uploaded_file.name] = 'processing'
         
-        # Process videos using multi-processing
-        with st.spinner(f"Preprocessing {len(uploaded_files)} videos in parallel..."):
-            processed_results = process_multiple_videos(
+        # Process videos using unified processing (with GPU acceleration)
+        with st.spinner(f"Preprocessing {len(uploaded_files)} videos..."):
+            processed_results = process_videos_unified(
                 uploaded_files,
                 target_fps=options['target_fps'],
                 out_size=options['out_size'],

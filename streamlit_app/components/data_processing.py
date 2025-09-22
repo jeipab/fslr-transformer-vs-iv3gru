@@ -30,14 +30,15 @@ except ImportError as e:
     st.warning(f"Preprocessing module not available: {e}. Video processing will not work.")
 
 
-def process_video_file(uploaded_file, target_fps: int = 30, out_size: int = 256, 
-                      write_keypoints: bool = True, write_iv3_features: bool = True,
-                      occ_detailed: bool = False) -> Dict[str, np.ndarray]:
+def process_videos_unified(uploaded_files, target_fps: int = 30, out_size: int = 256, 
+                          write_keypoints: bool = True, write_iv3_features: bool = True,
+                          occ_detailed: bool = False) -> Dict[str, Dict[str, np.ndarray]]:
     """
-    Process uploaded video file to extract keypoints and/or features.
+    Unified processing function for both single and multiple videos.
+    Always uses GPU acceleration and optimal resource allocation.
     
     Args:
-        uploaded_file: Streamlit uploaded file object
+        uploaded_files: Single Streamlit uploaded file object or list of files
         target_fps: Target FPS for processing
         out_size: Target frame size for processing
         write_keypoints: Whether to extract 156-D keypoint features
@@ -45,66 +46,90 @@ def process_video_file(uploaded_file, target_fps: int = 30, out_size: int = 256,
         occ_detailed: Whether to include detailed occlusion results
         
     Returns:
-        Dictionary with keypoint/feature data similar to NPZ format
+        Dictionary mapping filename to processed data
     """
     if not PREPROCESSING_AVAILABLE:
         st.error("Preprocessing module not available. Please ensure all dependencies are installed.")
         return {}
     
-    # Save uploaded file temporarily
-    with tempfile.NamedTemporaryFile(delete=False, suffix=Path(uploaded_file.name).suffix) as tmp_file:
-        tmp_file.write(uploaded_file.read())
-        tmp_video_path = tmp_file.name
+    # Ensure uploaded_files is a list for consistency
+    if not isinstance(uploaded_files, list):
+        uploaded_files = [uploaded_files]
     
-    # Create persistent output directory in temp folder
-    tmp_dir = tempfile.mkdtemp()
+    # Import unified preprocessing functions
+    try:
+        from preprocessing.core.preprocess import process_videos_multiprocess
+        MULTI_PREPROCESSING_AVAILABLE = True
+    except ImportError:
+        MULTI_PREPROCESSING_AVAILABLE = False
+        st.warning("Multi-processing not available. Falling back to sequential processing.")
+    
+    # Save uploaded files temporarily
+    temp_paths = []
+    temp_dir = tempfile.mkdtemp()
     
     try:
-        # Process video using existing preprocessing function
-        process_video(
-            video_path=tmp_video_path,
-            out_dir=tmp_dir,
-            target_fps=target_fps,
-            out_size=out_size,
-            conf_thresh=0.5,
-            max_gap=5,
-            write_keypoints=write_keypoints,
-            write_iv3_features=write_iv3_features,
-            compute_occlusion=True,  # Enable occlusion detection
-            occ_detailed=occ_detailed  # Include detailed results if requested
-        )
+        # Save all files to temporary paths
+        for uploaded_file in uploaded_files:
+            temp_path = os.path.join(temp_dir, uploaded_file.name)
+            with open(temp_path, 'wb') as f:
+                f.write(uploaded_file.read())
+            temp_paths.append(temp_path)
         
-        # Load the generated NPZ file
-        # Use the basename of the temporary video file (which is what preprocessing creates)
-        temp_basename = Path(tmp_video_path).stem
-        npz_path = os.path.join(tmp_dir, f"{temp_basename}.npz")
+        # Get real-time resource information
+        resource_info = get_dynamic_resource_info()
         
-        if os.path.exists(npz_path):
-            data = dict(np.load(npz_path, allow_pickle=True))
-            
-            # Clean up the temporary directory after loading
-            import shutil
-            shutil.rmtree(tmp_dir)
-            
-            return data
+        # Calculate optimal parameters based on current resources
+        optimal_workers, processing_type = calculate_optimal_workers(resource_info, len(uploaded_files))
+        optimal_batch_size = calculate_optimal_batch_size(resource_info, processing_type)
+        
+        if MULTI_PREPROCESSING_AVAILABLE:
+            # Process videos using multi-processing (works for single videos too)
+            results = process_videos_multiprocess(
+                video_files=temp_paths,
+                out_dir=temp_dir,
+                target_fps=target_fps,
+                out_size=out_size,
+                conf_thresh=0.5,
+                max_gap=5,
+                write_keypoints=write_keypoints,
+                write_iv3_features=write_iv3_features,
+                compute_occlusion=True,
+                occ_detailed=occ_detailed,
+                workers=optimal_workers,
+                batch_size=optimal_batch_size,
+                disable_parquet=True  # Disable parquet for Streamlit
+            )
         else:
-            st.error(f"Failed to process video: {uploaded_file.name}")
-            # Clean up directory even if file not found
-            import shutil
-            shutil.rmtree(tmp_dir)
-            return {}
+            # Fallback to sequential processing
+            results = {}
+            for temp_path in temp_paths:
+                basename = Path(temp_path).stem
+                data = _process_single_video_fallback(temp_path, target_fps, out_size, 
+                                                    write_keypoints, write_iv3_features, occ_detailed)
+                if data:
+                    results[basename] = data
+        
+        # Load results
+        processed_data = {}
+        for temp_path in temp_paths:
+            basename = Path(temp_path).stem
+            npz_path = os.path.join(temp_dir, f"{basename}.npz")
             
+            if os.path.exists(npz_path):
+                data = dict(np.load(npz_path, allow_pickle=True))
+                processed_data[basename] = data
+        
+        return processed_data
+        
     except Exception as e:
-        st.error(f"Error processing video: {str(e)}")
-        # Clean up directory on error
-        import shutil
-        if os.path.exists(tmp_dir):
-            shutil.rmtree(tmp_dir)
+        st.error(f"Error in unified processing: {str(e)}")
         return {}
     finally:
-        # Clean up temporary video file
-        if os.path.exists(tmp_video_path):
-            os.unlink(tmp_video_path)
+        # Clean up temporary files
+        import shutil
+        if os.path.exists(temp_dir):
+            shutil.rmtree(temp_dir)
 
 
 def ensure_cuda_multiprocessing_compatibility():
@@ -226,161 +251,34 @@ def calculate_optimal_batch_size(resource_info, processing_type):
             return 2
 
 
+# Legacy functions - redirect to unified processing for backward compatibility
+def process_video_file(uploaded_file, target_fps: int = 30, out_size: int = 256, 
+                      write_keypoints: bool = True, write_iv3_features: bool = True,
+                      occ_detailed: bool = False) -> Dict[str, np.ndarray]:
+    """
+    Legacy function - redirects to unified processing.
+    Maintained for backward compatibility.
+    """
+    results = process_videos_unified([uploaded_file], target_fps, out_size, 
+                                   write_keypoints, write_iv3_features, occ_detailed)
+    return results.get(Path(uploaded_file.name).stem, {})
+
+
 def process_multiple_videos(uploaded_files, target_fps: int = 30, out_size: int = 256, 
                           write_keypoints: bool = True, write_iv3_features: bool = True,
                           occ_detailed: bool = False) -> Dict[str, Dict[str, np.ndarray]]:
     """
-    Process multiple video files using dynamic resource detection and adaptive optimization.
-    
-    Args:
-        uploaded_files: List of Streamlit uploaded file objects
-        target_fps: Target FPS for processing
-        out_size: Target frame size for processing
-        write_keypoints: Whether to extract 156-D keypoint features
-        write_iv3_features: Whether to extract 2048-D InceptionV3 features
-        occ_detailed: Whether to include detailed occlusion results
-        
-    Returns:
-        Dictionary mapping filename to processed data
+    Legacy function - redirects to unified processing.
+    Maintained for backward compatibility.
     """
-    if not PREPROCESSING_AVAILABLE:
-        st.error("Preprocessing module not available. Please ensure all dependencies are installed.")
-        return {}
-    
-    # Import unified preprocessing functions
-    try:
-        from preprocessing.core.preprocess import process_videos_multiprocess
-        MULTI_PREPROCESSING_AVAILABLE = True
-    except ImportError:
-        MULTI_PREPROCESSING_AVAILABLE = False
-        st.warning("Multi-processing not available. Falling back to sequential processing.")
-    
-    # Save uploaded files temporarily
-    temp_paths = []
-    temp_dir = tempfile.mkdtemp()
-    
-    try:
-        # Save all files to temporary paths
-        for uploaded_file in uploaded_files:
-            temp_path = os.path.join(temp_dir, uploaded_file.name)
-            with open(temp_path, 'wb') as f:
-                f.write(uploaded_file.read())
-            temp_paths.append(temp_path)
-        
-        # Get real-time resource information
-        resource_info = get_dynamic_resource_info()
-        
-        # Display dynamic resource information with CUDA-specific optimizations
-        st.info("**Dynamic Resource Analysis (CUDA-Optimized):**")
-        col1, col2, col3, col4 = st.columns(4)
-        
-        with col1:
-            st.metric("CPU Usage", f"{resource_info['cpu_percent']:.1f}%")
-            st.metric("CPU Cores", resource_info['cpu_count'])
-        
-        with col2:
-            st.metric("Memory Usage", f"{resource_info['memory_percent']:.1f}%")
-            st.metric("Available RAM", f"{resource_info['memory_available_gb']:.1f} GB")
-        
-        with col3:
-            cuda_status = "✅ Ready" if resource_info['cuda_available'] else "❌ Not Available"
-            st.metric("CUDA Status", cuda_status)
-            st.metric("GPU Count", resource_info['gpu_count'])
-        
-        with col4:
-            if resource_info['cuda_available'] and resource_info['gpu_count'] > 0:
-                gpu_mem = resource_info['gpu_memory_info'][0]
-                st.metric("GPU Memory", f"{gpu_mem['free']:.1f} GB free")
-                st.metric("Processing", "🚀 GPU Accelerated")
-            else:
-                st.metric("Processing Type", "💻 CPU Only")
-                st.metric("Status", "Ready")
-        
-        # Choose processing strategy based on dynamic resources
-        if len(uploaded_files) == 1:
-            # Single video - use regular processing
-            st.info("Processing single video...")
-            return _process_single_video_fallback(temp_paths[0], target_fps, out_size, 
-                                                write_keypoints, write_iv3_features, occ_detailed)
-        
-        elif MULTI_PREPROCESSING_AVAILABLE and len(uploaded_files) > 1:
-            # Multiple videos - use dynamic multi-processing
-            
-            # Calculate optimal parameters based on current resources
-            optimal_workers, processing_type = calculate_optimal_workers(resource_info, len(uploaded_files))
-            optimal_batch_size = calculate_optimal_batch_size(resource_info, processing_type)
-            
-            # Display optimization results
-            processing_emoji = "🚀" if processing_type == 'gpu' else "💻"
-            st.info(f"**Adaptive Processing Configuration (CUDA-Optimized):**")
-            col1, col2, col3 = st.columns(3)
-            with col1:
-                st.metric("Workers", optimal_workers)
-            with col2:
-                st.metric("Batch Size", optimal_batch_size)
-            with col3:
-                st.metric("Processing Type", f"{processing_emoji} {processing_type.upper()}")
-            
-            st.info(f"Processing {len(uploaded_files)} videos with {optimal_workers} workers...")
-            
-            # Process videos using dynamic multi-processing
-            results = process_videos_multiprocess(
-                video_files=temp_paths,
-                out_dir=temp_dir,
-                target_fps=target_fps,
-                out_size=out_size,
-                conf_thresh=0.5,
-                max_gap=5,
-                write_keypoints=write_keypoints,
-                write_iv3_features=write_iv3_features,
-                compute_occlusion=True,
-                occ_detailed=occ_detailed,
-                workers=optimal_workers,
-                batch_size=optimal_batch_size,
-                disable_parquet=True  # Disable parquet for Streamlit
-            )
-            
-            # Load results
-            processed_data = {}
-            for temp_path in temp_paths:
-                basename = Path(temp_path).stem
-                npz_path = os.path.join(temp_dir, f"{basename}.npz")
-                
-                if os.path.exists(npz_path):
-                    data = dict(np.load(npz_path, allow_pickle=True))
-                    processed_data[basename] = data
-                else:
-                    st.warning(f"Failed to process: {basename}")
-            
-            return processed_data
-        
-        else:
-            # Fallback to sequential processing
-            st.info("Processing videos sequentially...")
-            processed_data = {}
-            for temp_path in temp_paths:
-                basename = Path(temp_path).stem
-                data = _process_single_video_fallback(temp_path, target_fps, out_size, 
-                                                    write_keypoints, write_iv3_features, occ_detailed)
-                if data:
-                    processed_data[basename] = data
-            
-            return processed_data
-            
-    except Exception as e:
-        st.error(f"Error in dynamic multi-processing: {str(e)}")
-        return {}
-    finally:
-        # Clean up temporary files
-        import shutil
-        if os.path.exists(temp_dir):
-            shutil.rmtree(temp_dir)
+    return process_videos_unified(uploaded_files, target_fps, out_size, 
+                                 write_keypoints, write_iv3_features, occ_detailed)
 
 
 def _process_single_video_fallback(video_path: str, target_fps: int, out_size: int, 
                                   write_keypoints: bool, write_iv3_features: bool,
                                   occ_detailed: bool) -> Dict[str, np.ndarray]:
-    """Fallback function for single video processing."""
+    """Fallback function for single video processing when multiprocessing is unavailable."""
     try:
         # Create output directory
         out_dir = os.path.dirname(video_path)
