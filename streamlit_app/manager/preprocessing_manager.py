@@ -264,10 +264,15 @@ def render_batch_operations(video_files: List):
                 preprocess_all_pending_videos()
                 st.rerun()
         else:
-            st.info("All video files have been processed")
+            st.markdown("")  # Empty space when no pending files
     
     with col4:
-        st.markdown("")  # Empty space for equal spacing
+        # Download All NPZ button - aligned with individual download buttons
+        preprocessed_files = st.session_state.preprocessed_files
+        if preprocessed_files:
+            create_bulk_download_button_inline(preprocessed_files, is_processing)
+        else:
+            st.markdown("")  # Empty space when no files
     
     with col5:
         if st.button("Reset All", help="Reset all processed videos back to pending", type="primary", disabled=is_processing):
@@ -281,39 +286,14 @@ def render_batch_operations(video_files: List):
 
 
 def render_preprocessed_files_summary(all_files_to_show: List):
-    """Render summary of preprocessed files."""
-    st.markdown("---")
-    st.markdown("### Preprocessed Files")
-    
+    """Render summary for preprocessed files (download button now in main button row)."""
     preprocessed_files = st.session_state.preprocessed_files
     
     if not preprocessed_files:
         return
     
-    # Show summary metrics
-    col1, col2, col3 = st.columns(3)
-    
-    with col1:
-        st.metric("Preprocessed Videos", len(preprocessed_files))
-    
-    with col2:
-        # Count compatibility
-        transformer_compatible = sum(1 for f in preprocessed_files 
-                                   if st.session_state.file_metadata.get(f.name, {}).get('compatibility', {}).get('transformer', False))
-        st.metric("Transformer Compatible", transformer_compatible)
-    
-    with col3:
-        iv3_compatible = sum(1 for f in preprocessed_files 
-                           if st.session_state.file_metadata.get(f.name, {}).get('compatibility', {}).get('iv3_gru', False))
-        st.metric("IV3-GRU Compatible", iv3_compatible)
-    
-    # Bulk download button
-    if preprocessed_files:
-        st.markdown("---")
-        
-        create_bulk_download_button(preprocessed_files)
-    
-    # Note: Go to Inference button is now in the navigation header
+    # Download button is now in the main button row, so this function can be minimal
+    # or removed entirely if no other summary is needed
 
 
 def preprocess_single_video(uploaded_file, filename: str):
@@ -376,18 +356,16 @@ def preprocess_single_video(uploaded_file, filename: str):
         
         st.session_state.file_status[filename] = 'completed'
         
-        # Show success message
+        # Store compatibility info (success toast will be shown in batch summary)
         compatible_models = []
         if compatibility['transformer']:
             compatible_models.append("Transformer")
         if compatibility['iv3_gru']:
             compatible_models.append("IV3-GRU")
         
-        st.toast(f"{filename} preprocessed successfully - compatible with {', '.join(compatible_models)}", icon="✅", duration=5000)
-        
     except Exception as e:
         st.session_state.file_status[filename] = 'error'
-        st.toast(f"Preprocessing failed for {filename}: {str(e)}", icon="❌", duration=5000)
+        # Error will be shown in batch summary
 
 
 def preprocess_all_pending_videos():
@@ -498,17 +476,14 @@ def preprocess_multiple_videos_batch(uploaded_files):
                 
                 st.session_state.file_status[filename] = 'completed'
                 
-                # Show success message
+                # Store compatibility info (success will be shown in batch summary)
                 compatible_models = []
                 if compatibility['transformer']:
                     compatible_models.append("Transformer")
                 if compatibility['iv3_gru']:
                     compatible_models.append("IV3-GRU")
-                
-                st.toast(f"{filename} preprocessed successfully - compatible with {', '.join(compatible_models)}", icon="✅", duration=5000)
             else:
                 st.session_state.file_status[filename] = 'error'
-                st.toast(f"Preprocessing failed for {filename}", icon="❌", duration=5000)
         
     except Exception as e:
         # Set all files to error status
@@ -525,12 +500,6 @@ def reset_preprocessed_videos():
     if 'original_file_data' not in st.session_state:
         st.session_state.original_file_data = {}
     
-    # Debug logging
-    st.write("🔍 **Reset Debug Info:**")
-    st.write(f"- original_file_data keys: {list(st.session_state.original_file_data.keys())}")
-    st.write(f"- preprocessed_files: {[f.name for f in st.session_state.preprocessed_files]}")
-    st.write(f"- video_files: {[f.name for f in st.session_state.video_files]}")
-    
     # Collect all filenames that need to be reset
     files_to_reset = set()
     
@@ -546,17 +515,11 @@ def reset_preprocessed_videos():
     
     # Reset each file
     for filename in files_to_reset:
-        st.write(f"🔄 **Resetting file: {filename}**")
-        
         # Check if we have original file data stored
         if filename in st.session_state.original_file_data:
-            st.write(f"✅ Found original data for {filename}")
             # Recreate the original file object from stored data
             from ..components.utils import TempUploadedFile
             original_data = st.session_state.original_file_data[filename]
-            
-            st.write(f"- Original data type: {type(original_data.get('data', 'No data'))}")
-            st.write(f"- Original data size: {len(original_data.get('data', b''))} bytes")
             
             # Create a new file object with the original data
             file_obj = TempUploadedFile(
@@ -565,9 +528,6 @@ def reset_preprocessed_videos():
                 type=original_data['type'],
                 size=original_data['size']
             )
-            
-            st.write(f"- Created file object: {type(file_obj)}")
-            st.write(f"- File object data size: {len(file_obj.getvalue())} bytes")
             
             # Add to video_files if not already there
             if not any(f.name == filename for f in st.session_state.video_files):
@@ -594,7 +554,7 @@ def reset_preprocessed_videos():
             
             reset_count += 1
         else:
-            st.write(f"❌ No original data found for {filename}, using fallback")
+            # No original data found, use fallback method
             # Fallback: try to find the file object from any of the lists
             file_obj = None
             
@@ -679,6 +639,68 @@ def clear_all_video_files():
     if not st.session_state.npz_files:
         st.session_state.workflow_stage = 'upload'
         st.rerun()
+
+
+def create_bulk_download_button_inline(preprocessed_files: List, is_processing: bool = False):
+    """Create inline bulk download button for the button row."""
+    import zipfile
+    import io
+    from pathlib import Path
+    from ..components.utils import create_npz_bytes
+    
+    if is_processing:
+        st.button("Download All", disabled=True, help="⏳ Please wait for all files to finish processing before downloading.")
+        return
+    
+    # Create ZIP in memory
+    zip_buffer = io.BytesIO()
+    
+    with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zip_file:
+        # Add all preprocessed NPZ files with unique names to handle duplicates
+        files_added = 0
+        used_names = set()
+        for preprocessed_file in preprocessed_files:
+            filename = preprocessed_file.name
+            npz_data = st.session_state.processed_data.get(filename)
+            if npz_data:
+                npz_bytes = create_npz_bytes(npz_data)
+                # Create descriptive filename for ZIP contents
+                base_name = Path(filename).stem  # Remove original extension
+                base_npz_filename = f"{base_name}_preprocessed.npz"
+                
+                # Handle duplicate names by adding (1), (2), etc.
+                npz_filename = base_npz_filename
+                counter = 1
+                while npz_filename in used_names:
+                    name_without_ext = Path(base_npz_filename).stem
+                    ext = Path(base_npz_filename).suffix
+                    npz_filename = f"{name_without_ext}({counter}){ext}"
+                    counter += 1
+                
+                used_names.add(npz_filename)
+                zip_file.writestr(npz_filename, npz_bytes)
+                files_added += 1
+        
+        if files_added == 0:
+            st.button("Download All", disabled=True, help="No NPZ files available for download")
+            return
+    
+    zip_buffer.seek(0)
+    
+    # Create descriptive ZIP filename with timestamp
+    import datetime
+    timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+    zip_filename = f"preprocessed_files_{timestamp}.zip"
+    
+    # Inline download button
+    st.download_button(
+        label="Download All",
+        data=zip_buffer.getvalue(),
+        file_name=zip_filename,
+        mime="application/zip",
+        help=f"Download {files_added} preprocessed NPZ files as ZIP",
+        type="primary"
+    )
 
 
 def create_bulk_download_button(preprocessed_files: List):
