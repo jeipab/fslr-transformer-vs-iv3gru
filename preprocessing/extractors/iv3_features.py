@@ -8,7 +8,7 @@ This module provides:
 - ImageNet pretrained weights for robust feature extraction
 
 Classes:
-- BatchedInceptionV3Processor: GPU-optimized batch processing (30-50x speedup)
+- BatchedInceptionV3Processor: GPU-optimized batch processing
 
 Functions:
 - extract_iv3_features: Single-frame feature extraction
