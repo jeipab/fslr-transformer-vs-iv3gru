@@ -368,27 +368,12 @@ def render_sequence_overview(npz_dict: Dict, sequence_length: int) -> Tuple[np.n
     return X_pad, mask, meta_parsed
 
 
-def render_keypoint_video(sequence: np.ndarray, mask: Optional[np.ndarray] = None, key_suffix: str = "") -> None:
+def render_keypoint_video(sequence: np.ndarray, mask: Optional[np.ndarray] = None, key_suffix: str = "", show_skeleton: bool = True, fps: int = 15) -> None:
     """Generate and display a video with keypoint animation."""
     time_steps, feature_dim = sequence.shape
     keypoints_2d = sequence.reshape(time_steps, 78, 2)
     
-    # Video settings
-    col1, col2, col3 = st.columns([2, 1, 1])
-    with col1:
-        fps = st.slider(
-            "FPS", 
-            min_value=5, 
-            max_value=30, 
-            value=15, 
-            step=1,
-            help="Frames per second for video", 
-            key=f"video_fps_{key_suffix}"
-        )
-    with col2:
-        show_skeleton = st.checkbox("Show Skeleton", value=True, help="Display skeleton connections", key=f"video_skeleton_{key_suffix}")
-    with col3:
-        show_visibility = st.checkbox("Show Visibility", value=True, help="Color points by visibility", key=f"video_visibility_{key_suffix}")
+    # Video settings - FPS is now controlled from main controls
     
     # Background options
     col4, col5 = st.columns(2)
@@ -397,8 +382,19 @@ def render_keypoint_video(sequence: np.ndarray, mask: Optional[np.ndarray] = Non
         background_options = ["White", "Black", "Grid"]
         
         # Check if this is a processed video file with original video data
-        if key_suffix and key_suffix in st.session_state.get('original_file_data', {}):
-            original_data = st.session_state.original_file_data[key_suffix]
+        # Extract filename from key_suffix (format: filename_objectid)
+        if key_suffix:
+            # Split by underscore and take all parts except the last one (object id)
+            parts = key_suffix.split('_')
+            if len(parts) > 1:
+                filename = '_'.join(parts[:-1])  # All parts except the last (object id)
+            else:
+                filename = key_suffix
+        else:
+            filename = ""
+        
+        if filename and filename in st.session_state.get('original_file_data', {}):
+            original_data = st.session_state.original_file_data[filename]
             if original_data.get('type', '').startswith('video/'):
                 background_options.append("Original Video")
         
@@ -429,7 +425,7 @@ def render_keypoint_video(sequence: np.ndarray, mask: Optional[np.ndarray] = Non
     # Video control buttons with Download Video right-aligned to dropdown and Generate Video with gap
     col_empty1, col_empty2, col_empty3, col_empty4, col_empty5, col_gen, col_gap, col_download = st.columns([2, 2, 1, 1, 1, 2, 0.25, 2])
     
-    with col_gen:
+    with col_download:
         if st.button("Generate Video", key=f"generate_video_{key_suffix}"):
             with st.spinner("Generating keypoint video..."):
                 video_path = create_keypoint_animation_video(
@@ -444,7 +440,7 @@ def render_keypoint_video(sequence: np.ndarray, mask: Optional[np.ndarray] = Non
                 else:
                     st.toast("Failed to generate video", icon="❌")
     
-    with col_download:
+    with col_gen:
         # Download button (moved here to be next to generate video button)
         if f"video_path_{key_suffix}" in st.session_state:
             video_path = st.session_state[f"video_path_{key_suffix}"]
@@ -543,21 +539,13 @@ def render_animated_keypoints(sequence: np.ndarray, mask: Optional[np.ndarray] =
                 is_occluded = result.get('occlusion_detected', False)
                 frame_occlusion_data[frame_idx] = is_occluded
     
-    # Video generation option
-    col1, col2, col3 = st.columns([2, 1, 1])
-    with col1:
-        st.markdown("**Choose visualization method:**")
-    with col2:
-        st.markdown("")  # Empty space for alignment
-    with col3:
-        use_video = st.checkbox("Generate Video", value=False, help="Create an MP4 video with keypoint animation", key=f"use_video_{key_suffix}")
-    
-    if use_video:
-        render_keypoint_video(sequence, mask, key_suffix)
-        return
     
     # Define skeleton connections for MediaPipe Holistic based on actual preprocessing layout
     # Layout: Pose(0-24), Left Hand(25-45), Right Hand(46-66), Face(67-77)
+    # Face landmarks use FACEMESH_11 = [1, 33, 263, 133, 362, 61, 291, 105, 334, 199, 4]
+    # Mapped to indices 0-10: [nose_tip, left_eye_outer, right_eye_outer, left_eye_inner, 
+    #                        right_eye_inner, mouth_left, mouth_right, left_eyebrow, 
+    #                        right_eyebrow, chin, nose_bridge]
     skeleton_connections = {
         "pose": [
             # Upper body pose connections (indices 0-24)
@@ -618,7 +606,7 @@ def render_animated_keypoints(sequence: np.ndarray, mask: Optional[np.ndarray] =
     col1, col2, col3 = st.columns([3, 1, 1])
     
     with col3:
-        use_video = st.checkbox("Generate Video", value=False, help="Create an MP4 video with keypoint animation", key=f"use_video_{key_suffix}")
+        use_video = st.checkbox("Generate Video", value=False, help="Create an MP4 video with keypoint animation", key=f"animated_video_{key_suffix}")
     
     with col1:
         if use_video:
