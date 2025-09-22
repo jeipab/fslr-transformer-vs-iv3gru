@@ -67,6 +67,39 @@ _IMAGENET_MEAN = torch.tensor([0.485, 0.456, 0.406]).view(3, 1, 1)
 _IMAGENET_STD = torch.tensor([0.229, 0.224, 0.225]).view(3, 1, 1)
 
 # ----------------------------
+# Shared Preprocessing Utilities
+# ----------------------------
+
+def _preprocess_frame_to_tensor(frame_bgr, image_size=(299, 299), device=None):
+    """Preprocess a BGR frame to InceptionV3 input tensor.
+    
+    Args:
+        frame_bgr: OpenCV BGR image (H, W, 3) in [0, 255] pixel range
+        image_size: Target image size for InceptionV3 (default: 299x299)
+        device: PyTorch device for computation (default: CPU)
+        
+    Returns:
+        Preprocessed tensor [1, 3, 299, 299] ready for InceptionV3
+    """
+    if device is None:
+        device = torch.device("cpu")
+    
+    # STEP 1: Convert BGR to RGB and resize
+    frame_rgb = cv2.cvtColor(frame_bgr, cv2.COLOR_BGR2RGB)
+    img_resized = cv2.resize(frame_rgb, image_size)
+    
+    # STEP 2: Convert to PyTorch tensor and normalize pixel values to [0, 1]
+    tensor = torch.from_numpy(img_resized).permute(2, 0, 1).float() / 255.0
+    tensor = tensor.unsqueeze(0).to(device)  # Add batch dimension: [1, 3, 299, 299]
+    
+    # STEP 3: Apply ImageNet normalization
+    mean = _IMAGENET_MEAN.to(device)
+    std = _IMAGENET_STD.to(device)
+    tensor = (tensor - mean) / std
+    
+    return tensor
+
+# ----------------------------
 # Batched InceptionV3 Processing for GPU Efficiency
 # ----------------------------
 
@@ -93,39 +126,14 @@ class BatchedInceptionV3Processor:
         self._init_model()
     
     def _init_model(self):
-        """Initialize InceptionV3 model with ImageNet weights for feature extraction."""
-        # Load pre-trained InceptionV3 model
-        self.weights = Inception_V3_Weights.IMAGENET1K_V1
-        self.model = inception_v3(weights=self.weights)
-        
-        # Configure model for feature extraction
-        self.model.aux_logits = False  # Disable auxiliary classifier outputs
-        self.model.fc = nn.Identity()  # Replace final classifier with identity (returns 2048D features)
-        self.model.eval()  # Set to evaluation mode
-        
-        # Freeze all parameters for inference-only mode
-        for p in self.model.parameters():
-            p.requires_grad = False
-        
-        # Move model to target device
-        self.model = self.model.to(self.device)
-        
-        # Pre-compute ImageNet normalization constants
-        self.mean = _IMAGENET_MEAN.to(self.device)
-        self.std = _IMAGENET_STD.to(self.device)
+        """Initialize InceptionV3 model using the global model for consistency."""
+        # Use the global model and move it to target device
+        self.model = _iv3_model.to(self.device)
     
     def preprocess_frame(self, frame_bgr, image_size=(299, 299)):
         """Preprocess a single BGR frame for InceptionV3 input."""
-        # Convert BGR to RGB
-        frame_rgb = cv2.cvtColor(frame_bgr, cv2.COLOR_BGR2RGB)
-        # Resize to InceptionV3 input dimensions
-        img_resized = cv2.resize(frame_rgb, image_size)
-        # Convert to PyTorch tensor and normalize to [0, 1]
-        tensor = torch.from_numpy(img_resized).permute(2, 0, 1).float() / 255.0
-        # Move to device and apply ImageNet normalization
-        tensor = tensor.to(self.device)
-        tensor = (tensor - self.mean) / self.std
-        return tensor
+        tensor = _preprocess_frame_to_tensor(frame_bgr, image_size, self.device)
+        return tensor.squeeze(0)  # Remove batch dimension for individual frame processing
     
     def extract_batch_features(self, frames_bgr, image_size=(299, 299)):
         """Extract InceptionV3 features for a batch of frames efficiently.
@@ -184,18 +192,8 @@ def extract_iv3_features(frame_bgr, image_size=(299, 299), device=None):
     if device is None:
         device = torch.device("cpu")
 
-    # STEP 1: Convert BGR (OpenCV) to RGB (PyTorch/ImageNet standard) and resize
-    frame_rgb = cv2.cvtColor(frame_bgr, cv2.COLOR_BGR2RGB)
-    img_resized = cv2.resize(frame_rgb, image_size)
-
-    # STEP 2: Convert to PyTorch tensor and normalize pixel values to [0, 1]
-    tensor = torch.from_numpy(img_resized).permute(2, 0, 1).float() / 255.0
-    tensor = tensor.unsqueeze(0).to(device)  # Add batch dimension: [1, 3, 299, 299]
-    
-    # STEP 3: Apply ImageNet normalization (move constants to target device)
-    mean = _IMAGENET_MEAN.to(device)
-    std = _IMAGENET_STD.to(device)
-    tensor = (tensor - mean) / std
+    # STEP 1-3: Preprocess frame using shared utility
+    tensor = _preprocess_frame_to_tensor(frame_bgr, image_size, device)
 
     # STEP 4: Forward pass through InceptionV3 (no gradient computation needed)
     with torch.no_grad():
