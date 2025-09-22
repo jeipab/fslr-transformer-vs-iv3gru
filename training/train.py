@@ -343,7 +343,7 @@ def collate_features_with_padding(batch):
     3. Create a padded tensor with shape [batch_size, max_length, feature_dim]
     4. Copy each sequence into the padded tensor
     5. Stack labels and lengths into tensors
-    
+
     Args:
         batch: List of tuples, each containing (features[T,2048], gloss_label, cat_label, length)
 
@@ -1524,7 +1524,7 @@ def train_model(
     # ============================================================================
     # Learning rate scheduling helps improve training stability and final performance
     # Different schedulers are suited for different training scenarios
-    
+
     if scheduler_type == "plateau":
         # Reduce LR when validation metric plateaus - good for stable training
         scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='max', factor=0.5, patience=scheduler_patience)
@@ -1621,7 +1621,7 @@ def train_model(
     # ============================================================================
     # TRAINING LOOP START
     # ============================================================================
-    
+
     print(f"Training for {epochs} epochs...")
     if curriculum_scheduler is not None:
         print(f"Curriculum training: {curriculum_scheduler.get_phase_info(0)}")
