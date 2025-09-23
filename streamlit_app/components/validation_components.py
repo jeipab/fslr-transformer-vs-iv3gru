@@ -256,6 +256,14 @@ def render_per_class_analysis(results: Dict[str, Any]):
     """Render per-class performance analysis."""
     per_class = results['per_class_results']
     
+    # Load label mappings (same approach as Detailed Predictions)
+    try:
+        from data.labels.label_mapping import load_label_mappings
+        gloss_mapping, category_mapping = load_label_mappings()
+    except Exception as e:
+        st.warning(f"Could not load label mappings: {e}. Showing numeric IDs only.")
+        gloss_mapping, category_mapping = {}, {}
+    
     # Extract per-class data for gloss
     gloss_per_class = per_class['gloss_per_class']
     cat_per_class = per_class['category_per_class']
@@ -264,12 +272,19 @@ def render_per_class_analysis(results: Dict[str, Any]):
     gloss_data = []
     for class_id, metrics in gloss_per_class.items():
         if class_id.isdigit():
+            # Handle both old format (support) and new format (occurrences)
+            occurrences = metrics.get('occurrences', metrics.get('support', 0))
+            
+            # Convert numeric class ID to actual label (like Detailed Predictions)
+            gloss_label = gloss_mapping.get(int(class_id), f"Unknown ({class_id})")
+            class_display = f"{gloss_label} ({class_id})"
+            
             gloss_data.append({
-                'Class': int(class_id),
+                'Class': class_display,  # Use actual label with ID
                 'Precision': metrics['precision'],
                 'Recall': metrics['recall'],
                 'F1-Score': metrics['f1-score'],
-                'Support': metrics['support']
+                'Occurrences': occurrences  # Support both old and new format
             })
     
     gloss_df = pd.DataFrame(gloss_data).sort_values('F1-Score', ascending=False)
@@ -278,12 +293,19 @@ def render_per_class_analysis(results: Dict[str, Any]):
     cat_data = []
     for class_id, metrics in cat_per_class.items():
         if class_id.isdigit():
+            # Handle both old format (support) and new format (occurrences)
+            occurrences = metrics.get('occurrences', metrics.get('support', 0))
+            
+            # Convert numeric class ID to actual label (like Detailed Predictions)
+            cat_label = category_mapping.get(int(class_id), f"Unknown ({class_id})")
+            class_display = f"{cat_label} ({class_id})"
+            
             cat_data.append({
-                'Class': int(class_id),
+                'Class': class_display,  # Use actual label with ID
                 'Precision': metrics['precision'],
                 'Recall': metrics['recall'],
                 'F1-Score': metrics['f1-score'],
-                'Support': metrics['support']
+                'Occurrences': occurrences  # Support both old and new format
             })
     
     cat_df = pd.DataFrame(cat_data).sort_values('F1-Score', ascending=False)

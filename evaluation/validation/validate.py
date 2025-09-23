@@ -581,10 +581,46 @@ class ModelValidator:
             cat_gts, cat_preds, output_dict=True, zero_division=0
         )
         
+        # Transform reports to include actual labels and rename support to occurrences
+        gloss_per_class_with_labels = self._transform_report_with_labels(gloss_report, self.gloss_mapping)
+        cat_per_class_with_labels = self._transform_report_with_labels(cat_report, self.category_mapping)
+        
         return {
-            'gloss_per_class': gloss_report,
-            'category_per_class': cat_report
+            'gloss_per_class': gloss_per_class_with_labels,
+            'category_per_class': cat_per_class_with_labels
         }
+    
+    def _transform_report_with_labels(self, report: Dict[str, Any], label_mapping: Dict[int, str]) -> Dict[str, Any]:
+        """
+        Transform classification report to include actual labels and rename support to occurrences.
+        
+        Args:
+            report: Classification report from sklearn
+            label_mapping: Dictionary mapping class IDs to label names
+            
+        Returns:
+            Transformed report with labels and renamed support column
+        """
+        transformed_report = {}
+        
+        for class_id_str, metrics in report.items():
+            if class_id_str.isdigit():  # Only numeric class IDs
+                class_id = int(class_id_str)
+                label_name = label_mapping.get(class_id, f'Unknown_{class_id}')
+                
+                # Keep numeric key but add label information and rename support to occurrences
+                transformed_report[class_id_str] = {
+                    'class': f"{label_name} ({class_id})",  # Format like individual predictions
+                    'precision': metrics['precision'],
+                    'recall': metrics['recall'],
+                    'f1-score': metrics['f1-score'],
+                    'occurrences': metrics['support']  # Rename support to occurrences
+                }
+            else:
+                # Keep non-numeric keys (like 'accuracy', 'macro avg', 'weighted avg') as-is
+                transformed_report[class_id_str] = metrics
+        
+        return transformed_report
     
     def _compute_confusion_matrices(self, gloss_preds: np.ndarray, cat_preds: np.ndarray,
                                   gloss_gts: np.ndarray, cat_gts: np.ndarray) -> Dict[str, Any]:

@@ -138,10 +138,6 @@ def render_validation_stage(cfg: Dict):
         # Download options
         render_download_results(results)
     
-    # Cleanup on exit
-    if st.button("Cleanup", help="Clean up temporary files", type="secondary"):
-        cleanup_temp_files()
-        st.success("Cleanup completed!")
 
 
 if __name__ == "__main__":

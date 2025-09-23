@@ -100,20 +100,36 @@ python validate.py --model iv3_gru --checkpoint iv3_gru/model.pt --device cpu
 
 ### Per-Class Results (`per_class_results.json`)
 
-Detailed metrics for each class:
+Detailed metrics for each class with actual labels:
 
 ```json
 {
   "gloss_per_class": {
     "0": {
+      "class": "GOOD MORNING (0)",
       "precision": 0.9231,
       "recall": 0.8571,
       "f1-score": 0.8889,
-      "support": 28
+      "occurrences": 28
+    },
+    "1": {
+      "class": "THANK YOU (1)",
+      "precision": 0.9,
+      "recall": 0.8182,
+      "f1-score": 0.8571,
+      "occurrences": 22
     }
   }
 }
 ```
+
+**Column Definitions:**
+
+- **class**: Display name showing actual label with class ID (format: "LABEL_NAME (ID)")
+- **precision**: True positives / (True positives + False positives)
+- **recall**: True positives / (True positives + False negatives)
+- **f1-score**: Harmonic mean of precision and recall
+- **occurrences**: Number of actual occurrences of this class in the validation dataset
 
 ### Individual Predictions
 
@@ -145,6 +161,19 @@ When using `--save-predictions`:
 - **Gloss Accuracy**: Percentage of correctly predicted sign words
 - **Category Accuracy**: Percentage of correctly predicted semantic categories
 - **F1-Score**: Harmonic mean of precision and recall
+
+### Understanding Per-Class Metrics
+
+The per-class analysis provides detailed performance metrics for each individual sign class:
+
+- **Precision**: Of all predictions for this class, how many were correct?
+- **Recall**: Of all actual instances of this class, how many were correctly identified?
+- **F1-Score**: Balanced measure combining precision and recall
+- **Occurrences**: Total number of samples belonging to this class in the validation dataset
+
+**Example**: If a class has occurrences=50, it means there are 50 samples of that sign in the validation set. This helps interpret whether low performance metrics are due to class imbalance (low occurrences) or actual model difficulty with that class.
+
+**Note**: The per-class results now include a "class" field that shows actual sign language labels with class IDs (like "GOOD MORNING (0)", "THANK YOU (1)"), making the results more readable and interpretable, similar to the format used in individual predictions.
 
 ### Occlusion Impact
 
