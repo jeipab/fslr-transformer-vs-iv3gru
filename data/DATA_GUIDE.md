@@ -109,6 +109,22 @@ python data/splitting/assign.py
 **Output**: Updated labels.csv with numeric IDs
 **Reference**: `data/splitting/labels_reference.csv`
 
+### Data Splitting Command
+
+After label assignment, split the data into train/validation sets:
+
+```bash
+python data/splitting/data_split.py --processed-root "data/processed/prepro_09-18" --labels "data/processed/prepro_09-18/labels.csv" --out-root data/processed --copy --label-ref data/splitting/labels_reference.csv
+```
+
+**Parameters**:
+
+- `--processed-root`: Directory containing the .npz files
+- `--labels`: Path to the labels CSV file
+- `--out-root`: Output directory for split data
+- `--copy`: Copy files instead of moving them
+- `--label-ref`: Reference file for label mapping
+
 ### Output Structure
 
 ```
