@@ -37,7 +37,8 @@ Run data split (full):
 Add missing files:
 1. Data
 2. Trained models
-3. Replace visualization
+3. Replace streamlit_app\components\visualization.py
+4. Replace streamlit_app\components\validation_components.py
 
 Run streamlit app.
 1. streamlit run run_app.py --server.port 8081 --server.address 0.0.0.0
