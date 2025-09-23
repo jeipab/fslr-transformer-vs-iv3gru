@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """
 Sign Language Recognition Model Validation Script
 
@@ -13,14 +12,9 @@ Example:
 """
 
 # Standard library imports
-import argparse
-import json
-import os
-import sys
-import time
-import warnings
+import argparse, json, os, sys, time, warnings
 from pathlib import Path
-from typing import Dict, List, Tuple, Any, Optional
+from typing import Dict, List, Tuple, Any
 
 # Third-party imports
 import numpy as np
