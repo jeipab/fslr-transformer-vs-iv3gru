@@ -1,4 +1,4 @@
-"""Validation manager for handling model validation and results processing."""
+"""Validation manager for model validation and results processing."""
 
 import io
 import json

@@ -1,4 +1,4 @@
-"""Upload manager for handling file uploads and routing to appropriate stages."""
+"""Upload manager for file uploads and routing to appropriate stages."""
 
 import streamlit as st
 from typing import List, Tuple, Dict
@@ -60,7 +60,7 @@ def initialize_upload_session_state():
 
 
 def render_upload_stage():
-    """Render the upload stage with file uploader and proceed button."""
+    """File upload interface."""
     st.markdown("<div class='main-section-header'>UPLOAD DATA</div>", unsafe_allow_html=True)
     
     # File uploader

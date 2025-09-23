@@ -1,4 +1,4 @@
-"""Prediction manager for handling NPZ file predictions and visualization."""
+"""Prediction manager for NPZ file predictions and visualization."""
 
 import io
 import streamlit as st
@@ -77,7 +77,6 @@ class ModelManager:
             )
             
             self._models[model_name] = predictor
-            # Model loaded successfully - no need to show message
             
         except Exception as e:
             st.toast(f"Failed to load {model_name.upper()} model: {str(e)}", icon="⚠️", duration=5000)
