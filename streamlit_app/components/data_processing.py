@@ -35,7 +35,7 @@ def process_videos_unified(uploaded_files, target_fps: int = 30, out_size: int =
                           occ_detailed: bool = False) -> Dict[str, Dict[str, np.ndarray]]:
     """
     Unified processing function for both single and multiple videos.
-    Always uses GPU acceleration and optimal resource allocation.
+    Uses GPU acceleration and optimal resource allocation.
     
     Args:
         uploaded_files: Single Streamlit uploaded file object or list of files

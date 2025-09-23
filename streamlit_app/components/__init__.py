@@ -1,7 +1,7 @@
 """
 Components module for UI components and utilities.
 
-This module contains reusable UI components, data processing utilities,
+Contains reusable UI components, data processing utilities,
 and visualization tools for the Streamlit application.
 
 Key Components:

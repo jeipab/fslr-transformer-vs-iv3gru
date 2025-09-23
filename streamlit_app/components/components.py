@@ -9,7 +9,7 @@ def set_page() -> None:
     from ..core.config import PAGE_CONFIG
     st.set_page_config(**PAGE_CONFIG)
     
-    # Consolidated CSS for better styling and layout
+    # Consolidated CSS for styling and layout
     st.markdown("""
     <style>
     /* ===== HEADER STYLES ===== */
