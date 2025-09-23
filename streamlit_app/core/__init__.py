@@ -1,7 +1,7 @@
 """
 Core module for the Streamlit application.
 
-This module contains the main application entry point and core configuration.
+Contains the main application entry point and configuration.
 """
 
 from .main import main

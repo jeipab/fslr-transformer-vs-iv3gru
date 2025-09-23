@@ -1,18 +1,14 @@
 """
 Configuration settings for the Streamlit application.
 
-This module centralizes all configuration settings including:
-- Page configuration
-- Model settings and paths
-- File processing parameters
-- UI styling and layout settings
-- Default values and constants
+Centralizes all configuration including page settings, model paths,
+file processing parameters, UI styling, and default values.
 """
 
 from pathlib import Path
 from typing import Dict, Any
 
-# ===== PAGE CONFIGURATION =====
+# Page configuration
 PAGE_CONFIG = {
     'page_title': 'FSLR Demo',
     'page_icon': None,
@@ -20,7 +16,7 @@ PAGE_CONFIG = {
     'initial_sidebar_state': 'expanded'
 }
 
-# ===== MODEL CONFIGURATION =====
+# Model configuration
 MODEL_CONFIG = {
     'transformer': {
         'enabled': True,
@@ -40,7 +36,7 @@ MODEL_CONFIG = {
     }
 }
 
-# ===== FILE PROCESSING CONFIGURATION =====
+# File processing configuration
 PROCESSING_CONFIG = {
     'video': {
         'target_fps': 30,
@@ -52,9 +48,9 @@ PROCESSING_CONFIG = {
         'occ_detailed': False
     },
     'npz': {
-        'sequence_length': 150,  # Default sequence length for padding/trimming
-        'keypoint_dim': 156,     # 78 keypoints × 2D coords
-        'feature_dim': 2048      # InceptionV3 feature dimension
+        'sequence_length': 150,
+        'keypoint_dim': 156,
+        'feature_dim': 2048
     },
     'file_limits': {
         'max_files': 10,
@@ -62,7 +58,7 @@ PROCESSING_CONFIG = {
     }
 }
 
-# ===== UI CONFIGURATION =====
+# UI configuration
 UI_CONFIG = {
     'colors': {
         'primary': '#1f77b4',
@@ -82,11 +78,11 @@ UI_CONFIG = {
     }
 }
 
-# ===== DUMMY DATA FOR TESTING =====
+# Dummy data for testing
 DUMMY_DATA = {
     'iv3_gru': {
-        'gloss_prediction': 4,  # HOW ARE YOU
-        'category_prediction': 0,  # GREETING
+        'gloss_prediction': 4,
+        'category_prediction': 0,
         'gloss_probability': 0.882,
         'category_probability': 0.774,
         'gloss_top5': [(4, 0.882), (18, 0.074), (17, 0.013), (85, 0.007), (6, 0.006)],
@@ -94,10 +90,10 @@ DUMMY_DATA = {
     }
 }
 
-# ===== WORKFLOW STAGES =====
+# Workflow stages
 WORKFLOW_STAGES = ['upload', 'preprocessing', 'predictions', 'validation']
 
-# ===== FILE TYPES =====
+# Supported file types
 SUPPORTED_FILE_TYPES = {
     'video': ['.mp4', '.mov'],
     'preprocessed': ['.npz']

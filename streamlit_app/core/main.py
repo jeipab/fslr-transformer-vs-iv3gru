@@ -1,4 +1,4 @@
-"""Main Streamlit application for FSLR Demo."""
+"""FSLR Demo - Main Streamlit Application"""
 
 from typing import Dict
 import streamlit as st
@@ -16,15 +16,14 @@ from ..components.validation_components import (
 
 
 def main() -> None:
-    """Main application function."""
+    """Application entry point."""
     set_page()
     cfg = render_sidebar()
     initialize_upload_session_state()
 
-    # Main header
     render_main_header()
     
-    # Four-stage workflow
+    # Route to appropriate workflow stage
     if st.session_state.workflow_stage == 'upload':
         render_upload_stage()
     elif st.session_state.workflow_stage == 'preprocessing':
@@ -36,7 +35,7 @@ def main() -> None:
 
 
 def render_validation_stage(cfg: Dict):
-    """Render the validation stage."""
+    """Model validation interface."""
     
     # Navigation header
     col1, col2, col3, col4 = st.columns([2, 6, 1, 1])
@@ -62,10 +61,7 @@ def render_validation_stage(cfg: Dict):
     npz_folder_path, labels_csv = render_dataset_upload()
     
     if not npz_folder_path or not labels_csv:
-        # Add divider above info box
         st.markdown("---")
-        
-        # Create centered column layout for info box only
         col_left, col_center, col_right = st.columns([1, 2, 1])
         
         with col_center:
@@ -89,20 +85,17 @@ def render_validation_stage(cfg: Dict):
     # Configuration
     batch_size, device = render_validation_configuration()
     
-    # Validation button
+    # Run validation
     if st.button("Run Validation", type="primary", use_container_width=True):
         try:
-            # Create progress indicators
             progress_bar = st.progress(0)
             status_text = st.empty()
             
-            # Run validation with progress callback
             def progress_callback(current_batch, total_batches):
                 progress = current_batch / total_batches
                 progress_bar.progress(progress)
                 status_text.text(f"Processing batch {current_batch}/{total_batches}")
             
-            # Run validation
             with st.spinner("Running validation..."):
                 results = run_validation_from_folder(
                     model_type=selected_model,
@@ -112,30 +105,20 @@ def render_validation_stage(cfg: Dict):
                     progress_callback=progress_callback
                 )
             
-            # Store results in session state
             st.session_state.validation_results = results
-            
-            # Clear progress indicators
             progress_bar.empty()
             status_text.empty()
-            
             st.toast("Validation completed successfully!", icon="✅")
             
         except Exception as e:
             st.error(f"Validation failed: {str(e)}")
             return
     
-    # Display results if available
+    # Display results
     if 'validation_results' in st.session_state and st.session_state.validation_results:
         results = st.session_state.validation_results
-        
-        # Validation summary
         render_validation_summary(results)
-        
-        # Detailed results
         render_validation_results(results)
-        
-        # Download options
         render_download_results(results)
     
 
@@ -144,5 +127,4 @@ if __name__ == "__main__":
     try:
         main()
     finally:
-        # Clean up resources when app exits
         cleanup_on_app_exit()
