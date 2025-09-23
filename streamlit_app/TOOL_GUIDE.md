@@ -1,8 +1,6 @@
-# Tool Guide
+# FSLR Demo Tool Guide
 
-Interactive Streamlit application for FSLR (First Sign Language Recognition) model comparison and analysis.
-
-> **⚠️ Development Status**: This application is currently in active development. Features may change and some functionality may be experimental.
+Interactive Streamlit application for Filipino Sign Language Recognition model comparison and analysis.
 
 ## Features
 
@@ -40,6 +38,14 @@ Interactive Streamlit application for FSLR (First Sign Language Recognition) mod
 - **Batch Processing**: Process multiple videos simultaneously
 - **File Organization**: Clear workflow from upload → preprocessing → analysis
 
+### Model Validation
+
+- **Comprehensive Evaluation**: Accuracy, precision, recall, F1-score metrics
+- **Confusion Matrix**: Visual analysis of model performance
+- **Occlusion Analysis**: Separate performance metrics for occluded vs non-occluded samples
+- **Per-class Performance**: Detailed breakdown by gloss and category classes
+- **Results Export**: Download validation results as CSV/JSON
+
 ## Usage
 
 ```bash
@@ -52,6 +58,7 @@ streamlit run run_app.py
 1. **Upload Stage**: Upload video files or preprocessed NPZ files
 2. **Preprocessing Stage**: Configure and run preprocessing with model-specific options
 3. **Analysis Stage**: Visualize keypoints, analyze features, and compare model compatibility
+4. **Validation Stage**: Evaluate model performance on validation datasets
 
 ## Model Types
 
@@ -65,20 +72,43 @@ streamlit run run_app.py
 - **Video files**: Multiple formats with automatic keypoint extraction
 - **Metadata**: Includes model type, occlusion flags, and processing parameters
 
+## Requirements
+
+- Python 3.8+
+- Streamlit
+- OpenCV (for video processing)
+- PyTorch (for model inference)
+- Plotly (for visualizations)
+- NumPy, Pandas (for data handling)
+
+## Configuration
+
+The application uses configuration files in `streamlit_app/core/config.py`:
+
+- Model paths and settings
+- Processing parameters (FPS, frame size, etc.)
+- UI styling and layout options
+- File size limits and supported formats
+
 ## Architecture
 
 - `main.py`: Application entry point and main workflow
 - `preprocessing_manager.py`: Video preprocessing interface and controls
 - `prediction_manager.py`: Model analysis and visualization interface
+- `validation_manager.py`: Model validation and evaluation interface
+- `upload_manager.py`: File upload and management
 - `data_processing.py`: Video and NPZ processing backend
 - `visualization.py`: Keypoint visualization and chart generation
 - `utils.py`: Utility functions and compatibility checking
-- `upload_manager.py`: File upload and management
 - `components.py`: Reusable UI components
+- `validation_components.py`: Validation-specific UI components
 
-## Development Notes
+## Technical Notes
 
 - **Occlusion Detection**: Uses geometric analysis of hand-face interactions
 - **Model Compatibility**: Based on metadata `model_type` field for accurate detection
 - **Validation**: Prevents invalid preprocessing configurations
 - **Backward Compatibility**: Supports legacy NPZ files without metadata
+- **GPU Acceleration**: Automatic detection and utilization of available GPU resources
+- **Batch Processing**: Optimized multi-processing for video preprocessing
+- **Session Management**: Persistent state across workflow stages
