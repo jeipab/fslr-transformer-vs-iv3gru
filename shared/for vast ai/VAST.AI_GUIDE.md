@@ -28,6 +28,10 @@
    ```bash
    pip install -r requirements.txt
    ```
+**Create processed folder**
+   ```bash
+   mkdir processed
+   ```
 
 ---
 
@@ -76,10 +80,21 @@
 ---
 
 ## 6. Add Required Files
-Ensure the following are present:
 1. Data files
+
 2. Trained model files
+**For the Transformer model, copy the checkpoint file to the optimal folder:**
+  ```bash
+  cp shared/current/transformer/optimal/SignTransformer_best.pt trained_models/transformer/optimal/
+  ```
+
+**For the IV3-GRU model, copy the checkpoint file to the 70-gloss_acc folder:**
+  ```bash
+  cp shared/current/iv3_gru/70-gloss_acc/InceptionV3GRU_best.pt trained_models/iv3_gru/70-gloss_acc/
+  ```
+
 3. `streamlit_app/components/visualization.py` (replace if needed)
+
 4. `streamlit_app/components/validation_components.py` (replace if needed)
 
 ---
@@ -93,8 +108,8 @@ streamlit run run_app.py --server.port 8081 --server.address 0.0.0.0
 ---
 
 ## 8. Create a Tunnel (for External Access)
-- Access locally: [http://localhost:8081](http://localhost:8081)
-- Example Cloudflare tunnel: [https://capable-oasis-aaa-load.trycloudflare.com](https://capable-oasis-aaa-load.trycloudflare.com)
+- Access locally: [http://localhost:8081] 
+- Example Cloudflare tunnel: [https://capable-oasis-aaa-load.trycloudflare.com]
 
 ---
 
