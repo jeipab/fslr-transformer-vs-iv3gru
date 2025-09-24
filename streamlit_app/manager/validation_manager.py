@@ -77,13 +77,26 @@ class ValidationDataset:
         
         if self.model_type == 'transformer':
             # Try to load the appropriate key based on expected input dimensions
-            # Check if this is a 2048-feature model or 156-keypoint model
-            if 'X2048' in data:
+            # Determine input data based on model's detected input dimension
+            from ..core.config import get_model_input_dim
+            
+            input_dim = get_model_input_dim('transformer')
+            if input_dim == 2048:
+                if 'X2048' not in data:
+                    raise ValueError(f"NPZ file {sample['npz_path']} missing 'X2048' key for 2048-D transformer model")
                 X = torch.from_numpy(data['X2048']).float()
-            elif 'X' in data:
+            elif input_dim == 156:
+                if 'X' not in data:
+                    raise ValueError(f"NPZ file {sample['npz_path']} missing 'X' key for 156-D transformer model")
                 X = torch.from_numpy(data['X']).float()
             else:
-                raise ValueError(f"NPZ file {sample['npz_path']} missing both 'X' and 'X2048' keys for transformer")
+                # Fallback to legacy behavior if input_dim not detected yet
+                if 'X2048' in data:
+                    X = torch.from_numpy(data['X2048']).float()
+                elif 'X' in data:
+                    X = torch.from_numpy(data['X']).float()
+                else:
+                    raise ValueError(f"NPZ file {sample['npz_path']} missing both 'X' and 'X2048' keys for transformer")
             
             # Handle sequence length truncation
             if X.shape[0] > 300:
@@ -140,13 +153,14 @@ class ModelValidator:
                 if 'embedding.weight' in state_dict:
                     embedding_shape = state_dict['embedding.weight'].shape
                     input_dim = embedding_shape[1]  # embedding.weight is [emb_dim, input_dim]
-                    print(f"Detected input_dim={input_dim} from checkpoint embedding layer")
                 else:
                     input_dim = 156  # Default fallback
-                    print(f"Warning: Could not detect input_dim from checkpoint, using default {input_dim}")
             except Exception as e:
                 input_dim = 156  # Default fallback
-                print(f"Warning: Could not load checkpoint to detect input_dim, using default {input_dim}: {e}")
+            
+            # Update the model configuration with detected input dimension
+            from ..core.config import update_model_input_dim
+            update_model_input_dim('transformer', input_dim)
             
             model = SignTransformer(
                 input_dim=input_dim,

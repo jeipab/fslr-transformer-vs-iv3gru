@@ -73,16 +73,23 @@ def detect_file_type(uploaded_file) -> str:
         return 'unknown'
 
 
-def check_npz_compatibility(npz_data: Dict[str, np.ndarray]) -> Dict[str, bool]:
+def check_npz_compatibility(npz_data: Dict[str, np.ndarray], model_configs: Dict = None) -> Dict[str, bool]:
     """
     Check if NPZ data is compatible with different model architectures.
     
     Args:
         npz_data: Dictionary containing NPZ file contents
+        model_configs: Optional model configurations for dynamic checking
         
     Returns:
         Dictionary with compatibility flags for each model architecture
     """
+    # Import config functions
+    from ..core.config import (
+        get_model_input_dim, get_model_supports_keypoints, 
+        get_model_supports_features, MODEL_CONFIG
+    )
+    
     compatibility = {
         'transformer': False,
         'iv3_gru': False,
@@ -113,20 +120,50 @@ def check_npz_compatibility(npz_data: Dict[str, np.ndarray]) -> Dict[str, bool]:
             compatibility['iv3_gru'] = True
             compatibility['both'] = True
     else:
-        # Fallback to legacy compatibility checking for old files without model_type
-        # Check for transformer compatibility (needs 156-D keypoints)
+        # Enhanced compatibility checking based on model capabilities and available data
+        # Check what data is available
         has_keypoints = 'X' in npz_data
+        has_features = 'X2048' in npz_data
+        
+        # Validate data shapes if present
+        keypoints_valid = False
+        features_valid = False
+        
         if has_keypoints:
             X = npz_data['X']
-            if X.ndim == 2 and X.shape[1] == 156:
-                compatibility['transformer'] = True
+            keypoints_valid = X.ndim == 2 and X.shape[1] == 156
         
-        # Check for iv3_gru compatibility (needs 2048-D features)
-        has_iv3_features = 'X2048' in npz_data
-        if has_iv3_features:
+        if has_features:
             X2048 = npz_data['X2048']
-            if X2048.ndim == 2 and X2048.shape[1] == 2048:
-                compatibility['iv3_gru'] = True
+            features_valid = X2048.ndim == 2 and X2048.shape[1] == 2048
+        
+        # Check compatibility for each model based on their capabilities
+        for model_name in ['transformer', 'iv3_gru']:
+            model_config = MODEL_CONFIG.get(model_name, {})
+            
+            # Get model capabilities
+            supports_keypoints = get_model_supports_keypoints(model_name)
+            supports_features = get_model_supports_features(model_name)
+            input_dim = get_model_input_dim(model_name)
+            
+            # Check compatibility based on model capabilities and available data
+            if model_name == 'transformer':
+                # Transformer can use either keypoints or features depending on its configuration
+                if supports_keypoints and keypoints_valid:
+                    compatibility['transformer'] = True
+                elif supports_features and features_valid:
+                    compatibility['transformer'] = True
+                elif input_dim is not None:
+                    # If we know the specific input dimension, check for exact match
+                    if input_dim == 156 and keypoints_valid:
+                        compatibility['transformer'] = True
+                    elif input_dim == 2048 and features_valid:
+                        compatibility['transformer'] = True
+            
+            elif model_name == 'iv3_gru':
+                # IV3-GRU always needs 2048-D features
+                if supports_features and features_valid:
+                    compatibility['iv3_gru'] = True
         
         # Check if both are compatible
         if compatibility['transformer'] and compatibility['iv3_gru']:

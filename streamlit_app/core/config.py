@@ -24,7 +24,10 @@ MODEL_CONFIG = {
         'model_type': 'transformer',
         'num_gloss_classes': 105,
         'num_category_classes': 10,
-        'display_name': 'SignTransformer'
+        'display_name': 'SignTransformer',
+        'input_dim': None,  # Will be auto-detected from checkpoint
+        'supports_keypoints': True,  # Can use 156-D keypoints
+        'supports_features': True    # Can use 2048-D features
     },
     'iv3_gru': {
         'enabled': True,
@@ -32,7 +35,10 @@ MODEL_CONFIG = {
         'model_type': 'iv3_gru',
         'num_gloss_classes': 105,
         'num_category_classes': 10,
-        'display_name': 'InceptionV3+GRU'
+        'display_name': 'InceptionV3+GRU',
+        'input_dim': 2048,  # Always uses 2048-D features
+        'supports_keypoints': False,  # Cannot use 156-D keypoints
+        'supports_features': True     # Can use 2048-D features
     }
 }
 
@@ -118,3 +124,20 @@ def is_model_enabled(model_name: str) -> bool:
 def get_checkpoint_path(model_name: str) -> str:
     """Get the checkpoint path for a model."""
     return MODEL_CONFIG.get(model_name, {}).get('checkpoint_path', '')
+
+def update_model_input_dim(model_name: str, input_dim: int) -> None:
+    """Update the input dimension for a model after auto-detection."""
+    if model_name in MODEL_CONFIG:
+        MODEL_CONFIG[model_name]['input_dim'] = input_dim
+
+def get_model_input_dim(model_name: str) -> int:
+    """Get the input dimension for a model."""
+    return MODEL_CONFIG.get(model_name, {}).get('input_dim', None)
+
+def get_model_supports_keypoints(model_name: str) -> bool:
+    """Check if a model supports 156-D keypoint inputs."""
+    return MODEL_CONFIG.get(model_name, {}).get('supports_keypoints', False)
+
+def get_model_supports_features(model_name: str) -> bool:
+    """Check if a model supports 2048-D feature inputs."""
+    return MODEL_CONFIG.get(model_name, {}).get('supports_features', False)

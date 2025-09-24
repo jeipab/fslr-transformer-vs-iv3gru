@@ -65,6 +65,7 @@ class ModelManager:
             
             # Import using the full module path
             from evaluation.prediction.predict import ModelPredictor
+            from ..core.config import update_model_input_dim
             
             # Determine device
             device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -75,6 +76,10 @@ class ModelManager:
                 checkpoint_path=config['checkpoint_path'],
                 device=device
             )
+            
+            # Update the model configuration with detected input dimension
+            if hasattr(predictor, 'input_dim') and predictor.input_dim is not None:
+                update_model_input_dim(model_name, predictor.input_dim)
             
             self._models[model_name] = predictor
             

@@ -79,8 +79,8 @@ class ModelPredictor:
         self.checkpoint_path = checkpoint_path
         self.device = device or torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         
-        # Step 2: Load model architecture
-        self.model = self._load_model()
+        # Step 2: Load model architecture and detect input dimensions
+        self.model, self.input_dim = self._load_model()
         
         # Step 3: Load trained weights
         self._load_checkpoint()
@@ -98,8 +98,10 @@ class ModelPredictor:
         3. Move model to specified device
         
         Returns:
-            torch.nn.Module: Initialized model (not yet loaded with weights)
-            
+            tuple: (model, input_dim) where:
+                - model: Initialized model (not yet loaded with weights)
+                - input_dim: Detected input dimension for the model
+                
         Raises:
             ValueError: If model_type is not supported
         """
@@ -113,13 +115,10 @@ class ModelPredictor:
                 if 'embedding.weight' in state_dict:
                     embedding_shape = state_dict['embedding.weight'].shape
                     input_dim = embedding_shape[1]  # embedding.weight is [emb_dim, input_dim]
-                    print(f"Detected input_dim={input_dim} from checkpoint embedding layer")
                 else:
                     input_dim = 156  # Default fallback
-                    print(f"Warning: Could not detect input_dim from checkpoint, using default {input_dim}")
             except Exception as e:
                 input_dim = 156  # Default fallback
-                print(f"Warning: Could not load checkpoint to detect input_dim, using default {input_dim}: {e}")
             
             # Step 2: Create Transformer model with detected/default parameters
             model = SignTransformer(
@@ -135,6 +134,9 @@ class ModelPredictor:
             )
             
         elif self.model_type == 'iv3_gru':
+            # IV3-GRU always uses 2048-dimensional features
+            input_dim = 2048
+            
             # Step 1: Auto-detect GRU hidden sizes from checkpoint
             try:
                 checkpoint = torch.load(self.checkpoint_path, map_location='cpu')
@@ -145,15 +147,12 @@ class ModelPredictor:
                     # GRU weight_hh has shape [3*hidden, hidden] for each layer
                     gru1_hidden = state_dict['gru1.weight_hh_l0'].shape[0] // 3
                     gru2_hidden = state_dict['gru2.weight_hh_l0'].shape[0] // 3
-                    print(f"Detected GRU hidden sizes from checkpoint: hidden1={gru1_hidden}, hidden2={gru2_hidden}")
                 else:
                     gru1_hidden = 16  # Default fallback
                     gru2_hidden = 12  # Default fallback
-                    print(f"Warning: Could not detect GRU hidden sizes from checkpoint, using defaults: hidden1={gru1_hidden}, hidden2={gru2_hidden}")
             except Exception as e:
                 gru1_hidden = 16  # Default fallback
                 gru2_hidden = 12  # Default fallback
-                print(f"Warning: Could not load checkpoint to detect GRU hidden sizes, using defaults: hidden1={gru1_hidden}, hidden2={gru2_hidden}: {e}")
             
             # Step 2: Create IV3-GRU model with detected/default parameters
             model = InceptionV3GRU(
@@ -169,7 +168,7 @@ class ModelPredictor:
             raise ValueError(f"Unknown model type: {self.model_type}")
         
         # Step 3: Move model to specified device
-        return model.to(self.device)
+        return model.to(self.device), input_dim
     
     def _load_checkpoint(self):
         """
@@ -217,7 +216,6 @@ class ModelPredictor:
         
         # Step 5: Set model to evaluation mode (disable dropout, batch norm updates)
         self.model.eval()
-        print(f"✓ Loaded {self.model_type} model from {self.checkpoint_path}")
     
     def predict_from_npz(self, npz_path):
         """
@@ -250,16 +248,19 @@ class ModelPredictor:
         data = np.load(npz_path)
         
         if self.model_type == 'transformer':
-            # Step 2: Extract features for Transformer model
-            # Try to load the appropriate key based on expected input dimensions
-            if 'X2048' in data:
+            # Step 2: Extract features for Transformer model based on detected input dimension
+            if self.input_dim == 2048:
                 # Use IV3 features (2048-dimensional)
+                if 'X2048' not in data:
+                    raise ValueError(f"NPZ file missing 'X2048' key for 2048-D transformer model")
                 X = torch.from_numpy(data['X2048']).float().unsqueeze(0)
-            elif 'X' in data:
+            elif self.input_dim == 156:
                 # Use keypoint features (156-dimensional)
+                if 'X' not in data:
+                    raise ValueError(f"NPZ file missing 'X' key for 156-D transformer model")
                 X = torch.from_numpy(data['X']).float().unsqueeze(0)
             else:
-                raise ValueError(f"NPZ file missing both 'X' and 'X2048' keys for transformer")
+                raise ValueError(f"Unsupported input dimension {self.input_dim} for transformer model")
             
             # Step 3: Prepare attention mask if available
             if 'mask' in data:
@@ -271,7 +272,6 @@ class ModelPredictor:
             
             # Step 4: Handle sequence length truncation (max_len=300)
             if X.shape[1] > 300:
-                print(f"Warning: Sequence length {X.shape[1]} exceeds max_len=300, truncating...")
                 X = X[:, :300, :]
                 if seq_mask is not None:
                     seq_mask = seq_mask[:, :300]
@@ -378,7 +378,6 @@ class ModelPredictor:
             
             # Handle sequence length truncation (max_len=300)
             if X.shape[1] > 300:
-                print(f"Warning: Sequence length {X.shape[1]} exceeds max_len=300, truncating...")
                 X = X[:, :300, :]
             
             # Move tensor to device

@@ -62,7 +62,7 @@ streamlit run run_app.py
 
 ## Model Types
 
-- **T (Transformer)**: 156-D keypoint features for Transformer architecture
+- **T (Transformer)**: Flexible input - can use either 156-D keypoint features or 2048-D InceptionV3 features (auto-detected from model checkpoint)
 - **I (IV3-GRU)**: 2048-D InceptionV3 features for IV3-GRU architecture
 - **B (Both)**: Contains both feature types for dual-model comparison
 
