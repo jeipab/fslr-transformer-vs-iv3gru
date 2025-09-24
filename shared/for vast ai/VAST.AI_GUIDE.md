@@ -28,6 +28,10 @@
    ```bash
    pip install -r requirements.txt
    ```
+**Create processed folder**
+   ```bash
+   mkdir processed
+   ```
 
 ---
 
