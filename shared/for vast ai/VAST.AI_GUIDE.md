@@ -3,95 +3,123 @@
 ---
 
 ## 1. Expose Required Port
+
 - Ensure port **8501** is exposed in your vast.ai template.
 
 ---
 
 ## 2. Set Up the Codebase
+
 **Clone the repository:**
-   ```bash
-   git clone https://github.com/jeipab/fslr-transformer-vs-iv3gru.git
-   ```
+
+```bash
+git clone https://github.com/jeipab/fslr-transformer-vs-iv3gru.git
+```
+
 **Navigate to the project directory:**
-   ```bash
-   cd fslr-transformer-vs-iv3gru
-   ```
+
+```bash
+cd fslr-transformer-vs-iv3gru
+```
+
 **Set up a Python virtual environment:**
-   ```bash
-   python -m venv venv
-   ```
+
+```bash
+python -m venv venv
+```
+
 **Activate the virtual environment:**
-   ```bash
-   source venv/bin/activate
-   ```
+
+```bash
+source venv/bin/activate
+```
+
 **Install dependencies:**
-   ```bash
-   pip install -r requirements.txt
-   ```
-**Create processed folder**
-   ```bash
-   mkdir processed
-   ```
+
+```bash
+pip install -r requirements.txt
+```
 
 ---
 
 ## 3. Upload and Prepare Data
+
 **Navigate to the processed data directory:**
-   ```bash
-   cd data/processed
-   ```
+
+```bash
+cd data
+mkdir processed
+cd processed
+```
+
 **Install gdown (if not already installed):**
-   ```bash
-   pip install gdown
-   ```
+
+```bash
+pip install gdown
+```
+
 **Download the zipped NPZ data:**
-   ```bash
-   gdown https://drive.google.com/uc?id=1C_td2Jqb07Z19t-uaoE3m3y7cAnHOZwI
-   ```
+
+```bash
+gdown https://drive.google.com/uc?id=1C_td2Jqb07Z19t-uaoE3m3y7cAnHOZwI
+```
+
 **Extract the zip file:**
-   ```bash
-   unzip *.zip
-   ```
+
+```bash
+unzip *.zip
+```
 
 ---
 
 ## 4. Assign Labels
+
 **Return to the project root:**
-   ```bash
-   cd ../../
-   ```
+
+```bash
+cd ../../
+```
+
 **Assign gloss and category labels:**
-   ```bash
-   python data/splitting/assign.py
-   ```
+
+```bash
+python data/splitting/assign.py
+```
 
 ---
 
 ## 5. Split Data
+
 **For greetings only:**
-  ```bash
-  python data/splitting/data_split.py --processed-root data/processed --labels data/processed/labels.csv --out-root data/processed --copy --cats greeting --label-ref data/splitting/labels_reference.csv
-  ```
+
+```bash
+python data/splitting/data_split.py --processed-root data/processed --labels data/processed/labels.csv --out-root data/processed --copy --cats greeting --label-ref data/splitting/labels_reference.csv
+```
+
 **For full dataset:**
-  ```bash
-  python data/splitting/data_split.py --processed-root data/processed --labels data/processed/labels.csv --out-root data/processed --copy --label-ref data/splitting/labels_reference.csv
-  ```
+
+```bash
+python data/splitting/data_split.py --processed-root data/processed --labels data/processed/labels.csv --out-root data/processed --copy --label-ref data/splitting/labels_reference.csv
+```
 
 ---
 
 ## 6. Add Required Files
+
 1. Data files
 
 2. Trained model files
-**For the Transformer model, copy the checkpoint file to the optimal folder:**
-  ```bash
-  cp shared/current/transformer/optimal/SignTransformer_best.pt trained_models/transformer/optimal/
-  ```
+   **For the Transformer model, copy the checkpoint file to the optimal folder:**
+
+```bash
+cp shared/current/transformer/optimal/SignTransformer_best.pt trained_models/transformer/optimal/
+```
 
 **For the IV3-GRU model, copy the checkpoint file to the 70-gloss_acc folder:**
-  ```bash
-  cp shared/current/iv3_gru/70-gloss_acc/InceptionV3GRU_best.pt trained_models/iv3_gru/70-gloss_acc/
-  ```
+
+```bash
+cp shared/current/iv3_gru/70-gloss_acc/InceptionV3GRU_best.pt trained_models/iv3_gru/70-gloss_acc/
+```
 
 3. `streamlit_app/components/visualization.py` (replace if needed)
 
@@ -100,7 +128,9 @@
 ---
 
 ## 7. Run the Streamlit Application
+
 Start the app with:
+
 ```bash
 streamlit run run_app.py --server.port 8081 --server.address 0.0.0.0
 ```
@@ -108,13 +138,16 @@ streamlit run run_app.py --server.port 8081 --server.address 0.0.0.0
 ---
 
 ## 8. Create a Tunnel (for External Access)
-- Access locally: [http://localhost:8081] 
+
+- Access locally: [http://localhost:8081]
 - Example Cloudflare tunnel: [https://capable-oasis-aaa-load.trycloudflare.com]
 
 ---
 
 ## 9. Optional: Test IV3-GRU Model Loading
+
 To verify IV3-GRU loads correctly on CPU:
+
 ```bash
 python -c "
 try:
@@ -129,7 +162,9 @@ except Exception as e:
 ---
 
 ## 10. Video Generation Dependencies (if needed)
+
 If you require video generation, install the following:
+
 ```bash
 apt-get update && apt-get install -y ffmpeg libx264-dev
 ```

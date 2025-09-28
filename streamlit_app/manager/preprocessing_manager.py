@@ -149,7 +149,7 @@ def render_video_files_list(all_files_to_show: List):
         col1, col2, col3, col4, col5, col6 = st.columns([3, 1, 1, 1, 1, 1])
         
         with col1:
-            st.markdown(f"**🎥 {filename}**")
+            st.markdown(f"**{filename}**")
         with col2:
             st.markdown(f"**Size:** {file_size}")
         with col3:
