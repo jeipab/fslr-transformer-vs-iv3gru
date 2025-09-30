@@ -1,87 +1,37 @@
-KEYPOINTS TRAINING (68/85):
-python -m training.train \
-  --model transformer \
-  --epochs 300 \
-  --batch-size 8 \
-  --lr 0.00006 \
-  --alpha 0.8 \
-  --beta 0.2 \
-  --num-gloss 105 \
-  --num-cat 10 \
-  --keypoints-train data/processed/keypoints_train \
-  --keypoints-val data/processed/keypoints_val \
-  --labels-train-csv data/processed/train_labels.csv \
-  --labels-val-csv data/processed/val_labels.csv \
-  --kp-key X \
-  --amp \
-  --augment \
-  --augment-noise-std 0.001 \
-  --augment-mask-prob 0.03 \
-  --augment-mask-ratio 0.03 \
-  --scheduler warmup_cosine \
-  --warmup-epochs 20 \
-  --early-stop 150 \
-  --weight-decay 1.1e-4 \
-  --log-csv transformer_keypoints_ultra_fine.csv \
-  --output-dir trained_models/transformer/keypoints_ultra_fine
-
 FEATURES TRAINING:
-Train Tranformer (optimal - 93/99):
+Train IV3-GRU (anti_overfitting - X/X):
 python -m training.train \
-  --model transformer \
-  --epochs 300 \
-  --batch-size 8 \
-  --lr 0.00006 \
-  --alpha 0.8 \
-  --beta 0.2 \
+  --model iv3_gru \
+  --epochs 200 \
+  --batch-size 16 \
+  --lr 0.00003 \
+  --alpha 0.7 \
+  --beta 0.3 \
   --num-gloss 105 \
   --num-cat 10 \
-  --keypoints-train data/processed/keypoints_train \
-  --keypoints-val data/processed/keypoints_val \
+  --features-train data/processed/keypoints_train \
+  --features-val data/processed/keypoints_val \
   --labels-train-csv data/processed/train_labels.csv \
   --labels-val-csv data/processed/val_labels.csv \
-  --kp-key X2048 \
+  --feature-key X2048 \
+  --hidden1 24 \
+  --hidden2 18 \
+  --dropout 0.4 \
+  --no-freeze-backbone \
   --amp \
   --augment \
-  --augment-noise-std 0.001 \
-  --augment-mask-prob 0.03 \
-  --augment-mask-ratio 0.03 \
+  --augment-noise-std 0.003 \
+  --augment-mask-prob 0.08 \
+  --augment-mask-ratio 0.08 \
   --scheduler warmup_cosine \
-  --warmup-epochs 20 \
-  --early-stop 150 \
-  --weight-decay 1.1e-4 \
-  --log-csv transformer_full_features_ultra_fine.csv \
-  --output-dir trained_models/transformer/full_with_features_ultra_fine
-
-Train Trasformer (t-regularized_v2)
-python -m training.train \
-  --model transformer \
-  --epochs 250 \
-  --batch-size 12 \
-  --lr 0.00004 \
-  --alpha 0.8 \
-  --beta 0.2 \
-  --num-gloss 105 \
-  --num-cat 10 \
-  --keypoints-train data/processed/keypoints_train \
-  --keypoints-val data/processed/keypoints_val \
-  --labels-train-csv data/processed/train_labels.csv \
-  --labels-val-csv data/processed/val_labels.csv \
-  --kp-key X2048 \
-  --amp \
-  --augment \
-  --augment-noise-std 0.002 \
-  --augment-mask-prob 0.05 \
-  --augment-mask-ratio 0.05 \
-  --scheduler warmup_cosine \
-  --warmup-epochs 25 \
-  --early-stop 120 \
-  --weight-decay 2e-4 \
-  --grad-clip 1.0 \
-  --label-smoothing 0.1 \
-  --ema-decay 0.9995 \
-  --log-csv transformer_regularized_v2.csv \
-  --output-dir trained_models/transformer/t-regularized_v2
+  --warmup-epochs 15 \
+  --early-stop 50 \
+  --weight-decay 2.5e-4 \
+  --grad-clip 0.8 \
+  --label-smoothing 0.08 \
+  --ema-decay 0.9997 \
+  --log-csv iv3gru_anti_overfitting.csv \
+  --output-dir trained_models/iv3_gru/anti_overfitting
 
 Train IV3-GRU (70 gloss acc):
 python -m training.train \
