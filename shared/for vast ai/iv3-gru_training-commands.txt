@@ -1,5 +1,39 @@
 FEATURES TRAINING:
-Train IV3-GRU (anti_overfitting - X/X):
+
+Train IV3-GRU (recovery - 45/99):
+python -m training.train \
+  --model iv3_gru \
+  --epochs 180 \
+  --batch-size 16 \
+  --lr 0.0002 \
+  --alpha 0.7 \
+  --beta 0.3 \
+  --num-gloss 105 \
+  --num-cat 10 \
+  --features-train data/processed/keypoints_train \
+  --features-val data/processed/keypoints_val \
+  --labels-train-csv data/processed/train_labels.csv \
+  --labels-val-csv data/processed/val_labels.csv \
+  --feature-key X2048 \
+  --hidden1 32 \
+  --hidden2 24 \
+  --dropout 0.30 \
+  --amp \
+  --augment \
+  --augment-noise-std 0.0015 \
+  --augment-mask-prob 0.04 \
+  --augment-mask-ratio 0.04 \
+  --scheduler plateau \
+  --scheduler-patience 20 \
+  --early-stop 40 \
+  --weight-decay 1e-4 \
+  --grad-clip 1.0 \
+  --label-smoothing 0.10 \
+  --ema-decay 0.9995 \
+  --log-csv iv3gru_recovery.csv \
+  --output-dir trained_models/iv3_gru/recovery
+
+Train IV3-GRU (anti_overfitting - 8/79):
 python -m training.train \
   --model iv3_gru \
   --epochs 200 \

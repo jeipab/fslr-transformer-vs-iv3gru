@@ -26,7 +26,7 @@ python -m training.train \
   --output-dir trained_models/transformer/keypoints_ultra_fine
 
 FEATURES TRAINING:
-Train Tranformer (anti_overfitting - X/X):
+Train Tranformer (anti_overfitting - 82/99):
 python -m training.train \
   --model transformer \
   --epochs 200 \

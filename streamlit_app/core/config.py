@@ -20,7 +20,7 @@ PAGE_CONFIG = {
 MODEL_CONFIG = {
     'transformer': {
         'enabled': True,
-        'checkpoint_path': 'trained_models/transformer/optimal/SignTransformer_best.pt',
+        'checkpoint_path': 'trained_models/transformer/anti_overfitting/SignTransformer_best.pt',
         'model_type': 'transformer',
         'num_gloss_classes': 105,
         'num_category_classes': 10,
