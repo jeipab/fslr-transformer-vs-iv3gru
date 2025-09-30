@@ -50,7 +50,7 @@ def render_validation_stage(cfg: Dict):
     with col4:
         st.markdown("")  # Empty space
     
-    st.markdown("### Model Validation")
+    st.markdown("<div class='main-section-header'>MODEL VALIDATION</div>", unsafe_allow_html=True)
     
     # Model selection
     selected_model = render_model_selection()

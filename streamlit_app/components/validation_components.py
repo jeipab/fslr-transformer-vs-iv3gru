@@ -220,7 +220,11 @@ def render_overall_performance(results: Dict[str, Any]):
     
     df = pd.DataFrame(metrics_data)
     
-    # Create comparison chart
+    # Performance table
+    st.markdown("#### Detailed Metrics")
+    st.dataframe(df, use_container_width=True)
+    
+    # Create comparison chart (moved below table)
     fig = go.Figure()
     
     fig.add_trace(go.Bar(
@@ -246,10 +250,6 @@ def render_overall_performance(results: Dict[str, Any]):
     )
     
     st.plotly_chart(fig, use_container_width=True)
-    
-    # Performance table
-    st.markdown("#### Detailed Metrics")
-    st.dataframe(df, use_container_width=True)
 
 
 def render_per_class_analysis(results: Dict[str, Any]):
@@ -353,7 +353,22 @@ def render_confusion_matrices(results: Dict[str, Any]):
     gloss_cm = np.array(confusion_matrices['gloss_confusion_matrix'])
     cat_cm = np.array(confusion_matrices['category_confusion_matrix'])
     
-    # Create confusion matrix plots
+    # Confusion matrix statistics
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        st.markdown("#### Gloss Confusion Matrix Statistics")
+        gloss_diag_acc = np.trace(gloss_cm) / np.sum(gloss_cm)
+        st.metric("Diagonal Accuracy", f"{gloss_diag_acc:.4f}")
+        st.metric("Matrix Shape", f"{gloss_cm.shape[0]} × {gloss_cm.shape[1]}")
+    
+    with col2:
+        st.markdown("#### Category Confusion Matrix Statistics")
+        cat_diag_acc = np.trace(cat_cm) / np.sum(cat_cm)
+        st.metric("Diagonal Accuracy", f"{cat_diag_acc:.4f}")
+        st.metric("Matrix Shape", f"{cat_cm.shape[0]} × {cat_cm.shape[1]}")
+    
+    # Create confusion matrix plots (moved below statistics)
     fig, axes = plt.subplots(1, 2, figsize=(20, 8))
     
     # Gloss confusion matrix
@@ -370,21 +385,6 @@ def render_confusion_matrices(results: Dict[str, Any]):
     
     plt.tight_layout()
     st.pyplot(fig)
-    
-    # Confusion matrix statistics
-    col1, col2 = st.columns(2)
-    
-    with col1:
-        st.markdown("#### Gloss Confusion Matrix Statistics")
-        gloss_diag_acc = np.trace(gloss_cm) / np.sum(gloss_cm)
-        st.metric("Diagonal Accuracy", f"{gloss_diag_acc:.4f}")
-        st.metric("Matrix Shape", f"{gloss_cm.shape[0]} × {gloss_cm.shape[1]}")
-    
-    with col2:
-        st.markdown("#### Category Confusion Matrix Statistics")
-        cat_diag_acc = np.trace(cat_cm) / np.sum(cat_cm)
-        st.metric("Diagonal Accuracy", f"{cat_diag_acc:.4f}")
-        st.metric("Matrix Shape", f"{cat_cm.shape[0]} × {cat_cm.shape[1]}")
 
 
 def render_occlusion_analysis(results: Dict[str, Any]):
@@ -411,7 +411,53 @@ def render_occlusion_analysis(results: Dict[str, Any]):
     
     df = pd.DataFrame(comparison_data)
     
-    # Create comparison chart
+    # Performance analysis table
+    st.markdown("#### Performance Analysis")
+
+    metrics_index = ['Accuracy', 'Precision', 'Recall', 'F1-Score']
+
+    # Safely extract metrics
+    def safe_get(d: Dict[str, Any], key: str) -> float:
+        return d.get(key, 0.0) if 'error' not in d else 0.0
+
+    table_values = [
+        [
+            safe_get(non_occluded, 'gloss_accuracy'),
+            safe_get(non_occluded, 'category_accuracy'),
+            safe_get(occluded, 'gloss_accuracy'),
+            safe_get(occluded, 'category_accuracy'),
+        ],
+        [
+            safe_get(non_occluded, 'gloss_precision'),
+            safe_get(non_occluded, 'category_precision'),
+            safe_get(occluded, 'gloss_precision'),
+            safe_get(occluded, 'category_precision'),
+        ],
+        [
+            safe_get(non_occluded, 'gloss_recall'),
+            safe_get(non_occluded, 'category_recall'),
+            safe_get(occluded, 'gloss_recall'),
+            safe_get(occluded, 'category_recall'),
+        ],
+        [
+            safe_get(non_occluded, 'gloss_f1_score'),
+            safe_get(non_occluded, 'category_f1_score'),
+            safe_get(occluded, 'gloss_f1_score'),
+            safe_get(occluded, 'category_f1_score'),
+        ],
+    ]
+
+    columns = pd.MultiIndex.from_tuples([
+        ('Without Occlusion', 'Gloss Recognition'),
+        ('Without Occlusion', 'Category Recognition'),
+        ('With Occlusion', 'Gloss Recognition'),
+        ('With Occlusion', 'Category Recognition'),
+    ])
+
+    perf_df = pd.DataFrame(table_values, index=metrics_index, columns=columns)
+    st.dataframe(perf_df, use_container_width=True)
+
+    # Create comparison chart (moved below table)
     fig = go.Figure()
     
     fig.add_trace(go.Bar(
@@ -438,35 +484,12 @@ def render_occlusion_analysis(results: Dict[str, Any]):
     
     st.plotly_chart(fig, use_container_width=True)
     
-    # Performance difference analysis
-    st.markdown("#### Performance Difference Analysis")
-    
-    diff_data = {
-        'Metric': ['Accuracy', 'Precision', 'Recall', 'F1-Score'],
-        'Difference': [
-            (non_occluded.get('gloss_accuracy', 0.0) if 'error' not in non_occluded else 0.0) - 
-            (occluded.get('gloss_accuracy', 0.0) if 'error' not in occluded else 0.0),
-            (non_occluded.get('gloss_precision', 0.0) if 'error' not in non_occluded else 0.0) - 
-            (occluded.get('gloss_precision', 0.0) if 'error' not in occluded else 0.0),
-            (non_occluded.get('gloss_recall', 0.0) if 'error' not in non_occluded else 0.0) - 
-            (occluded.get('gloss_recall', 0.0) if 'error' not in occluded else 0.0),
-            (non_occluded.get('gloss_f1_score', 0.0) if 'error' not in non_occluded else 0.0) - 
-            (occluded.get('gloss_f1_score', 0.0) if 'error' not in occluded else 0.0)
-        ]
-    }
-    
-    diff_df = pd.DataFrame(diff_data)
-    
-    # Display dataframe with left-aligned text
-    styled_df = diff_df.style.set_properties(**{'text-align': 'left'})
-    st.dataframe(styled_df, use_container_width=True)
-    
 
 
 def render_validation_summary(results: Dict[str, Any]):
     """Render validation summary with key insights."""
     st.markdown("---")
-    st.markdown("### Validation Summary")
+    st.markdown("<div class='main-section-header'>VALIDATION SUMMARY</div>", unsafe_allow_html=True)
     
     model_info = results['model_info']
     overall = results['overall_results']
@@ -547,8 +570,8 @@ def render_detailed_predictions(results: Dict[str, Any]):
     table_data = []
     for pred in predictions:
         # Determine correctness status
-        gloss_correct = "✅" if pred['gloss_pred'] == pred['gloss_gt'] else "❌"
-        cat_correct = "✅" if pred['cat_pred'] == pred['cat_gt'] else "❌"
+        gloss_correct = "Correct" if pred['gloss_pred'] == pred['gloss_gt'] else "Wrong"
+        cat_correct = "Correct" if pred['cat_pred'] == pred['cat_gt'] else "Wrong"
         
         # Get human-readable labels
         pred_gloss_label = gloss_mapping.get(pred['gloss_pred'], f"Unknown ({pred['gloss_pred']})")
@@ -556,8 +579,8 @@ def render_detailed_predictions(results: Dict[str, Any]):
         pred_cat_label = category_mapping.get(pred['cat_pred'], f"Unknown ({pred['cat_pred']})")
         actual_cat_label = category_mapping.get(pred['cat_gt'], f"Unknown ({pred['cat_gt']})")
         
-        # Determine occlusion status
-        occlusion_status = "✅" if pred.get('occluded', 0) == 1 else "❌"
+        # Determine occlusion status (text labels for CSV compatibility)
+        occlusion_status = "Occluded" if pred.get('occluded', 0) == 1 else "Not Occluded"
         
         table_data.append({
             'File Name': pred['file'],
@@ -601,27 +624,27 @@ def render_detailed_predictions(results: Dict[str, Any]):
     
     # Apply gloss filter
     if gloss_filter == "Correct Only":
-        df = df[df['Gloss Status'] == "✅"]
+        df = df[df['Gloss Status'] == "Correct"]
     elif gloss_filter == "Incorrect Only":
-        df = df[df['Gloss Status'] == "❌"]
+        df = df[df['Gloss Status'] == "Wrong"]
     
     # Apply category filter
     if category_filter == "Correct Only":
-        df = df[df['Category Status'] == "✅"]
+        df = df[df['Category Status'] == "Correct"]
     elif category_filter == "Incorrect Only":
-        df = df[df['Category Status'] == "❌"]
+        df = df[df['Category Status'] == "Wrong"]
     
     # Apply occlusion filter
     if occlusion_filter == "Occluded Only":
-        df = df[df['Occlusion Status'] == "✅"]
+        df = df[df['Occlusion Status'] == "Occluded"]
     elif occlusion_filter == "Non-Occluded Only":
-        df = df[df['Occlusion Status'] == "❌"]
+        df = df[df['Occlusion Status'] == "Not Occluded"]
     
     # Display statistics based on filtered data
     filtered_samples = len(df)
-    correct_gloss_filtered = len(df[df['Gloss Status'] == "✅"])
-    correct_cat_filtered = len(df[df['Category Status'] == "✅"])
-    both_correct_filtered = len(df[(df['Gloss Status'] == "✅") & (df['Category Status'] == "✅")])
+    correct_gloss_filtered = len(df[df['Gloss Status'] == "Correct"])
+    correct_cat_filtered = len(df[df['Category Status'] == "Correct"])
+    both_correct_filtered = len(df[(df['Gloss Status'] == "Correct") & (df['Category Status'] == "Correct")])
     
     col1, col2, col3, col4 = st.columns(4)
     with col1:
@@ -643,12 +666,50 @@ def render_detailed_predictions(results: Dict[str, Any]):
         height=400
     )
     
-    # Download option for the filtered table
-    csv_str = df.to_csv(index=False)
-    st.download_button(
-        label="Download Filtered Predictions (CSV)",
-        data=csv_str,
-        file_name=f"detailed_predictions_{results['model_info']['model_type']}_{results['model_info']['timestamp'].replace(':', '-')}.csv",
-        mime="text/csv",
-        key="download_detailed_predictions_csv"
+    # Per-class TP/FP/TN/FN aggregated table with toggle
+    st.markdown("#### TP/FP/TN/FN by Class")
+    class_task_choice = st.selectbox(
+        "Select task for per-class confusion counts",
+        ["Gloss Recognition", "Category Recognition"],
+        key="class_confusion_toggle"
     )
+
+    # Collect class IDs present in predictions
+    if class_task_choice == "Gloss Recognition":
+        class_ids = sorted(set([int(p['gloss_gt']) for p in predictions] + [int(p['gloss_pred']) for p in predictions]))
+    else:
+        class_ids = sorted(set([int(p['cat_gt']) for p in predictions] + [int(p['cat_pred']) for p in predictions]))
+
+    total_n = len(predictions)
+    per_class_rows = []
+
+    for cid in class_ids:
+        if class_task_choice == "Gloss Recognition":
+            tp = sum(1 for p in predictions if p['gloss_pred'] == cid and p['gloss_gt'] == cid)
+            fp = sum(1 for p in predictions if p['gloss_pred'] == cid and p['gloss_gt'] != cid)
+            fn = sum(1 for p in predictions if p['gloss_pred'] != cid and p['gloss_gt'] == cid)
+            label = gloss_mapping.get(cid, f"Unknown ({cid})")
+        else:
+            tp = sum(1 for p in predictions if p['cat_pred'] == cid and p['cat_gt'] == cid)
+            fp = sum(1 for p in predictions if p['cat_pred'] == cid and p['cat_gt'] != cid)
+            fn = sum(1 for p in predictions if p['cat_pred'] != cid and p['cat_gt'] == cid)
+            label = category_mapping.get(cid, f"Unknown ({cid})")
+
+        tn = total_n - (tp + fp + fn)
+
+        per_class_rows.append({
+            'Class': f"{label} ({cid})",
+            'TP': tp,
+            'FP': fp,
+            'TN': tn,
+            'FN': fn,
+        })
+
+    per_class_df = pd.DataFrame(per_class_rows)
+    st.dataframe(
+        per_class_df,
+        use_container_width=True,
+        height=400
+    )
+
+    # Note: Download button removed; users can download directly from the table UI.
