@@ -4,7 +4,7 @@
 
 ## 1. Expose Required Port
 
-- Ensure port **8501** is exposed in your vast.ai template.
+- Ensure port **8081** is exposed in your vast.ai template.
 
 ---
 
@@ -121,30 +121,58 @@ cp shared/current/transformer/optimal/SignTransformer_best.pt trained_models/tra
 cp shared/current/iv3_gru/70-gloss_acc/InceptionV3GRU_best.pt trained_models/iv3_gru/70-gloss_acc/
 ```
 
-3. `streamlit_app/components/visualization.py` (replace if needed)
+3. Replace Streamlit components with vast.ai versions:
 
-4. `streamlit_app/components/validation_components.py` (replace if needed)
+```bash
+cp "shared/for vast ai/visualization_vast_ai.py" "streamlit_app/components/visualization.py"
+```
+
+```bash
+cp "shared/for vast ai/validation_components_vast_ai.py" "streamlit_app/components/validation_components.py"
+```
 
 ---
 
 ## 7. Run the Streamlit Application
 
-Start the app with:
+**Start the app with proper settings:**
 
 ```bash
-streamlit run run_app.py --server.port 8081 --server.address 0.0.0.0
+streamlit run run_app.py --server.port 8081 --server.address 0.0.0.0 --server.headless true
+```
+
+**In another terminal, create a tunnel for external access:**
+
+```bash
+cloudflared tunnel --url http://localhost:8081
+```
+
+**Test locally first:**
+
+```bash
+curl -I http://localhost:8081
 ```
 
 ---
 
-## 8. Create a Tunnel (for External Access)
+## 8. Access Your Application
 
-- Access locally: [http://localhost:8081]
-- Example Cloudflare tunnel: [https://capable-oasis-aaa-load.trycloudflare.com]
+- **Local access:** [http://localhost:8081]
+- **External access:** Use the tunnel URL provided by cloudflared (e.g., [https://something-random.trycloudflare.com])
 
 ---
 
-## 9. Optional: Test IV3-GRU Model Loading
+## 9. Video Generation Dependencies (if needed)
+
+If you require video generation, install the following:
+
+```bash
+apt-get update && apt-get install -y ffmpeg libx264-dev
+```
+
+---
+
+## 10. Optional: Test IV3-GRU Model Loading
 
 To verify IV3-GRU loads correctly on CPU:
 
@@ -152,21 +180,11 @@ To verify IV3-GRU loads correctly on CPU:
 python -c "
 try:
     from evaluation.prediction.predict import ModelPredictor
-    predictor = ModelPredictor('iv3_gru', 'trained_models/iv3_gru/iv3gru_100_epochs_09-16/InceptionV3GRU_best.pt', device='cpu')
+    predictor = ModelPredictor('iv3_gru', 'trained_models/iv3_gru/70-gloss_acc/InceptionV3GRU_best.pt', device='cpu')
     print('IV3-GRU loaded successfully on CPU')
 except Exception as e:
     print('IV3-GRU loading failed:', str(e))
 "
-```
-
----
-
-## 10. Video Generation Dependencies (if needed)
-
-If you require video generation, install the following:
-
-```bash
-apt-get update && apt-get install -y ffmpeg libx264-dev
 ```
 
 ---
