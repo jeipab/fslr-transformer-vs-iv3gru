@@ -8,7 +8,51 @@
 
 ---
 
-## 2. Set Up the Codebase
+## 2. Quick Start (Pre-Setup Project)
+
+If the project has already been properly set up with all dependencies, data, and models in place, follow these steps:
+
+**Prerequisites:**
+
+- Project cloned and dependencies installed
+- Data downloaded and processed
+- Models copied to appropriate directories
+- Virtual environment created
+
+**Step 1: Navigate to project directory**
+
+```bash
+cd fslr-transformer-vs-iv3gru
+```
+
+**Step 2: Activate virtual environment**
+
+```bash
+source venv/bin/activate
+```
+
+**Step 3: Run Streamlit application**
+
+```bash
+streamlit run run_app.py --server.port 8081 --server.address 0.0.0.0 --server.headless true
+```
+
+**Step 4: Open new terminal and create tunnel**
+
+In a new terminal window:
+
+```bash
+cloudflared tunnel --url http://localhost:8081
+```
+
+**Step 5: Access your application**
+
+- **Local access:** [http://localhost:8081]
+- **External access:** Use the tunnel URL provided by cloudflared
+
+---
+
+## 3. Set Up the Codebase
 
 **Clone the repository:**
 
@@ -42,7 +86,7 @@ pip install -r requirements.txt
 
 ---
 
-## 3. Upload and Prepare Data
+## 4. Upload and Prepare Data
 
 **Navigate to the processed data directory:**
 
@@ -72,7 +116,7 @@ unzip *.zip
 
 ---
 
-## 4. Assign Labels
+## 5. Assign Labels
 
 **Return to the project root:**
 
@@ -88,7 +132,7 @@ python data/splitting/assign.py
 
 ---
 
-## 5. Split Data
+## 6. Split Data
 
 **For greetings only:**
 
@@ -104,7 +148,7 @@ python data/splitting/data_split.py --processed-root data/processed --labels dat
 
 ---
 
-## 6. Add Required Files
+## 7. Add Required Files
 
 1. Data files
 
@@ -133,7 +177,7 @@ cp "shared/for vast ai/validation_components_vast_ai.py" "streamlit_app/componen
 
 ---
 
-## 7. Run the Streamlit Application
+## 8. Run the Streamlit Application
 
 **Start the app with proper settings:**
 
@@ -155,14 +199,14 @@ curl -I http://localhost:8081
 
 ---
 
-## 8. Access Your Application
+## 9. Access Your Application
 
 - **Local access:** [http://localhost:8081]
 - **External access:** Use the tunnel URL provided by cloudflared (e.g., [https://something-random.trycloudflare.com])
 
 ---
 
-## 9. Video Generation Dependencies (if needed)
+## 10. Video Generation Dependencies (if needed)
 
 If you require video generation, install the following:
 
@@ -172,7 +216,7 @@ apt-get update && apt-get install -y ffmpeg libx264-dev
 
 ---
 
-## 10. Optional: Test IV3-GRU Model Loading
+## 11. Optional: Test IV3-GRU Model Loading
 
 To verify IV3-GRU loads correctly on CPU:
 
