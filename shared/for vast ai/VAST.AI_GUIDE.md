@@ -170,20 +170,7 @@ cd ../../
 
 1. Data files
 
-2. Trained model files
-   **For the Transformer model, copy the checkpoint file to the optimal folder:**
-
-```bash
-cp shared/current/transformer/anti_overfitting/SignTransformer_best.pt trained_models/transformer/anti_overfitting/
-```
-
-**For the IV3-GRU model, copy the checkpoint file to the 70-gloss_acc folder:**
-
-```bash
-cp shared/current/iv3_gru/70-gloss_acc/InceptionV3GRU_best.pt trained_models/iv3_gru/70-gloss_acc/
-```
-
-3. Replace Streamlit components with vast.ai versions:
+2. Replace Streamlit components with vast.ai versions:
 
 ```bash
 cp "shared/for vast ai/visualization_vast_ai.py" "streamlit_app/components/visualization.py"
