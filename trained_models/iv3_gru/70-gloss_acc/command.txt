@@ -1,0 +1,31 @@
+70-gloss_acc - 70/98
+
+python -m training.train \
+  --model iv3_gru \
+  --epochs 300 \
+  --batch-size 16 \
+  --lr 0.0003 \
+  --alpha 0.8 \
+  --beta 0.2 \
+  --num-gloss 105 \
+  --num-cat 10 \
+  --features-train data/processed/keypoints_train \
+  --features-val data/processed/keypoints_val \
+  --labels-train-csv data/processed/train_labels.csv \
+  --labels-val-csv data/processed/val_labels.csv \
+  --feature-key X2048 \
+  --hidden1 32 \
+  --hidden2 24 \
+  --dropout 0.2 \
+  --no-freeze-backbone \
+  --amp \
+  --augment \
+  --augment-noise-std 0.001 \
+  --augment-mask-prob 0.03 \
+  --augment-mask-ratio 0.03 \
+  --scheduler plateau \
+  --scheduler-patience 25 \
+  --early-stop 150 \
+  --weight-decay 5e-6 \
+  --log-csv iv3gru_full_optimized.csv \
+  --output-dir trained_models/iv3_gru/full_optimized

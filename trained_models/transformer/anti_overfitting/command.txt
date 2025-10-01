@@ -1,0 +1,30 @@
+anti_overfitting - 82/99
+
+python -m training.train \
+  --model transformer \
+  --epochs 200 \
+  --batch-size 16 \
+  --lr 0.00003 \
+  --alpha 0.7 \
+  --beta 0.3 \
+  --num-gloss 105 \
+  --num-cat 10 \
+  --keypoints-train data/processed/keypoints_train \
+  --keypoints-val data/processed/keypoints_val \
+  --labels-train-csv data/processed/train_labels.csv \
+  --labels-val-csv data/processed/val_labels.csv \
+  --kp-key X2048 \
+  --amp \
+  --augment \
+  --augment-noise-std 0.003 \
+  --augment-mask-prob 0.08 \
+  --augment-mask-ratio 0.08 \
+  --scheduler warmup_cosine \
+  --warmup-epochs 15 \
+  --early-stop 50 \
+  --weight-decay 2.5e-4 \
+  --grad-clip 0.8 \
+  --label-smoothing 0.08 \
+  --ema-decay 0.9997 \
+  --log-csv transformer_anti_overfitting.csv \
+  --output-dir trained_models/transformer/anti_overfitting

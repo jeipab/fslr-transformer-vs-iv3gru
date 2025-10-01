@@ -1,0 +1,34 @@
+regularized_v2 - 46/98
+
+python -m training.train \
+  --model iv3_gru \
+  --epochs 250 \
+  --batch-size 20 \
+  --lr 0.0002 \
+  --alpha 0.8 \
+  --beta 0.2 \
+  --num-gloss 105 \
+  --num-cat 10 \
+  --features-train data/processed/keypoints_train \
+  --features-val data/processed/keypoints_val \
+  --labels-train-csv data/processed/train_labels.csv \
+  --labels-val-csv data/processed/val_labels.csv \
+  --feature-key X2048 \
+  --hidden1 28 \
+  --hidden2 20 \
+  --dropout 0.35 \
+  --no-freeze-backbone \
+  --amp \
+  --augment \
+  --augment-noise-std 0.002 \
+  --augment-mask-prob 0.05 \
+  --augment-mask-ratio 0.05 \
+  --scheduler plateau \
+  --scheduler-patience 20 \
+  --early-stop 120 \
+  --weight-decay 1e-4 \
+  --grad-clip 1.0 \
+  --label-smoothing 0.1 \
+  --ema-decay 0.9995 \
+  --log-csv iv3gru_regularized_v2.csv \
+  --output-dir trained_models/iv3_gru/i-regularized_v2

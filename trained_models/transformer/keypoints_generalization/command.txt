@@ -1,0 +1,27 @@
+keypoints_generalization - 63/82
+
+python -m training.train \
+  --model transformer \
+  --epochs 150 \
+  --batch-size 8 \
+  --lr 0.00006 \
+  --alpha 0.8 \
+  --beta 0.2 \
+  --num-gloss 105 \
+  --num-cat 10 \
+  --keypoints-train data/processed/keypoints_train \
+  --keypoints-val data/processed/keypoints_val \
+  --labels-train-csv data/processed/train_labels.csv \
+  --labels-val-csv data/processed/val_labels.csv \
+  --kp-key X \
+  --amp \
+  --augment \
+  --augment-noise-std 0.001 \
+  --augment-mask-prob 0.03 \
+  --augment-mask-ratio 0.03 \
+  --scheduler warmup_cosine \
+  --warmup-epochs 15 \
+  --early-stop 30 \
+  --weight-decay 1.1e-4 \
+  --log-csv transformer_keypoints_generalization.csv \
+  --output-dir trained_models/transformer/keypoints_generalization
