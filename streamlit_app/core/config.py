@@ -20,12 +20,12 @@ PAGE_CONFIG = {
 MODEL_CONFIG = {
     'transformer': {
         'enabled': True,
-        'checkpoint_path': 'trained_models/transformer/anti_overfitting/SignTransformer_best.pt',
+        'checkpoint_path': 'trained_models/transformer/combined_generalization/SignTransformer_best.pt',
         'model_type': 'transformer',
         'num_gloss_classes': 105,
         'num_category_classes': 10,
         'display_name': 'SignTransformer',
-        'input_dim': None,  # Will be auto-detected from checkpoint
+        'input_dim': None,  # Will be auto-detected from checkpoint (2204 for combined model)
         'supports_keypoints': True,  # Can use 156-D keypoints
         'supports_features': True    # Can use 2048-D features
     },

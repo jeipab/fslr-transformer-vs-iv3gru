@@ -259,6 +259,21 @@ class ModelPredictor:
                 if 'X' not in data:
                     raise ValueError(f"NPZ file missing 'X' key for 156-D transformer model")
                 X = torch.from_numpy(data['X']).float().unsqueeze(0)
+            elif self.input_dim == 2204:
+                # Use combined features (156 keypoints + 2048 features = 2204-dimensional)
+                if 'X' not in data or 'X2048' not in data:
+                    raise ValueError(f"NPZ file missing 'X' or 'X2048' key for combined transformer model")
+                
+                # Load both keypoints and features
+                X_keypoints = torch.from_numpy(data['X']).float()  # [T, 156]
+                X_features = torch.from_numpy(data['X2048']).float()  # [T, 2048]
+                
+                # Ensure both have the same sequence length
+                if X_keypoints.shape[0] != X_features.shape[0]:
+                    raise ValueError(f"Sequence length mismatch: keypoints {X_keypoints.shape[0]} vs features {X_features.shape[0]}")
+                
+                # Concatenate along feature dimension: [T, 156] + [T, 2048] = [T, 2204]
+                X = torch.cat([X_keypoints, X_features], dim=1).unsqueeze(0)  # [1, T, 2204]
             else:
                 raise ValueError(f"Unsupported input dimension {self.input_dim} for transformer model")
             
@@ -367,14 +382,43 @@ class ModelPredictor:
         )
         
         if self.model_type == 'transformer':
-            # Step 4: Prepare input tensors for Transformer model
-            # For the current Transformer model, we need 2048-D features (IV3 features)
-            if iv3_features is None or len(iv3_features) == 0:
-                raise ValueError("Could not extract IV3 features from video")
-            
-            # Stack features into sequence tensor
-            X = np.stack(iv3_features, axis=0)
-            X = torch.from_numpy(X).float().unsqueeze(0)
+            # Step 4: Prepare input tensors for Transformer model based on input dimension
+            if self.input_dim == 2048:
+                # Use IV3 features (2048-dimensional)
+                if iv3_features is None or len(iv3_features) == 0:
+                    raise ValueError("Could not extract IV3 features from video")
+                
+                # Stack features into sequence tensor
+                X = np.stack(iv3_features, axis=0)
+                X = torch.from_numpy(X).float().unsqueeze(0)
+            elif self.input_dim == 156:
+                # Use keypoint features (156-dimensional)
+                if keypoints is None or len(keypoints) == 0:
+                    raise ValueError("Could not extract keypoints from video")
+                
+                # Stack keypoints into sequence tensor
+                X = np.stack(keypoints, axis=0)
+                X = torch.from_numpy(X).float().unsqueeze(0)
+            elif self.input_dim == 2204:
+                # Use combined features (156 keypoints + 2048 features = 2204-dimensional)
+                if keypoints is None or len(keypoints) == 0:
+                    raise ValueError("Could not extract keypoints from video")
+                if iv3_features is None or len(iv3_features) == 0:
+                    raise ValueError("Could not extract IV3 features from video")
+                
+                # Ensure both have the same sequence length
+                if len(keypoints) != len(iv3_features):
+                    raise ValueError(f"Sequence length mismatch: keypoints {len(keypoints)} vs features {len(iv3_features)}")
+                
+                # Stack both keypoints and features
+                X_keypoints = np.stack(keypoints, axis=0)  # [T, 156]
+                X_features = np.stack(iv3_features, axis=0)  # [T, 2048]
+                
+                # Concatenate along feature dimension: [T, 156] + [T, 2048] = [T, 2204]
+                X_combined = np.concatenate([X_keypoints, X_features], axis=1)  # [T, 2204]
+                X = torch.from_numpy(X_combined).float().unsqueeze(0)  # [1, T, 2204]
+            else:
+                raise ValueError(f"Unsupported input dimension {self.input_dim} for transformer model")
             
             # Handle sequence length truncation (max_len=300)
             if X.shape[1] > 300:
