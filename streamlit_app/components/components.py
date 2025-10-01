@@ -798,6 +798,11 @@ def render_sidebar() -> Dict:
     </div>
     """, unsafe_allow_html=True)
 
+    # Add demo video button at the very bottom of the sidebar
+    st.sidebar.markdown("<div style='height: 2rem;'></div>", unsafe_allow_html=True)
+    from .demo_video import render_demo_button
+    render_demo_button()
+
     return dict(
         model_choice=model_choice,
         sequence_length=150,  # Default sequence length

@@ -43,6 +43,7 @@ from .validation_components import (
     render_validation_summary,
     render_download_results
 )
+from .demo_video import render_demo_button
 
 __all__ = [
     # UI Components
@@ -77,5 +78,8 @@ __all__ = [
     'render_validation_configuration',
     'render_validation_results',
     'render_validation_summary',
-    'render_download_results'
+    'render_download_results',
+    
+    # Demo Video
+    'render_demo_button'
 ]
