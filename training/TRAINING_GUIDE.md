@@ -12,10 +12,10 @@ pip install -r requirements.txt
 
 ## ⚠️ **Important: Real Data Required**
 
-The training script now **requires real data files** and no longer supports synthetic data. You must provide either:
+The training script now **requires real data files** and no longer supports synthetic data. You must provide:
 
-- **For Transformer**: Keypoint data files with CSV labels
-- **For IV3-GRU**: Feature data files with CSV labels
+- **For Transformer**: Keypoint data files [T, 156], feature data files [T, 2048], or combined [T, 2204]
+- **For IV3-GRU**: Feature data files [T, 2048] with CSV labels
 
 ## Quick Start
 
@@ -30,6 +30,24 @@ python training/train.py \
   --keypoints-val data/processed/keypoints_val \
   --labels-train-csv data/processed/train_labels.csv \
   --labels-val-csv data/processed/val_labels.csv \
+  --num-gloss 105 --num-cat 10 \
+  --epochs 50 --batch-size 32 \
+  --auto-workers --auto-batch-size --enable-parallel \
+  --amp --compile-model
+```
+
+**Transformer (Combined: Keypoints + Features)**:
+
+```bash
+python training/train.py \
+  --model transformer \
+  --keypoints-train data/processed/keypoints_train \
+  --keypoints-val data/processed/keypoints_val \
+  --labels-train-csv data/processed/train_labels.csv \
+  --labels-val-csv data/processed/val_labels.csv \
+  --kp-key X \
+  --feature-key X2048 \
+  --combine-features \
   --num-gloss 105 --num-cat 10 \
   --epochs 50 --batch-size 32 \
   --auto-workers --auto-batch-size --enable-parallel \
@@ -109,7 +127,9 @@ data/processed/
 
 **NPZ Files**:
 
-- **Transformer**: Key `X` with shape `[T, 156]` (variable sequence lengths)
+- **Transformer (Keypoints)**: Key `X` with shape `[T, 156]` (variable sequence lengths)
+- **Transformer (Features)**: Key `X2048` with shape `[T, 2048]` (variable sequence lengths)
+- **Transformer (Combined)**: Both keys `X` [T, 156] and `X2048` [T, 2048] in same file → concatenated to [T, 2204]
 - **IV3-GRU**: Key `X2048` (or `X`) with shape `[T, 2048]` (variable sequence lengths)
 
 **Labels CSV**:

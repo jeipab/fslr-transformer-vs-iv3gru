@@ -15,7 +15,8 @@ This comprehensive training module supports:
 
 3. DATA HANDLING:
    - File-based datasets from preprocessed .npz files
-   - Support for both keypoints [T, 156] and features [T, 2048]
+   - Support for keypoints [T, 156], features [T, 2048], or combined [T, 2204]
+   - Combined mode: concatenates keypoints + features for richer representations
    - Temporal data augmentation (noise, masking)
    - Variable-length sequence padding and batching
 
@@ -328,6 +329,120 @@ class FSLKeypointFileDataset(Dataset):
         elif self.kp_key == "X" and X.shape[-1] != 156:
             raise ValueError(f"Expected [T,156] keypoints in {path}, got shape {X.shape}")
         return X
+
+class FSLCombinedFileDataset(Dataset):
+    """
+    PyTorch Dataset that combines keypoints and features into single input.
+    
+    This dataset loads both keypoints [T, 156] and features [T, 2048] from the same
+    .npz files and concatenates them to create combined input [T, 2204].
+    
+    The combined approach leverages both:
+    - Raw keypoint information (156-dim): Direct pose landmarks for interpretability
+    - Learned visual features (2048-dim): Rich InceptionV3 representations
+    
+    Data Flow:
+    1. Load CSV to build filename -> (gloss, category) mapping
+    2. For each sample, load corresponding .npz file
+    3. Extract both keypoint array (X) and feature array (X2048)
+    4. Concatenate along feature dimension: [T, 156] + [T, 2048] = [T, 2204]
+    5. Apply temporal augmentation if enabled and in training mode
+    6. Return (combined_data, gloss_label, category_label, sequence_length)
+    
+    Args:
+        data_dir (str): Directory containing .npz files with both X and X2048 keys
+        labels_csv (str): CSV file with columns: file, gloss, cat
+        kp_key (str): Key for keypoints in .npz files (default: 'X')
+        feature_key (str): Key for features in .npz files (default: 'X2048')
+        augment (bool): Enable temporal data augmentation
+        augment_params (dict): Augmentation parameters (noise_std, mask_prob, etc.)
+    
+    Returns:
+        __getitem__ returns (combined[T,2204] float32, gloss long, cat long, length long)
+        
+    Raises:
+        ValueError: If CSV format is invalid or array dimensions don't match
+        FileNotFoundError: If data file doesn't exist
+        KeyError: If expected keys not found in .npz file
+    """
+    def __init__(self, data_dir, labels_csv, kp_key='X', feature_key='X2048', augment=False, augment_params=None):
+        self.data_dir = data_dir
+        self.kp_key = kp_key
+        self.feature_key = feature_key
+        self.index = []  # list of (stem, gloss, cat)
+        self.augment = augment
+        self.training = True  # Will be set by DataLoader
+        
+        # Initialize temporal augmentation if enabled
+        if augment and augment_params:
+            self.augmentation = TemporalAugmentation(**augment_params)
+        elif augment:
+            self.augmentation = TemporalAugmentation()
+        
+        if labels_csv is None:
+            raise ValueError("labels_csv must be provided for combined dataset")
+        
+        # Load and parse the labels CSV file
+        with open(labels_csv, newline='') as f:
+            reader = csv.DictReader(f)
+            required = {'file', 'gloss', 'cat'}
+            if not required.issubset(set(reader.fieldnames or [])):
+                raise ValueError(f"labels_csv must have columns: {required}")
+            for row in reader:
+                try:
+                    stem = os.path.splitext(row['file'])[0]
+                    gloss = int(row['gloss'])
+                    cat = int(row['cat'])
+                    self.index.append((stem, gloss, cat))
+                except (ValueError, KeyError) as e:
+                    raise ValueError(f"Invalid data in row {row}: {e}")
+    
+    def __len__(self):
+        return len(self.index)
+    
+    def __getitem__(self, idx):
+        stem, gloss, cat = self.index[idx]
+        path = os.path.join(self.data_dir, stem + '.npz')
+        if not os.path.exists(path):
+            raise FileNotFoundError(f"Data file not found: {path}")
+        
+        # Load both keypoints and features
+        keypoints, features = self._load_combined_data(path)
+        
+        # Concatenate along feature dimension: [T, 156] + [T, 2048] = [T, 2204]
+        combined = torch.cat([keypoints, features], dim=1)
+        length = combined.shape[0]
+        
+        # Apply augmentation if enabled and in training mode
+        if self.augment and self.training and hasattr(self, 'augmentation'):
+            combined = self.augmentation(combined)
+        
+        return combined.float(), torch.tensor(gloss, dtype=torch.long), torch.tensor(cat, dtype=torch.long), torch.tensor(length, dtype=torch.long)
+    
+    def _load_combined_data(self, path):
+        """Load and validate both keypoints and features from .npz file."""
+        with np.load(path, allow_pickle=True) as npz:
+            # Load keypoints
+            if self.kp_key not in npz:
+                raise KeyError(f"Keypoint key '{self.kp_key}' not found in {path}")
+            keypoints = np.array(npz[self.kp_key])
+            
+            # Load features
+            if self.feature_key not in npz:
+                raise KeyError(f"Feature key '{self.feature_key}' not found in {path}")
+            features = np.array(npz[self.feature_key])
+        
+        # Validate shapes
+        if keypoints.ndim != 2 or keypoints.shape[-1] != 156:
+            raise ValueError(f"Expected [T,156] keypoints in {path}, got shape {keypoints.shape}")
+        if features.ndim != 2 or features.shape[-1] != 2048:
+            raise ValueError(f"Expected [T,2048] features in {path}, got shape {features.shape}")
+        
+        # Ensure temporal dimensions match
+        if keypoints.shape[0] != features.shape[0]:
+            raise ValueError(f"Temporal dimension mismatch in {path}: keypoints {keypoints.shape[0]} != features {features.shape[0]}")
+        
+        return torch.from_numpy(keypoints), torch.from_numpy(features)
 
 def collate_features_with_padding(batch):
     """
@@ -685,7 +800,13 @@ def log_comprehensive_config(args, device, model=None):
         elif args.model == "transformer":
             print(f"  - Training folder: {args.keypoints_train}")
             print(f"  - Validation folder: {args.keypoints_val}")
-            print(f"  - Keypoint key: {args.kp_key}")
+            if args.combine_features:
+                print(f"  - Mode: Combined (Keypoints + Features)")
+                print(f"  - Keypoint key: {args.kp_key} (156-dim)")
+                print(f"  - Feature key: {args.feature_key} (2048-dim)")
+                print(f"  - Combined input: 2204-dim")
+            else:
+                print(f"  - Keypoint key: {args.kp_key}")
     else:
         print(f"  - Data source: Synthetic data")
         print(f"  - Training samples: {args.train_samples}")
@@ -2041,6 +2162,8 @@ Examples:
                        help="Directory containing validation .npz files with keypoint sequences [T,156]")
     parser.add_argument("--kp-key", type=str, default="X", 
                        help="Key name in .npz files containing [T,156] keypoint arrays")
+    parser.add_argument("--combine-features", action="store_true",
+                       help="Combine keypoints [T,156] and features [T,2048] into single input [T,2204] (Transformer only)")
     # IV3-GRU hyperparameters
     parser.add_argument("--hidden1", type=int, default=16, help="IV3-GRU first GRU hidden size")
     parser.add_argument("--hidden2", type=int, default=12, help="IV3-GRU second GRU hidden size")
@@ -2196,8 +2319,21 @@ if __name__ == "__main__":
             raise ValueError("No data files provided. Please specify either --features-train/--features-val for IV3-GRU model or --keypoints-train/--keypoints-val for Transformer model.")
         print(f"✓ Loaded data successfully")
         
+        # Check for combined features mode (Transformer only)
+        use_combined_features = (
+            args.model == "transformer" and args.combine_features and 
+            args.keypoints_train is not None and args.keypoints_val is not None
+        )
+        
         # Log dataset source information
-        if use_feature_files:
+        if use_combined_features:
+            print(f"  - Dataset type: Transformer Combined (Keypoints + Features)")
+            print(f"  - Training folder: {args.keypoints_train}")
+            print(f"  - Validation folder: {args.keypoints_val}")
+            print(f"  - Keypoint key: {args.kp_key} (156-dim)")
+            print(f"  - Feature key: {args.feature_key} (2048-dim)")
+            print(f"  - Combined dimension: 2204 (156 + 2048)")
+        elif use_feature_files:
             print(f"  - Dataset type: IV3-GRU Features")
             print(f"  - Training folder: {args.features_train}")
             print(f"  - Validation folder: {args.features_val}")
@@ -2235,7 +2371,32 @@ if __name__ == "__main__":
             'time_mask_ratio': args.augment_mask_ratio
         }
 
-    if use_feature_files:
+    if use_combined_features:
+        # Combined mode: Load both keypoints and features
+        if args.labels_train_csv is None or not os.path.exists(args.labels_train_csv):
+            raise FileNotFoundError(f"Training labels CSV not found: {args.labels_train_csv}")
+        if args.labels_val_csv is None or not os.path.exists(args.labels_val_csv):
+            raise FileNotFoundError(f"Validation labels CSV not found: {args.labels_val_csv}")
+        
+        train_dataset = FSLCombinedFileDataset(
+            data_dir=args.keypoints_train,
+            labels_csv=args.labels_train_csv,
+            kp_key=args.kp_key,
+            feature_key=args.feature_key,
+            augment=args.augment,
+            augment_params=augment_params,
+        )
+        val_dataset = FSLCombinedFileDataset(
+            data_dir=args.keypoints_val,
+            labels_csv=args.labels_val_csv,
+            kp_key=args.kp_key,
+            feature_key=args.feature_key,
+            augment=False,  # No augmentation for validation
+            augment_params=None,
+        )
+        train_loader = _make_dataloader(train_dataset, batch_size, True, args, collate_fn=collate_keypoints_with_padding)
+        val_loader = _make_dataloader(val_dataset, batch_size, False, args, collate_fn=collate_keypoints_with_padding)
+    elif use_feature_files:
         # Validate CSV files exist
         if args.labels_train_csv is None or not os.path.exists(args.labels_train_csv):
             raise FileNotFoundError(f"Training labels CSV not found: {args.labels_train_csv}")
@@ -2290,7 +2451,11 @@ if __name__ == "__main__":
         print(f"  - Data augmentation: Enabled (noise_std={args.augment_noise_std}, mask_prob={args.augment_mask_prob})")
     
     # Log dataset details
-    if use_feature_files:
+    if use_combined_features:
+        print(f"  - Training dataset size: {len(train_dataset)} samples")
+        print(f"  - Validation dataset size: {len(val_dataset)} samples")
+        print(f"  - Data format: [T, 2204] combined (156 keypoints + 2048 features)")
+    elif use_feature_files:
         print(f"  - Training dataset size: {len(train_dataset)} samples")
         print(f"  - Validation dataset size: {len(val_dataset)} samples")
         print(f"  - Data format: [T, 2048] features")
@@ -2309,8 +2474,10 @@ if __name__ == "__main__":
     print("- iv3_gru: InceptionV3 + GRU hybrid")
     
     if args.model == "transformer":
-        # Determine input dimension based on the data key being used
-        if args.kp_key == "X2048":
+        # Determine input dimension based on the data mode being used
+        if use_combined_features:
+            input_dim = 2204  # 156 keypoints + 2048 features
+        elif args.kp_key == "X2048":
             input_dim = 2048
         else:
             input_dim = 156  # Default for keypoints
