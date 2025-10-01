@@ -148,7 +148,25 @@ python data/splitting/data_split.py --processed-root data/processed --labels dat
 
 ---
 
-## 7. Add Required Files
+## 7. Clean Up Unused Files
+
+After data splitting, remove unused .npz and .zip files from the processed directory (this won't affect subdirectories):
+
+```bash
+find data/processed -maxdepth 1 \( -name "*.npz" -o -name "*.zip" \) -type f -delete
+```
+
+**Alternative method (navigate to directory first):**
+
+```bash
+cd data/processed
+rm -f *.npz *.zip
+cd ../../
+```
+
+---
+
+## 8. Add Required Files
 
 1. Data files
 
@@ -177,7 +195,7 @@ cp "shared/for vast ai/validation_components_vast_ai.py" "streamlit_app/componen
 
 ---
 
-## 8. Run the Streamlit Application
+## 9. Run the Streamlit Application
 
 **Start the app with proper settings:**
 
@@ -199,14 +217,14 @@ curl -I http://localhost:8081
 
 ---
 
-## 9. Access Your Application
+## 10. Access Your Application
 
 - **Local access:** [http://localhost:8081]
 - **External access:** Use the tunnel URL provided by cloudflared (e.g., [https://something-random.trycloudflare.com])
 
 ---
 
-## 10. Video Generation Dependencies (if needed)
+## 11. Video Generation Dependencies (if needed)
 
 If you require video generation, install the following:
 
@@ -216,7 +234,7 @@ apt-get update && apt-get install -y ffmpeg libx264-dev
 
 ---
 
-## 11. Optional: Test IV3-GRU Model Loading
+## 12. Optional: Test IV3-GRU Model Loading
 
 To verify IV3-GRU loads correctly on CPU:
 
@@ -233,9 +251,9 @@ except Exception as e:
 
 ---
 
-## 12. Download and Process Sample Data
+## 13. Download and Process Sample Data
 
-This section covers downloading sample video data and processing it for testing purposes.
+This section covers downloading preprocessed sample data for testing purposes.
 
 **Prerequisites:**
 
@@ -246,17 +264,16 @@ cd fslr-transformer-vs-iv3gru
 source venv/bin/activate
 ```
 
-**Step 1: Create raw directory and navigate to sample directory**
+**Step 1: Navigate to raw data directory**
 
 ```bash
-mkdir -p data/raw/sample
-cd data/raw/sample
+cd data/processed
 ```
 
-**Step 2: Download the sample zip file from Google Drive**
+**Step 2: Download the preprocessed sample zip file from Google Drive**
 
 ```bash
-gdown https://drive.google.com/uc?id=12S2q_RmHKAsl40ZNAsJpNL2p2F65rVeJ
+gdown https://drive.google.com/uc?id=1CcYjT4cK0su6oC0UrGcY8Nqy_V6Px01E
 ```
 
 **Step 3: Unzip the downloaded file**
@@ -265,69 +282,19 @@ gdown https://drive.google.com/uc?id=12S2q_RmHKAsl40ZNAsJpNL2p2F65rVeJ
 unzip *.zip
 ```
 
-**Step 4: Preprocess videos to NPZ format**
-
-Navigate back to project root and preprocess the MP4 videos:
+**Step 4: Clean up the zip file**
 
 ```bash
-cd ../../../
-mkdir -p data/processed/sample
-python -m preprocessing.core.preprocess data/raw/sample data/processed/sample --write-keypoints --write-iv3-features --workers 4 --batch-size 16 --disable-parquet
+rm -f *.zip
 ```
 
-Note: Optimized for RTX 5080 (1 GPU, 12 CPU cores, 15.9 GB VRAM):
-
-- `--workers 4`: Uses 4 parallel processes (limited by single GPU memory, not CPU cores)
-- `--batch-size 16`: Conservative batch size to avoid CUDA OOM with multiple workers sharing 1 GPU
-- `--disable-parquet`: Skips parquet files for faster processing
-
-**Step 6: Create labels.csv for the processed sample data**
-
-Create labels.csv from the processed NPZ files (including occluded flag):
+**Step 5: Return to project root**
 
 ```bash
-python3 -c "
-import os
-import numpy as np
-import pandas as pd
-import json
-
-# Get all npz files in processed sample directory
-processed_dir = 'data/processed/sample'
-files = [f for f in os.listdir(processed_dir) if f.endswith('.npz')]
-
-# Extract occluded flag from each NPZ file's metadata
-data = []
-for f in files:
-    npz_path = os.path.join(processed_dir, f)
-    npz_data = np.load(npz_path, allow_pickle=True)
-    meta = json.loads(str(npz_data['meta']))
-    occluded = meta.get('occluded_flag', 0)
-    data.append({'file': f, 'occluded': occluded})
-
-df = pd.DataFrame(data)
-df.to_csv('data/processed/sample/labels.csv', index=False)
-print(f'Created labels.csv with {len(files)} files (with occluded column)')
-"
+cd ../../
 ```
 
-**Step 7: Run the assign script on sample data**
-
-Run assign script to add gloss and category IDs:
-
-```bash
-cp data/processed/sample/labels.csv data/processed/labels.csv
-python data/splitting/assign.py
-cp data/processed/labels.csv data/processed/sample/labels.csv
-```
-
-**Step 8: Verify the output**
-
-Check that the labels.csv file was created with proper mappings:
-
-```bash
-head data/processed/sample/labels.csv
-```
+The sample data is now ready to use. Since the files are already preprocessed, no additional processing or label assignment is needed.
 
 ---
 

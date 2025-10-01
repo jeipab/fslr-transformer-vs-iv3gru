@@ -89,6 +89,21 @@ class ValidationDataset:
                 if 'X' not in data:
                     raise ValueError(f"NPZ file {sample['npz_path']} missing 'X' key for 156-D transformer model")
                 X = torch.from_numpy(data['X']).float()
+            elif input_dim == 2204:
+                # Combined features: concatenate keypoints (156-D) and features (2048-D)
+                if 'X' not in data or 'X2048' not in data:
+                    raise ValueError(f"NPZ file {sample['npz_path']} missing 'X' or 'X2048' key for 2204-D combined transformer model")
+                
+                # Load both keypoints and features
+                X_keypoints = torch.from_numpy(data['X']).float()  # [T, 156]
+                X_features = torch.from_numpy(data['X2048']).float()  # [T, 2048]
+                
+                # Ensure both have the same sequence length
+                if X_keypoints.shape[0] != X_features.shape[0]:
+                    raise ValueError(f"Sequence length mismatch: keypoints {X_keypoints.shape[0]} vs features {X_features.shape[0]}")
+                
+                # Concatenate along feature dimension: [T, 156] + [T, 2048] = [T, 2204]
+                X = torch.cat([X_keypoints, X_features], dim=1)
             else:
                 # Fallback to legacy behavior if input_dim not detected yet
                 if 'X2048' in data:
@@ -153,10 +168,13 @@ class ModelValidator:
                 if 'embedding.weight' in state_dict:
                     embedding_shape = state_dict['embedding.weight'].shape
                     input_dim = embedding_shape[1]  # embedding.weight is [emb_dim, input_dim]
+                    print(f"Detected input dimension from checkpoint: {input_dim}")
                 else:
                     input_dim = 156  # Default fallback
+                    print(f"Warning: Could not detect input dimension from checkpoint, using default: {input_dim}")
             except Exception as e:
                 input_dim = 156  # Default fallback
+                print(f"Warning: Could not load checkpoint to detect input dimension, using default: {input_dim}: {e}")
             
             # Update the model configuration with detected input dimension
             from ..core.config import update_model_input_dim
