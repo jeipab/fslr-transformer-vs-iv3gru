@@ -42,6 +42,9 @@ data/splitting/**/*.pyc
 *.pt
 *.pth
 
+# Allow only the "best" model files
+!trained_models/**/*_best.pt
+
 # Allow shared/ to be tracked despite global ignores
 !shared/
 !shared/**
