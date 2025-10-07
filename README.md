@@ -187,6 +187,31 @@ python -m training.train --model iv3_gru --smoke-test --num-gloss 105 --num-cat 
 - **Port conflicts**: Use `streamlit run run_app.py --server.port 8502`
 - **CUDA issues**: Auto-detects CUDA, CPU fallback available
 
+### Mobile Upload Issues
+
+**Problem**: Video uploads from mobile camera fail (6-10MB+), but gallery uploads work.
+
+**Root Cause**: Default Streamlit upload size limit and mobile-specific WebSocket constraints.
+
+**Solution**: Configuration has been updated in `.streamlit/config.toml`:
+
+- `maxUploadSize = 500` MB (increased from 200MB default)
+- `maxMessageSize = 500` MB (matches upload size)
+- `enableCORS = true` (mobile browser compatibility)
+- `enableWebsocketCompression = true` (better mobile network performance)
+
+**After deploying these changes:**
+
+1. Restart the Streamlit app
+2. Test on actual mobile devices (iOS Safari, Android Chrome)
+3. See `.streamlit/CONFIG_NOTES.md` for detailed configuration explanation
+
+**For deployment platforms:**
+
+- **Streamlit Cloud**: Automatically reads config from repository
+- **Heroku/Railway**: May need additional platform configuration
+- **Self-hosted**: Check nginx/Apache upload limits
+
 ### Performance Tips
 
 - Use `--amp` for automatic mixed precision training
