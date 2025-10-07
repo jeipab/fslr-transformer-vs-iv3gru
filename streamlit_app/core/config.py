@@ -101,7 +101,7 @@ WORKFLOW_STAGES = ['upload', 'preprocessing', 'predictions', 'validation']
 
 # Supported file types
 SUPPORTED_FILE_TYPES = {
-    'video': ['.mp4', '.mov'],
+    'video': ['.mp4', '.mov', '.webm'],
     'preprocessed': ['.npz']
 }
 

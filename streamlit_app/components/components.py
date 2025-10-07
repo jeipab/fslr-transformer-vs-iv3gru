@@ -703,7 +703,7 @@ def render_sidebar() -> Dict:
     </div>
     """, unsafe_allow_html=True)
     
-    # Model Status Section - Clean and minimal
+    # Model Status Section
     st.sidebar.markdown("""
     <div style='margin-bottom: 0.1rem;'>
         <h3 style='color: #e2e8f0; margin: 0 0 0.1rem 0; font-size: 1.1rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px;'>Model Status</h3>
@@ -711,7 +711,7 @@ def render_sidebar() -> Dict:
     """, unsafe_allow_html=True)
     render_model_status()
     
-    # Model Configuration Section - Clean and minimal
+    # Model Configuration Section
     st.sidebar.markdown("""
     <div style='margin: 1.5rem 0 0.1rem 0;'>
         <h3 style='color: #e2e8f0; margin: 0 0 0.1rem 0; font-size: 1.1rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px;'>Configuration</h3>
@@ -777,7 +777,7 @@ def render_sidebar() -> Dict:
         key="occ_detailed_checkbox"
     )
     
-    # About Section - Clean and minimal
+    # About Section
     st.sidebar.markdown("""
     <div style='margin: 1.5rem 0 0.1rem 0;'>
         <h3 style='color: #e2e8f0; margin: 0 0 0.1rem 0; font-size: 1.1rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px;'>About</h3>
@@ -915,12 +915,30 @@ def get_available_models():
 
 
 def render_file_upload() -> object:
-    """Render file upload component with native Streamlit design."""
+    """Render file upload component with mobile camera upload support."""
+    
+    st.markdown("""
+    <script>
+    // Enable mobile camera capture for file uploader
+    function configureMobileCapture() {
+        const fileInput = document.querySelector('input[type="file"]');
+        if (fileInput && !fileInput.hasAttribute('data-mobile-configured')) {
+            fileInput.setAttribute('capture', 'environment');
+            fileInput.setAttribute('data-mobile-configured', 'true');
+        }
+    }
+    
+    // Configure on page load and when DOM changes
+    document.addEventListener('DOMContentLoaded', configureMobileCapture);
+    new MutationObserver(configureMobileCapture).observe(document.body, { childList: true, subtree: true });
+    </script>
+    """, unsafe_allow_html=True)
+    
     return st.file_uploader(
         "Choose .npz files or video files (max 10)", 
-        type=["npz", "mp4", "mov"],
+        type=["npz", "mp4", "mov", "webm"],
         accept_multiple_files=True,
-        help="Upload preprocessed .npz files or video files for processing (up to 10 files)"
+        help="Upload preprocessed .npz files or video files for processing (up to 10 files). On mobile devices, you can also capture videos directly using your camera."
     )
 
 
