@@ -9,7 +9,6 @@ raw/
 venv311/
 venv/
 raw/
-thesis/
 
 # Data (ignore everything inside data/)
 data/*
