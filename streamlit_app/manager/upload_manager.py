@@ -66,6 +66,13 @@ def render_upload_stage():
     # File uploader
     uploaded_files = render_file_upload()
     
+    # Handle camera captures
+    if uploaded_files:
+        for file in uploaded_files:
+            # Check if this looks like a recent camera capture
+            if file.name.lower().startswith('vid_'):
+                st.success(f"📹 Camera capture uploaded successfully: {file.name}")
+    
     # Handle file limit
     if uploaded_files and len(uploaded_files) > 10:
         st.error("Maximum 10 files allowed. Please select fewer files.")

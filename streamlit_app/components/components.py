@@ -917,20 +917,69 @@ def get_available_models():
 def render_file_upload() -> object:
     """Render file upload component with mobile camera upload support."""
     
+    # Mobile camera capture solution - auto-upload from gallery
     st.markdown("""
     <script>
-    // Enable mobile camera capture for file uploader
-    function configureMobileCapture() {
+    // Auto-upload most recent camera capture from gallery
+    function configureCameraCapture() {
         const fileInput = document.querySelector('input[type="file"]');
-        if (fileInput && !fileInput.hasAttribute('data-mobile-configured')) {
+        if (fileInput) {
+            // Add camera capture attributes
             fileInput.setAttribute('capture', 'environment');
-            fileInput.setAttribute('data-mobile-configured', 'true');
+            fileInput.setAttribute('accept', 'video/*,image/*,.npz');
+            
+            // Track when user clicks the file input
+            fileInput.addEventListener('click', function(e) {
+                // Set a flag to indicate camera capture was attempted
+                localStorage.setItem('camera_capture_attempted', 'true');
+                localStorage.setItem('camera_attempt_time', Date.now().toString());
+            });
+            
+            // Handle file changes
+            fileInput.addEventListener('change', function(e) {
+                if (e.target.files && e.target.files.length > 0) {
+                    const file = e.target.files[0];
+                    const wasCameraAttempted = localStorage.getItem('camera_capture_attempted') === 'true';
+                    const attemptTime = parseInt(localStorage.getItem('camera_attempt_time') || '0');
+                    const timeSinceAttempt = Date.now() - attemptTime;
+                    
+                    // If camera was attempted recently (within 30 seconds), treat as camera capture
+                    if (wasCameraAttempted && timeSinceAttempt < 30000) {
+                        // Force Streamlit to process this file immediately
+                        setTimeout(function() {
+                            // Multiple event triggers to ensure Streamlit catches it
+                            const events = ['input', 'change', 'blur'];
+                            events.forEach(function(eventType) {
+                                const event = new Event(eventType, { bubbles: true });
+                                e.target.dispatchEvent(event);
+                            });
+                            
+                            // Trigger custom Streamlit events
+                            const customEvent = new CustomEvent('streamlit:fileUploader:change', {
+                                detail: { files: e.target.files },
+                                bubbles: true
+                            });
+                            document.dispatchEvent(customEvent);
+                            
+                            // Also try to trigger a focus/blur cycle
+                            e.target.focus();
+                            setTimeout(function() {
+                                e.target.blur();
+                            }, 50);
+                        }, 200);
+                        
+                        // Clear the flags
+                        localStorage.removeItem('camera_capture_attempted');
+                        localStorage.removeItem('camera_attempt_time');
+                    }
+                }
+            });
         }
     }
     
-    // Configure on page load and when DOM changes
-    document.addEventListener('DOMContentLoaded', configureMobileCapture);
-    new MutationObserver(configureMobileCapture).observe(document.body, { childList: true, subtree: true });
+    // Apply configuration
+    document.addEventListener('DOMContentLoaded', configureCameraCapture);
+    new MutationObserver(configureCameraCapture).observe(document.body, { childList: true, subtree: true });
     </script>
     """, unsafe_allow_html=True)
     
