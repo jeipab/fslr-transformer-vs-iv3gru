@@ -81,11 +81,16 @@ def collect_clips(clips_dir: Path) -> List[Tuple[int, Path]]:
         except ValueError:
             print(f"[WARN] ❗ Skipping non-numeric folder {id_dir}", file=sys.stderr)
             continue
-        # gather .mov files inside
+        # gather video files inside (.MOV, .mov, .mp4, .MP4)
         for mov in sorted(id_dir.glob("*.MOV"), key=lambda p: (p.stem.isdigit(), int(p.stem) if p.stem.isdigit() else p.stem)):
             items.append((id_num, mov))
-        # case-insensitive: also pick *.mov if any (deduplicate)
         for mov in sorted(id_dir.glob("*.mov"), key=lambda p: (p.stem.isdigit(), int(p.stem) if p.stem.isdigit() else p.stem)):
+            if (id_num, mov) not in items:
+                items.append((id_num, mov))
+        for mov in sorted(id_dir.glob("*.mp4"), key=lambda p: (p.stem.isdigit(), int(p.stem) if p.stem.isdigit() else p.stem)):
+            if (id_num, mov) not in items:
+                items.append((id_num, mov))
+        for mov in sorted(id_dir.glob("*.MP4"), key=lambda p: (p.stem.isdigit(), int(p.stem) if p.stem.isdigit() else p.stem)):
             if (id_num, mov) not in items:
                 items.append((id_num, mov))
     # sort globally by id then by filename stem numeric/text
