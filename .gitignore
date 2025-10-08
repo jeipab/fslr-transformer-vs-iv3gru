@@ -19,6 +19,8 @@ data/*
 !data/labels/
 !data/__init__.py
 !data/resize_360p.py
+!data/demo/
+!data/demo/**
 
 # Exclude specific files/directories within allowed data directories
 data/labels/__pycache__/
