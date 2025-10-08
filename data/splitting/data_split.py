@@ -152,24 +152,44 @@ def _write_csv(path: Path, rows):
 
 def main():
     ap = argparse.ArgumentParser(description="Organize preprocessed dataset into train/val splits")
-    ap.add_argument("--processed-root", required=True, type=Path)
-    ap.add_argument("--labels", required=True, type=Path)
+    ap.add_argument("--processed-root", required=True, type=Path, nargs="+", help="One or more directories containing NPZ files")
+    ap.add_argument("--labels", required=True, type=Path, nargs="+", help="One or more labels CSV files (must match order of --processed-root)")
     ap.add_argument("--out-root", type=Path, default=None)
     ap.add_argument("--copy", action="store_true")
     ap.add_argument("--train-ratio", type=float, default=0.8, help="Train split ratio if no split column is present")
     ap.add_argument("--cats", nargs="+",help="Restrict to specific categories (IDs or names). ",default=None)
     ap.add_argument("--gloss", nargs="+", help="Restrict to specific glosses (IDs or names). ",default=None)
     ap.add_argument("--label-ref", type=Path,help="Path to label_reference.csv (required if using names in --cats or --gloss).")
+    ap.add_argument("--train-dir", type=str, default="keypoints_train", help="Name for train directory (default: keypoints_train)")
+    ap.add_argument("--val-dir", type=str, default="keypoints_val", help="Name for val directory (default: keypoints_val)")
+    ap.add_argument("--train-csv", type=str, default="train_labels.csv", help="Name for train CSV (default: train_labels.csv)")
+    ap.add_argument("--val-csv", type=str, default="val_labels.csv", help="Name for val CSV (default: val_labels.csv)")
     args = ap.parse_args()
 
-    processed_root: Path = args.processed_root.resolve()
-    out_root: Path = (args.out_root or args.processed_root).resolve()
-    # Load labels
-    try:
-        df = pd.read_csv(args.labels)
-    except Exception as e:
-        print(f"ERROR: Could not read labels CSV: {e}", file=sys.stderr)
+    # Handle single or multiple input directories
+    processed_roots = [Path(p).resolve() for p in (args.processed_root if isinstance(args.processed_root, list) else [args.processed_root])]
+    labels_files = [Path(p).resolve() for p in (args.labels if isinstance(args.labels, list) else [args.labels])]
+    
+    if len(processed_roots) != len(labels_files):
+        print(f"ERROR: Number of --processed-root ({len(processed_roots)}) must match --labels ({len(labels_files)})", file=sys.stderr)
         return 2
+    
+    out_root: Path = (args.out_root or processed_roots[0]).resolve()
+    
+    # Load and combine labels from all sources
+    df_list = []
+    for i, (proc_root, labels_file) in enumerate(zip(processed_roots, labels_files)):
+        print(f"Loading dataset {i+1}/{len(processed_roots)}: {proc_root}")
+        try:
+            df_part = pd.read_csv(labels_file)
+            df_part["__source_root"] = str(proc_root)  # Track source directory
+            df_list.append(df_part)
+        except Exception as e:
+            print(f"ERROR: Could not read labels CSV {labels_file}: {e}", file=sys.stderr)
+            return 2
+    
+    df = pd.concat(df_list, ignore_index=True)
+    print(f"Combined {len(df)} samples from {len(processed_roots)} dataset(s)")
 
     # Validate required columns  
     required_cols = {"file", "gloss", "cat", "occluded"}
@@ -190,11 +210,13 @@ def main():
             return 2
 
 
-    # Resolve .npz paths
+    # Resolve .npz paths (using source_root for each file)
     paths = []
-    for file_entry in df["file"].astype(str).tolist():
+    for idx, row in df.iterrows():
+        file_entry = str(row["file"])
+        source_root = Path(row["__source_root"])
         try:
-            p = _resolve_npz_path(processed_root, file_entry)
+            p = _resolve_npz_path(source_root, file_entry)
             paths.append(p)
         except FileNotFoundError as e:
             print(f"ERROR: {e}", file=sys.stderr)
@@ -283,9 +305,9 @@ def main():
     df_train = df[df["split"] == "train"].reset_index(drop=True)
     df_val   = df[df["split"] == "val"].reset_index(drop=True)
 
-    # Output directories
-    d_train = out_root / "keypoints_train"
-    d_val = out_root / "keypoints_val"
+    # Output directories (using custom names)
+    d_train = out_root / args.train_dir
+    d_val = out_root / args.val_dir
 
     # Clear existing content from output directories
     print(f"Clearing existing content from {d_train}...")
@@ -318,8 +340,8 @@ def main():
         for b, g, c, o in zip(basenames_val, df_val["gloss"], df_val["cat"], df_val["occluded"])
     ]
 
-    csv_train = out_root / "train_labels.csv"
-    csv_val = out_root / "val_labels.csv"
+    csv_train = out_root / args.train_csv
+    csv_val = out_root / args.val_csv
     _write_csv(csv_train, rows_train)
     _write_csv(csv_val, rows_val)
 
