@@ -1,8 +1,44 @@
+# ===== SERVER CONFIGURATION =====
+[server]
+# File upload limits (increased from 200MB default)
+maxUploadSize = 500
+maxMessageSize = 500
+
+# Network and connection settings
+enableCORS = true
+enableWebsocketCompression = true
+headless = true
+
+# Server binding (allows external connections)
+port = 8501
+
+# Increase timeouts to handle slow mobile uploads
+# These settings help prevent timeout errors for 10MB+ uploads on mobile networks
+fileWatcherType = "auto"
+runOnSave = false
+
+# Disable XSRF protection if mobile uploads still fail
+enableXsrfProtection = false
+
+# Increase timeouts for slow connections (30 seconds)
+browserWebsocketDelay = 30000
+
+# Allow more time for file processing
+maxUploadTime = 300
+
+
+# ===== BROWSER CONFIGURATION =====
+[browser]
+gatherUsageStats = false
+serverPort = 8501
+
+
+# ===== THEME CONFIGURATION =====
 [theme]
-base="dark"
-primaryColor="#FF4B4B"
-backgroundColor="#0E1117"
-secondaryBackgroundColor="#262730"
-textColor="#FAFAFA"
-font="sans serif"
+base = "dark"
+primaryColor = "#FF4B4B"
+backgroundColor = "#0E1117"
+secondaryBackgroundColor = "#262730"
+textColor = "#FAFAFA"
+font = "sans serif"
 

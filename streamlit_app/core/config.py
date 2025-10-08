@@ -10,8 +10,8 @@ from typing import Dict, Any
 
 # Page configuration
 PAGE_CONFIG = {
-    'page_title': 'FSLR Demo',
-    'page_icon': None,
+    'page_title': 'PANSINAYAN',
+    'page_icon': '🤟',
     'layout': 'wide',
     'initial_sidebar_state': 'expanded'
 }

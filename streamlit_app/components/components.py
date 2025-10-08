@@ -698,8 +698,8 @@ def render_sidebar() -> Dict:
     # Clean, elegant header
     st.sidebar.markdown("""
     <div style='text-align: center; padding: 0 0 1rem 0; border-bottom: 1px solid #4a5568; margin-bottom: 1rem; margin-top: -1rem;'>
-        <h1 style='color: #1f77b4; font-size: 2.8rem; font-weight: bold; margin: 0;'>FSLR Demo</h1>
-        <p style='color: #a0aec0; font-size: 1rem; margin: 0.5rem 0 0 0; font-weight: 400;'>Filipino Sign Language Recognition</p>
+        <h1 style='color: #1f77b4; font-size: 3.2rem; font-weight: bold; margin: 0;'>PANSINAYAN</h1>
+        <p style='color: #a0aec0; font-size: 1rem; margin: 0.2rem 0 0 0; font-weight: 400;'>Where Every Sign Gets Attention</p>
     </div>
     """, unsafe_allow_html=True)
     
@@ -1059,14 +1059,19 @@ def render_video_carousel(video_files) -> None:
 def render_main_header() -> None:
     """Render main page header."""
     st.markdown("""
-    <div class='main-header'>
-        Filipino Sign Language Recognition Demo
+    <div style='text-align: center; margin-top: -2rem; margin-bottom: 1rem;'>
+        <div style='font-size: 3.5rem; font-weight: bold; color: #1f77b4; margin-bottom: 0.2rem;'>
+            PANSINAYAN
+        </div>
+        <div style='color: #a0aec0; font-size: 1.2rem; font-weight: 400;'>
+            Where Every Sign Gets Attention
+        </div>
     </div>
     """, unsafe_allow_html=True)
     
     # Add spacing to move content down
     st.markdown("""
-    <div style='margin-top: 3rem;'></div>
+    <div style='margin-top: 1.5rem;'></div>
     """, unsafe_allow_html=True)
 
 
