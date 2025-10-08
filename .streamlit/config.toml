@@ -20,6 +20,12 @@ runOnSave = false
 # Disable XSRF protection if mobile uploads still fail
 enableXsrfProtection = false
 
+# Increase timeouts for slow connections (30 seconds)
+browserWebsocketDelay = 30000
+
+# Allow more time for file processing
+maxUploadTime = 300
+
 
 # ===== BROWSER CONFIGURATION =====
 [browser]
