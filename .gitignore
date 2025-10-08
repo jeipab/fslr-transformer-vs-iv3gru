@@ -3,12 +3,12 @@ __pycache__/
 *.pyc
 .venv/
 env/
-raw/
 
 # User Specific Folders
 venv311/
 venv/
 raw/
+.archive/
 
 # Data (ignore everything inside data/)
 data/*

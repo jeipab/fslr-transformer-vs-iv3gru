@@ -11,17 +11,17 @@ clips/
    104/
       ...
 
-labels.csv columns: id,label,category
+rename.csv columns: id,label,category
 - id: integer folder name (0..104)
-- label: e.g., "Good Morning" (not used for filename)
-- category: e.g., "Greetings" (used in filename, slugified & lowercased)
+- label: e.g., "GOOD MORNING" (used in filename, lowercased)
+- category: e.g., "GREETING" (not used in current version)
 
 Output:
 videos/
-   clip_0001_greetings.MOV
-   clip_0002_greetings.MOV
+   clip_0001_good_morning.MOV
+   clip_0002_good_afternoon.MOV
    ...
-   clip_2235_drink.MOV
+   clip_2235_no_sugar.MOV
 
 Usage:
     python rename_clips.py --root .
@@ -50,15 +50,15 @@ def slugify_category(s: str) -> str:
     return s or 'uncategorized'
 
 def read_labels(labels_csv: Path):
-    print(f"🔍 Looking for labels.csv at: {labels_csv}")  # Debugging path
+    print(f"🔍 Looking for rename.csv at: {labels_csv}")  # Debugging path
     if not labels_csv.exists():
-        raise FileNotFoundError(f"labels.csv not found at {labels_csv}")
+        raise FileNotFoundError(f"rename.csv not found at {labels_csv}")
     mapping: Dict[int, Tuple[str, str]] = {}  # Storing both label and category
     with labels_csv.open(newline='', encoding='utf-8-sig') as f:
         reader = csv.DictReader(f)
         required = {'id', 'label', 'category'}
         if not required.issubset(reader.fieldnames or []):
-            raise ValueError(f"labels.csv must contain columns: {required}. Found: {reader.fieldnames}")
+            raise ValueError(f"rename.csv must contain columns: {required}. Found: {reader.fieldnames}")
         for row in reader:
             try:
                 i = int(row['id'])
@@ -99,10 +99,10 @@ def collect_clips(clips_dir: Path) -> List[Tuple[int, Path]]:
     return items
 
 def main():
-    ap = argparse.ArgumentParser(description="Rename and flatten video clips based on labels.csv")
-    ap.add_argument("--root", type=Path, default=Path("."), help="Project root containing labels.csv and clips/")
+    ap = argparse.ArgumentParser(description="Rename and flatten video clips based on rename.csv")
+    ap.add_argument("--root", type=Path, default=Path("."), help="Project root containing rename.csv and clips/")
     ap.add_argument("--clips", type=Path, default=None, help="Path to clips/ (default: <root>/data/raw/clips)")
-    ap.add_argument("--labels", type=Path, default=None, help="Path to labels.csv (default: <root>/preprocessing/utils/rename.csv)")
+    ap.add_argument("--labels", type=Path, default=None, help="Path to rename.csv (default: <root>/preprocessing/utils/rename.csv)")
     ap.add_argument("--out", type=Path, default=None, help="Output folder (default: <root>/videos)")
     ap.add_argument("--start-index", type=int, default=1, help="Starting index for clip numbering (default: 1)")
     ap.add_argument("--digits", type=int, default=4, help="Zero-pad width for numbers (default: 4)")
@@ -110,9 +110,22 @@ def main():
     args = ap.parse_args()
 
     root = args.root.resolve() if args.root else Path(__file__).resolve().parent
-    clips_dir = (root / "data/raw/clips").resolve()
-    labels_csv = (root / "preprocessing/utils/rename.csv").resolve()
-    out_dir = (root / "data/raw").resolve()
+    
+    # Use command-line arguments if provided, otherwise use defaults
+    if args.clips:
+        clips_dir = args.clips.resolve()
+    else:
+        clips_dir = (root / "data/raw/clips").resolve()
+    
+    if args.labels:
+        labels_csv = args.labels.resolve()
+    else:
+        labels_csv = (root / "preprocessing/utils/rename.csv").resolve()
+    
+    if args.out:
+        out_dir = args.out.resolve()
+    else:
+        out_dir = (root / "data/raw").resolve()
 
     print(f"📂 Root directory: {root}")
     print(f"📂 clips_dir: {clips_dir}")
@@ -137,7 +150,7 @@ def main():
     for id_num, src in items:
         cat = id_to_cat.get(id_num)
         if not cat:
-            print(f"[WARN] ❗ No category found in labels.csv for id={id_num}; skipping {src}", file=sys.stderr)
+            print(f"[WARN] ❗ No category found in rename.csv for id={id_num}; skipping {src}", file=sys.stderr)
             continue
         label, cat = id_to_cat.get(id_num)
         new_name = f"clip_{counter:0{width}d}_{label}.MOV"
