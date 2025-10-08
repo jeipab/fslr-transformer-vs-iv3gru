@@ -38,6 +38,9 @@ streamlit run run_app.py
 
 # Alternative: Run from streamlit_app directory
 cd streamlit_app && streamlit run main.py
+
+# Check network connection info (local IP and access URLs)
+python show_network_info.py
 ```
 
 **Features**: Animated keypoint visualization, feature analysis, real-time predictions, support for both `.npz` files and raw videos.

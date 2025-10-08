@@ -10,7 +10,8 @@ enableWebsocketCompression = true
 headless = true
 
 # Server binding (allows external connections)
-port = 8501
+port = 8081
+address = "0.0.0.0"
 
 # Increase timeouts to handle slow mobile uploads
 # These settings help prevent timeout errors for 10MB+ uploads on mobile networks
@@ -30,7 +31,7 @@ maxUploadTime = 300
 # ===== BROWSER CONFIGURATION =====
 [browser]
 gatherUsageStats = false
-serverPort = 8501
+serverPort = 8081
 
 
 # ===== THEME CONFIGURATION =====
