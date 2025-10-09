@@ -1,6 +1,13 @@
 # Filipino Sign Language Recognition (FSLR)
 
-Multi-Head Attention Transformer for Filipino Sign Language Recognition.
+Multi-Head Attention Transformer vs InceptionV3-GRU for Filipino Sign Language Recognition.
+
+## 📊 Dataset
+
+- **Glosses**: 105 Filipino sign words
+- **Categories**: 10 semantic categories (Greeting, Survival, Number, Calendar, Days, Family, Relationships, Color, Food, Drink)
+- **Training Data**: Combined fsl-105 + sample-105 datasets
+- **Models**: Pre-trained Transformer and IV3-GRU models available
 
 ## 🚀 Quick Start
 
@@ -8,7 +15,7 @@ Multi-Head Attention Transformer for Filipino Sign Language Recognition.
 
 **Requirements**: Python 3.9-3.11
 
-```bash
+```powershell
 # Clone the repository
 git clone https://github.com/jeipab/fslr-transformer-vs-iv3gru.git
 cd fslr-transformer-vs-iv3gru
@@ -32,12 +39,9 @@ pip install pyarrow  # optional, for parquet inspection
 
 ### Interactive Demo
 
-```bash
+```powershell
 # Run the Streamlit application
 streamlit run run_app.py
-
-# Alternative: Run from streamlit_app directory
-cd streamlit_app && streamlit run main.py
 
 # Check network connection info (local IP and access URLs)
 python show_network_info.py
@@ -47,24 +51,35 @@ python show_network_info.py
 
 ### Quick Prediction
 
-```bash
-# Predict from NPZ file
-python -m evaluation.prediction.predict \
-  --model transformer \
-  --checkpoint trained_models/transformer/transformer_100_epoch/SignTransformer_best.pt \
-  --input data/processed/transformer_only/clip_0089_how\ are\ you.npz
+**Predict from Demo Files:**
 
-# Predict from video file
-python -m evaluation.prediction.predict \
-  --model transformer \
-  --checkpoint trained_models/transformer/transformer_100_epoch/SignTransformer_best.pt \
-  --input data/raw/videos/new_sign.mp4
+```powershell
+# Transformer model
+python -m evaluation.prediction.predict ^
+  --model transformer ^
+  --checkpoint trained_models\transformer\cmb_optimal\SignTransformer_best.pt ^
+  --input data\demo\clip_0138_nice to meet you.npz
+
+# IV3-GRU model
+python -m evaluation.prediction.predict ^
+  --model iv3_gru ^
+  --checkpoint trained_models\iv3_gru\cmb_optimal\InceptionV3GRU_best.pt ^
+  --input data\demo\clip_1146_grandfather.npz
+```
+
+**Predict from Video:**
+
+```powershell
+python -m evaluation.prediction.predict ^
+  --model transformer ^
+  --checkpoint trained_models\transformer\cmb_optimal\SignTransformer_best.pt ^
+  --input video.mp4
 ```
 
 **Output Example:**
 
 ```
-Gloss: HOW ARE YOU (4) (confidence: 0.882)
+Gloss: NICE TO MEET YOU (6) (confidence: 0.882)
 Category: GREETING (0) (confidence: 0.774)
 ```
 
@@ -73,13 +88,31 @@ Category: GREETING (0) (confidence: 0.774)
 ```
 fslr-transformer-vs-iv3gru/
 ├── 📊 data/                    # Data management and label mapping
+│   ├── demo/                   # Demo NPZ files for testing
+│   ├── labels/                 # Label mappings (105 glosses, 10 categories)
+│   ├── processed/              # Preprocessed NPZ files
+│   │   ├── cmb_train/         # Combined training set (80%)
+│   │   ├── cmb_val/           # Combined validation set (20%)
+│   │   ├── cmb_train.csv      # Training labels
+│   │   └── cmb_val.csv        # Validation labels
+│   ├── raw/                    # Raw video files
+│   └── splitting/              # Data splitting utilities
 ├── 📈 evaluation/              # Model validation and prediction
+│   ├── prediction/            # Inference scripts
+│   └── validation/            # Model evaluation
 ├── 🧠 models/                  # Neural network architectures
+│   ├── transformer.py         # SignTransformer (keypoints)
+│   └── iv3_gru.py            # InceptionV3GRU (features)
 ├── 📓 notebooks/               # Jupyter notebooks for experiments
 ├── 🔧 preprocessing/           # Video preprocessing and feature extraction
+│   ├── core/                  # Core preprocessing modules
+│   └── extractors/            # Feature extractors
 ├── 📚 shared/                  # Shared resources and documentation
+│   └── for vast ai/           # Vast.ai deployment resources
 ├── 🖥️ streamlit_app/          # Interactive web application
 ├── 💾 trained_models/          # Model checkpoints and weights
+│   ├── transformer\cmb_optimal\  # Transformer models
+│   └── iv3_gru\cmb_optimal\      # IV3-GRU models
 └── 🏋️ training/               # Model training and evaluation
 ```
 
@@ -89,77 +122,162 @@ fslr-transformer-vs-iv3gru/
 
 **Multi-Process (Recommended - 30-50x faster):**
 
-```bash
-python -m preprocessing.core.preprocess \
-  data/raw/videos data/processed \
-  --write-keypoints --write-iv3-features \
-  --workers 10 --batch-size 64 --target-fps 15 --disable-parquet
+```powershell
+python -m preprocessing.core.preprocess ^
+  data\raw\videos ^
+  data\processed\output ^
+  --write-keypoints ^
+  --write-iv3-features ^
+  --workers 8 ^
+  --batch-size 32 ^
+  --target-fps 30 ^
+  --disable-parquet
 ```
 
 **Sequential (For small datasets):**
 
-```bash
-python -m preprocessing.core.preprocess \
-  data/raw/videos data/processed \
-  --write-keypoints --write-iv3-features \
+```powershell
+python -m preprocessing.core.preprocess ^
+  data\raw\videos ^
+  data\processed\output ^
+  --write-keypoints ^
+  --write-iv3-features ^
   --target-fps 30
 ```
 
-**Output**: `.npz` files with keypoints `X [T,156]`, features `X2048 [T,2048]`, visibility `mask [T,78]`, timestamps, and metadata.
+**Output**: `.npz` files with:
 
-### 2. Training
+- Keypoints `X [T,156]` - 78 MediaPipe keypoints (pose, hands, face)
+- Features `X2048 [T,2048]` - InceptionV3 features
+- Visibility mask `mask [T,78]`
+- Timestamps `timestamps_ms [T]`
+- Metadata with occlusion detection
+
+For detailed preprocessing instructions, see [Preprocessing Guide](preprocessing/docs/PREPROCESS_GUIDE.MD).
+
+### 2. Data Splitting
+
+After preprocessing, create labels and split data:
+
+```powershell
+# Assign gloss and category IDs
+python data\splitting\assign.py
+
+# Split into train/val sets
+python data\splitting\data_split.py ^
+  --processed-root data\processed\fsl-105_10-08 ^
+  --labels data\processed\fsl-105_10-08\labels.csv ^
+  --out-root data\processed ^
+  --copy ^
+  --train-ratio 0.8 ^
+  --train-dir cmb_train ^
+  --val-dir cmb_val ^
+  --train-csv cmb_train.csv ^
+  --val-csv cmb_val.csv
+```
+
+For detailed data splitting instructions, see [Data Guide](data/DATA_GUIDE.md).
+
+### 3. Training
 
 **Transformer Model (Keypoints):**
 
-```bash
-python -m training.train \
-  --model transformer \
-  --keypoints-train data/processed/keypoints_train \
-  --keypoints-val data/processed/keypoints_val \
-  --labels-train-csv data/processed/train_labels.csv \
-  --labels-val-csv data/processed/val_labels.csv \
-  --num-gloss 105 --num-cat 10 \
-  --epochs 30 --batch-size 32 --amp
+```powershell
+python -m training.train ^
+  --model transformer ^
+  --keypoints-train data\processed\cmb_train ^
+  --keypoints-val data\processed\cmb_val ^
+  --labels-train-csv data\processed\cmb_train.csv ^
+  --labels-val-csv data\processed\cmb_val.csv ^
+  --num-gloss 105 ^
+  --num-cat 10 ^
+  --epochs 100 ^
+  --batch-size 32 ^
+  --amp ^
+  --auto-workers ^
+  --auto-batch-size
 ```
 
-**IV3-GRU Model (Features):**
+**IV3-GRU Model (InceptionV3 Features):**
 
-```bash
-python -m training.train \
-  --model iv3_gru \
-  --features-train data/processed/keypoints_train \
-  --features-val data/processed/keypoints_val \
-  --labels-train-csv data/processed/train_labels.csv \
-  --labels-val-csv data/processed/val_labels.csv \
-  --feature-key X2048 \
-  --num-gloss 105 --num-cat 10 \
-  --epochs 30 --batch-size 32 --amp
+```powershell
+python -m training.train ^
+  --model iv3_gru ^
+  --features-train data\processed\cmb_train ^
+  --features-val data\processed\cmb_val ^
+  --labels-train-csv data\processed\cmb_train.csv ^
+  --labels-val-csv data\processed\cmb_val.csv ^
+  --feature-key X2048 ^
+  --num-gloss 105 ^
+  --num-cat 10 ^
+  --epochs 100 ^
+  --batch-size 32 ^
+  --amp ^
+  --auto-workers ^
+  --auto-batch-size
 ```
 
-### 3. Validation
+For detailed training instructions, see [Training Guide](training/TRAINING_GUIDE.md).
+
+### 4. Validation
 
 **Data Validation:**
 
-```bash
-python -m preprocessing.utils.validate_npz data/processed/keypoints_train
-python -m preprocessing.utils.validate_npz data/processed/keypoints_val --require-x2048
+```powershell
+# Validate NPZ files
+python -m preprocessing.utils.validate_npz data\processed\cmb_train
+python -m preprocessing.utils.validate_npz data\processed\cmb_val --require-x2048
 ```
 
 **Model Validation:**
 
-```bash
-python -m evaluation.validation.validate \
-  --model transformer \
-  --checkpoint trained_models/transformer/transformer_100_epoch/SignTransformer_best.pt \
-  --data-dir data/processed
+```powershell
+# Transformer model
+python -m evaluation.validation.validate ^
+  --model transformer ^
+  --checkpoint trained_models\transformer\cmb_optimal\SignTransformer_best.pt ^
+  --data-dir data\processed\cmb_val ^
+  --labels-csv data\processed\cmb_val.csv
+
+# IV3-GRU model
+python -m evaluation.validation.validate ^
+  --model iv3_gru ^
+  --checkpoint trained_models\iv3_gru\cmb_optimal\InceptionV3GRU_best.pt ^
+  --data-dir data\processed\cmb_val ^
+  --labels-csv data\processed\cmb_val.csv
 ```
 
 **Smoke Tests:**
 
-```bash
+```powershell
 python -m training.train --model transformer --smoke-test --num-gloss 105 --num-cat 10
 python -m training.train --model iv3_gru --smoke-test --num-gloss 105 --num-cat 10
 ```
+
+For detailed validation instructions, see [Validation Guide](evaluation/validation/VALIDATION_GUIDE.md).
+
+## 🧠 Models
+
+### Transformer (SignTransformer)
+
+- **Input**: MediaPipe keypoints [T, 156]
+- **Architecture**: Multi-head attention with positional encoding
+- **Advantages**: Lighter, interpretable attention weights
+- **Best for**: Keypoint-based sign recognition
+
+### InceptionV3-GRU
+
+- **Input**: InceptionV3 features [T, 2048]
+- **Architecture**: CNN + GRU with pretrained backbone
+- **Advantages**: Transfer learning from ImageNet
+- **Best for**: Visual feature-based recognition
+
+Both models predict:
+
+- **Gloss**: Specific sign word (105 classes)
+- **Category**: Semantic category (10 classes)
+
+For architecture details, see [Model Guide](models/MODEL_GUIDE.md).
 
 ## 📖 Documentation
 
@@ -169,6 +287,7 @@ python -m training.train --model iv3_gru --smoke-test --num-gloss 105 --num-cat 
 - **[Validation Guide](evaluation/validation/VALIDATION_GUIDE.md)** - Model validation and evaluation
 - **[Label Mapping Table](data/labels/LABEL_MAPPING_TABLE.md)** - Complete list of signs and categories
 - **[Trained Models Guide](trained_models/TRAINED_MODEL_GUIDE.md)** - Model checkpoints and usage
+- **[Tool Guide](streamlit_app/TOOL_GUIDE.md)** - Interactive visualization app
 
 ### 🔧 Development & Training
 
@@ -177,18 +296,41 @@ python -m training.train --model iv3_gru --smoke-test --num-gloss 105 --num-cat 
 - **[Occlusion Guide](preprocessing/docs/OCCLUSION_GUIDE.md)** - Hand occlusion detection and handling
 - **[Model Guide](models/MODEL_GUIDE.md)** - Architecture details and usage
 - **[Training Guide](training/TRAINING_GUIDE.md)** - Model training instructions
-- **[Tool Guide](streamlit_app/TOOL_GUIDE.md)** - Interactive visualization app
-- **[Sharing Guide](shared/SHARING_GUIDE.md)** - Collaboration and sharing resources
+- **[Sharing Guide](shared/SHARING_GUIDE.md)** - Vast.ai deployment and collaboration
 
 ## 🛠️ Troubleshooting
 
 ### Common Issues
 
-- **File not found**: CSV `file` values must match `.npz` basenames exactly
-- **Wrong shapes**: Transformer needs `X [T,156]`; IV3-GRU needs `X2048 [T,2048]`
-- **Label ranges**: `gloss` in `[0, num_gloss-1]`, `cat` in `[0, num_cat-1]`
-- **Port conflicts**: Use `streamlit run run_app.py --server.port 8502`
-- **CUDA issues**: Auto-detects CUDA, CPU fallback available
+**File not found:**
+
+- CSV `file` values must match `.npz` basenames exactly (without extension)
+- Example: CSV has `clip_0315_yes`, NPZ file is `clip_0315_yes.npz`
+
+**Wrong shapes:**
+
+- Transformer needs `X [T,156]` keypoints
+- IV3-GRU needs `X2048 [T,2048]` InceptionV3 features
+
+**Label ranges:**
+
+- `gloss` must be in `[0, 104]` (105 classes, 0-based)
+- `cat` must be in `[0, 9]` (10 categories, 0-based)
+
+**Port conflicts:**
+
+- Use `streamlit run run_app.py --server.port 8502` for alternative port
+
+**CUDA issues:**
+
+- Auto-detects CUDA, falls back to CPU if unavailable
+- Use `--device cpu` to force CPU mode
+
+**Out of Memory (OOM):**
+
+- Reduce `--batch-size` (try 16 or 8)
+- Enable `--amp` for mixed precision
+- Use `--gradient-accumulation-steps` for effective larger batches
 
 ### Mobile Upload Issues
 
@@ -217,10 +359,41 @@ python -m training.train --model iv3_gru --smoke-test --num-gloss 105 --num-cat 
 
 ### Performance Tips
 
+**For Training:**
+
 - Use `--amp` for automatic mixed precision training
-- Add `--num-workers N` for faster data loading
-- Use `--pin-memory` for GPU training
-- Enable `--disable-parquet` for faster preprocessing
+- Add `--auto-workers` for optimal data loading
+- Use `--auto-batch-size` for memory-efficient batch sizing
+- Enable `--compile-model` for PyTorch 2.0+ optimization
+
+**For Preprocessing:**
+
+- Use `--workers 8` for parallel processing
+- Enable `--disable-parquet` for faster I/O
+- Lower `--target-fps` (15-20) for faster processing
+
+**For Multi-GPU:**
+
+- Enable `--enable-parallel` for automatic DataParallel
+- Increase `--batch-size` to utilize multiple GPUs
+
+## 🚀 Deployment
+
+### Local Development
+
+```powershell
+streamlit run run_app.py
+```
+
+### Vast.ai Deployment
+
+For remote deployment on Vast.ai instances:
+
+1. Follow [Vast.ai Guide](shared/for vast ai/VAST.AI_GUIDE.md)
+2. Replace components with Vast.ai versions
+3. Use cloudflared tunnel for external access
+
+See [Sharing Guide](shared/SHARING_GUIDE.md) for detailed deployment instructions.
 
 ## 🤝 Contributing
 
@@ -229,3 +402,22 @@ This project supports Filipino Sign Language Recognition research. For collabora
 ## 📄 License
 
 This project is part of academic research in Filipino Sign Language Recognition.
+
+## 📚 Citation
+
+If you use this work in your research, please cite:
+
+```bibtex
+@thesis{fslr2024,
+  title={Filipino Sign Language Recognition: Transformer vs InceptionV3-GRU},
+  author={Your Name},
+  year={2024},
+  school={Your Institution}
+}
+```
+
+## 🔗 Links
+
+- **Repository**: [https://github.com/jeipab/fslr-transformer-vs-iv3gru](https://github.com/jeipab/fslr-transformer-vs-iv3gru)
+- **Documentation**: See individual guide files listed above
+- **Demo Data**: Available in `data/demo/` directory
