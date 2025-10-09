@@ -1,0 +1,129 @@
+# ===== OPTIMIZED FOR CLOUDFLARE TUNNEL + VAST.AI + MOBILE UPLOADS =====
+# Based on your deployment: Vast.AI instance + Cloudflare tunnel
+# Optimized for the new mobile camera upload improvements
+
+[server]
+# ===== FILE UPLOAD SETTINGS (MOBILE OPTIMIZED) =====
+# Increased limits for large video uploads
+maxUploadSize = 500  # MB - handles large mobile videos
+
+# IMPORTANT: Must be larger than maxUploadSize to handle Base64-encoded files
+# Base64 encoding increases size by ~33%, so 500MB file becomes ~665MB
+maxMessageSize = 700  # MB - accommodates Base64-encoded videos
+
+# ===== NETWORK SETTINGS (CLOUDFLARE TUNNEL OPTIMIZED) =====
+# Enable CORS for Cloudflare tunnel access
+enableCORS = true
+
+# Enable WebSocket compression (critical for mobile & Base64)
+# Reduces data transfer, especially important for Base64-encoded uploads
+enableWebsocketCompression = true
+
+# Headless mode for server deployment
+headless = true
+
+# ===== PORT AND ADDRESS (VAST.AI SETUP) =====
+# Bind to all interfaces for Cloudflare tunnel access
+address = "0.0.0.0"
+port = 8081
+
+# ===== MOBILE UPLOAD OPTIMIZATIONS =====
+# Disable XSRF protection - helps with mobile camera uploads
+# Cloudflare tunnel already provides security layer
+enableXsrfProtection = false
+
+# Increase WebSocket timeout for slow mobile connections (30 seconds)
+# Prevents timeout on 3G/4G networks
+browserWebsocketDelay = 30000
+
+# Allow extended time for file processing (5 minutes)
+# Helpful for preprocessing large videos on mobile
+maxUploadTime = 300
+
+# ===== FILE WATCHING =====
+fileWatcherType = "auto"
+runOnSave = false
+
+
+# ===== BROWSER CONFIGURATION =====
+[browser]
+# Disable usage stats for privacy
+gatherUsageStats = false
+
+# Must match server port
+serverPort = 8081
+
+# Cloudflare tunnel handles the external URL
+# Leave serverAddress blank - it will use the tunnel URL
+
+
+# ===== RUNNER CONFIGURATION =====
+[runner]
+# Disable magic commands for cleaner production code
+magicEnabled = false
+
+# Enable fast reruns for better performance
+fastReruns = true
+
+# Fix matplotlib backend issues
+fixMatplotlib = true
+
+
+# ===== CLIENT CONFIGURATION =====
+[client]
+# Hide detailed errors in production (via Cloudflare tunnel)
+showErrorDetails = false
+
+# Toolbar mode for production
+showToolbarMode = "viewer"
+
+
+# ===== LOGGER CONFIGURATION =====
+[logger]
+# Use 'info' for production, 'debug' for troubleshooting
+level = "info"
+
+# Message format for better log readability
+messageFormat = "%(asctime)s %(levelname)s: %(message)s"
+
+
+# ===== THEME CONFIGURATION =====
+[theme]
+# Your current dark theme (preserved)
+base = "dark"
+primaryColor = "#FF4B4B"
+backgroundColor = "#0E1117"
+secondaryBackgroundColor = "#262730"
+textColor = "#FAFAFA"
+font = "sans serif"
+
+
+# ===== DEPLOYMENT NOTES =====
+# 1. Cloudflare tunnel provides single endpoint - no load balancing
+#    → No session affinity needed
+#    → But Base64 encoding still recommended for mobile reliability
+#
+# 2. Mobile uploads through Cloudflare tunnel:
+#    → Enable Base64 encoding in streamlit_app/core/config.py:
+#      UPLOAD_CONFIG['use_base64_preview'] = True
+#
+# 3. For best mobile experience:
+#    → Base64 encoding passes data through WebSocket
+#    → Avoids potential HTTP routing issues in tunnel
+#    → More reliable on slow mobile networks
+#
+# 4. Security:
+#    → Cloudflare tunnel handles HTTPS/TLS
+#    → XSRF disabled for mobile upload compatibility
+#    → enableCORS needed for tunnel to work
+#
+# 5. Performance:
+#    → WebSocket compression reduces bandwidth
+#    → maxMessageSize accommodates Base64 overhead
+#    → Extended timeouts handle slow connections
+
+# ===== RECOMMENDED NEXT STEP =====
+# Enable Base64 encoding for mobile uploads:
+# In streamlit_app/core/config.py, change:
+#   UPLOAD_CONFIG['use_base64_preview'] = True
+
