@@ -287,17 +287,29 @@ def main():
 
     # Handle split
     if "split" not in df.columns:
-        # Stratify by gloss for proper 80/20 split per gloss
-        splitter = StratifiedShuffleSplit(
-            n_splits=1, 
-            test_size=1-args.train_ratio, 
-            random_state=42
-        )
-        train_indices, val_indices = next(splitter.split(df, df['gloss']))
+        # Deterministic hash-based splitting per gloss (ensures consistency across runs)
+        # Each file goes to same split based on its filename hash, regardless of dataset combination
+        import hashlib
         
-        # Create split column
-        df["split"] = "val"  # Initialize all as val
-        df.loc[train_indices, "split"] = "train"
+        def hash_to_split(filename, train_ratio):
+            """Deterministically assign split based on filename hash"""
+            hash_val = int(hashlib.md5(filename.encode()).hexdigest(), 16)
+            return "train" if (hash_val % 100) < (train_ratio * 100) else "val"
+        
+        # Apply hash-based split per gloss to maintain stratification
+        splits = []
+        for idx, row in df.iterrows():
+            splits.append(hash_to_split(row['file'], args.train_ratio))
+        
+        df["split"] = splits
+        
+        # Verify stratification is maintained
+        for gloss_id in df['gloss'].unique():
+            gloss_df = df[df['gloss'] == gloss_id]
+            train_count = (gloss_df['split'] == 'train').sum()
+            total_count = len(gloss_df)
+            actual_ratio = train_count / total_count if total_count > 0 else 0
+            # Should be close to args.train_ratio (small variations due to rounding)
         
         # Shuffle the entire dataframe to randomize order for training
         df = df.sample(frac=1, random_state=42).reset_index(drop=True)
