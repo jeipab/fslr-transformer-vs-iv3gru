@@ -6,21 +6,33 @@ File formats and structures for the Filipino Sign Language Recognition (FSLR) pi
 
 ```
 data/
-├── raw/           # Original videos and metadata
-├── processed/     # Preprocessed artifacts ready for training
-├── reports/       # Validation outputs and audit reports
-└── splitting/     # Data splitting utilities and configurations
+├── raw/                    # Original videos (fsl-105, sample-105)
+├── processed/              # Preprocessed NPZ files and splits
+│   ├── fsl-105_10-08/     # Processed fsl-105 source
+│   ├── smp-105_10-08/     # Processed sample-105 source
+│   ├── fsl_train/         # FSL-105 training split
+│   ├── fsl_val/           # FSL-105 validation split
+│   ├── smp_train/         # Sample-105 training split
+│   ├── smp_val/           # Sample-105 validation split
+│   ├── cmb_train/         # Combined training split
+│   ├── cmb_val/           # Combined validation split
+│   └── *.csv              # Label files for each split
+├── demo/                   # Demo clips for testing
+└── splitting/              # Data splitting utilities
 
-trained_models/    # Trained model checkpoints and artifacts
-├── transformer/   # Transformer model checkpoints
-└── iv3_gru/      # InceptionV3-GRU model checkpoints
+trained_models/
+└── cmb/                    # Models trained on combined dataset
+    ├── transformer/        # Transformer model checkpoints
+    └── iv3_gru/           # InceptionV3-GRU model checkpoints
 ```
 
 ## File Types
 
-- **Raw**: `.mp4`, `.avi`, `.mov`, `.json`, `.csv`, `.zip`
-- **Processed**: `.npz`, `.pt`, cleaned `.csv`
-- **Reports**: `.csv`, `.jsonl`, `.md`, (optional `.mp4` animations)
+- **Raw**: `.mp4` video files
+- **Processed**: `.npz` (NumPy archives containing keypoints and features)
+- **Labels**: `.csv` files with gloss/category mappings
+- **Models**: `.pt` PyTorch checkpoint files
+- **Logs**: `.log` and `.csv` training logs
 
 ---
 
@@ -30,48 +42,51 @@ trained_models/    # Trained model checkpoints and artifacts
 
 ```
 data/raw/
-├── videos/
-│   ├── sample_0001.mp4
-│   └── sample_0002.mp4
-├── labels.csv     # Main label file
-└── metadata.json  # Optional: dataset information
+├── fsl-105/               # Main FSL dataset (105 glosses)
+│   └── *.mp4
+└── sample-105/            # Sample/supplementary dataset
+    └── *.mp4
 ```
 
 ### Requirements
 
-- Video files: `.mp4`, `.avi`, `.mov` (OpenCV-supported)
-- Labels: `.csv` with required columns
-- Metadata: `.json` with dataset information (optional)
+- Video files: `.mp4` format (OpenCV-compatible)
+- Naming convention: `clip_XXXX_<gloss_text>.mp4`
+- Proper lighting and framing for keypoint detection
 
 ---
 
 ## Preprocessed Data (.npz)
 
-Each `.npz` contains both keypoint and feature data for both models.
+Each `.npz` file contains both keypoint and feature data for both models.
 
 ### Format
 
 - **File**: `.npz` (compressed NumPy archive)
 - **Keys**:
-  - `X`: `[T, 156]` keypoints (Transformer model)
-  - `X2048`: `[T, 2048]` InceptionV3 features (IV3-GRU model)
-  - `mask`: `[T, 78]` keypoint visibility
-  - `timestamps_ms`: `[T]` frame timestamps
-  - `meta`: JSON metadata
+  - `X`: `[T, 156]` - MediaPipe keypoints (for Transformer)
+  - `X2048`: `[T, 2048]` - InceptionV3 features (for IV3-GRU)
+  - `mask`: `[T, 78]` - Keypoint visibility mask
+  - `timestamps_ms`: `[T]` - Frame timestamps in milliseconds
+  - `meta`: JSON metadata (filename, source, occlusion info)
 
-### Keypoint Structure (156 dims)
+### Keypoint Structure (156 dimensions)
 
-- Pose landmarks (25 points): 50 dims
-- Left hand (21 points): 42 dims
-- Right hand (21 points): 42 dims
-- Face mesh (11 points): 22 dims
+- **Pose landmarks** (25 points): 50 dims (x, y per point)
+- **Left hand** (21 points): 42 dims (x, y per point)
+- **Right hand** (21 points): 42 dims (x, y per point)
+- **Face mesh** (11 points): 22 dims (x, y per point)
 
 ### Occlusion Detection
 
-- Frame occluded if visible keypoints/78 < 0.6 (default)
-- Clip marked occluded if:
-  - Occluded frames ≥ 40%, or
-  - Consecutive occluded run ≥ 15 frames
+Automatic occlusion detection during preprocessing:
+
+- **Frame occluded** if: `visible_keypoints / 78 < 0.6` (default threshold)
+- **Clip marked occluded** if:
+  - Occluded frames ≥ 40% of total frames, OR
+  - Consecutive occluded frames ≥ 15
+
+For details, see [Occlusion Guide](../preprocessing/docs/OCCLUSION_GUIDE.md)
 
 ---
 
@@ -79,192 +94,273 @@ Each `.npz` contains both keypoint and feature data for both models.
 
 ### Overview
 
-Data splitting is performed to create train/validation/test sets for model training and evaluation. The splitting process ensures proper distribution of classes and categories across splits.
+The project supports three dataset configurations:
+
+1. **fsl-105**: Main FSL dataset only
+2. **sample-105**: Supplementary dataset only
+3. **cmb**: Combined dataset (fsl-105 + sample-105)
+
+Current trained models use the combined dataset (`cmb`).
 
 ### Splitting Strategy
 
 - **Train**: 80% of data (default)
 - **Validation**: 20% of data (default)
-- **Test**: Optional test set
-
-### Configuration
-
-Splitting parameters are configured in the data splitting utilities located in `data/splitting/`:
-
-- Stratified splitting by gloss and category
-- Random seed for reproducibility
-- Customizable split ratios
-- Handling of occluded samples
+- **Stratified**: By gloss and category for balanced splits
 
 ### Label Assignment
 
-Before data splitting, gloss text labels must be mapped to numeric IDs using `assign.py`:
+Before splitting, assign numeric gloss IDs and category IDs:
 
-```bash
-python data/splitting/assign.py
+```powershell
+python data\splitting\assign.py
 ```
 
-**Purpose**: Maps gloss text in labels.csv to gloss_id and cat_id using labels_reference.csv
-**Input**: `data/processed/labels.csv` (with text labels)
-**Output**: Updated labels.csv with numeric IDs
-**Reference**: `data/splitting/labels_reference.csv`
+**Purpose**: Maps gloss text to numeric IDs using `labels_reference.csv`
 
-### Data Splitting Command
+**Input**: `data\processed\labels.csv` (with filename and text labels)
 
-After label assignment, split the data into train/validation sets:
+**Output**: Updated `labels.csv` with `gloss`, `cat`, and `occluded` columns
 
-```bash
-python data/splitting/data_split.py --processed-root "data/processed/prepro_09-18" --labels "data/processed/prepro_09-18/labels.csv" --out-root data/processed --copy --label-ref data/splitting/labels_reference.csv
+**Reference**: `data\splitting\labels_reference.csv` (105 glosses, 10 categories)
+
+### Data Splitting Commands
+
+**Split fsl-105 dataset:**
+
+```powershell
+python data\splitting\data_split.py ^
+  --processed-root data\processed\fsl-105_10-08 ^
+  --labels data\processed\fsl-105_10-08\labels.csv ^
+  --out-root data\processed ^
+  --copy ^
+  --train-ratio 0.8 ^
+  --train-dir fsl_train ^
+  --val-dir fsl_val ^
+  --train-csv fsl_train.csv ^
+  --val-csv fsl_val.csv
 ```
 
-**Parameters**:
+**Split sample-105 dataset:**
 
-- `--processed-root`: Directory containing the .npz files
-- `--labels`: Path to the labels CSV file
-- `--out-root`: Output directory for split data
-- `--copy`: Copy files instead of moving them
-- `--label-ref`: Reference file for label mapping
+```powershell
+python data\splitting\data_split.py ^
+  --processed-root data\processed\smp-105_10-08 ^
+  --labels data\processed\smp-105_10-08\labels.csv ^
+  --out-root data\processed ^
+  --copy ^
+  --train-ratio 0.8 ^
+  --train-dir smp_train ^
+  --val-dir smp_val ^
+  --train-csv smp_train.csv ^
+  --val-csv smp_val.csv
+```
+
+**Split combined dataset:**
+
+```powershell
+python data\splitting\data_split.py ^
+  --processed-root data\processed\fsl-105_10-08 data\processed\smp-105_10-08 ^
+  --labels data\processed\fsl-105_10-08\labels.csv data\processed\smp-105_10-08\labels.csv ^
+  --out-root data\processed ^
+  --copy ^
+  --train-ratio 0.8 ^
+  --train-dir cmb_train ^
+  --val-dir cmb_val ^
+  --train-csv cmb_train.csv ^
+  --val-csv cmb_val.csv
+```
 
 ### Output Structure
 
 ```
 data/processed/
-├── keypoints_train/
-│   ├── sample_0001.npz
-│   └── sample_0002.npz
-├── keypoints_val/
-│   └── sample_0101.npz
-├── train_labels.csv
-├── val_labels.csv
-└── cat_mapping.csv
+├── cmb_train/             # Combined training set
+│   └── *.npz
+├── cmb_val/               # Combined validation set
+│   └── *.npz
+├── cmb_train.csv          # Training labels
+└── cmb_val.csv            # Validation labels
 ```
 
 ### Label CSV Format
 
 ```csv
 file,gloss,cat,occluded
-sample_0001,42,3,0
-sample_0002,15,1,1
+clip_0315_yes,15,1,0
+clip_1601_orange,79,7,0
+clip_2062_no sugar,104,9,1
 ```
 
 **Columns**:
 
-- `file`: filename (without `.npz` extension)
-- `gloss`: 0-based class ID (0 to num_gloss-1)
-- `cat`: 0-based category ID (0 to num_cat-1)
-- `occluded`: 0/1 flag (auto-generated during preprocessing)
+- `file`: Filename without `.npz` extension
+- `gloss`: 0-based gloss ID (0-104 for 105 glosses)
+- `cat`: 0-based category ID (0-9 for 10 categories)
+- `occluded`: Binary flag (0 = clean, 1 = occluded)
 
 ---
 
-## Reports
+## Demo Data
 
-Validation reports generated by NPZ validation scripts.
-
-### Output Structure
+### Location
 
 ```
-data/reports/
-├── npz_audit_report.csv     # Tabular summary across all clips
-├── npz_audit_report.jsonl   # Detailed JSONL (one line per file)
-├── npz_audit_summary.md     # Human-readable summary of top issues
-└── sample_animations/       # Optional: MP4 previews (if enabled)
+data/demo/
+├── clip_0138_nice to meet you.npz
+├── clip_0585_nine.npz
+├── clip_1146_grandfather.npz
+├── clip_1493_green.npz
+├── clip_1765_fish.npz
+└── clip_1912_crab.npz
 ```
 
-### File Types
+### Purpose
 
-- **CSV**: compact overview of key metrics
-- **JSONL**: detailed per-file audit information (machine-readable)
-- **MD**: summary report with counts of issues
-- **MP4**: optional animations showing keypoints per frame
+Sample NPZ files for testing and demonstration without loading full dataset.
+
+---
+
+## Label Reference
+
+### File
+
+`data/splitting/labels_reference.csv`
+
+### Format
+
+```csv
+gloss_id,label,cat_id,category
+0,GOOD MORNING,0,GREETING
+1,GOOD AFTERNOON,0,GREETING
+15,YES,1,COMMON
+79,ORANGE,7,FOOD
+104,NO SUGAR,9,HEALTH
+```
+
+### Categories (10 total)
+
+0. GREETING
+1. COMMON
+2. FAMILY
+3. NATURE
+4. COLORS
+5. NUMBERS
+6. PEOPLE
+7. FOOD
+8. TIME
+9. HEALTH
+
+---
+
+## Trained Models
+
+### Directory Structure
+
+```
+trained_models/cmb/
+├── transformer/
+│   ├── SignTransformer_best.pt
+│   ├── SignTransformer_last.pt
+│   └── *.log
+└── iv3_gru/
+    ├── InceptionV3GRU_best.pt
+    ├── InceptionV3GRU_last.pt
+    └── *.log
+```
+
+### Checkpoint Format (.pt)
+
+PyTorch checkpoint with keys:
+
+- `model`: Model state_dict
+- `epoch`: Training epoch number
+- `best_metric`: Best validation metric
+- `optimizer`: Optimizer state (optional)
+- `scheduler`: Scheduler state (optional)
+
+### Naming Convention
+
+- `{ModelName}_best.pt`: Best validation performance
+- `{ModelName}_last.pt`: Most recent epoch
+- `{ModelName}_epoch_X.pt`: Specific epoch checkpoint
+
+For details, see [Trained Model Guide](../trained_models/TRAINED_MODEL_GUIDE.md)
 
 ---
 
 ## Model Training
 
-### Checkpoints (.pt)
+### Transformer Training
 
-**Location**: `trained_models/{model_type}/`
-
-**Format**: PyTorch checkpoint with keys:
-
-- `model`: model state_dict
-- `epoch`: training epoch number
-- `best_metric`: best validation metric
-- `optimizer`: optimizer state (optional)
-- `scheduler`: scheduler state (optional)
-
-**Naming**:
-
-- `SignTransformer_best.pt`
-- `InceptionV3GRU_best.pt`
-- `SignTransformer_epoch_X.pt`
-
-**Directory Structure**:
-
-```
-trained_models/
-├── transformer/
-│   ├── optimal/
-│   │   ├── SignTransformer_best.pt
-│   │   ├── SignTransformer_last.pt
-│   │   └── transformer_log.csv
-│   └── [additional transformer models]
-└── iv3_gru/
-    ├── 70-gloss_acc/
-    │   ├── InceptionV3GRU_best.pt
-    │   ├── InceptionV3GRU_last.pt
-    │   └── iv3_log.csv
-    └── [additional IV3-GRU models]
+```powershell
+python -m training.train ^
+  --model transformer ^
+  --keypoints-train data\processed\cmb_train ^
+  --keypoints-val data\processed\cmb_val ^
+  --labels-train-csv data\processed\cmb_train.csv ^
+  --labels-val-csv data\processed\cmb_val.csv ^
+  --num-gloss 105 ^
+  --num-cat 10 ^
+  --epochs 100 ^
+  --batch-size 32
 ```
 
-**For detailed model management**: See [Trained Model Guide](../trained_models/TRAINED_MODEL_GUIDE.md)
+### IV3-GRU Training
 
-### Training Logs (.csv)
-
-```csv
-epoch,train_loss,val_loss,gloss_acc,cat_acc,lr
-1,2.456,2.123,0.234,0.567,0.001
-2,2.134,1.987,0.289,0.612,0.001
+```powershell
+python -m training.train ^
+  --model iv3_gru ^
+  --features-train data\processed\cmb_train ^
+  --features-val data\processed\cmb_val ^
+  --labels-train-csv data\processed\cmb_train.csv ^
+  --labels-val-csv data\processed\cmb_val.csv ^
+  --feature-key X2048 ^
+  --num-gloss 105 ^
+  --num-cat 10 ^
+  --epochs 100 ^
+  --batch-size 32
 ```
 
-### Configuration (.json)
-
-```json
-{
-  "model_type": "transformer",
-  "num_gloss": 105,
-  "num_cat": 10,
-  "batch_size": 32,
-  "learning_rate": 0.001,
-  "num_epochs": 100
-}
-```
+For details, see [Training Guide](../training/TRAINING_GUIDE.md)
 
 ---
 
-## Model Results
+## Validation
 
-### Evaluation Files
+### NPZ Validation
 
-- `summary_metrics_TIMESTAMP.csv`: Main performance metrics
-- `gloss_per_class_TIMESTAMP.csv`: Per-class gloss performance
-- `cat_per_class_TIMESTAMP.csv`: Per-class category performance
-- `detailed_results_TIMESTAMP.json`: Complete results with confidence intervals
-- `predictions_TIMESTAMP.csv`: All predictions with confidence scores
+Validate preprocessed files before training:
 
-### Visualizations
+```powershell
+python -m preprocessing.utils.validate_npz data\processed\cmb_train
+python -m preprocessing.utils.validate_npz data\processed\cmb_val --require-x2048
+```
 
-- Confusion matrices (`.png`)
-- Performance plots (HTML/images)
-- Error analysis charts
+### Model Validation
+
+Validate trained models:
+
+```powershell
+python -m evaluation.validation.validate ^
+  --model-type transformer ^
+  --model-path trained_models\cmb\transformer\SignTransformer_best.pt ^
+  --data-dir data\processed\cmb_val ^
+  --labels-csv data\processed\cmb_val.csv
+```
+
+For details, see [Validation Guide](../evaluation/validation/VALIDATION_GUIDE.md)
 
 ---
 
 ## File Sizes
 
-- **NPZ files**: 50KB-2MB per file (depends on sequence length)
-- **Model checkpoints**: 10-200 MB
+- **NPZ files**: 50KB - 2MB per file (varies with sequence length)
+- **Model checkpoints**:
+  - Transformer: ~50-100 MB
+  - IV3-GRU: ~100-200 MB
 - **Label CSVs**: 1-10 KB per split
+- **Full dataset**: ~5-10 GB total
 
 ---
 
@@ -273,17 +369,19 @@ epoch,train_loss,val_loss,gloss_acc,cat_acc,lr
 ### Before Training
 
 - [ ] All `.npz` files load without errors
-- [ ] Label CSV has required columns: `file,gloss,cat,occluded`
-- [ ] Data types correct: string,int,int,int
-- [ ] Class IDs within expected ranges (0-based)
+- [ ] Label CSV has required columns: `file`, `gloss`, `cat`, `occluded`
+- [ ] Data types correct: string, int, int, int
+- [ ] Gloss IDs in range [0, 104]
+- [ ] Category IDs in range [0, 9]
 - [ ] Occlusion flags are 0 or 1
-- [ ] No missing files in label CSV
+- [ ] No missing files referenced in label CSV
 
 ### Before Evaluation
 
-- [ ] Model checkpoint has required keys
+- [ ] Model checkpoint loads successfully
 - [ ] Test data matches training format
 - [ ] Model architecture matches checkpoint
+- [ ] Correct num_gloss (105) and num_cat (10)
 
 ---
 
@@ -292,43 +390,41 @@ epoch,train_loss,val_loss,gloss_acc,cat_acc,lr
 ```
 data/
 ├── raw/
-│   ├── videos/
-│   │   ├── gesture_001.mp4
-│   │   └── gesture_002.mp4
-│   └── labels.csv
+│   ├── fsl-105/
+│   │   ├── clip_0001_hello.mp4
+│   │   └── clip_0002_thank you.mp4
+│   └── sample-105/
+│       └── clip_0003_good morning.mp4
 ├── processed/
-│   ├── keypoints_all/              # Preprocessing output
-│   │   ├── clip_0001_<label>.npz  # X: [45,156], X2048: [45,2048]
-│   │   └── clip_0002_<label>.npz
-│   ├── keypoints_train/            # After data splitting
-│   │   ├── clip_0001_<label>.npz
-│   │   └── clip_0002_<label>.npz
-│   ├── keypoints_val/
-│   │   ├── clip_0001_<label>.npz
-│   │   └── clip_0002_<label>.npz
-│   ├── train_labels.csv            # clip_0001,12,2,0
-│   ├── val_labels.csv              # clip_0002,5,1,1
-│   └── cat_mapping.csv
-├── reports/
-│   ├── npz_audit_report.csv
-│   ├── npz_audit_report.jsonl
-│   └── npz_audit_summary.md
-└── splitting/                      # Data splitting utilities
+│   ├── fsl-105_10-08/              # Preprocessing output
+│   │   ├── clip_0001_hello.npz
+│   │   ├── clip_0002_thank you.npz
+│   │   └── labels.csv
+│   ├── smp-105_10-08/
+│   │   ├── clip_0003_good morning.npz
+│   │   └── labels.csv
+│   ├── cmb_train/                  # Combined training split (80%)
+│   │   ├── clip_0001_hello.npz
+│   │   └── clip_0003_good morning.npz
+│   ├── cmb_val/                    # Combined validation split (20%)
+│   │   └── clip_0002_thank you.npz
+│   ├── cmb_train.csv               # file,gloss,cat,occluded
+│   └── cmb_val.csv
+├── demo/
+│   ├── clip_0138_nice to meet you.npz
+│   └── clip_0585_nine.npz
+└── splitting/
     ├── assign.py
     ├── data_split.py
     └── labels_reference.csv
 
-trained_models/                     # Trained model artifacts
+trained_models/cmb/
 ├── transformer/
-│   ├── optimal/
-│   │   ├── SignTransformer_best.pt
-│   │   ├── SignTransformer_last.pt
-│   │   └── transformer_log.csv
-│   └── [additional transformer models]
+│   ├── SignTransformer_best.pt
+│   ├── SignTransformer_last.pt
+│   └── transformer_train.log
 └── iv3_gru/
-    ├── 70-gloss_acc/
-    │   ├── InceptionV3GRU_best.pt
-    │   ├── InceptionV3GRU_last.pt
-    │   └── iv3_log.csv
-    └── [additional IV3-GRU models]
+    ├── InceptionV3GRU_best.pt
+    ├── InceptionV3GRU_last.pt
+    └── iv3_train.log
 ```
