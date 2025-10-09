@@ -25,7 +25,7 @@ This comprehensive training module supports:
    - Learning rate scheduling (plateau, cosine, warmup-cosine)
    - Early stopping and checkpointing
    - Resume training from checkpoints
-   - Comprehensive CSV logging with performance metrics
+   - Automatic logging: CSV metrics + console logs saved with timestamps
    - Exponential Moving Average (EMA) for model stability
 
 5. ADVANCED LOSS FUNCTIONS:
@@ -34,11 +34,13 @@ This comprehensive training module supports:
    - Label Smoothing for better generalization
 
 Usage:
-    # Basic training
-    python training/train.py --model transformer --epochs 50
+    # Basic training (automatic logging with timestamps)
+    python training/train.py --model transformer --epochs 50 \\
+        --output-dir trained_models/transformer/run1
     
     # Advanced training with curriculum learning
-    python training/train.py --model iv3_gru --curriculum gloss-first --epochs 100
+    python training/train.py --model iv3_gru --curriculum gloss-first --epochs 100 \\
+        --output-dir trained_models/iv3_gru/run1
     
     # Smoke test
     python training/train.py --smoke-test
@@ -60,6 +62,52 @@ from torch.utils.data import DataLoader, Dataset
 
 # Local imports
 from models import InceptionV3GRU, SignTransformer
+
+# ============================================================================
+# LOGGING UTILITIES
+# ============================================================================
+
+class TeeLogger:
+    """
+    Utility class to duplicate stdout to both console and a log file.
+    
+    This allows capturing all printed output during training to a file while
+    still displaying it on the console in real-time.
+    
+    Usage:
+        sys.stdout = TeeLogger('training.log')
+        print("This goes to both console and file")
+        sys.stdout.close()  # Close the file when done
+    """
+    def __init__(self, log_path):
+        """
+        Initialize the TeeLogger.
+        
+        Args:
+            log_path (str): Path to the log file to write to
+        """
+        self.terminal = sys.stdout
+        self.log_file = open(log_path, 'a', encoding='utf-8')
+        
+    def write(self, message):
+        """Write message to both terminal and log file."""
+        self.terminal.write(message)
+        self.log_file.write(message)
+        self.log_file.flush()  # Ensure immediate write to file
+        
+    def flush(self):
+        """Flush both terminal and log file."""
+        self.terminal.flush()
+        self.log_file.flush()
+        
+    def close(self):
+        """Close the log file."""
+        if hasattr(self, 'log_file') and self.log_file:
+            self.log_file.close()
+
+# ============================================================================
+# DATASET CLASSES
+# ============================================================================
 
 class FSLFeatureFileDataset(Dataset):
     """
@@ -2111,11 +2159,18 @@ def parse_args():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-  # Basic training
-  python training/train.py --model transformer --epochs 50
+  # Basic training (logs auto-created in output-dir with timestamp)
+  python training/train.py --model transformer --epochs 50 \\
+    --output-dir trained_models/transformer/run1
+  
+  # Training with custom log file name
+  python training/train.py --model transformer --epochs 50 \\
+    --log-file trained_models/transformer/my_training.log \\
+    --output-dir trained_models/transformer/run1
   
   # Advanced training with curriculum learning
-  python training/train.py --model iv3_gru --curriculum gloss-first --epochs 100
+  python training/train.py --model iv3_gru --curriculum gloss-first --epochs 100 \\
+    --output-dir trained_models/iv3_gru/curriculum
   
   # Quick smoke test
   python training/train.py --smoke-test
@@ -2184,7 +2239,8 @@ Examples:
     parser.add_argument("--warmup-epochs", type=int, default=5, help="Warmup epochs for warmup_cosine scheduler")
     parser.add_argument("--early-stop", type=int, default=None, help="Early stopping patience (epochs)")
     parser.add_argument("--resume", type=str, default=None, help="Path to checkpoint to resume from")
-    parser.add_argument("--log-csv", type=str, default=None, help="Path to CSV log file for metrics")
+    parser.add_argument("--log-csv", type=str, default=None, help="Path to CSV log file for metrics (auto-created if not specified)")
+    parser.add_argument("--log-file", type=str, default=None, help="Path to text file for console logs (auto-created in output-dir with timestamp if not specified)")
     # DataLoader performance
     parser.add_argument("--num-workers", type=int, default=0, help="DataLoader workers")
     parser.add_argument("--pin-memory", action="store_true", help="DataLoader pin_memory")
@@ -2246,6 +2302,36 @@ Examples:
 if __name__ == "__main__":
     args = parse_args()
     set_global_seed(args.seed, deterministic=args.deterministic)
+    
+    # Setup log files automatically if not specified
+    original_stdout = None
+    
+    # Auto-create log file in output directory if not explicitly specified
+    if args.log_file is None and args.output_dir:
+        os.makedirs(args.output_dir, exist_ok=True)
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        args.log_file = os.path.join(args.output_dir, f"training_{timestamp}.log")
+    
+    # Setup logging if log file is specified (either manually or auto-created)
+    if args.log_file:
+        # Create directory for log file if it doesn't exist
+        log_dir = os.path.dirname(args.log_file)
+        if log_dir and not os.path.exists(log_dir):
+            os.makedirs(log_dir, exist_ok=True)
+        
+        # If CSV log not specified, automatically create one in same directory as log file
+        if args.log_csv is None:
+            log_filename = os.path.splitext(os.path.basename(args.log_file))[0]
+            args.log_csv = os.path.join(log_dir if log_dir else '.', f"{log_filename}_metrics.csv")
+        
+        # Redirect stdout to both console and log file
+        original_stdout = sys.stdout
+        sys.stdout = TeeLogger(args.log_file)
+        print(f"{'='*60}")
+        print(f"TRAINING LOG - {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+        print(f"{'='*60}")
+        print(f"Console output will be saved to: {args.log_file}")
+        print(f"Metrics CSV will be saved to: {args.log_csv}\n")
     
     # Optimized device setup
     device = get_optimal_device()
@@ -2531,42 +2617,52 @@ if __name__ == "__main__":
     print("TRAINING START")
     print("="*60)
     
-    train_model(
-        model,
-        train_loader,
-        val_loader,
-        device,
-        forward_fn,
-        epochs=args.epochs,
-        alpha=args.alpha,
-        beta=args.beta,
-        output_dir=args.output_dir,
-        lr=args.lr,
-        weight_decay=args.weight_decay,
-        use_amp=args.amp,
-        grad_clip=args.grad_clip,
-        scheduler_type=args.scheduler,
-        scheduler_patience=args.scheduler_patience,
-        warmup_epochs=args.warmup_epochs,
-        early_stop_patience=args.early_stop,
-        resume_path=args.resume,
-        log_csv_path=args.log_csv,
-        gradient_accumulation_steps=args.gradient_accumulation_steps,
-        compile_model=args.compile_model,
-        curriculum_strategy=args.curriculum,
-        curriculum_epochs=args.curriculum_epochs,
-        curriculum_warmup=args.curriculum_warmup,
-        curriculum_min_weight=args.curriculum_min_weight,
-        curriculum_schedule=args.curriculum_schedule,
-        loss_weighting_strategy=args.loss_weighting,
-        grid_search_weights=args.grid_search_weights,
-        uncertainty_init=args.uncertainty_init,
-        gradnorm_alpha=args.gradnorm_alpha,
-        gradnorm_update_freq=args.gradnorm_update_freq,
-        loss_type=args.loss_type,
-        focal_gamma=args.focal_gamma,
-        focal_alpha=args.focal_alpha,
-        label_smoothing=args.label_smoothing,
-        use_ema=args.use_ema,
-        ema_decay=args.ema_decay,
-    )
+    try:
+        train_model(
+            model,
+            train_loader,
+            val_loader,
+            device,
+            forward_fn,
+            epochs=args.epochs,
+            alpha=args.alpha,
+            beta=args.beta,
+            output_dir=args.output_dir,
+            lr=args.lr,
+            weight_decay=args.weight_decay,
+            use_amp=args.amp,
+            grad_clip=args.grad_clip,
+            scheduler_type=args.scheduler,
+            scheduler_patience=args.scheduler_patience,
+            warmup_epochs=args.warmup_epochs,
+            early_stop_patience=args.early_stop,
+            resume_path=args.resume,
+            log_csv_path=args.log_csv,
+            gradient_accumulation_steps=args.gradient_accumulation_steps,
+            compile_model=args.compile_model,
+            curriculum_strategy=args.curriculum,
+            curriculum_epochs=args.curriculum_epochs,
+            curriculum_warmup=args.curriculum_warmup,
+            curriculum_min_weight=args.curriculum_min_weight,
+            curriculum_schedule=args.curriculum_schedule,
+            loss_weighting_strategy=args.loss_weighting,
+            grid_search_weights=args.grid_search_weights,
+            uncertainty_init=args.uncertainty_init,
+            gradnorm_alpha=args.gradnorm_alpha,
+            gradnorm_update_freq=args.gradnorm_update_freq,
+            loss_type=args.loss_type,
+            focal_gamma=args.focal_gamma,
+            focal_alpha=args.focal_alpha,
+            label_smoothing=args.label_smoothing,
+            use_ema=args.use_ema,
+            ema_decay=args.ema_decay,
+        )
+    finally:
+        # Restore stdout and close log file if it was opened
+        if args.log_file and original_stdout is not None:
+            print(f"\n{'='*60}")
+            print(f"Training completed - {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+            print(f"Log saved to: {args.log_file}")
+            print(f"{'='*60}")
+            sys.stdout.close()  # Close the TeeLogger
+            sys.stdout = original_stdout  # Restore original stdout
