@@ -64,6 +64,15 @@ PROCESSING_CONFIG = {
     }
 }
 
+# Upload configuration
+UPLOAD_CONFIG = {
+    'use_base64_preview': False,  # Enable Base64 encoding for video previews (recommended for mobile/load-balanced deployments)
+    'base64_size_threshold_mb': 50,  # Max file size for Base64 encoding (larger files use standard preview)
+    'enable_mobile_camera': True,  # Enable camera capture on mobile devices
+    'show_upload_feedback': True,  # Show visual feedback during uploads
+    'enable_enhanced_sync': True,  # Enable enhanced JavaScript sync for camera uploads
+}
+
 # UI configuration
 UI_CONFIG = {
     'colors': {
@@ -141,3 +150,26 @@ def get_model_supports_keypoints(model_name: str) -> bool:
 def get_model_supports_features(model_name: str) -> bool:
     """Check if a model supports 2048-D feature inputs."""
     return MODEL_CONFIG.get(model_name, {}).get('supports_features', False)
+
+def get_upload_config(key: str = None) -> Any:
+    """Get upload configuration settings.
+    
+    Args:
+        key: Optional specific config key to retrieve
+        
+    Returns:
+        Full config dict if key is None, otherwise the specific value
+    """
+    if key is None:
+        return UPLOAD_CONFIG
+    return UPLOAD_CONFIG.get(key, None)
+
+def update_upload_config(key: str, value: Any) -> None:
+    """Update upload configuration setting.
+    
+    Args:
+        key: Configuration key to update
+        value: New value
+    """
+    if key in UPLOAD_CONFIG:
+        UPLOAD_CONFIG[key] = value

@@ -1,5 +1,6 @@
 """Utility functions for the Streamlit app."""
 
+import base64
 import io
 import json
 import os
@@ -261,3 +262,62 @@ class TempUploadedFile:
     def seek(self, position):
         # For compatibility with file-like objects
         pass
+
+
+def encode_file_to_base64(file_data: bytes, mime_type: str = "video/mp4") -> str:
+    """
+    Encode file data to Base64 data URI for WebSocket delivery.
+    
+    This ensures media files pass through WebSocket connection rather than
+    HTTP requests, avoiding session affinity issues in load-balanced deployments.
+    
+    Args:
+        file_data: Raw bytes of the file
+        mime_type: MIME type of the file (e.g., 'video/mp4', 'video/webm')
+        
+    Returns:
+        Base64-encoded data URI string
+    """
+    encoded = base64.b64encode(file_data).decode('utf-8')
+    return f"data:{mime_type};base64,{encoded}"
+
+
+def decode_base64_file(data_uri: str) -> Tuple[bytes, str]:
+    """
+    Decode Base64 data URI back to file bytes.
+    
+    Args:
+        data_uri: Base64-encoded data URI string
+        
+    Returns:
+        Tuple of (file_bytes, mime_type)
+    """
+    # Extract MIME type and Base64 data
+    if ',' in data_uri and data_uri.startswith('data:'):
+        header, encoded = data_uri.split(',', 1)
+        mime_type = header.split(':')[1].split(';')[0]
+        file_bytes = base64.b64decode(encoded)
+        return file_bytes, mime_type
+    else:
+        raise ValueError("Invalid data URI format")
+
+
+def get_mime_type_from_extension(filename: str) -> str:
+    """
+    Get MIME type from file extension.
+    
+    Args:
+        filename: Name of the file
+        
+    Returns:
+        MIME type string
+    """
+    ext = Path(filename).suffix.lower()
+    mime_types = {
+        '.mp4': 'video/mp4',
+        '.mov': 'video/quicktime',
+        '.webm': 'video/webm',
+        '.npz': 'application/octet-stream',
+        '.avi': 'video/x-msvideo',
+    }
+    return mime_types.get(ext, 'application/octet-stream')

@@ -43,6 +43,21 @@ python show_network_info.py
 
 PANSINAYAN will open in your default browser at `http://localhost:8501`.
 
+### Mobile Camera Uploads
+
+PANSINAYAN supports direct camera capture on mobile devices with enhanced reliability:
+
+- **iOS Safari**: Tap "Browse files" to access camera
+- **Android Chrome**: Select camera from file picker
+- **Enhanced Sync**: Automatic event handling for consistent uploads
+- **Base64 Option**: Available for load-balanced deployments
+
+For mobile-specific configuration and troubleshooting, see:
+
+- [Quick Start: Mobile Uploads](./QUICK_START_MOBILE_UPLOADS.md)
+- [Camera Upload Improvements](./CAMERA_UPLOAD_IMPROVEMENTS.md)
+- [Deployment Guide](./DEPLOYMENT_GUIDE.md)
+
 ## Features
 
 ### 1. Model Prediction

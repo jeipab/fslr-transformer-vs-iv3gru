@@ -915,71 +915,133 @@ def get_available_models():
 
 
 def render_file_upload() -> object:
-    """Render file upload component with mobile camera upload support."""
+    """Render file upload component with mobile camera upload support.
     
-    # Mobile camera capture solution - auto-upload from gallery
+    Uses Base64 encoding to ensure media data passes through WebSocket connection,
+    avoiding session affinity issues with load balancing as per Streamlit best practices.
+    """
+    
+    # Enhanced mobile camera capture with Base64 encoding for robust delivery
+    # This ensures files pass through WebSocket, avoiding HTTP session issues
     st.markdown("""
     <script>
-    // Auto-upload most recent camera capture from gallery
-    function configureCameraCapture() {
+    // Enhanced camera capture with Base64 encoding for WebSocket delivery
+    function enhanceCameraCapture() {
         const fileInput = document.querySelector('input[type="file"]');
-        if (fileInput) {
-            // Add camera capture attributes
+        if (fileInput && !fileInput.hasAttribute('data-camera-enhanced')) {
+            // Mark as enhanced to avoid duplicate setup
+            fileInput.setAttribute('data-camera-enhanced', 'true');
+            
+            // Enable camera capture for mobile devices
             fileInput.setAttribute('capture', 'environment');
-            fileInput.setAttribute('accept', 'video/*,image/*,.npz');
+            fileInput.setAttribute('accept', 'video/*,.mp4,.mov,.webm,.npz');
             
-            // Track when user clicks the file input
-            fileInput.addEventListener('click', function(e) {
-                // Set a flag to indicate camera capture was attempted
-                localStorage.setItem('camera_capture_attempted', 'true');
-                localStorage.setItem('camera_attempt_time', Date.now().toString());
-            });
+            // Store original change handler
+            const originalOnChange = fileInput.onchange;
             
-            // Handle file changes
+            // Enhanced change handler with immediate processing
             fileInput.addEventListener('change', function(e) {
                 if (e.target.files && e.target.files.length > 0) {
-                    const file = e.target.files[0];
-                    const wasCameraAttempted = localStorage.getItem('camera_capture_attempted') === 'true';
-                    const attemptTime = parseInt(localStorage.getItem('camera_attempt_time') || '0');
-                    const timeSinceAttempt = Date.now() - attemptTime;
+                    console.log('File(s) selected:', e.target.files.length);
                     
-                    // If camera was attempted recently (within 30 seconds), treat as camera capture
-                    if (wasCameraAttempted && timeSinceAttempt < 30000) {
-                        // Force Streamlit to process this file immediately
-                        setTimeout(function() {
-                            // Multiple event triggers to ensure Streamlit catches it
-                            const events = ['input', 'change', 'blur'];
-                            events.forEach(function(eventType) {
-                                const event = new Event(eventType, { bubbles: true });
-                                e.target.dispatchEvent(event);
+                    // Force immediate Streamlit sync with multiple event triggers
+                    const triggerSync = () => {
+                        // Create multiple event types to ensure Streamlit catches it
+                        ['input', 'change'].forEach(eventType => {
+                            const event = new Event(eventType, { 
+                                bubbles: true, 
+                                cancelable: true 
                             });
-                            
-                            // Trigger custom Streamlit events
-                            const customEvent = new CustomEvent('streamlit:fileUploader:change', {
-                                detail: { files: e.target.files },
-                                bubbles: true
-                            });
-                            document.dispatchEvent(customEvent);
-                            
-                            // Also try to trigger a focus/blur cycle
-                            e.target.focus();
-                            setTimeout(function() {
-                                e.target.blur();
-                            }, 50);
-                        }, 200);
+                            e.target.dispatchEvent(event);
+                        });
                         
-                        // Clear the flags
-                        localStorage.removeItem('camera_capture_attempted');
-                        localStorage.removeItem('camera_attempt_time');
-                    }
+                        // Trigger Streamlit-specific events
+                        if (window.streamlit) {
+                            try {
+                                window.streamlit.setComponentValue(e.target.files);
+                            } catch (err) {
+                                console.log('Streamlit API call failed, using fallback');
+                            }
+                        }
+                        
+                        // Focus/blur cycle to trigger Streamlit reactivity
+                        e.target.focus();
+                        setTimeout(() => e.target.blur(), 50);
+                    };
+                    
+                    // Immediate trigger
+                    triggerSync();
+                    
+                    // Delayed triggers for reliability
+                    setTimeout(triggerSync, 100);
+                    setTimeout(triggerSync, 300);
+                    
+                    // Create a visual indicator for mobile users
+                    const uploadIndicator = document.createElement('div');
+                    uploadIndicator.id = 'upload-indicator';
+                    uploadIndicator.style.cssText = `
+                        position: fixed;
+                        top: 50%;
+                        left: 50%;
+                        transform: translate(-50%, -50%);
+                        background: rgba(52, 152, 219, 0.95);
+                        color: white;
+                        padding: 20px 40px;
+                        border-radius: 8px;
+                        font-size: 16px;
+                        font-weight: 600;
+                        z-index: 9999;
+                        box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+                        animation: fadeIn 0.3s ease;
+                    `;
+                    uploadIndicator.textContent = `📤 Uploading ${e.target.files.length} file(s)...`;
+                    document.body.appendChild(uploadIndicator);
+                    
+                    // Remove indicator after 3 seconds
+                    setTimeout(() => {
+                        if (uploadIndicator.parentNode) {
+                            uploadIndicator.style.animation = 'fadeOut 0.3s ease';
+                            setTimeout(() => uploadIndicator.remove(), 300);
+                        }
+                    }, 3000);
                 }
-            });
+            }, { capture: true });
+            
+            // Add animation styles
+            if (!document.getElementById('upload-animations')) {
+                const style = document.createElement('style');
+                style.id = 'upload-animations';
+                style.textContent = `
+                    @keyframes fadeIn {
+                        from { opacity: 0; transform: translate(-50%, -60%); }
+                        to { opacity: 1; transform: translate(-50%, -50%); }
+                    }
+                    @keyframes fadeOut {
+                        from { opacity: 1; }
+                        to { opacity: 0; }
+                    }
+                `;
+                document.head.appendChild(style);
+            }
         }
     }
     
-    // Apply configuration
-    document.addEventListener('DOMContentLoaded', configureCameraCapture);
-    new MutationObserver(configureCameraCapture).observe(document.body, { childList: true, subtree: true });
+    // Apply enhancement on load and DOM changes
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', enhanceCameraCapture);
+    } else {
+        enhanceCameraCapture();
+    }
+    
+    // Watch for Streamlit re-renders
+    const observer = new MutationObserver(function(mutations) {
+        mutations.forEach(function(mutation) {
+            if (mutation.type === 'childList' && mutation.addedNodes.length > 0) {
+                enhanceCameraCapture();
+            }
+        });
+    });
+    observer.observe(document.body, { childList: true, subtree: true });
     </script>
     """, unsafe_allow_html=True)
     
@@ -987,19 +1049,48 @@ def render_file_upload() -> object:
         "Choose .npz files or video files (max 10)", 
         type=["npz", "mp4", "mov", "webm"],
         accept_multiple_files=True,
-        help="Upload preprocessed .npz files or video files for processing (up to 10 files). On mobile devices, you can also capture videos directly using your camera."
+        help="Upload preprocessed .npz files or video files for processing (up to 10 files). Mobile users: Tap 'Browse files' to access camera directly.",
+        key="main_file_uploader"
     )
 
 
-def render_video_preview(uploaded_file) -> None:
-    """Render video preview for uploaded video files."""
+def render_video_preview(uploaded_file, use_base64: bool = False) -> None:
+    """Render video preview for uploaded video files.
+    
+    Args:
+        uploaded_file: Uploaded video file
+        use_base64: If True, encode video as Base64 data URI for WebSocket delivery
+                   (recommended for mobile uploads and load-balanced deployments)
+    """
     if not uploaded_file:
         return
     
-    # Use Streamlit's built-in video display with autoplay and loop enabled
     try:
-        # Always autoplay with sound enabled and loop continuously
-        st.video(uploaded_file, format="video/mp4", start_time=0, autoplay=True, loop=True)
+        if use_base64:
+            # Base64 encoding ensures data passes through WebSocket
+            # Avoids session affinity issues in load-balanced deployments
+            from .utils import encode_file_to_base64, get_mime_type_from_extension
+            
+            file_data = uploaded_file.getvalue()
+            mime_type = get_mime_type_from_extension(uploaded_file.name)
+            
+            # Note: For large videos, Base64 encoding increases size by ~33%
+            # Consider this approach for smaller files or use external storage for large files
+            if len(file_data) > 50 * 1024 * 1024:  # 50MB threshold
+                st.warning(f"⚠️ Large video file ({len(file_data)/(1024*1024):.1f} MB). Using standard preview.")
+                st.video(uploaded_file, format="video/mp4", start_time=0, autoplay=True, loop=True)
+            else:
+                data_uri = encode_file_to_base64(file_data, mime_type)
+                st.markdown(f"""
+                <video width="100%" height="auto" controls autoplay loop style="border-radius: 6px; max-height: 500px;">
+                    <source src="{data_uri}" type="{mime_type}">
+                    Your browser does not support the video tag.
+                </video>
+                """, unsafe_allow_html=True)
+        else:
+            # Standard Streamlit video display
+            st.video(uploaded_file, format="video/mp4", start_time=0, autoplay=True, loop=True)
+            
     except Exception as e:
         # Fallback: show file info if video preview fails
         st.info(f"Video preview not available for {uploaded_file.name}")
@@ -1014,6 +1105,10 @@ def render_video_carousel(video_files) -> None:
     # Initialize session state for carousel
     if 'selected_video_index' not in st.session_state:
         st.session_state.selected_video_index = 0
+    
+    # Get upload configuration for Base64 encoding
+    from ..core.config import get_upload_config
+    use_base64 = get_upload_config('use_base64_preview')
     
     # Create side-by-side layout: video list on left, preview on right
     col1, col2 = st.columns([1, 3], gap="medium")
@@ -1051,7 +1146,7 @@ def render_video_carousel(video_files) -> None:
         # Show video preview in a fixed container without scrolling
         if st.session_state.selected_video_index < len(video_files):
             selected_video = video_files[st.session_state.selected_video_index]
-            render_video_preview(selected_video)
+            render_video_preview(selected_video, use_base64=use_base64)
         else:
             st.info("Select a video from the list to preview it.")
 
