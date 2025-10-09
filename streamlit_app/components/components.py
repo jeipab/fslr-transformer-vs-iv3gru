@@ -697,9 +697,9 @@ def render_sidebar() -> Dict:
     """Render sidebar controls and return configuration dict."""
     # Clean, elegant header
     st.sidebar.markdown("""
-    <div style='text-align: center; padding: 0 0 1rem 0; border-bottom: 1px solid #4a5568; margin-bottom: 1rem; margin-top: -1rem;'>
-        <h1 style='color: #1f77b4; font-size: 3.2rem; font-weight: bold; margin: 0;'>PANSINAYAN</h1>
-        <p style='color: #a0aec0; font-size: 1rem; margin: 0.2rem 0 0 0; font-weight: 400;'>Where Every Sign Gets Attention</p>
+    <div style='text-align: left; padding: 0 0 0.75rem 0; border-bottom: 1px solid #4a5568; margin-bottom: 1rem; margin-top: -1rem;'>
+        <h1 style='color: #1f77b4; font-size: 2.5rem; font-weight: bold; margin: 0; line-height: 1.2;'>PANSINAYAN</h1>
+        <p style='color: #a0aec0; font-size: 0.9rem; margin: 0.1rem 0 0 0; font-weight: 400;'>Where Every Sign Gets Attention</p>
     </div>
     """, unsafe_allow_html=True)
     
