@@ -8,22 +8,22 @@ The preprocessing pipeline includes hand-head occlusion detection for Filipino s
 
 ### Basic Usage
 
-```bash
+```powershell
 # Enable occlusion detection (default when keypoints are written)
-python preprocessing/preprocess.py video.mp4 output/ --write-keypoints --occ-enable
+python -m preprocessing.core.preprocess data\raw\video.mp4 data\processed\output --write-keypoints --occ-enable
 
-# Multi-processing version (unified module)
-python preprocessing/preprocess.py video.mp4 output/ --write-keypoints --occ-enable --workers 8
+# Multi-processing version for batch processing
+python -m preprocessing.core.preprocess data\raw\videos data\processed\output --write-keypoints --occ-enable --workers 8
 ```
 
 ### Detailed Results
 
-```bash
+```powershell
 # Get detailed occlusion analysis
-python preprocessing/preprocess.py video.mp4 output/ --write-keypoints --occ-enable --occ-detailed
+python -m preprocessing.core.preprocess data\raw\video.mp4 data\processed\output --write-keypoints --occ-enable --occ-detailed
 
-# Multi-processing with detailed results (unified module)
-python preprocessing/preprocess.py video.mp4 output/ --write-keypoints --occ-enable --occ-detailed --workers 8
+# Multi-processing with detailed results
+python -m preprocessing.core.preprocess data\raw\videos data\processed\output --write-keypoints --occ-enable --occ-detailed --workers 8
 ```
 
 ## How It Works
@@ -72,6 +72,18 @@ config = {
     'min_consecutive_confidence': 0.2        # Minimum confidence threshold
 }
 ```
+
+### Occlusion Criteria
+
+**Frame-level occlusion:**
+
+- Frame marked as occluded if `visible_keypoints / 78 < 0.6` (default threshold)
+
+**Clip-level occlusion:**
+
+- Clip marked as occluded if:
+  - Occluded frames ≥ 40% of total frames, OR
+  - Consecutive occluded run ≥ 15 frames
 
 ### Output Formats
 
@@ -177,6 +189,36 @@ while True:
     print(f"Occluded regions: {result['occluded_regions']}")
 ```
 
+## Batch Processing Example
+
+```powershell
+# Process entire dataset with occlusion detection
+python -m preprocessing.core.preprocess ^
+  data\raw\fsl-105 ^
+  data\processed\fsl-105_output ^
+  --write-keypoints ^
+  --write-iv3-features ^
+  --occ-enable ^
+  --workers 8 ^
+  --batch-size 32
+```
+
+## NPZ Metadata
+
+Occlusion information is stored in the NPZ file's metadata:
+
+```python
+import numpy as np
+import json
+
+# Load NPZ file
+data = np.load('clip_0001.npz', allow_pickle=True)
+
+# Access metadata
+meta = json.loads(str(data['meta']))
+print(f"Occluded: {meta.get('occluded_flag', 0)}")
+```
+
 ## Dependencies
 
 The occlusion detection system requires:
@@ -198,7 +240,7 @@ pip install scipy scikit-learn opencv-python mediapipe
 
 1. **ImportError**: Install required dependencies
 
-   ```bash
+   ```powershell
    pip install scipy scikit-learn
    ```
 
@@ -210,8 +252,13 @@ pip install scipy scikit-learn opencv-python mediapipe
 
 Enable detailed output for debugging:
 
-```bash
-python preprocessing/preprocess.py video.mp4 output/ --write-keypoints --occ-enable --occ-detailed
+```powershell
+python -m preprocessing.core.preprocess ^
+  data\raw\video.mp4 ^
+  data\processed\output ^
+  --write-keypoints ^
+  --occ-enable ^
+  --occ-detailed
 ```
 
 This will provide frame-by-frame analysis in the metadata.
