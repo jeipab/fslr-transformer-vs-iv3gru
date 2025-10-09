@@ -1,52 +1,56 @@
 # Python
 __pycache__/
 *.pyc
+
+# Virtual Environments
 .venv/
 env/
-
-# User Specific Folders
-venv311/
 venv/
-raw/
+venv311/
+
+# Archive
 .archive/
 
-# Data (ignore everything inside data/)
+# Data Directory Structure
+# Ignore everything in data/ by default
 data/*
 
-# Allow tracking in data
-!data/splitting/
-!data/splitting/**
-!data/labels/
+# Allow specific data subdirectories and files
 !data/__init__.py
 !data/resize_360p.py
 !data/demo/
 !data/demo/**
+!data/labels/
+!data/splitting/
+!data/splitting/**
 
-# Exclude specific files/directories within allowed data directories
+# Exclude pycache in allowed data directories
 data/labels/__pycache__/
 data/labels/**/*.pyc
 data/splitting/__pycache__/
 data/splitting/**/*.pyc
 
-# Other Data Formats
+# Data File Formats
 *.npy
 *.csv
-*.mp4
-*.avi
-*.mov
 *.npz
 *.parquet
 
-# Allow specific CSV files
+# Video Files
+*.mp4
+*.avi
+*.mov
+
+# Exception: Allow specific CSV files
 !preprocessing/utils/rename.csv
 
-# Checkpoints
+# Model Checkpoints
 *.pt
 *.pth
 
-# Allow only the "best" model files
+# Exception: Allow best model files
 !trained_models/**/*_best.pt
 
-# Allow shared/ to be tracked despite global ignores
+# Exception: Allow shared directory
 !shared/
 !shared/**
