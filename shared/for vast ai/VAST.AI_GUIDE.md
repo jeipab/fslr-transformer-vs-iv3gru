@@ -102,75 +102,87 @@ cd processed
 pip install gdown
 ```
 
-**Download the zipped NPZ data:**
+**Download the preprocessed fsl-105 clips:**
 
 ```bash
-gdown https://drive.google.com/uc?id=1C_td2Jqb07Z19t-uaoE3m3y7cAnHOZwI
+gdown https://drive.google.com/uc?id=1c6SP6Hecv0p5c7c4ntEy-VxZaGeg7bMD
 ```
 
-**Extract the zip file:**
+**Download the preprocessed smp-105 clips:**
 
 ```bash
-unzip *.zip
+gdown https://drive.google.com/uc?id=1wKc5lu1pmonnkqDOG6p0vCjrHxQDvjqA
+```
+
+**Unzip all zip files:**
+
+```bash
+unzip '*.zip'
+```
+
+**Clean up zip files:**
+
+```bash
+rm -f *.zip
 ```
 
 ---
 
-## 5. Assign Labels
+## 5. Split Data
 
-**Return to the project root:**
+**Return to project root:**
 
 ```bash
 cd ../../
 ```
 
-**Assign gloss and category labels:**
+**For fsl-105 data split:**
 
 ```bash
-python data/splitting/assign.py
+python data/splitting/data_split.py --processed-root data/processed/fsl-105_10-08 --labels data/processed/fsl-105_10-08/labels.csv --out-root data/processed --copy --train-ratio 0.8 --train-dir fsl_train --val-dir fsl_val --train-csv fsl_train.csv --val-csv fsl_val.csv
+```
+
+**For sample-105 data split:**
+
+```bash
+python data/splitting/data_split.py --processed-root data/processed/smp-105_10-08 --labels data/processed/smp-105_10-08/labels.csv --out-root data/processed --copy --train-ratio 0.8 --train-dir smp_train --val-dir smp_val --train-csv smp_train.csv --val-csv smp_val.csv
+```
+
+**For combined data split:**
+
+```bash
+python data/splitting/data_split.py --processed-root data/processed/fsl-105_10-08 data/processed/smp-105_10-08 --labels data/processed/fsl-105_10-08/labels.csv data/processed/smp-105_10-08/labels.csv --out-root data/processed --copy --train-ratio 0.8 --train-dir cmb_train --val-dir cmb_val --train-csv cmb_train.csv --val-csv cmb_val.csv
 ```
 
 ---
 
-## 6. Split Data
+## 6. Clean Up Source Folders
 
-**For greetings only:**
+After data splitting is complete, navigate back to the processed folder and remove the source directories:
 
-```bash
-python data/splitting/data_split.py --processed-root data/processed --labels data/processed/labels.csv --out-root data/processed --copy --cats greeting --label-ref data/splitting/labels_reference.csv
-```
-
-**For full dataset:**
-
-```bash
-python data/splitting/data_split.py --processed-root data/processed --labels data/processed/labels.csv --out-root data/processed --copy --label-ref data/splitting/labels_reference.csv
-```
-
----
-
-## 7. Clean Up Unused Files
-
-After data splitting, remove unused .npz and .zip files from the processed directory (this won't affect subdirectories):
-
-```bash
-find data/processed -maxdepth 1 \( -name "*.npz" -o -name "*.zip" \) -type f -delete
-```
-
-**Alternative method (navigate to directory first):**
+**Navigate to processed directory:**
 
 ```bash
 cd data/processed
-rm -f *.npz *.zip
+```
+
+**Remove source folders:**
+
+```bash
+rm -rf fsl-105_10-08 smp-105_10-08
+```
+
+**Return to project root:**
+
+```bash
 cd ../../
 ```
 
 ---
 
-## 8. Add Required Files
+## 7. Replace Streamlit Components
 
-1. Data files
-
-2. Replace Streamlit components with vast.ai versions:
+Replace Streamlit components with vast.ai versions:
 
 ```bash
 cp "shared/for vast ai/visualization_vast_ai.py" "streamlit_app/components/visualization.py"
@@ -182,7 +194,7 @@ cp "shared/for vast ai/validation_components_vast_ai.py" "streamlit_app/componen
 
 ---
 
-## 9. Run the Streamlit Application
+## 7. Run the Streamlit Application
 
 **Start the app with proper settings:**
 
@@ -204,14 +216,14 @@ curl -I http://localhost:8081
 
 ---
 
-## 10. Access Your Application
+## 8. Access Your Application
 
 - **Local access:** [http://localhost:8081]
 - **External access:** Use the tunnel URL provided by cloudflared (e.g., [https://something-random.trycloudflare.com])
 
 ---
 
-## 11. Video Generation Dependencies (if needed)
+## 9. Video Generation Dependencies (if needed)
 
 If you require video generation, install the following:
 
@@ -221,7 +233,7 @@ apt-get update && apt-get install -y ffmpeg libx264-dev
 
 ---
 
-## 12. Optional: Test IV3-GRU Model Loading
+## 10. Optional: Test IV3-GRU Model Loading
 
 To verify IV3-GRU loads correctly on CPU:
 
@@ -235,53 +247,6 @@ except Exception as e:
     print('IV3-GRU loading failed:', str(e))
 "
 ```
-
----
-
-## 13. Download and Process Sample Data
-
-This section covers downloading preprocessed sample data for testing purposes.
-
-**Prerequisites:**
-
-- Ensure you're in the project directory with virtual environment activated:
-
-```bash
-cd fslr-transformer-vs-iv3gru
-source venv/bin/activate
-```
-
-**Step 1: Navigate to raw data directory**
-
-```bash
-cd data/processed
-```
-
-**Step 2: Download the preprocessed sample zip file from Google Drive**
-
-```bash
-gdown https://drive.google.com/uc?id=1CcYjT4cK0su6oC0UrGcY8Nqy_V6Px01E
-```
-
-**Step 3: Unzip the downloaded file**
-
-```bash
-unzip *.zip
-```
-
-**Step 4: Clean up the zip file**
-
-```bash
-rm -f *.zip
-```
-
-**Step 5: Return to project root**
-
-```bash
-cd ../../
-```
-
-The sample data is now ready to use. Since the files are already preprocessed, no additional processing or label assignment is needed.
 
 ---
 
