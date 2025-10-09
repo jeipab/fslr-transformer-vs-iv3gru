@@ -587,9 +587,11 @@ def render_detailed_predictions(results: Dict[str, Any]):
             'Predicted Gloss': f"{pred_gloss_label} ({pred['gloss_pred']})",
             'Actual Gloss': f"{actual_gloss_label} ({pred['gloss_gt']})",
             'Gloss Status': gloss_correct,
+            'Gloss Confidence': f"{pred.get('gloss_prob', 0):.4f}",
             'Predicted Category': f"{pred_cat_label} ({pred['cat_pred']})",
             'Actual Category': f"{actual_cat_label} ({pred['cat_gt']})",
             'Category Status': cat_correct,
+            'Category Confidence': f"{pred.get('cat_prob', 0):.4f}",
             'Occlusion Status': occlusion_status
         })
     
