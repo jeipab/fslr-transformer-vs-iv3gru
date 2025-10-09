@@ -7,6 +7,10 @@ PANSINAYAN - Filipino Sign Language Recognition System
 
 This utility displays connection information for accessing the PANSINAYAN
 Streamlit application from different devices on your network.
+
+Usage:
+    python show_network_info.py          # Use default port (8501)
+    python show_network_info.py 8080     # Specify custom port
 """
 
 import socket
