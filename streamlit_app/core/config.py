@@ -20,7 +20,7 @@ PAGE_CONFIG = {
 MODEL_CONFIG = {
     'transformer': {
         'enabled': True,
-        'checkpoint_path': 'trained_models/cmb/transformer/cmb_features_2048/SignTransformer_best.pt',
+        'checkpoint_path': 'trained_models/cmb/transformer/cmb_combined_2204/SignTransformer_best.pt',
         'model_type': 'transformer',
         'num_gloss_classes': 105,
         'num_category_classes': 10,
