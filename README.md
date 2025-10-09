@@ -1,4 +1,8 @@
-# Filipino Sign Language Recognition (FSLR)
+# PANSINAYAN
+
+### _Where Every Sign Gets Attention_
+
+**Filipino Sign Language Recognition System**
 
 Multi-Head Attention Transformer vs InceptionV3-GRU for Filipino Sign Language Recognition.
 
@@ -37,17 +41,23 @@ pip install -r requirements.txt
 pip install pyarrow  # optional, for parquet inspection
 ```
 
-### Interactive Demo
+### Interactive Demo with PANSINAYAN
 
 ```powershell
-# Run the Streamlit application
+# Run the PANSINAYAN application
 streamlit run run_app.py
 
 # Check network connection info (local IP and access URLs)
 python show_network_info.py
 ```
 
-**Features**: Animated keypoint visualization, feature analysis, real-time predictions, support for both `.npz` files and raw videos.
+**PANSINAYAN Features**:
+
+- Animated keypoint visualization with attention mechanism
+- Real-time predictions for 105 Filipino sign words
+- Support for both preprocessed `.npz` files and raw videos
+- Dual model comparison (Transformer vs IV3-GRU)
+- Occlusion-aware analysis and validation
 
 ### Quick Prediction
 
@@ -397,7 +407,7 @@ See [Sharing Guide](shared/SHARING_GUIDE.md) for detailed deployment instruction
 
 ## 🤝 Contributing
 
-This project supports Filipino Sign Language Recognition research. For collaboration guidelines, see the [Sharing Guide](shared/SHARING_GUIDE.md).
+PANSINAYAN supports Filipino Sign Language Recognition research and accessibility initiatives. For collaboration guidelines, see the [Sharing Guide](shared/SHARING_GUIDE.md).
 
 ## 📄 License
 
@@ -405,14 +415,14 @@ This project is part of academic research in Filipino Sign Language Recognition.
 
 ## 📚 Citation
 
-If you use this work in your research, please cite:
+If you use PANSINAYAN in your research, please cite:
 
 ```bibtex
-@thesis{fslr2024,
-  title={Filipino Sign Language Recognition: Transformer vs InceptionV3-GRU},
-  author={Your Name},
-  year={2024},
-  school={Your Institution}
+@thesis{pansinayan2025,
+  title={PANSINAYAN: Multi-Head Attention Transformer for Filipino Sign Language Recognition},
+  author={Estrella, Novelle Lyn and Magtibay, Nathaniel L. and Migueh, Rica Joi C. and Pablo, Jeremias G.},
+  year={2025},
+  school={Polytechnic University of the Philippines}
 }
 ```
 

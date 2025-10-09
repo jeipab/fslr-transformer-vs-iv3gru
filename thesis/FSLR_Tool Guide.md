@@ -4,66 +4,6 @@
 
 This presentation script provides a comprehensive walkthrough of the Filipino Sign Language Recognition (FSLR) Streamlit application for your thesis defense. The app serves as a sophisticated data gathering and analysis platform designed to systematically collect evidence and performance data to answer critical research questions about neural network architecture effectiveness in sign language recognition under varying occlusion conditions.
 
-## Quick Reference: Current System Configuration
-
-### Dataset Specifications
-
-- **Total Glosses**: 105 Filipino sign words (IDs: 0-104)
-- **Total Categories**: 10 semantic categories (IDs: 0-9)
-  1. GREETING - Greetings and social pleasantries
-  2. SURVIVAL - Essential communication phrases
-  3. NUMBER - Numeric signs (1-10)
-  4. CALENDAR - Months of the year
-  5. DAYS - Days of the week and time references
-  6. FAMILY - Family member relationships
-  7. RELATIONSHIPS - Social relationships and disabilities
-  8. COLOR - Color descriptors
-  9. FOOD - Food items
-  10. DRINK - Beverage-related signs
-
-### Data Organization
-
-- **Combined Dataset**: FSL-105 (main) + Sample-105 (supplementary)
-- **Training Set**: `data/processed/cmb_train/` (80% of data)
-- **Validation Set**: `data/processed/cmb_val/` (20% of data)
-- **Label Files**: `cmb_train.csv`, `cmb_val.csv`
-- **Demo Files**: `data/demo/` (6 pre-processed samples for quick testing)
-
-### Pre-trained Models
-
-- **Transformer Model**: `trained_models/transformer/cmb_optimal/SignTransformer_best.pt`
-  - Input: Keypoints [T, 156] from MediaPipe
-  - Architecture: Multi-Head Attention Mechanism
-  - Parameters: ~2M
-- **IV3-GRU Model**: `trained_models/iv3_gru/cmb_optimal/InceptionV3GRU_best.pt`
-  - Input: InceptionV3 features [T, 2048]
-  - Architecture: CNN + GRU
-  - Parameters: ~25M
-
-### Demo Files for Quick Testing
-
-1. `clip_0138_nice to meet you.npz` - GREETING category
-2. `clip_0585_nine.npz` - NUMBER category
-3. `clip_1146_grandfather.npz` - FAMILY category
-4. `clip_1493_green.npz` - COLOR category
-5. `clip_1765_fish.npz` - FOOD category
-6. `clip_1912_crab.npz` - FOOD category
-
-### Application Access
-
-```powershell
-# Launch application
-streamlit run run_app.py
-
-# Check network info
-python show_network_info.py
-```
-
-**Access URLs:**
-
-- Local: `http://localhost:8501`
-- Network: Check network info script output
-
 ---
 
 ## 1. Introduction to the Tool
@@ -445,8 +385,8 @@ The preprocessing stage implements occlusion detection that is central to the re
 
 The preprocessing pipeline implements temporal standardization that ensures fair comparison between architectures:
 
-- **Frame Rate Normalization**: Standardization to 15-30 FPS for consistent temporal representation (configurable based on processing requirements)
-- **Sequence Length Management**: Variable-length sequences supported (maximum 300 frames for Transformer)
+- **Frame Rate Normalization**: Standardization to 30 FPS for consistent temporal representation
+- **Sequence Length Management**: Automatic padding/trimming to standardized sequence lengths
 - **Temporal Alignment**: Synchronization of keypoint and visual feature sequences
 - **Temporal Metadata**: Comprehensive temporal information including timestamps and frame counts
 
@@ -607,18 +547,8 @@ The inference system implements systematic comparison capabilities that directly
 
 The inference system implements comprehensive classification for Filipino Sign Language:
 
-- **105 Gloss Classes**: Complete vocabulary of Filipino sign language words for detailed analysis (IDs: 0-104)
-- **10 Category Classes**: Semantic groupings for broader analysis (IDs: 0-9)
-  - 0: GREETING (greetings and social pleasantries)
-  - 1: SURVIVAL (essential communication phrases)
-  - 2: NUMBER (numeric signs 1-10)
-  - 3: CALENDAR (months of the year)
-  - 4: DAYS (days of the week and time references)
-  - 5: FAMILY (family member relationships)
-  - 6: RELATIONSHIPS (social relationships and disabilities)
-  - 7: COLOR (color descriptors)
-  - 8: FOOD (food items)
-  - 9: DRINK (beverage-related signs)
+- **105 Gloss Classes**: Complete vocabulary of Filipino sign language words for detailed analysis
+- **10 Category Classes**: Semantic groupings (GREETING, SURVIVAL, NUMBER, etc.) for broader analysis
 - **Human-Readable Mapping**: Conversion of numeric predictions to meaningful sign language terms
 - **Research Data Integration**: Integration of classification results with research evaluation framework
 
@@ -893,11 +823,10 @@ The validation stage serves as the **comprehensive systematic evaluation engine*
 
 The validation system implements sophisticated dataset management designed for systematic research evaluation:
 
-- **Dataset Configuration**: FSL-105 (main dataset) + Sample-105 (supplementary) = Combined dataset for training
-- **NPZ Folder Integration**: Direct integration with large-scale research datasets (`cmb_train`, `cmb_val`) containing preprocessed data
-- **CSV Label System**: Automatic integration of comprehensive label files (`cmb_train.csv`, `cmb_val.csv`) with encoding detection for robust data handling
+- **NPZ Folder Integration**: Direct integration with large-scale research datasets containing preprocessed data
+- **CSV Label System**: Automatic integration of comprehensive label files with encoding detection for robust data handling
 - **File Compatibility Validation**: Comprehensive verification that NPZ files contain properly formatted data for both architectures
-- **Batch Dataset Preparation**: Efficient preparation of large datasets (80% train, 20% validation) required for statistically significant research evaluation
+- **Batch Dataset Preparation**: Efficient preparation of large datasets required for statistically significant research evaluation
 
 ##### **Research Data Quality Assurance**
 
@@ -1339,33 +1268,12 @@ The following demo flow is specifically designed to demonstrate how the tool sup
 
 ### **Conclusion and Research Summary**
 
-The FSLR Streamlit App serves as a comprehensive research data gathering and analysis platform that enables systematic evaluation of Multi-Head Attention Mechanism Transformer vs InceptionV3-GRU baseline architectures under varying occlusion conditions. The tool provides:
+The FSLR Streamlit App serves as a research data gathering and analysis platform that enables evaluation of Multi-Head Attention Mechanism Transformer vs InceptionV3-GRU baseline architectures under varying occlusion conditions. The tool provides:
 
-1. **Data Collection**: Systematic collection of performance data for both architectures across 105 Filipino sign language glosses and 10 semantic categories
-2. **Occlusion-Aware Evaluation**: Rigorous analysis of performance under occluded and non-occluded conditions using geometric hand-face intersection detection
-3. **Research Evidence Generation**: Creation of comprehensive evidence (accuracy, precision, recall, F1-score) to support research conclusions
-4. **Academic Standards Compliance**: Following rigorous academic standards for research evaluation with reproducible methodology
-5. **Research Methodology Support**: Direct support for answering specific research questions about architectural performance under varying conditions
+1. **Data Collection**: Collection of performance data for both architectures
+2. **Occlusion-Aware Evaluation**: Analysis of performance under occluded conditions
+3. **Research Evidence Generation**: Creation of evidence to support research conclusions
+4. **Academic Standards Compliance**: Following academic standards for research evaluation
+5. **Research Methodology Support**: Direct support for answering specific research questions
 
-**Dataset Information:**
-
-- **105 Glosses**: Complete Filipino Sign Language vocabulary (GREETING, SURVIVAL, NUMBER, CALENDAR, DAYS, FAMILY, RELATIONSHIPS, COLOR, FOOD, DRINK)
-- **10 Categories**: Semantic groupings for hierarchical classification analysis
-- **Combined Dataset**: FSL-105 + Sample-105 for comprehensive evaluation
-- **Data Split**: 80% training (cmb_train), 20% validation (cmb_val)
-
-**Pre-trained Models:**
-
-- **Transformer**: `trained_models/transformer/cmb_optimal/SignTransformer_best.pt`
-- **IV3-GRU**: `trained_models/iv3_gru/cmb_optimal/InceptionV3GRU_best.pt`
-
-**Demo Files Available:**
-
-- `data/demo/clip_0138_nice to meet you.npz`
-- `data/demo/clip_0585_nine.npz`
-- `data/demo/clip_1146_grandfather.npz`
-- `data/demo/clip_1493_green.npz`
-- `data/demo/clip_1765_fish.npz`
-- `data/demo/clip_1912_crab.npz`
-
-The tool represents a significant contribution to sign language recognition research by providing a robust, systematic platform for architectural comparison and evaluation under real-world conditions including occlusion scenarios, supporting evidence-based conclusions about the effectiveness of attention-based approaches for Filipino Sign Language Recognition.
+The tool represents a contribution to sign language recognition research by providing a platform for architectural comparison and evaluation under real-world conditions including occlusion scenarios.
