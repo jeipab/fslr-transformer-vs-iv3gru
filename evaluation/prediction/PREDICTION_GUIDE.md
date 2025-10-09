@@ -6,20 +6,26 @@ This guide explains how to use the prediction script for Sign Language Recogniti
 
 ### List Available Models
 
-```bash
-python predict.py --list-models
+```powershell
+python -m evaluation.prediction.predict --list-models
 ```
 
 ### Predict from NPZ File (Transformer)
 
-```bash
-python predict.py --model transformer --checkpoint transformer/optimal/SignTransformer_best.pt --input data.npz
+```powershell
+python -m evaluation.prediction.predict ^
+  --model transformer ^
+  --checkpoint trained_models\transformer\cmb_optimal\SignTransformer_best.pt ^
+  --input data\demo\clip_0138_nice to meet you.npz
 ```
 
 ### Predict from Video File (IV3-GRU)
 
-```bash
-python predict.py --model iv3_gru --checkpoint iv3_gru/70-gloss_acc/InceptionV3GRU_best.pt --input video.mp4
+```powershell
+python -m evaluation.prediction.predict ^
+  --model iv3_gru ^
+  --checkpoint trained_models\iv3_gru\cmb_optimal\InceptionV3GRU_best.pt ^
+  --input video.mp4
 ```
 
 ## Required Arguments
@@ -41,45 +47,67 @@ python predict.py --model iv3_gru --checkpoint iv3_gru/70-gloss_acc/InceptionV3G
 The script outputs human-readable results:
 
 ```
-Gloss: HOW ARE YOU (4) (confidence: 0.882)
+Gloss: NICE TO MEET YOU (6) (confidence: 0.882)
 Category: GREETING (0) (confidence: 0.774)
 ```
 
-- **HOW ARE YOU (4)**: The predicted sign with its class ID
-- **GREETING (0)**: The predicted category with its class ID
+- **NICE TO MEET YOU (6)**: The predicted sign with its gloss ID
+- **GREETING (0)**: The predicted category with its category ID
 - **Confidence**: How certain the model is (0.0 to 1.0)
 
 ## Examples
 
+### Predict from Demo Files
+
+```powershell
+python -m evaluation.prediction.predict ^
+  --model transformer ^
+  --checkpoint trained_models\transformer\cmb_optimal\SignTransformer_best.pt ^
+  --input data\demo\clip_0585_nine.npz
+```
+
 ### Save Results to File
 
-```bash
-python predict.py --model transformer --checkpoint transformer/optimal/SignTransformer_best.pt --input data.npz --output results.json
+```powershell
+python -m evaluation.prediction.predict ^
+  --model transformer ^
+  --checkpoint trained_models\transformer\cmb_optimal\SignTransformer_best.pt ^
+  --input data\demo\clip_1493_green.npz ^
+  --output results.json
 ```
 
 ### Force CPU Usage
 
-```bash
-python predict.py --model transformer --checkpoint transformer/optimal/SignTransformer_best.pt --input data.npz --device cpu
+```powershell
+python -m evaluation.prediction.predict ^
+  --model iv3_gru ^
+  --checkpoint trained_models\iv3_gru\cmb_optimal\InceptionV3GRU_best.pt ^
+  --input data\demo\clip_1765_fish.npz ^
+  --device cpu
 ```
 
 ### Process Video File
 
-```bash
-python predict.py --model transformer --checkpoint transformer/optimal/SignTransformer_best.pt --input video.mp4 --fps 15 --image-size 256
+```powershell
+python -m evaluation.prediction.predict ^
+  --model transformer ^
+  --checkpoint trained_models\transformer\cmb_optimal\SignTransformer_best.pt ^
+  --input video.mp4 ^
+  --fps 30 ^
+  --image-size 256
 ```
 
 ## Model Types
 
 ### Transformer Model
 
-- **NPZ Input**: Requires NPZ files with keypoint data (`X` key) or IV3 features (`X2048` key)
-- **Video Input**: Automatically extracts features using MediaPipe and InceptionV3
-- **Features**: 156-dimensional keypoints or 2048-dimensional IV3 features
+- **NPZ Input**: Requires NPZ files with keypoint data (`X` key)
+- **Video Input**: Automatically extracts 156-dimensional keypoints using MediaPipe
+- **Features**: 156-dimensional keypoints (78 points × 2 coordinates)
 
 ### IV3-GRU Model
 
-- **NPZ Input**: Requires NPZ files with IV3 features (`X2048` key)
+- **NPZ Input**: Requires NPZ files with InceptionV3 features (`X2048` key)
 - **Video Input**: Automatically extracts 2048-dimensional InceptionV3 features
 - **Features**: 2048-dimensional InceptionV3 feature sequences
 
@@ -89,17 +117,16 @@ python predict.py --model transformer --checkpoint transformer/optimal/SignTrans
 
 **For Transformer:**
 
-- `X`: Keypoint data [T, 156] - 78 keypoints × 2 coordinates
-- `X2048`: IV3 features [T, 2048] - 2048-dimensional features per frame
-- `mask`: Visibility mask [T, 78] (optional)
+- `X`: Keypoint data `[T, 156]` - 78 keypoints × 2 coordinates
+- `mask`: Visibility mask `[T, 78]` (optional)
 
 **For IV3-GRU:**
 
-- `X2048`: InceptionV3 features [T, 2048] - 2048-dimensional features per frame
+- `X2048`: InceptionV3 features `[T, 2048]` - 2048-dimensional features per frame
 
 ### Video Files (Raw Videos)
 
-Supported formats: MP4, AVI, MOV, etc.
+Supported formats: `.mp4`, `.avi`, `.mov` (OpenCV-compatible)
 
 **Processing Flow:**
 
@@ -116,18 +143,81 @@ The script outputs:
 - Top 3 category predictions with probabilities
 - Additional metadata (frames extracted for videos)
 
+## Dataset Information
+
+- **Glosses**: 105 sign words (IDs: 0-104)
+- **Categories**: 10 semantic categories (IDs: 0-9)
+  - 0: GREETING
+  - 1: SURVIVAL
+  - 2: NUMBER
+  - 3: CALENDAR
+  - 4: DAYS
+  - 5: FAMILY
+  - 6: RELATIONSHIPS
+  - 7: COLOR
+  - 8: FOOD
+  - 9: DRINK
+
+For complete mappings, see [LABEL_MAPPING_TABLE.md](../../data/labels/LABEL_MAPPING_TABLE.md)
+
+## Demo Files
+
+Test predictions using demo files in `data\demo\`:
+
+- `clip_0138_nice to meet you.npz`
+- `clip_0585_nine.npz`
+- `clip_1146_grandfather.npz`
+- `clip_1493_green.npz`
+- `clip_1765_fish.npz`
+- `clip_1912_crab.npz`
+
+## Available Models
+
+### Transformer Models
+
+```
+trained_models\transformer\
+└── cmb_optimal\
+    ├── SignTransformer_best.pt   # Best validation performance
+    └── SignTransformer_last.pt   # Most recent epoch
+```
+
+### IV3-GRU Models
+
+```
+trained_models\iv3_gru\
+└── cmb_optimal\
+    ├── InceptionV3GRU_best.pt    # Best validation performance
+    └── InceptionV3GRU_last.pt    # Most recent epoch
+```
+
+All models are trained on the combined dataset (fsl-105 + sample-105).
+
 ## Troubleshooting
 
 ### Common Issues
 
-1. **"Checkpoint not found"**: Check the path to your .pt file
-2. **"NPZ file must contain 'X' key"**: Use NPZ files with keypoint data for Transformer
-3. **"NPZ file must contain 'X2048' key"**: Use NPZ files with IV3 features for IV3-GRU
+1. **"Checkpoint not found"**: Verify the path to your .pt file exists
+2. **"NPZ file must contain 'X' key"**: Transformer requires keypoint data
+3. **"NPZ file must contain 'X2048' key"**: IV3-GRU requires InceptionV3 features
 4. **CUDA out of memory**: Use `--device cpu` to run on CPU
-5. **"No module named 'mediapipe'"**: Video processing requires mediapipe (NPZ processing works without it)
+5. **"No module named 'mediapipe'"**: Install mediapipe for video processing: `pip install mediapipe`
 
 ### Getting Help
 
-- Check [LABEL_MAPPING_TABLE.md](../../data/labels/LABEL_MAPPING_TABLE.md) for all possible signs and categories
-- Run `python predict.py --help` for command-line help
-- Ensure your virtual environment is activated: `.venv\Scripts\Activate.ps1`
+```powershell
+python -m evaluation.prediction.predict --help
+```
+
+### Verify Installation
+
+```powershell
+# List available models
+python -m evaluation.prediction.predict --list-models
+
+# Test with demo file
+python -m evaluation.prediction.predict ^
+  --model transformer ^
+  --checkpoint trained_models\transformer\cmb_optimal\SignTransformer_best.pt ^
+  --input data\demo\clip_0138_nice to meet you.npz
+```
