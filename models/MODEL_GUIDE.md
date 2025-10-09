@@ -11,6 +11,21 @@ This project implements two architectures for Filipino Sign Language Recognition
 
 Both models predict sign words (gloss) and semantic categories.
 
+## Dataset Configuration
+
+- **Glosses**: 105 sign words (IDs: 0-104)
+- **Categories**: 10 semantic categories (IDs: 0-9)
+  - 0: GREETING
+  - 1: SURVIVAL
+  - 2: NUMBER
+  - 3: CALENDAR
+  - 4: DAYS
+  - 5: FAMILY
+  - 6: RELATIONSHIPS
+  - 7: COLOR
+  - 8: FOOD
+  - 9: DRINK
+
 ## SignTransformer
 
 ### Architecture Overview
@@ -95,9 +110,7 @@ attention_weights = model.get_attention_weights(x)
 The InceptionV3GRU combines visual feature extraction with temporal sequence modeling:
 
 ```
-Input: [B, T, 3, 299, 299] raw frames (ImageNet-normalized)
-  ↓
-InceptionV3 Feature Extraction: [B, T, 3, 299, 299] → [B, T, 2048]
+Input: [B, T, 2048] precomputed InceptionV3 features
   ↓
 First GRU Layer: [B, T, 2048] → [B, T, hidden1] + Dropout
   ↓
@@ -161,17 +174,17 @@ gloss_probs, cat_probs = model.predict_proba(frames, features_already=False)
 
 ## Model Comparison
 
-| Aspect               | SignTransformer              | InceptionV3GRU                                          |
-| :------------------- | :--------------------------- | :------------------------------------------------------ |
-| **Input**            | Keypoints `[B, T, 156]`      | Frames `[B, T, 3, 299, 299]` or features `[B, T, 2048]` |
-| **Architecture**     | Multi-head attention         | CNN + GRU                                               |
-| **Pretrained**       | No                           | InceptionV3 (ImageNet)                                  |
-| **Parameters**       | ~2M                          | ~25M (with frozen backbone)                             |
-| **Training**         | End-to-end                   | Can freeze backbone                                     |
-| **Memory**           | Lower                        | Higher                                                  |
-| **Interpretability** | Attention weights available  | Less interpretable                                      |
-| **Sequence Length**  | Fixed max length             | Variable length support                                 |
-| **Preprocessing**    | Requires keypoint extraction | Can use raw frames                                      |
+| Aspect               | SignTransformer              | InceptionV3GRU                          |
+| :------------------- | :--------------------------- | :-------------------------------------- |
+| **Input**            | Keypoints `[B, T, 156]`      | InceptionV3 features `[B, T, 2048]`     |
+| **Architecture**     | Multi-head attention         | CNN + GRU                               |
+| **Pretrained**       | No                           | InceptionV3 (ImageNet)                  |
+| **Parameters**       | ~2M                          | ~25M (with frozen backbone)             |
+| **Training**         | End-to-end                   | Can freeze backbone                     |
+| **Memory**           | Lower                        | Higher                                  |
+| **Interpretability** | Attention weights available  | Less interpretable                      |
+| **Sequence Length**  | Fixed max length             | Variable length support                 |
+| **Preprocessing**    | Requires keypoint extraction | Requires InceptionV3 feature extraction |
 
 ## Training Considerations
 
@@ -202,21 +215,21 @@ gloss_probs, cat_probs = model.predict_proba(frames, features_already=False)
 **Advantages:**
 
 - Pretrained ImageNet features provide visual representations
-- Flexible input options (raw frames or precomputed features)
+- Precomputed features enable efficient training
 - Variable-length sequence support with packed sequences
 - Transfer learning capabilities
 
 **Considerations:**
 
 - Higher memory requirements
-- Complex training pipeline
+- Requires InceptionV3 feature extraction
 - Less interpretable than attention-based models
 
 **Training Tips:**
 
+- Use precomputed features for faster training
 - Start with frozen backbone for transfer learning
 - Use mixed precision training (`--amp`) for efficiency
-- Apply data augmentation for raw frames
 - Gradually unfreeze backbone after GRU head stabilizes
 
 ## Input Requirements
@@ -228,8 +241,15 @@ gloss_probs, cat_probs = model.predict_proba(frames, features_already=False)
 - Shape: `[batch_size, sequence_length, 156]`
 - 78 keypoints × 2 coordinates (x, y)
 - Normalized coordinates in range `[0, 1]`
-- Extracted using MediaPipe pose, hands, and face landmarks
+- Extracted using MediaPipe (pose, hands, face landmarks)
 - Maximum sequence length: 300 frames (configurable)
+
+**Keypoint Breakdown (78 points):**
+
+- Pose: 25 landmarks
+- Left hand: 21 landmarks
+- Right hand: 21 landmarks
+- Face: 11 landmarks
 
 **Optional Attention Mask:**
 
@@ -239,18 +259,12 @@ gloss_probs, cat_probs = model.predict_proba(frames, features_already=False)
 
 ### InceptionV3GRU
 
-**Raw Video Frames:**
-
-- Shape: `[batch_size, sequence_length, 3, 299, 299]`
-- ImageNet normalization: mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]
-- RGB color channels
-- Resized to 299×299 pixels
-
-**Precomputed Features:**
+**Precomputed InceptionV3 Features:**
 
 - Shape: `[batch_size, sequence_length, 2048]`
-- Extracted using InceptionV3 backbone
-- Can be precomputed for faster training
+- Extracted using InceptionV3 backbone during preprocessing
+- Stored in NPZ files with key `X2048`
+- All training uses precomputed features for efficiency
 
 **Variable-Length Sequences:**
 
@@ -297,16 +311,51 @@ cat_pred = torch.argmax(cat_logits, dim=-1)
 
 **Training Optimization:**
 
+- Use precomputed features stored in NPZ files
 - Start with frozen backbone for transfer learning
 - Use mixed precision training (`--amp`) for efficiency
-- Apply data augmentation for raw frames (rotation, color jitter)
 - Gradually unfreeze backbone after GRU head stabilizes
 
 **Memory Optimization:**
 
-- Use precomputed features when possible
-- Implement gradient checkpointing for memory efficiency
+- Precomputed features reduce memory footprint significantly
 - Use smaller hidden dimensions for GRU layers
+- Implement gradient checkpointing for memory efficiency
+
+## Training Integration
+
+### SignTransformer Training
+
+```powershell
+python -m training.train ^
+  --model transformer ^
+  --keypoints-train data\processed\cmb_train ^
+  --keypoints-val data\processed\cmb_val ^
+  --labels-train-csv data\processed\cmb_train.csv ^
+  --labels-val-csv data\processed\cmb_val.csv ^
+  --num-gloss 105 ^
+  --num-cat 10 ^
+  --epochs 100 ^
+  --batch-size 32
+```
+
+### InceptionV3GRU Training
+
+```powershell
+python -m training.train ^
+  --model iv3_gru ^
+  --features-train data\processed\cmb_train ^
+  --features-val data\processed\cmb_val ^
+  --labels-train-csv data\processed\cmb_train.csv ^
+  --labels-val-csv data\processed\cmb_val.csv ^
+  --feature-key X2048 ^
+  --num-gloss 105 ^
+  --num-cat 10 ^
+  --epochs 100 ^
+  --batch-size 32
+```
+
+For detailed training instructions, see [Training Guide](../training/TRAINING_GUIDE.md)
 
 ## Model Files
 
@@ -315,27 +364,33 @@ cat_pred = torch.argmax(cat_logits, dim=-1)
 - `__init__.py`: Module initialization and imports
 - `MODEL_GUIDE.md`: This guide
 
-## Integration
+## Trained Models
 
-Both models integrate with the training pipeline:
+Pre-trained models are available in `trained_models/`:
 
-```bash
-# Train SignTransformer with keypoint data
-python -m training.train --model transformer --keypoints-train data/processed/keypoints_train --keypoints-val data/processed/keypoints_val
-
-# Train InceptionV3GRU with feature data
-python -m training.train --model iv3_gru --features-train data/processed/features_train --features-val data/processed/features_val
-
-# Train InceptionV3GRU with raw frames
-python -m training.train --model iv3_gru --frames-train data/raw/videos --frames-val data/raw/videos
 ```
+trained_models/
+├── transformer/
+│   └── cmb_optimal/
+│       ├── SignTransformer_best.pt   # Best validation performance
+│       └── SignTransformer_last.pt   # Most recent epoch
+└── iv3_gru/
+    └── cmb_optimal/
+        ├── InceptionV3GRU_best.pt    # Best validation performance
+        └── InceptionV3GRU_last.pt    # Most recent epoch
+```
+
+All models are trained on the combined dataset (fsl-105 + sample-105).
+
+For model management details, see [Trained Model Guide](../trained_models/TRAINED_MODEL_GUIDE.md)
 
 ## Additional Resources
 
 - [Training Guide](../training/TRAINING_GUIDE.md): Training instructions and hyperparameters
 - [Data Guide](../data/DATA_GUIDE.md): Data preprocessing and preparation
-- [Evaluation Guide](../evaluation/EVALUATION_GUIDE.md): Model evaluation and metrics
-- [Streamlit App](../streamlit_app/TOOL_GUIDE.md): Model testing and visualization
+- [Prediction Guide](../evaluation/prediction/PREDICTION_GUIDE.md): Model inference
+- [Validation Guide](../evaluation/validation/VALIDATION_GUIDE.md): Model evaluation
+- [Tool Guide](../streamlit_app/TOOL_GUIDE.md): Streamlit app usage
 
 ## Troubleshooting
 
@@ -349,6 +404,26 @@ python -m training.train --model iv3_gru --frames-train data/raw/videos --frames
 
 **InceptionV3GRU:**
 
-- `ValueError: Expected features with 2048 dimensions`: Check feature extraction or use `features_already=False`
-- `ValueError: Expected raw frames with shape [B, T, 3, H, W]`: Ensure correct frame preprocessing
+- `ValueError: Expected features with 2048 dimensions`: Check NPZ files contain `X2048` key
+- `KeyError: 'X2048'`: Use NPZ files with InceptionV3 features extracted during preprocessing
 - CUDA out of memory: Use smaller batch sizes or mixed precision training
+
+### Data Format Verification
+
+**Check NPZ file contents:**
+
+```python
+import numpy as np
+
+# Load NPZ file
+data = np.load('data/processed/cmb_train/clip_0001.npz')
+
+# Check available keys
+print(data.files)  # Should include: ['X', 'X2048', 'mask', 'timestamps_ms', 'meta']
+
+# Check shapes
+print(f"X shape: {data['X'].shape}")        # [T, 156]
+print(f"X2048 shape: {data['X2048'].shape}") # [T, 2048]
+```
+
+For NPZ validation, see [Preprocess Guide](../preprocessing/docs/PREPROCESS_GUIDE.MD)
