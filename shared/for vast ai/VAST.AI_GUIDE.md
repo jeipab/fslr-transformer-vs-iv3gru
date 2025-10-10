@@ -31,13 +31,19 @@ cd fslr-transformer-vs-iv3gru
 source venv/bin/activate
 ```
 
-**Step 3: Run Streamlit application**
+**Step 3: Configure Streamlit for Vast.AI**
+
+```bash
+cp .streamlit/config.toml.optimized .streamlit/config.toml
+```
+
+**Step 4: Run Streamlit application**
 
 ```bash
 streamlit run run_app.py --server.port 8081 --server.address 0.0.0.0 --server.headless true
 ```
 
-**Step 4: Open new terminal and create tunnel**
+**Step 5: Open new terminal and create tunnel**
 
 In a new terminal window:
 
@@ -48,7 +54,7 @@ cloudflared tunnel --url http://localhost:8081 --protocol http2
 
 **Note**: If you encounter connection timeouts, the `--protocol http2` flag forces TCP instead of UDP/QUIC, which works better on most Vast.AI instances.
 
-**Step 5: Access your application**
+**Step 6: Access your application**
 
 - **Local access:** [http://localhost:8081]
 - **External access:** Use the tunnel URL provided by cloudflared
@@ -197,7 +203,41 @@ cp "shared/for vast ai/validation_components_vast_ai.py" "streamlit_app/componen
 
 ---
 
-## 7. Run the Streamlit Application
+## 8. Configure Streamlit for Vast.AI
+
+Use the optimized configuration file for Vast.AI + Cloudflare tunnel deployment:
+
+```bash
+cp .streamlit/config.toml.optimized .streamlit/config.toml
+```
+
+**What this does:**
+
+- ✅ Sets correct port (8081) for Vast.AI
+- ✅ Enables CORS for Cloudflare tunnel
+- ✅ Configures extended timeouts for mobile uploads
+- ✅ Sets maxMessageSize to 700 MB (supports Base64 encoding)
+- ✅ Optimizes WebSocket compression
+
+**Optional: Enable Base64 encoding for mobile uploads**
+
+For better mobile camera upload reliability, edit `streamlit_app/core/config.py`:
+
+```bash
+nano streamlit_app/core/config.py
+```
+
+Change this line:
+
+```python
+'use_base64_preview': True,  # Change from False to True
+```
+
+This eliminates `MediaFileStorageError` and improves mobile upload consistency.
+
+---
+
+## 9. Run the Streamlit Application
 
 **Start the app with proper settings:**
 
@@ -241,14 +281,14 @@ curl -I http://localhost:8081
 
 ---
 
-## 8. Access Your Application
+## 10. Access Your Application
 
 - **Local access:** [http://localhost:8081]
 - **External access:** Use the tunnel URL provided by cloudflared (e.g., [https://something-random.trycloudflare.com])
 
 ---
 
-## 9. Video Generation Dependencies (if needed)
+## 11. Video Generation Dependencies (if needed)
 
 If you require video generation, install the following:
 
@@ -258,7 +298,7 @@ apt-get update && apt-get install -y ffmpeg libx264-dev
 
 ---
 
-## 10. Optional: Test IV3-GRU Model Loading
+## 12. Optional: Test IV3-GRU Model Loading
 
 To verify IV3-GRU loads correctly on CPU:
 
@@ -275,7 +315,7 @@ except Exception as e:
 
 ---
 
-## 11. Troubleshooting
+## 13. Troubleshooting
 
 ### Cloudflare Tunnel Connection Issues
 
