@@ -11,6 +11,9 @@ venv311/
 # Archive
 .archive/
 
+# Streamlit
+.streamlit/Guides/
+
 # Data Directory Structure
 # Ignore everything in data/ by default
 data/*
