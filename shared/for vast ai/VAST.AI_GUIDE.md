@@ -31,19 +31,13 @@ cd fslr-transformer-vs-iv3gru
 source venv/bin/activate
 ```
 
-**Step 3: Configure Streamlit for Vast.AI**
-
-```bash
-cp .streamlit/config.toml.optimized .streamlit/config.toml
-```
-
-**Step 4: Run Streamlit application**
+**Step 3: Run Streamlit application**
 
 ```bash
 streamlit run run_app.py --server.port 8081 --server.address 0.0.0.0 --server.headless true
 ```
 
-**Step 5: Open new terminal and create tunnel**
+**Step 4: Open new terminal and create tunnel**
 
 In a new terminal window:
 
@@ -54,7 +48,7 @@ cloudflared tunnel --url http://localhost:8081 --protocol http2
 
 **Note**: If you encounter connection timeouts, the `--protocol http2` flag forces TCP instead of UDP/QUIC, which works better on most Vast.AI instances.
 
-**Step 6: Access your application**
+**Step 5: Access your application**
 
 - **Local access:** [http://localhost:8081]
 - **External access:** Use the tunnel URL provided by cloudflared
@@ -201,6 +195,10 @@ cp "shared/for vast ai/visualization_vast_ai.py" "streamlit_app/components/visua
 cp "shared/for vast ai/validation_components_vast_ai.py" "streamlit_app/components/validation_components.py"
 ```
 
+```bash
+cp "shared/for vast ai/config_vast_ai.py" "streamlit_app/core/config.py"
+```
+
 ---
 
 ## 8. Configure Streamlit for Vast.AI
@@ -219,21 +217,11 @@ cp .streamlit/config.toml.optimized .streamlit/config.toml
 - ✅ Sets maxMessageSize to 700 MB (supports Base64 encoding)
 - ✅ Optimizes WebSocket compression
 
-**Optional: Enable Base64 encoding for mobile uploads**
+**What the Vast.AI config.py does:**
 
-For better mobile camera upload reliability, edit `streamlit_app/core/config.py`:
-
-```bash
-nano streamlit_app/core/config.py
-```
-
-Change this line:
-
-```python
-'use_base64_preview': True,  # Change from False to True
-```
-
-This eliminates `MediaFileStorageError` and improves mobile upload consistency.
+- ✅ Enables Base64 encoding for mobile camera uploads (`use_base64_preview: True`)
+- ✅ Eliminates `MediaFileStorageError` on mobile devices
+- ✅ Improves mobile upload consistency through Cloudflare tunnel
 
 ---
 

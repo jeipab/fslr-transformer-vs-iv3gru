@@ -695,10 +695,30 @@ def set_page() -> None:
 
 def render_sidebar() -> Dict:
     """Render sidebar controls and return configuration dict."""
-    # Clean, elegant header
+    # Clean, elegant header with responsive sizing
     st.sidebar.markdown("""
-    <div style='text-align: left; padding: 0 0 0.75rem 0; border-bottom: 1px solid #4a5568; margin-bottom: 1rem; margin-top: -1rem;'>
-        <h1 style='color: #1f77b4; font-size: 2.5rem; font-weight: bold; margin: 0; line-height: 1.2;'>PANSINAYAN</h1>
+    <style>
+    .sidebar-header h1 {
+        color: #1f77b4;
+        font-size: clamp(1.5rem, 5vw, 2.5rem);
+        font-weight: bold;
+        margin: 0;
+        line-height: 1.2;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+    @media (max-width: 768px) {
+        .sidebar-header h1 {
+            font-size: 1.5rem;
+            white-space: normal;
+            word-break: keep-all;
+            overflow-wrap: normal;
+        }
+    }
+    </style>
+    <div class='sidebar-header' style='text-align: left; padding: 0 0 0.75rem 0; border-bottom: 1px solid #4a5568; margin-bottom: 1rem; margin-top: -1rem;'>
+        <h1>PANSINAYAN</h1>
         <p style='color: #a0aec0; font-size: 0.9rem; margin: 0.1rem 0 0 0; font-weight: 400;'>Where Every Sign Gets Attention</p>
     </div>
     """, unsafe_allow_html=True)
