@@ -42,8 +42,11 @@ streamlit run run_app.py --server.port 8081 --server.address 0.0.0.0 --server.he
 In a new terminal window:
 
 ```bash
-cloudflared tunnel --url http://localhost:8081
+# Recommended: Use HTTP/2 protocol (more reliable on Vast.AI)
+cloudflared tunnel --url http://localhost:8081 --protocol http2
 ```
+
+**Note**: If you encounter connection timeouts, the `--protocol http2` flag forces TCP instead of UDP/QUIC, which works better on most Vast.AI instances.
 
 **Step 5: Access your application**
 
@@ -205,8 +208,30 @@ streamlit run run_app.py --server.port 8081 --server.address 0.0.0.0 --server.he
 **In another terminal, create a tunnel for external access:**
 
 ```bash
+# Recommended: Use HTTP/2 protocol for better reliability
+cloudflared tunnel --url http://localhost:8081 --protocol http2
+```
+
+**Alternative (if HTTP/2 has issues):**
+
+```bash
+# Standard command (may fail with QUIC timeout errors)
 cloudflared tunnel --url http://localhost:8081
 ```
+
+**Troubleshooting Tunnel Connection:**
+
+If you see errors like `"failed to dial to edge with quic: timeout"`, use the HTTP/2 protocol:
+
+```bash
+cloudflared tunnel --url http://localhost:8081 --protocol http2
+```
+
+This works better on Vast.AI because:
+
+- ✅ Uses TCP instead of UDP/QUIC
+- ✅ More compatible with Vast.AI network setup
+- ✅ Bypasses UDP firewall restrictions
 
 **Test locally first:**
 
@@ -247,6 +272,74 @@ except Exception as e:
     print('IV3-GRU loading failed:', str(e))
 "
 ```
+
+---
+
+## 11. Troubleshooting
+
+### Cloudflare Tunnel Connection Issues
+
+**Problem**: Tunnel fails with errors like:
+
+```
+ERR Failed to dial a quic connection error="failed to dial to edge with quic: timeout"
+```
+
+**Solution**: Use HTTP/2 protocol instead of QUIC:
+
+```bash
+cloudflared tunnel --url http://localhost:8081 --protocol http2
+```
+
+**Why this works:**
+
+- Vast.AI instances may have UDP/QUIC blocked for security
+- HTTP/2 uses TCP, which is always allowed
+- Proven to work on most Vast.AI configurations
+
+**Additional options if needed:**
+
+```bash
+# More aggressive settings for difficult networks
+cloudflared tunnel --url http://localhost:8081 \
+  --protocol http2 \
+  --edge-ip-version 4 \
+  --no-autoupdate
+```
+
+### Verify Streamlit is Running
+
+Before troubleshooting the tunnel, verify Streamlit is accessible locally:
+
+```bash
+curl -I http://localhost:8081
+```
+
+You should see HTTP headers with status `200 OK`.
+
+### Check Network Connectivity
+
+```bash
+# Test basic connectivity to Cloudflare
+ping -c 3 cloudflare.com
+curl https://cloudflare.com
+
+# Both should work without errors
+```
+
+### Alternative: Direct IP Access
+
+If Cloudflare tunnel continues to fail, use Vast.AI's direct port access:
+
+1. Find your instance's public IP:
+
+   ```bash
+   curl ifconfig.me
+   ```
+
+2. Configure Vast.AI to expose port 8081 in your instance settings
+
+3. Access directly: `http://YOUR_PUBLIC_IP:8081`
 
 ---
 
