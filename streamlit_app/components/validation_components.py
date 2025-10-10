@@ -373,7 +373,7 @@ def render_confusion_matrices(results: Dict[str, Any]):
     
     # Gloss confusion matrix
     sns.heatmap(gloss_cm, annot=False, fmt='d', cmap='Blues', ax=axes[0])
-    axes[0].set_title('Gloss Classification Confusion Matrix')
+    axes[0].set_title('Gloss Recognition Confusion Matrix')
     axes[0].set_xlabel('Predicted Class')
     axes[0].set_ylabel('True Class')
     
@@ -449,9 +449,9 @@ def render_occlusion_analysis(results: Dict[str, Any]):
 
     columns = pd.MultiIndex.from_tuples([
         ('Without Occlusion', 'Gloss Recognition'),
-        ('Without Occlusion', 'Category Recognition'),
+        ('Without Occlusion', 'Category Classification'),
         ('With Occlusion', 'Gloss Recognition'),
-        ('With Occlusion', 'Category Recognition'),
+        ('With Occlusion', 'Category Classification'),
     ])
 
     perf_df = pd.DataFrame(table_values, index=metrics_index, columns=columns)
@@ -672,7 +672,7 @@ def render_detailed_predictions(results: Dict[str, Any]):
     st.markdown("#### TP/FP/TN/FN by Class")
     class_task_choice = st.selectbox(
         "Select task for per-class confusion counts",
-        ["Gloss Recognition", "Category Recognition"],
+        ["Gloss Recognition", "Category Classification"],
         key="class_confusion_toggle"
     )
 
