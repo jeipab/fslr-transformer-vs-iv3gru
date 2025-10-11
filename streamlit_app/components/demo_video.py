@@ -8,7 +8,7 @@ def show_demo_video():
     """Show the demo video in a native Streamlit dialog."""
     
     # Google Drive video ID
-    video_id = "1Y-c9S74wCY6wxCDcmHtnBUrFnAk2OShm"
+    video_id = "13-U3Km34fTtdmV0vIf4gD7zIQd8eQK1M"
     
     # Compact Google Drive video
     st.markdown(f"""
