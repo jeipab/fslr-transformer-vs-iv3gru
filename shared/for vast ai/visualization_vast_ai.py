@@ -1064,16 +1064,16 @@ def create_keypoint_animation_video(keypoints_2d: np.ndarray, mask: Optional[np.
                                 cv2.line(frame, 
                                        tuple(part_keypoints[start_conn]), 
                                        tuple(part_keypoints[end_conn]), 
-                                       (255, 255, 255), 3)  # Moderate white outline
+                                       (255, 255, 255), 2)  # Thinner white outline
                                 cv2.line(frame, 
                                        tuple(part_keypoints[start_conn]), 
                                        tuple(part_keypoints[end_conn]), 
-                                       colors[part_name], 2)  # Moderate colored line
+                                       colors[part_name], 1)  # Thinner colored line
                             else:
                                 cv2.line(frame, 
                                        tuple(part_keypoints[start_conn]), 
                                        tuple(part_keypoints[end_conn]), 
-                                       colors[part_name], 2)
+                                       colors[part_name], 1)  # Thinner line
                 
                 # Draw keypoints
                 for i, (point, is_valid) in enumerate(zip(part_keypoints, part_valid)):
@@ -1081,26 +1081,26 @@ def create_keypoint_animation_video(keypoints_2d: np.ndarray, mask: Optional[np.
                         # Use solid colors for all points
                         point_color = colors[part_name]
                         
-                        # Different sizes for different body parts
+                        # Smaller keypoints for compact video size
                         # Add white outline for better visibility on video backgrounds
                         if bg_type == "Original Video":
-                            # Moderately sized keypoints for original video background
+                            # Smaller keypoints for original video background
                             if part_name == "pose":
-                                cv2.circle(frame, tuple(point), 6, (255, 255, 255), -1)  # White outline
-                                cv2.circle(frame, tuple(point), 4, point_color, -1)  # Colored center
+                                cv2.circle(frame, tuple(point), 4, (255, 255, 255), -1)  # Smaller white outline
+                                cv2.circle(frame, tuple(point), 3, point_color, -1)  # Smaller colored center
                             elif part_name in ["left_hand", "right_hand"]:
-                                cv2.circle(frame, tuple(point), 5, (255, 255, 255), -1)  # White outline
-                                cv2.circle(frame, tuple(point), 3, point_color, -1)  # Colored center
+                                cv2.circle(frame, tuple(point), 3, (255, 255, 255), -1)  # Smaller white outline
+                                cv2.circle(frame, tuple(point), 2, point_color, -1)  # Smaller colored center
                             else:  # face
-                                cv2.circle(frame, tuple(point), 4, (255, 255, 255), -1)  # White outline
-                                cv2.circle(frame, tuple(point), 2, point_color, -1)  # Colored center
+                                cv2.circle(frame, tuple(point), 3, (255, 255, 255), -1)  # Smaller white outline
+                                cv2.circle(frame, tuple(point), 2, point_color, -1)  # Smaller colored center
                         else:
                             if part_name == "pose":
-                                cv2.circle(frame, tuple(point), 6, point_color, -1)
+                                cv2.circle(frame, tuple(point), 4, point_color, -1)  # Smaller
                             elif part_name in ["left_hand", "right_hand"]:
-                                cv2.circle(frame, tuple(point), 4, point_color, -1)
+                                cv2.circle(frame, tuple(point), 3, point_color, -1)  # Smaller
                             else:  # face
-                                cv2.circle(frame, tuple(point), 3, point_color, -1)
+                                cv2.circle(frame, tuple(point), 2, point_color, -1)  # Smaller
             
             # Add frame counter text
             frame_text = f"Frame {frame_idx + 1}/{len(keypoints_2d)}"
