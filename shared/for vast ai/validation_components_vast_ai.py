@@ -315,11 +315,11 @@ def render_per_class_analysis(results: Dict[str, Any]):
     
     with col1:
         st.markdown("#### Top Gloss Classes (by F1-Score)")
-        st.dataframe(gloss_df.head(10), use_container_width=True)
+        st.dataframe(gloss_df, use_container_width=True, height=400)
     
     with col2:
         st.markdown("#### Top Category Classes (by F1-Score)")
-        st.dataframe(cat_df.head(10), use_container_width=True)
+        st.dataframe(cat_df, use_container_width=True, height=400)
     
     # Performance distribution
     st.markdown("#### Performance Distribution")
