@@ -373,7 +373,7 @@ def render_confusion_matrices(results: Dict[str, Any]):
     
     # Gloss confusion matrix
     sns.heatmap(gloss_cm, annot=False, fmt='d', cmap='Blues', ax=axes[0])
-    axes[0].set_title('Gloss Classification Confusion Matrix')
+    axes[0].set_title('Gloss Recognition Confusion Matrix')
     axes[0].set_xlabel('Predicted Class')
     axes[0].set_ylabel('True Class')
     
@@ -449,9 +449,9 @@ def render_occlusion_analysis(results: Dict[str, Any]):
 
     columns = pd.MultiIndex.from_tuples([
         ('Without Occlusion', 'Gloss Recognition'),
-        ('Without Occlusion', 'Category Recognition'),
+        ('Without Occlusion', 'Category Classification'),
         ('With Occlusion', 'Gloss Recognition'),
-        ('With Occlusion', 'Category Recognition'),
+        ('With Occlusion', 'Category Classification'),
     ])
 
     perf_df = pd.DataFrame(table_values, index=metrics_index, columns=columns)
@@ -668,4 +668,50 @@ def render_detailed_predictions(results: Dict[str, Any]):
         height=400
     )
     
+    # Per-class TP/FP/TN/FN aggregated table with toggle
+    st.markdown("#### TP/FP/TN/FN by Class")
+    class_task_choice = st.selectbox(
+        "Select task for per-class confusion counts",
+        ["Gloss Recognition", "Category Classification"],
+        key="class_confusion_toggle"
+    )
+
+    # Collect class IDs present in predictions
+    if class_task_choice == "Gloss Recognition":
+        class_ids = sorted(set([int(p['gloss_gt']) for p in predictions] + [int(p['gloss_pred']) for p in predictions]))
+    else:
+        class_ids = sorted(set([int(p['cat_gt']) for p in predictions] + [int(p['cat_pred']) for p in predictions]))
+
+    total_n = len(predictions)
+    per_class_rows = []
+
+    for cid in class_ids:
+        if class_task_choice == "Gloss Recognition":
+            tp = sum(1 for p in predictions if p['gloss_pred'] == cid and p['gloss_gt'] == cid)
+            fp = sum(1 for p in predictions if p['gloss_pred'] == cid and p['gloss_gt'] != cid)
+            fn = sum(1 for p in predictions if p['gloss_pred'] != cid and p['gloss_gt'] == cid)
+            label = gloss_mapping.get(cid, f"Unknown ({cid})")
+        else:
+            tp = sum(1 for p in predictions if p['cat_pred'] == cid and p['cat_gt'] == cid)
+            fp = sum(1 for p in predictions if p['cat_pred'] == cid and p['cat_gt'] != cid)
+            fn = sum(1 for p in predictions if p['cat_pred'] != cid and p['cat_gt'] == cid)
+            label = category_mapping.get(cid, f"Unknown ({cid})")
+
+        tn = total_n - (tp + fp + fn)
+
+        per_class_rows.append({
+            'Class': f"{label} ({cid})",
+            'TP': tp,
+            'FP': fp,
+            'TN': tn,
+            'FN': fn,
+        })
+
+    per_class_df = pd.DataFrame(per_class_rows)
+    st.dataframe(
+        per_class_df,
+        use_container_width=True,
+        height=400
+    )
+
     # Note: Download button removed; users can download directly from the table UI.
