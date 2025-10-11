@@ -427,9 +427,10 @@ def render_keypoint_video(sequence: np.ndarray, mask: Optional[np.ndarray] = Non
     with col_download:
         if st.button("Generate Video", key=f"generate_video_{key_suffix}"):
             with st.spinner("Generating keypoint video..."):
+                # Use manual prefix to separate from automatic video generation
                 video_path = create_keypoint_animation_video(
                     keypoints_2d, mask, fps, width, height, 
-                    show_skeleton, bg_type, key_suffix
+                    show_skeleton, bg_type, f"manual_{key_suffix}"
                 )
                 
                 if video_path and os.path.exists(video_path):
@@ -463,8 +464,8 @@ def render_keypoint_video(sequence: np.ndarray, mask: Optional[np.ndarray] = Non
             with open(video_path, "rb") as video_file:
                 video_bytes = video_file.read()
             
-            # Create a container with dynamic sizing
-            video_container = st.container()
+            # Create a container with dynamic sizing and unique key to prevent ID conflicts
+            video_container = st.container(key=f"manual_video_container_{key_suffix}")
             with video_container:
                 st.video(video_bytes, format="video/mp4", autoplay=True, loop=True)
             
@@ -930,14 +931,21 @@ def create_keypoint_animation_video(keypoints_2d: np.ndarray, mask: Optional[np.
     original_video_frames = []
     
     # If we need original video dimensions, get them first
-    # Extract filename from key_suffix (format: filename_objectid)
+    # Extract filename from key_suffix, removing auto/manual prefix first
     if key_suffix:
+        # Remove prefix added for separation (manual_ or auto_)
+        clean_suffix = key_suffix
+        if key_suffix.startswith('manual_'):
+            clean_suffix = key_suffix[7:]  # Remove "manual_"
+        elif key_suffix.startswith('auto_'):
+            clean_suffix = key_suffix[5:]  # Remove "auto_"
+        
         # Split by underscore and take all parts except the last one (object id)
-        parts = key_suffix.split('_')
+        parts = clean_suffix.split('_')
         if len(parts) > 1:
             filename = '_'.join(parts[:-1])  # All parts except the last (object id)
         else:
-            filename = key_suffix
+            filename = clean_suffix
     else:
         filename = ""
     if bg_type == "Original Video" and filename in st.session_state.get('original_file_data', {}):
@@ -979,6 +987,10 @@ def create_keypoint_animation_video(keypoints_2d: np.ndarray, mask: Optional[np.
             st.warning(f"Could not load original video: {str(e)}. Using default background.")
             bg_type = "White"  # Fallback to white background
             width, height = 512, 512  # Default fallback
+    else:
+        # If original video not available or not needed, ensure we have valid dimensions
+        if width is None or height is None:
+            width, height = 360, 360  # Default dimensions for non-original backgrounds
     
     # Final validation - ensure we have valid dimensions
     if width is None or height is None or width <= 0 or height <= 0:

@@ -1140,7 +1140,10 @@ def render_video_preview(uploaded_file, use_base64: bool = False) -> None:
             # Consider this approach for smaller files or use external storage for large files
             if len(file_data) > 50 * 1024 * 1024:  # 50MB threshold
                 st.warning(f"⚠️ Large video file ({len(file_data)/(1024*1024):.1f} MB). Using standard preview.")
-                st.video(uploaded_file, format="video/mp4", start_time=0, autoplay=True, loop=True)
+                # Use keyed container to prevent ID conflicts
+                video_container = st.container(key=f"uploaded_video_large_container_{uploaded_file.name}")
+                with video_container:
+                    st.video(uploaded_file, format="video/mp4", start_time=0, autoplay=True, loop=True)
             else:
                 data_uri = encode_file_to_base64(file_data, mime_type)
                 st.markdown(f"""
@@ -1150,8 +1153,10 @@ def render_video_preview(uploaded_file, use_base64: bool = False) -> None:
                 </video>
                 """, unsafe_allow_html=True)
         else:
-            # Standard Streamlit video display
-            st.video(uploaded_file, format="video/mp4", start_time=0, autoplay=True, loop=True)
+            # Standard Streamlit video display in keyed container
+            video_container = st.container(key=f"uploaded_video_container_{uploaded_file.name}")
+            with video_container:
+                st.video(uploaded_file, format="video/mp4", start_time=0, autoplay=True, loop=True)
             
     except Exception as e:
         # Fallback: show file info if video preview fails
@@ -1326,9 +1331,8 @@ def render_inline_video_preview(npz_data: Dict, metadata: Dict, filename: str, k
     
     st.markdown("**Video Preview**")
     
-    # Determine background based on source type
-    source_type = metadata.get('source_type', 'original') if metadata else 'original'
-    bg_type = "Original Video" if source_type == 'video' else "Grid"
+    # Determine background - always use Grid for automatic generation
+    bg_type = "Grid"
     
     # Check if video already generated (cached)
     video_key = f"auto_preview_{filename}_{key_suffix}"
@@ -1349,15 +1353,15 @@ def render_inline_video_preview(npz_data: Dict, metadata: Dict, filename: str, k
                 keypoints_2d = X.reshape(time_steps, 78, 2)
                 mask = npz_data.get('mask', None)
                 
-                # Video settings
+                # Video settings - use fixed size and scale original video to fit
                 fps = 30
-                width, height = 360, 360 if bg_type != "Original Video" else (None, None)
+                width, height = 360, 360  # Fixed size for consistent output
                 show_skeleton = True
                 
-                # Generate video
+                # Generate video with auto prefix to separate from manual generation
                 video_path = create_keypoint_animation_video(
                     keypoints_2d, mask, fps, width, height,
-                    show_skeleton, bg_type, key_suffix
+                    show_skeleton, bg_type, f"auto_{filename}_{key_suffix}"
                 )
                 
                 if video_path and os.path.exists(video_path):
@@ -1377,7 +1381,9 @@ def render_inline_video_preview(npz_data: Dict, metadata: Dict, filename: str, k
                 with open(video_path, 'rb') as f:
                     video_bytes = f.read()
                 
-                # Compact video player with autoplay and loop
-                st.video(video_bytes, autoplay=True, loop=True)
+                # Compact video player with autoplay and loop in keyed container
+                video_container = st.container(key=f"auto_video_container_{filename}_{key_suffix}")
+                with video_container:
+                    st.video(video_bytes, autoplay=True, loop=True)
             except Exception as e:
                 st.error(f"Playback error: {str(e)}")
