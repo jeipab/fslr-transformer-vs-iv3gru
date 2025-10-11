@@ -1,6 +1,7 @@
 # Python
 __pycache__/
 *.pyc
+*.ipynb
 
 # Virtual Environments
 .venv/
