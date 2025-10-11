@@ -22,7 +22,7 @@ PANSINAYAN implements a 6-stage pipeline for Filipino Sign Language Recognition:
 
 ```
 ┌─────────────────────────────────────────────────────────────────────┐
-│                    PANSINAYAN PIPELINE FLOW                          │
+│                    PANSINAYAN PIPELINE FLOW                         │
 └─────────────────────────────────────────────────────────────────────┘
 
 Stage 1: UPLOAD & INPUT HANDLING
@@ -35,18 +35,18 @@ Stage 1: UPLOAD & INPUT HANDLING
              │
              ├─── NPZ Files ───────────────────────┐
              │                                     │
-             └─── Video Files                     │
+             └─── Video Files                      │
                      ↓                             │
-Stage 2: PREPROCESSING (Video → Features)         │
-┌──────────────────────────────────────┐          │
-│ • MediaPipe keypoint extraction      │          │
-│ • InceptionV3 feature extraction     │          │
-│ • Occlusion detection                │          │
-│ • Multi-process GPU acceleration     │          │
-│ • NPZ generation with metadata       │          │
-└────────────┬─────────────────────────┘          │
+Stage 2: PREPROCESSING (Video → Features)          │
+┌──────────────────────────────────────┐           │
+│ • MediaPipe keypoint extraction      │           │
+│ • InceptionV3 feature extraction     │           │
+│ • Occlusion detection                │           │
+│ • Multi-process GPU acceleration     │           │
+│ • NPZ generation with metadata       │           │
+└────────────┬─────────────────────────┘           │
              │                                     │
-             └────── NPZ Files ───────────────────┘
+             └────── NPZ Files ────────────────────┘
                         ↓
 Stage 3: DATA VALIDATION
 ┌──────────────────────────────────────┐
@@ -138,7 +138,7 @@ enableWebsocketCompression = true  # Better mobile performance
 # Core session state variables initialized on upload
 st.session_state = {
     # File lists
-    'uploaded_files': [],           # All uploaded files
+    'uploaded_files': [],          # All uploaded files
     'npz_files': [],               # NPZ files (ready for inference)
     'video_files': [],             # Video files (need preprocessing)
     'preprocessed_files': [],      # Preprocessed NPZ files
@@ -293,14 +293,14 @@ Video File (.mp4, .mov, .avi)
          ↓
 ┌────────────────────────────────┐
 │ 1. Video Loading & Frame       │
-│    Extraction (OpenCV)          │
-│    • Target FPS sampling        │
-│    • Frame resizing (256×256)   │
+│    Extraction (OpenCV)         │
+│    • Target FPS sampling       │
+│    • Frame resizing (256×256)  │
 └────────┬───────────────────────┘
          ↓
 ┌────────────────────────────────┐
 │ 2. Parallel Feature Extraction │
-│    (Multi-process/GPU)          │
+│    (Multi-process/GPU)         │
 └───┬─────────────────┬──────────┘
     │                 │
     ↓                 ↓
@@ -313,19 +313,19 @@ Video File (.mp4, .mov, .avi)
       └────────┬───────┘
                ↓
 ┌────────────────────────────────┐
-│ 3. Post-Processing              │
-│    • Gap interpolation (≤5)     │
-│    • Occlusion detection        │
-│    • Metadata generation        │
+│ 3. Post-Processing             │
+│    • Gap interpolation (≤5)    │
+│    • Occlusion detection       │
+│    • Metadata generation       │
 └────────┬───────────────────────┘
          ↓
 ┌────────────────────────────────┐
-│ 4. NPZ File Generation          │
-│    • X: [T, 156] keypoints      │
-│    • X2048: [T, 2048] features  │
-│    • mask: [T, 78] visibility   │
-│    • timestamps_ms: [T]         │
-│    • meta: JSON metadata        │
+│ 4. NPZ File Generation         │
+│    • X: [T, 156] keypoints     │
+│    • X2048: [T, 2048] features │
+│    • mask: [T, 78] visibility  │
+│    • timestamps_ms: [T]        │
+│    • meta: JSON metadata       │
 └────────────────────────────────┘
 ```
 

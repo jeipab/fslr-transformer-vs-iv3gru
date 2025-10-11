@@ -4,34 +4,34 @@
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────────────┐
-│                    PANSINAYAN COMPLETE PIPELINE AT A GLANCE                          │
+│                    PANSINAYAN COMPLETE PIPELINE AT A GLANCE                         │
 └─────────────────────────────────────────────────────────────────────────────────────┘
 
 ┌──────────────────────────────────────────────────────────────────────────────────────┐
 │ STAGE 1: UPLOAD & INPUT HANDLING                                                     │
 ├──────────────────────────────────────────────────────────────────────────────────────┤
-│ Controller: streamlit_app/manager/upload_manager.py                                 │
-│ Functions: initialize_upload_session_state(), render_upload_stage()                 │
+│ Controller: streamlit_app/manager/upload_manager.py                                  │
+│ Functions: initialize_upload_session_state(), render_upload_stage()                  │
 ├──────────────────────────────────────────────────────────────────────────────────────┤
-│ Inputs:  • NPZ files (.npz) → Direct to Stage 4                                     │
-│          • Video files (.mp4, .mov, .avi) → Continue to Stage 2                     │
+│ Inputs:  • NPZ files (.npz) → Direct to Stage 4                                      │
+│          • Video files (.mp4, .mov, .avi) → Continue to Stage 2                      │
 │          • Demo files (data/demo/) → Direct to Stage 4                               │
 │ Config:  • Max files: 10                                                             │
 │          • Max size: 500MB (.streamlit/config.toml)                                  │
-│ Output:  • st.session_state.npz_files or st.session_state.video_files              │
+│ Output:  • st.session_state.npz_files or st.session_state.video_files                │
 │          • workflow_stage = 'preprocessing' or 'predictions'                         │
 └──────────────────────────────────────────────────────────────────────────────────────┘
                                          ↓
 ┌──────────────────────────────────────────────────────────────────────────────────────┐
-│ STAGE 2: PREPROCESSING (Video → Features)                                           │
+│ STAGE 2: PREPROCESSING (Video → Features)                                            │
 ├──────────────────────────────────────────────────────────────────────────────────────┤
-│ Controller: streamlit_app/manager/preprocessing_manager.py                          │
-│ Processor: preprocessing/core/preprocess.py → process_videos_multiprocess()         │
+│ Controller: streamlit_app/manager/preprocessing_manager.py                           │
+│ Processor: preprocessing/core/preprocess.py → process_videos_multiprocess()          │
 ├──────────────────────────────────────────────────────────────────────────────────────┤
 │ Feature Extractors:                                                                  │
 │   1. MediaPipe Keypoints (156-D)                                                     │
 │      • File: preprocessing/extractors/keypoints_features.py                          │
-│      • Components: Pose (25) + Hands (42) + Face (11) = 78 keypoints × 2 coords     │
+│      • Components: Pose (25) + Hands (42) + Face (11) = 78 keypoints × 2 coords      │
 │      • Output: X [T, 156]                                                            │
 │                                                                                      │
 │   2. InceptionV3 Features (2048-D)                                                   │
@@ -42,102 +42,102 @@
 │   3. Occlusion Detection                                                             │
 │      • File: preprocessing/core/occlusion_detection.py                               │
 │      • Frame-level: <60% keypoints visible                                           │
-│      • Clip-level: ≥40% frames OR ≥15 consecutive frames occluded                   │
-│      • Output: occluded_flag (0 or 1)                                               │
+│      • Clip-level: ≥40% frames OR ≥15 consecutive frames occluded                    │
+│      • Output: occluded_flag (0 or 1)                                                │
 ├──────────────────────────────────────────────────────────────────────────────────────┤
 │ Processing Options (config.py):                                                      │
-│   • target_fps: 30 (frame sampling rate)                                            │
-│   • out_size: 256 (frame resize dimension)                                          │
-│   • write_keypoints: True (extract MediaPipe)                                       │
-│   • write_iv3_features: True (extract InceptionV3)                                  │
-│   • occ_detailed: False (detailed metrics)                                          │
+│   • target_fps: 30 (frame sampling rate)                                             │
+│   • out_size: 256 (frame resize dimension)                                           │
+│   • write_keypoints: True (extract MediaPipe)                                        │ 
+│   • write_iv3_features: True (extract InceptionV3)                                   │
+│   • occ_detailed: False (detailed metrics)                                           │
 ├──────────────────────────────────────────────────────────────────────────────────────┤
 │ Performance Optimizations:                                                           │
 │   • Dynamic resource detection (CPU/GPU/RAM)                                         │
 │   • Optimal worker calculation                                                       │
-│   • GPU acceleration (10-100x speedup)                                              │
-│   • Multi-processing (30-50x speedup)                                               │
+│   • GPU acceleration (10-100x speedup)                                               │
+│   • Multi-processing (30-50x speedup)                                                │
 ├──────────────────────────────────────────────────────────────────────────────────────┤
 │ Output NPZ Structure:                                                                │
-│   • X: [T, 156] keypoints                                                           │
-│   • X2048: [T, 2048] features                                                       │
-│   • mask: [T, 78] visibility                                                        │
-│   • timestamps_ms: [T] frame timestamps                                             │
-│   • meta: JSON {fps, size, model_type, occluded_flag, ...}                         │
+│   • X: [T, 156] keypoints                                                            │
+│   • X2048: [T, 2048] features                                                        │
+│   • mask: [T, 78] visibility                                                         │
+│   • timestamps_ms: [T] frame timestamps                                              │
+│   • meta: JSON {fps, size, model_type, occluded_flag, ...}                           │
 └──────────────────────────────────────────────────────────────────────────────────────┘
                                          ↓
 ┌──────────────────────────────────────────────────────────────────────────────────────┐
-│ STAGE 3: DATA VALIDATION                                                            │
+│ STAGE 3: DATA VALIDATION                                                             │
 ├──────────────────────────────────────────────────────────────────────────────────────┤
-│ Validators: preprocessing/utils/validate_npz.py, components/utils.py                │
+│ Validators: preprocessing/utils/validate_npz.py, components/utils.py                 │
 ├──────────────────────────────────────────────────────────────────────────────────────┤
 │ Validation Layers:                                                                   │
-│   1. File Structure: NPZ loadable, required keys present                            │
-│   2. Shape Validation: Correct dimensions [T,156] / [T,2048]                        │
-│   3. Content Validation: No NaN/Inf, normalized ranges                              │
-│   4. Model Compatibility: Transformer needs X or X2048, IV3-GRU needs X2048         │
-│   5. Metadata Validation: model_type, occluded_flag valid                           │
+│   1. File Structure: NPZ loadable, required keys present                             │
+│   2. Shape Validation: Correct dimensions [T,156] / [T,2048]                         │
+│   3. Content Validation: No NaN/Inf, normalized ranges                               │
+│   4. Model Compatibility: Transformer needs X or X2048, IV3-GRU needs X2048          │
+│   5. Metadata Validation: model_type, occluded_flag valid                            │
 ├──────────────────────────────────────────────────────────────────────────────────────┤
 │ Compatibility Matrix:                                                                │
-│   NPZ Content      │ Transformer │ IV3-GRU │                                        │
-│   ────────────────────────────────────────                                          │
-│   X (156-D)        │     ✓       │    ✗    │                                        │
-│   X2048 (2048-D)   │     ✓       │    ✓    │                                        │
-│   X + X2048        │  ✓ (2204-D) │    ✓    │                                        │
+│   NPZ Content      │ Transformer │ IV3-GRU │                                         │
+│   ────────────────────────────────────────                                           │
+│   X (156-D)        │     ✓       │    ✗    │                                         │
+│   X2048 (2048-D)   │     ✓       │    ✓    │                                         │
+│   X + X2048        │  ✓ (2204-D) │    ✓    │                                         │
 ├──────────────────────────────────────────────────────────────────────────────────────┤
-│ Output: Compatibility dict stored in st.session_state.file_metadata                 │
+│ Output: Compatibility dict stored in st.session_state.file_metadata                  │
 └──────────────────────────────────────────────────────────────────────────────────────┘
                                          ↓
 ┌──────────────────────────────────────────────────────────────────────────────────────┐
-│ STAGE 4: PREDICTION & INFERENCE                                                     │
+│ STAGE 4: PREDICTION & INFERENCE                                                      │
 ├──────────────────────────────────────────────────────────────────────────────────────┤
-│ Controller: streamlit_app/manager/prediction_manager.py                             │
-│ Engine: evaluation/prediction/predict.py → ModelPredictor                           │
-│ Models: models/transformer.py, models/iv3_gru.py                                    │
+│ Controller: streamlit_app/manager/prediction_manager.py                              │
+│ Engine: evaluation/prediction/predict.py → ModelPredictor                            │
+│ Models: models/transformer.py, models/iv3_gru.py                                     │
 ├──────────────────────────────────────────────────────────────────────────────────────┤
-│ Model Loading (Singleton Pattern):                                                  │
-│   ModelManager → get_model() → ModelPredictor                                       │
-│   • First load: ~5-10s (checkpoint loading)                                         │
-│   • Cached: ~100-500ms (inference only)                                             │
-│   • Memory: Single instance per model                                               │
+│ Model Loading (Singleton Pattern):                                                   │
+│   ModelManager → get_model() → ModelPredictor                                        │
+│   • First load: ~5-10s (checkpoint loading)                                          │
+│   • Cached: ~100-500ms (inference only)                                              │
+│   • Memory: Single instance per model                                                │
 ├──────────────────────────────────────────────────────────────────────────────────────┤
 │ SignTransformer Architecture:                                                        │
-│   Input: [B, T, 156/2048/2204] → Embedding [B,T,256] → Positional Encoding        │
-│   → Transformer Layers (4 layers, 8 heads) → Pooling [B,256]                       │
-│   → Dual Heads: Gloss[105] + Category[10]                                          │
-│   Checkpoint: trained_models/transformer/optimal/SignTransformer_best.pt            │
+│   Input: [B, T, 156/2048/2204] → Embedding [B,T,256] → Positional Encoding           │
+│   → Transformer Layers (4 layers, 8 heads) → Pooling [B,256]                         │
+│   → Dual Heads: Gloss[105] + Category[10]                                            │
+│   Checkpoint: trained_models/transformer/optimal/SignTransformer_best.pt             │
 ├──────────────────────────────────────────────────────────────────────────────────────┤
 │ InceptionV3-GRU Architecture:                                                        │
-│   Input: [B, T, 2048] → GRU1 (hidden=16) → Dropout                                 │
-│   → GRU2 (hidden=12) → Dropout → Final Hidden [B,12]                               │
-│   → Dual Heads: Gloss[105] + Category[10]                                          │
-│   Checkpoint: trained_models/iv3_gru/optimal/InceptionV3GRU_best.pt                │
+│   Input: [B, T, 2048] → GRU1 (hidden=16) → Dropout                                   │
+│   → GRU2 (hidden=12) → Dropout → Final Hidden [B,12]                                 │
+│   → Dual Heads: Gloss[105] + Category[10]                                            │
+│   Checkpoint: trained_models/iv3_gru/optimal/InceptionV3GRU_best.pt                  │
 ├──────────────────────────────────────────────────────────────────────────────────────┤
 │ Prediction Workflow:                                                                 │
-│   1. get_model() → Load/retrieve cached model                                       │
+│   1. get_model() → Load/retrieve cached model                                        │
 │   2. Load NPZ data                                                                   │
-│   3. Extract appropriate features (156-D / 2048-D / 2204-D)                         │
+│   3. Extract appropriate features (156-D / 2048-D / 2204-D)                          │
 │   4. Forward pass through model                                                      │
-│   5. Softmax → Get top-K predictions                                                │
+│   5. Softmax → Get top-K predictions                                                 │
 │   6. Label mapping → Human-readable results                                          │
 ├──────────────────────────────────────────────────────────────────────────────────────┤
 │ Prediction Output:                                                                   │
-│   • gloss_prediction: int (0-104)                                                   │
-│   • gloss_probability: float (confidence)                                           │
-│   • category_prediction: int (0-9)                                                  │
-│   • category_probability: float (confidence)                                        │
-│   • gloss_top5: [(id, prob), ...]                                                  │
-│   • category_top3: [(id, prob), ...]                                               │
+│   • gloss_prediction: int (0-104)                                                    │
+│   • gloss_probability: float (confidence)                                            │
+│   • category_prediction: int (0-9)                                                   │
+│   • category_probability: float (confidence)                                         │
+│   • gloss_top5: [(id, prob), ...]                                                    │
+│   • category_top3: [(id, prob), ...]                                                 │
 ├──────────────────────────────────────────────────────────────────────────────────────┤
 │ Label Categories (10):                                                               │
-│   0: GREETING  │  1: SURVIVAL  │  2: NUMBER  │  3: CALENDAR  │  4: DAYS           │
-│   5: FAMILY    │  6: RELATIONSHIPS  │  7: COLOR  │  8: FOOD   │  9: DRINK          │
+│   0: GREETING  │  1: SURVIVAL  │  2: NUMBER  │  3: CALENDAR  │  4: DAYS              │
+│   5: FAMILY    │  6: RELATIONSHIPS  │  7: COLOR  │  8: FOOD   │  9: DRINK            │
 └──────────────────────────────────────────────────────────────────────────────────────┘
                                          ↓
 ┌──────────────────────────────────────────────────────────────────────────────────────┐
-│ STAGE 5: RESULTS & VISUALIZATION                                                    │
+│ STAGE 5: RESULTS & VISUALIZATION                                                     │
 ├──────────────────────────────────────────────────────────────────────────────────────┤
-│ Components: streamlit_app/components/visualization.py, components.py                │
+│ Components: streamlit_app/components/visualization.py, components.py                 │
 ├──────────────────────────────────────────────────────────────────────────────────────┤
 │ Visualization Features:                                                              │
 │                                                                                      │
@@ -197,12 +197,12 @@
             Continue Using Tool              Model Validation (Optional)
                                                       ↓
 ┌──────────────────────────────────────────────────────────────────────────────────────┐
-│ STAGE 6: MODEL VALIDATION & EVALUATION                                              │
+│ STAGE 6: MODEL VALIDATION & EVALUATION                                               │
 ├──────────────────────────────────────────────────────────────────────────────────────┤
-│ Controller: streamlit_app/core/main.py → render_validation_stage()                  │
-│ Manager: streamlit_app/manager/validation_manager.py                                │
-│ Engine: evaluation/validation/validate.py → ModelValidator                          │
-│ UI: streamlit_app/components/validation_components.py                               │
+│ Controller: streamlit_app/core/main.py → render_validation_stage()                   │
+│ Manager: streamlit_app/manager/validation_manager.py                                 │
+│ Engine: evaluation/validation/validate.py → ModelValidator                           │
+│ UI: streamlit_app/components/validation_components.py                                │
 ├──────────────────────────────────────────────────────────────────────────────────────┤
 │ Validation Setup:                                                                    │
 │   • Model selection: Transformer or IV3-GRU                                          │
@@ -212,8 +212,8 @@
 │   • Device: Auto (CUDA if available) or CPU                                          │
 ├──────────────────────────────────────────────────────────────────────────────────────┤
 │ Validation Process:                                                                  │
-│   1. Load ValidationDataset (filter existing files)                                 │
-│   2. Load ModelValidator (model + checkpoint)                                       │
+│   1. Load ValidationDataset (filter existing files)                                  │
+│   2. Load ModelValidator (model + checkpoint)                                        │
 │   3. Batch inference with progress tracking                                          │
 │   4. Collect predictions + ground truth                                              │
 │   5. Compute comprehensive metrics                                                   │
@@ -222,8 +222,8 @@
 │ Metrics Computed:                                                                    │
 │                                                                                      │
 │   1. Overall Metrics                                                                 │
-│      • Gloss: Accuracy, Precision, Recall, F1-score                                 │
-│      • Category: Accuracy, Precision, Recall, F1-score                              │
+│      • Gloss: Accuracy, Precision, Recall, F1-score                                  │
+│      • Category: Accuracy, Precision, Recall, F1-score                               │
 │      • Sample count                                                                  │
 │                                                                                      │
 │   2. Occlusion-Based Metrics                                                         │
@@ -232,8 +232,8 @@
 │      • Performance comparison                                                        │
 │                                                                                      │
 │   3. Per-Class Metrics                                                               │
-│      • Precision/Recall/F1 per gloss (105 classes)                                  │
-│      • Precision/Recall/F1 per category (10 classes)                                │
+│      • Precision/Recall/F1 per gloss (105 classes)                                   │
+│      • Precision/Recall/F1 per category (10 classes)                                 │
 │      • Support counts                                                                │
 │      • Identify difficult classes                                                    │
 │                                                                                      │
@@ -262,7 +262,7 @@
 
 ```
 ┌─────────────────────────────────────────────────────────────────────┐
-│                      SESSION STATE LIFECYCLE                         │
+│                      SESSION STATE LIFECYCLE                        │
 └─────────────────────────────────────────────────────────────────────┘
 
 INITIALIZATION (upload_manager.initialize_upload_session_state)
@@ -280,7 +280,7 @@ INITIALIZATION (upload_manager.initialize_upload_session_state)
 │   workflow_stage: 'upload', # Current stage                         │
 │   current_tab: None,        # Selected file                         │
 │   validation_results: None  # Validation output                     │
-│ }                                                                    │
+│ }                                                                   │
 └─────────────────────────────────────────────────────────────────────┘
     ↓
 ┌─────────────────────────────────────────────────────────────────────┐
@@ -292,11 +292,11 @@ INITIALIZATION (upload_manager.initialize_upload_session_state)
 └─────────────────────────────────────────────────────────────────────┘
     ↓
 ┌─────────────────────────────────────────────────────────────────────┐
-│ PREPROCESSING STAGE (if videos)                                    │
+│ PREPROCESSING STAGE (if videos)                                     │
 │ • file_status[filename] = 'processing' → 'completed'/'error'        │
 │ • processed_data[filename] = npz_data                               │
 │ • file_metadata[filename] = {compatibility, frame_count, ...}       │
-│ • original_file_data[filename] = {name, data, type, size}          │
+│ • original_file_data[filename] = {name, data, type, size}           │
 │ • Move from video_files to preprocessed_files                       │
 └─────────────────────────────────────────────────────────────────────┘
     ↓
@@ -361,8 +361,8 @@ INITIALIZATION (upload_manager.initialize_upload_session_state)
            │                        │
            │ "Back" button          │ "Reset All" button
            ↓                        │
-    ┌─────────────┐                │
-    │  UPLOAD or  │────────────────┘
+    ┌─────────────┐                 │
+    │  UPLOAD or  │─────────────────┘
     │PREPROCESSING│
     └──────┬──────┘
            │

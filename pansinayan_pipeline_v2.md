@@ -1102,7 +1102,7 @@ def render_download_results(results):
 
 ```
 ┌─────────────────────────────────────────────────────────────────────┐
-│                         DATA FLOW                                    │
+│                         DATA FLOW                                   │
 └─────────────────────────────────────────────────────────────────────┘
 
 USER INTERACTION
@@ -1113,18 +1113,18 @@ USER INTERACTION
          │
          ↓
 ┌─────────────────────────────────────────────────────────────────────┐
-│ FILE ROUTING                                                         │
+│ FILE ROUTING                                                        │
 ├─────────────────────────────────────────────────────────────────────┤
-│ detect_file_type(file) → 'npz' or 'video'                          │
-│                                                                      │
+│ detect_file_type(file) → 'npz' or 'video'                           │
+│                                                                     │
 │ IF npz:                        IF video:                            │
-│   → st.session_state.npz_files    → st.session_state.video_files   │
+│   → st.session_state.npz_files    → st.session_state.video_files    │
 │   → workflow_stage='predictions'  → workflow_stage='preprocessing'  │
-└────────┬────────────────────────────────────┬─────────────────────┘
+└────────┬────────────────────────────────────┬───────────────────────┘
          │                                    │
          │                                    ↓
          │                           ┌──────────────────────┐
-         │                           │ PREPROCESSING         │
+         │                           │ PREPROCESSING        │
          │                           ├──────────────────────┤
          │                           │ save_to_temp()       │
          │                           │ ↓                    │
@@ -1154,13 +1154,13 @@ USER INTERACTION
                           │ meta: JSON      │
                           └────────┬────────┘
                                    ↓
-                          ┌─────────────────┐
+                          ┌──────────────────┐
                           │ VALIDATION       │
-                          ├─────────────────┤
+                          ├──────────────────┤
                           │ validate_shapes()│
-                          │ validate_content│
-                          │ check_compat()  │
-                          └────────┬────────┘
+                          │ validate_content │
+                          │ check_compat()   │
+                          └────────┬─────────┘
                                    ↓
                     ┌──────────────┴──────────────┐
                     │ SESSION STATE STORAGE       │
@@ -1170,9 +1170,9 @@ USER INTERACTION
                     │ file_status[filename]       │
                     └──────────────┬──────────────┘
                                    ↓
-                          ┌─────────────────┐
+                          ┌──────────────────┐
                           │ PREDICTION       │
-                          ├─────────────────┤
+                          ├──────────────────┤
                           │ ModelManager     │
                           │ ↓                │
                           │ get_model()      │
@@ -1181,43 +1181,43 @@ USER INTERACTION
                           │ ↓                │
                           │ load_checkpoint()│
                           │ ↓                │
-                          │ predict_from_npz│
+                          │ predict_from_npz │
                           │ ↓                │
                           │ forward_pass()   │
                           │ ↓                │
                           │ softmax()        │
                           │ ↓                │
                           │ get_top_k()      │
-                          └────────┬────────┘
+                          └────────┬─────────┘
                                    ↓
-                          ┌─────────────────┐
+                          ┌──────────────────┐
                           │ LABEL MAPPING    │
-                          ├─────────────────┤
+                          ├──────────────────┤
                           │ load_mappings()  │
                           │ format_results() │
-                          └────────┬────────┘
+                          └────────┬─────────┘
                                    ↓
-                          ┌─────────────────┐
+                          ┌──────────────────┐
                           │ RESULTS          │
-                          ├─────────────────┤
+                          ├──────────────────┤
                           │ gloss_prediction │
                           │ category_pred    │
                           │ top-5 glosses    │
                           │ top-3 categories │
                           │ confidence scores│
-                          └────────┬────────┘
+                          └────────┬─────────┘
                                    ↓
                     ┌──────────────┴──────────────┐
                     │                             │
                     ↓                             ↓
-         ┌──────────────────┐         ┌──────────────────┐
-         │ VISUALIZATION     │         │ EXPORT           │
-         ├──────────────────┤         ├──────────────────┤
-         │ skeleton_animation│         │ JSON results     │
-         │ trajectory_plots  │         │ CSV summaries    │
-         │ heatmaps          │         │ ZIP archives     │
+         ┌───────────────────┐         ┌───────────────────┐
+         │ VISUALIZATION     │         │ EXPORT            │
+         ├───────────────────┤         ├───────────────────┤
+         │ skeleton_animation│         │ JSON results      │
+         │ trajectory_plots  │         │ CSV summaries     │
+         │ heatmaps          │         │ ZIP archives      │
          │ statistics        │         │ confusion_matrices│
-         └──────────────────┘         └──────────────────┘
+         └───────────────────┘         └───────────────────┘
 ```
 
 ### Session State Data Flow
@@ -1242,66 +1242,66 @@ INITIALIZATION (upload_manager.initialize_upload_session_state)
 UPLOAD STAGE
     ↓
 ┌─────────────────────────────────────────────────────────┐
-│ uploaded_files = [file1, file2, ...]                   │
-│ npz_files = [npz1, npz2, ...]                          │
-│ video_files = [vid1, vid2, ...]                        │
+│ uploaded_files = [file1, file2, ...]                    │
+│ npz_files = [npz1, npz2, ...]                           │
+│ video_files = [vid1, vid2, ...]                         │
 │ file_status = {                                         │
-│   'file1.npz': 'pending',                              │
-│   'video1.mp4': 'pending'                              │
+│   'file1.npz': 'pending',                               │
+│   'video1.mp4': 'pending'                               │
 │ }                                                       │
-│ workflow_stage = 'preprocessing' or 'predictions'      │
+│ workflow_stage = 'preprocessing' or 'predictions'       │
 └─────────────────────────────────────────────────────────┘
     ↓
 PREPROCESSING STAGE (if videos)
     ↓
 ┌─────────────────────────────────────────────────────────┐
 │ file_status = {                                         │
-│   'video1.mp4': 'processing'  → 'completed'            │
+│   'video1.mp4': 'processing'  → 'completed'             │
 │ }                                                       │
 │ processed_data = {                                      │
-│   'video1.mp4': {X, X2048, mask, timestamps, meta}     │
+│   'video1.mp4': {X, X2048, mask, timestamps, meta}      │
 │ }                                                       │
 │ file_metadata = {                                       │
 │   'video1.mp4': {                                       │
 │     'compatibility': {transformer: True, iv3_gru: True},│
-│     'frame_count': 150,                                │
-│     'source_type': 'video'                             │
+│     'frame_count': 150,                                 │
+│     'source_type': 'video'                              │
 │   }                                                     │
 │ }                                                       │
 │ original_file_data = {                                  │
-│   'video1.mp4': {name, data, type, size}              │
+│   'video1.mp4': {name, data, type, size}                │
 │ }                                                       │
-│ preprocessed_files = [TempUploadedFile('video1.mp4')]  │
-│ video_files = []  (moved to preprocessed)              │
+│ preprocessed_files = [TempUploadedFile('video1.mp4')]   │
+│ video_files = []  (moved to preprocessed)               │
 └─────────────────────────────────────────────────────────┘
     ↓
 PREDICTIONS STAGE
     ↓
 ┌─────────────────────────────────────────────────────────┐
-│ All NPZ files (npz_files + preprocessed_files)         │
+│ All NPZ files (npz_files + preprocessed_files)          │
 │ file_status = {                                         │
-│   'file1.npz': 'completed',                            │
-│   'video1.mp4': 'completed'                            │
+│   'file1.npz': 'completed',                             │
+│   'video1.mp4': 'completed'                             │
 │ }                                                       │
 │ processed_data = {                                      │
-│   'file1.npz': npz_data,                               │
-│   'video1.mp4': npz_data                               │
+│   'file1.npz': npz_data,                                │
+│   'video1.mp4': npz_data                                │
 │ }                                                       │
-│ current_tab = 'file1.npz'  (selected for viewing)     │
-│ file_selector = 'file1.npz' (dropdown selection)       │
-│ current_file_page = 1  (pagination)                    │
+│ current_tab = 'file1.npz'  (selected for viewing)       │
+│ file_selector = 'file1.npz' (dropdown selection)        │
+│ current_file_page = 1  (pagination)                     │
 └─────────────────────────────────────────────────────────┘
     ↓
 VALIDATION STAGE (optional)
     ↓
 ┌─────────────────────────────────────────────────────────┐
 │ validation_results = {                                  │
-│   'overall_results': {...},                            │
-│   'occluded_results': {...},                           │
-│   'non_occluded_results': {...},                       │
-│   'per_class_results': {...},                          │
-│   'confusion_matrices': {...},                         │
-│   'detailed_predictions': [...]                        │
+│   'overall_results': {...},                             │
+│   'occluded_results': {...},                            │
+│   'non_occluded_results': {...},                        │
+│   'per_class_results': {...},                           │
+│   'confusion_matrices': {...},                          │
+│   'detailed_predictions': [...]                         │
 │ }                                                       │
 └─────────────────────────────────────────────────────────┘
 ```
@@ -1416,40 +1416,40 @@ st.session_state.file_status[filename] = 'pending'
 ┌─────────────────────────────────────────────────────────┐
 │ ERROR DETECTION CHECKPOINTS                             │
 ├─────────────────────────────────────────────────────────┤
-│                                                          │
+│                                                         │
 │ 1. UPLOAD STAGE                                         │
 │    • File size > 500MB                                  │
 │    • Unsupported format                                 │
 │    • Too many files (>10)                               │
 │    • Corrupted upload                                   │
-│                                                          │
+│                                                         │
 │ 2. PREPROCESSING STAGE                                  │
 │    • Video codec unsupported                            │
 │    • Frame extraction failure                           │
 │    • MediaPipe initialization error                     │
 │    • InceptionV3 CUDA OOM                               │
 │    • NPZ write failure (disk full)                      │
-│                                                          │
+│                                                         │
 │ 3. VALIDATION STAGE                                     │
 │    • NPZ structure invalid                              │
 │    • Shape mismatch                                     │
 │    • NaN/Inf values detected                            │
 │    • Incompatible with model                            │
 │    • Metadata parsing error                             │
-│                                                          │
+│                                                         │
 │ 4. PREDICTION STAGE                                     │
 │    • Model loading failure                              │
 │    • Checkpoint not found                               │
 │    • State dict mismatch                                │
 │    • CUDA OOM during inference                          │
 │    • Feature extraction error                           │
-│                                                          │
+│                                                         │
 │ 5. VALIDATION EVALUATION STAGE                          │
 │    • Labels CSV not found                               │
 │    • File-label mismatch                                │
 │    • Batch processing error                             │
 │    • Metrics computation failure                        │
-│                                                          │
+│                                                         │
 └─────────────────────────────────────────────────────────┘
 ```
 
