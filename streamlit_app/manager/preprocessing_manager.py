@@ -93,7 +93,7 @@ def render_preprocessing_stage():
             button_disabled = True
             button_help = "No files available for inference - complete preprocessing or upload NPZ files"
         
-        if st.button("Inference →", type="primary", help=button_help, disabled=button_disabled):
+        if st.button("Go to Inference →", type="primary", help=button_help, disabled=button_disabled):
             st.session_state.workflow_stage = 'predictions'
             st.rerun()
     
