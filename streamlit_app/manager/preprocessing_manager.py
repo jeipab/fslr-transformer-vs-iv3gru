@@ -35,6 +35,17 @@ def get_all_files_to_show():
 
 def render_preprocessing_stage():
     """Render the preprocessing stage with video files and preprocessing controls."""
+    # Add CSS to prevent button text wrapping
+    st.markdown("""
+    <style>
+    .stButton > button {
+        white-space: nowrap !important;
+        overflow: hidden !important;
+        text-overflow: ellipsis !important;
+    }
+    </style>
+    """, unsafe_allow_html=True)
+    
     # Navigation header
     col1, col2, col3, col4 = st.columns([2, 6, 1, 1])
     with col1:
@@ -82,7 +93,7 @@ def render_preprocessing_stage():
             button_disabled = True
             button_help = "No files available for inference - complete preprocessing or upload NPZ files"
         
-        if st.button("Go to Inference→", type="primary", help=button_help, disabled=button_disabled):
+        if st.button("Inference →", type="primary", help=button_help, disabled=button_disabled):
             st.session_state.workflow_stage = 'predictions'
             st.rerun()
     
