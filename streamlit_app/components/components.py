@@ -717,24 +717,87 @@ def render_sidebar() -> Dict:
         }
     }
     </style>
-    <div class='sidebar-header' style='text-align: left; padding: 0 0 0.75rem 0; border-bottom: 1px solid #4a5568; margin-bottom: 1rem; margin-top: -1rem;'>
+    <div class='sidebar-header' style='text-align: left; padding: 0 0 0.5rem 0; border-bottom: 1px solid #4a5568; margin-bottom: 0.5rem; margin-top: -1rem;'>
         <h1>PANSINAYAN</h1>
         <p style='color: #a0aec0; font-size: 0.9rem; margin: 0.1rem 0 0 0; font-weight: 400;'>Where Every Sign Gets Attention</p>
     </div>
     """, unsafe_allow_html=True)
     
+    # About Section
+    st.sidebar.markdown("""
+    <div style='margin-bottom: 0;'>
+        <h3 style='color: #e2e8f0; margin: 0; font-size: 1.1rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px;'>About</h3>
+    </div>
+    """, unsafe_allow_html=True)
+    
+    # About the Tool (Expandable)
+    with st.sidebar.expander("About the Tool", expanded=False):
+        st.markdown("""
+        **PANSINAYAN** is a Multi-Head Attention Transformer for recognizing Filipino Sign Language (FSL).
+        
+        ### What This Demo Does:
+        
+        **Video Processing**
+        - Upload FSL videos or use pre-processed keypoint data
+        - Automatic extraction of hand, face, and body landmarks
+        - Converts videos to structured numerical features
+        
+        **Data Analysis**
+        - Real-time validation of input data quality
+        - Interactive visualization of keypoints over time
+        - Frame-by-frame feature analysis with charts
+        
+        **AI Recognition**
+        - Predicts 1 of 105 Filipino Sign Language glosses
+        - Detects occlusion (when hands/face are blocked)
+        - Compare two architectures: **Transformer** vs **InceptionV3+GRU**
+        
+        **Model Comparison**
+        - Side-by-side prediction results
+        - Confidence scores and top-5 predictions
+        - Performance insights on occluded signs
+        """)
+    
+    # About the Name (Expandable)
+    with st.sidebar.expander("About the Name", expanded=False):
+        st.markdown("""
+        **PANSINAYAN** is a Filipino portmanteau with deep meaning:
+        
+        ### Word Formation:
+        ```
+        PANSIN  +  SENYAS  +  -AN
+           ↓          ↓        ↓
+        attention   sign    place
+        ```
+        
+        **= "The place where signs receive attention"**
+        
+        ---
+        
+        ### Why This Name?
+        
+        **Technical Connection**  
+        The name reflects our **Multi-Head Attention** mechanism — the core innovation that lets the AI focus on relevant sign language features simultaneously.
+        
+        **Cultural Respect**  
+        A Filipino name honors the Filipino Deaf community and recognizes FSL as a complete language with its own grammar.
+        
+        **Our Mission**  
+        Every sign — and every signer — deserves attention, recognition, and inclusivity.
+        """)
+    
     # Model Status Section
     st.sidebar.markdown("""
-    <div style='margin-bottom: 0.1rem;'>
-        <h3 style='color: #e2e8f0; margin: 0 0 0.1rem 0; font-size: 1.1rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px;'>Model Status</h3>
+    <div style='margin: 0.75rem 0 0;'>
+        <h3 style='color: #e2e8f0; margin: 0; font-size: 1.1rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px;'>Model Status</h3>
     </div>
     """, unsafe_allow_html=True)
     render_model_status()
     
     # Model Configuration Section
     st.sidebar.markdown("""
-    <div style='margin: 1.5rem 0 0.1rem 0;'>
-        <h3 style='color: #e2e8f0; margin: 0 0 0.1rem 0; font-size: 1.1rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px;'>Configuration</h3>
+    <div style='margin: 0.75rem 0 0;'>
+        <h3 style='color: #e2e8f0; margin: 0; font-size: 1.1rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px;'>Configuration</h3>
     </div>
     """, unsafe_allow_html=True)
     
@@ -796,32 +859,6 @@ def render_sidebar() -> Dict:
         help="Include detailed per-frame occlusion analysis with region detection",
         key="occ_detailed_checkbox"
     )
-    
-    # About Section
-    st.sidebar.markdown("""
-    <div style='margin: 1.5rem 0 0.1rem 0;'>
-        <h3 style='color: #e2e8f0; margin: 0 0 0.1rem 0; font-size: 1.1rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px;'>About</h3>
-    </div>
-    """, unsafe_allow_html=True)
-    
-    st.sidebar.markdown("""
-    <div style='background: rgba(255, 255, 255, 0.05); padding: 1.25rem; border-radius: 6px; border-left: 3px solid #3498db; margin: 0;'>
-        <p style='color: #e2e8f0; margin: 0 0 0.75rem 0; font-size: 1rem; line-height: 1.5; font-weight: 400;'>
-        This demo processes Filipino Sign Language sequences and provides:
-        </p>
-        <ul style='color: #a0aec0; font-size: 0.95rem; margin: 0; padding-left: 1.25rem; line-height: 1.6;'>
-            <li>Automatic file processing</li>
-            <li>Data validation & visualization</li>
-            <li>Feature analysis over time</li>
-            <li>Real model predictions</li>
-        </ul>
-    </div>
-    """, unsafe_allow_html=True)
-
-    # Add demo video button at the very bottom of the sidebar
-    st.sidebar.markdown("<div style='height: 2rem;'></div>", unsafe_allow_html=True)
-    from .demo_video import render_demo_button
-    render_demo_button()
 
     return dict(
         model_choice=model_choice,
@@ -854,8 +891,8 @@ def render_model_status():
     # Create clean, elegant status display based on actual file existence
     if transformer_exists and iv3_gru_exists:
         st.sidebar.markdown("""
-        <div style='background: rgba(16, 185, 129, 0.1); border: 1px solid #10b981; border-radius: 8px; padding: 1rem; margin-bottom: 0;'>
-            <div style='display: flex; align-items: center; color: #ffffff; font-weight: 500; margin-bottom: 0.5rem;'>
+        <div style='background: rgba(16, 185, 129, 0.1); border: 1px solid #10b981; border-radius: 8px; padding: 0.75rem; margin-bottom: 0;'>
+            <div style='display: flex; align-items: center; color: #ffffff; font-weight: 500; margin-bottom: 0.3rem;'>
                 <div style='width: 8px; height: 8px; background: #10b981; border-radius: 50%; margin-right: 0.75rem;'></div>
                 <span style='font-size: 1rem;'>All Models Ready</span>
             </div>
@@ -866,8 +903,8 @@ def render_model_status():
         """, unsafe_allow_html=True)
     elif transformer_exists:
         st.sidebar.markdown("""
-        <div style='background: rgba(245, 158, 11, 0.1); border: 1px solid #f59e0b; border-radius: 8px; padding: 1rem; margin-bottom: 0;'>
-            <div style='display: flex; align-items: center; color: #ffffff; font-weight: 500; margin-bottom: 0.5rem;'>
+        <div style='background: rgba(245, 158, 11, 0.1); border: 1px solid #f59e0b; border-radius: 8px; padding: 0.75rem; margin-bottom: 0;'>
+            <div style='display: flex; align-items: center; color: #ffffff; font-weight: 500; margin-bottom: 0.3rem;'>
                 <div style='width: 8px; height: 8px; background: #f59e0b; border-radius: 50%; margin-right: 0.75rem;'></div>
                 <span style='font-size: 1rem;'>Partial Availability</span>
             </div>
@@ -878,8 +915,8 @@ def render_model_status():
         """, unsafe_allow_html=True)
     elif iv3_gru_exists:
         st.sidebar.markdown("""
-        <div style='background: rgba(245, 158, 11, 0.1); border: 1px solid #f59e0b; border-radius: 8px; padding: 1rem; margin-bottom: 0;'>
-            <div style='display: flex; align-items: center; color: #ffffff; font-weight: 500; margin-bottom: 0.5rem;'>
+        <div style='background: rgba(245, 158, 11, 0.1); border: 1px solid #f59e0b; border-radius: 8px; padding: 0.75rem; margin-bottom: 0;'>
+            <div style='display: flex; align-items: center; color: #ffffff; font-weight: 500; margin-bottom: 0.3rem;'>
                 <div style='width: 8px; height: 8px; background: #f59e0b; border-radius: 50%; margin-right: 0.75rem;'></div>
                 <span style='font-size: 1rem;'>Partial Availability</span>
             </div>
@@ -890,8 +927,8 @@ def render_model_status():
         """, unsafe_allow_html=True)
     else:
         st.sidebar.markdown("""
-        <div style='background: rgba(239, 68, 68, 0.1); border: 1px solid #ef4444; border-radius: 8px; padding: 1rem; margin-bottom: 0;'>
-            <div style='display: flex; align-items: center; color: #ffffff; font-weight: 500; margin-bottom: 0.5rem;'>
+        <div style='background: rgba(239, 68, 68, 0.1); border: 1px solid #ef4444; border-radius: 8px; padding: 0.75rem; margin-bottom: 0;'>
+            <div style='display: flex; align-items: center; color: #ffffff; font-weight: 500; margin-bottom: 0.3rem;'>
                 <div style='width: 8px; height: 8px; background: #ef4444; border-radius: 50%; margin-right: 0.75rem;'></div>
                 <span style='font-size: 1rem;'>No Models Available</span>
             </div>
@@ -902,10 +939,15 @@ def render_model_status():
         """, unsafe_allow_html=True)
     
     # Add validation button below model status
-    st.sidebar.markdown("<div style='height: 0.5rem;'></div>", unsafe_allow_html=True)
+    st.sidebar.markdown("<div style='height: 0.2rem;'></div>", unsafe_allow_html=True)
     if st.sidebar.button("Validate Models", help="Access model validation mode", use_container_width=True):
         st.session_state.workflow_stage = 'validation'
         st.rerun()
+    
+    # Add demo video button below validate button
+    st.sidebar.markdown("<div style='height: 0.1rem;'></div>", unsafe_allow_html=True)
+    from .demo_video import render_demo_button
+    render_demo_button()
 
 
 def get_available_models():

@@ -422,7 +422,7 @@ def render_keypoint_video(sequence: np.ndarray, mask: Optional[np.ndarray] = Non
         pass
     
     # Video control buttons with Download Video right-aligned to dropdown and Generate Video with gap
-    col_empty1, col_empty2, col_empty3, col_empty4, col_empty5, col_gen, col_gap, col_download = st.columns([1.5, 1.5, 0.75, 0.75, 0.75, 3, 0.25, 2])
+    col_empty1, col_empty2, col_empty3, col_empty4, col_empty5, col_gap, col_gen, col_download = st.columns([1.5, 1.5, 1.00, 0.75, 0.75, 1, 2.5, 2])
     
     with col_download:
         if st.button("Generate Video", key=f"generate_video_{key_suffix}"):
