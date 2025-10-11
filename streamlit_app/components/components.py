@@ -1232,7 +1232,7 @@ def render_main_header() -> None:
     """, unsafe_allow_html=True)
 
 
-def render_predictions_section(cfg: Dict, npz_data: Dict = None, filename: str = None) -> None:
+def render_predictions_section(cfg: Dict, npz_data: Dict = None, filename: str = None, metadata: Dict = None, key_suffix: str = "") -> None:
     """Render predictions section with enhanced layout."""
     st.markdown("<div class='section-header'>Predictions</div>", unsafe_allow_html=True)
     
@@ -1266,15 +1266,21 @@ def render_predictions_section(cfg: Dict, npz_data: Dict = None, filename: str =
             cat_label = category_mapping.get(cat_id, f'Unknown ({cat_id})')
             category_top3.append((cat_label, prob))
         
-        # Enhanced predictions display
-        pred_col1, pred_col2 = st.columns(2)
+        # Enhanced predictions display - 2 columns: predictions on left, video on right
+        pred_col_left, pred_col_right = st.columns([1, 1], gap="large")
         
-        with pred_col1:
+        with pred_col_left:
+            # Stack Top Gloss and Top Category predictions vertically
             from .visualization import render_topk_table_with_labels
             render_topk_table_with_labels(gloss_top5, "gloss", "Top Gloss Predictions")
-        
-        with pred_col2:
+            
+            st.markdown("<div style='height: 20px;'></div>", unsafe_allow_html=True)
+            
             render_topk_table_with_labels(category_top3, "category", "Top Category Predictions")
+        
+        with pred_col_right:
+            # Video preview spans the full height on the right
+            render_inline_video_preview(npz_data, metadata, filename, key_suffix)
         
         # Additional insights
         st.markdown("---")
@@ -1308,3 +1314,70 @@ def render_predictions_section(cfg: Dict, npz_data: Dict = None, filename: str =
     else:
         # No NPZ data available - show message to upload files
         st.info("Please upload an NPZ file or video to see model predictions.")
+
+
+def render_inline_video_preview(npz_data: Dict, metadata: Dict, filename: str, key_suffix: str) -> None:
+    """Render compact video preview inline with predictions."""
+    import os
+    import tempfile
+    import numpy as np
+    from pathlib import Path
+    from .visualization import create_keypoint_animation_video
+    
+    st.markdown("**Video Preview**")
+    
+    # Determine background based on source type
+    source_type = metadata.get('source_type', 'original') if metadata else 'original'
+    bg_type = "Original Video" if source_type == 'video' else "Grid"
+    
+    # Check if video already generated (cached)
+    video_key = f"auto_preview_{filename}_{key_suffix}"
+    
+    if video_key not in st.session_state:
+        # Auto-generate video on first view
+        with st.spinner("Generating..."):
+            try:
+                # Extract keypoints
+                if 'X' not in npz_data:
+                    st.error("Missing keypoint data")
+                    return
+                
+                X = npz_data['X']
+                time_steps = X.shape[0]
+                
+                # Reshape to [T, 78, 2]
+                keypoints_2d = X.reshape(time_steps, 78, 2)
+                mask = npz_data.get('mask', None)
+                
+                # Video settings
+                fps = 30
+                width, height = 360, 360 if bg_type != "Original Video" else (None, None)
+                show_skeleton = True
+                
+                # Generate video
+                video_path = create_keypoint_animation_video(
+                    keypoints_2d, mask, fps, width, height,
+                    show_skeleton, bg_type, key_suffix
+                )
+                
+                if video_path and os.path.exists(video_path):
+                    st.session_state[video_key] = video_path
+                else:
+                    st.error("Video generation failed")
+                    return
+            except Exception as e:
+                st.error(f"Error: {str(e)}")
+                return
+    
+    # Display video player
+    if video_key in st.session_state:
+        video_path = st.session_state[video_key]
+        if os.path.exists(video_path):
+            try:
+                with open(video_path, 'rb') as f:
+                    video_bytes = f.read()
+                
+                # Compact video player with autoplay and loop
+                st.video(video_bytes, autoplay=True, loop=True)
+            except Exception as e:
+                st.error(f"Playback error: {str(e)}")

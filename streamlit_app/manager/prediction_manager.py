@@ -588,20 +588,21 @@ def render_visualization_tabs(cfg: Dict):
             npz_data = st.session_state.processed_data[filename]
             metadata = st.session_state.file_metadata[filename]
             
+            # Create unique key suffix using file object id to handle duplicate filenames
+            unique_key_suffix = f"{filename}_{id(selected_uploaded_file)}"
+            
             # Render consolidated file info (includes sequence overview data)
             try:
                 X_pad, mask, meta = render_consolidated_file_info(filename, npz_data, metadata, cfg["sequence_length"])
                 
-                # Generate and render predictions
-                render_predictions_section(cfg, npz_data, filename)
+                # Generate and render predictions (with metadata and key_suffix for video preview)
+                render_predictions_section(cfg, npz_data, filename, metadata, unique_key_suffix)
                 
                 # Side-by-side layout for Keypoint Visualization and Feature Analysis
                 st.markdown('<div class="viz-side-by-side">', unsafe_allow_html=True)
                 viz_col1, viz_col2 = st.columns([1, 1])
                 
                 with viz_col1:
-                    # Create unique key suffix using file object id to handle duplicate filenames
-                    unique_key_suffix = f"{filename}_{id(selected_uploaded_file)}"
                     render_animated_keypoints(X_pad, mask if mask.size > 0 else None, key_suffix=unique_key_suffix, meta_dict=meta)
                 
                 with viz_col2:
@@ -682,7 +683,24 @@ def render_batch_summary_tab(cfg: Dict):
             'Occluded': occlusion_status
         })
     
-    st.dataframe(summary_data, use_container_width=True)
+    # Interactive table with row selection
+    selected_rows = st.dataframe(
+        summary_data, 
+        use_container_width=True,
+        on_select="rerun",
+        selection_mode="single-row",
+        key="summary_table_selection"
+    )
+    
+    # Handle row selection - navigate to selected file
+    if selected_rows and hasattr(selected_rows, 'selection') and selected_rows.selection.rows:
+        selected_idx = selected_rows.selection.rows[0]
+        if 0 <= selected_idx < len(summary_data):
+            selected_filename = summary_data[selected_idx]['File']
+            # Navigate to that file (same mechanism as View button)
+            # Only set current_tab - file_selector will be updated by existing logic in render_visualization_tabs
+            st.session_state.current_tab = selected_filename
+            st.rerun()
     
     # Batch download
     st.markdown("### Batch Download")
