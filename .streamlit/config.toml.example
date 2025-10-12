@@ -1,0 +1,88 @@
+# Streamlit Configuration File
+# Copy this file to config.toml and customize for your deployment
+# Documentation: https://docs.streamlit.io/library/advanced-features/configuration
+
+[server]
+# Port to run the app on
+port = 8501
+
+# If false, the server only listens on localhost (for local development)
+# If true, the server listens on all network interfaces (for production)
+headless = true
+
+# Enable Cross-Origin Resource Sharing (CORS)
+# Set to false for production deployments behind a proxy
+enableCORS = false
+
+# Enable XSRF protection (recommended for production)
+enableXsrfProtection = true
+
+# Maximum file upload size in MB
+# Increase for larger video files
+maxUploadSize = 200
+
+# Enable WebSocket compression (recommended for mobile and slow connections)
+enableWebsocketCompression = true
+
+# Maximum message size in MB
+# Should be larger than maxUploadSize to handle Base64-encoded files
+maxMessageSize = 300
+
+[browser]
+# Whether to gather usage statistics
+gatherUsageStats = false
+
+# Server address to use when connecting from the browser
+# Leave blank to auto-detect
+serverAddress = ""
+
+# Server port to use when connecting from the browser
+# Leave blank to auto-detect
+serverPort = 0
+
+[runner]
+# Allows you to type a variable or string by itself in a single line of Python code
+# to write it to the app (disabled for cleaner production apps)
+magicEnabled = false
+
+# Enable fast reruns for better performance
+fastReruns = true
+
+# Install required packages on the fly
+installTracer = false
+
+# Handle script rerun requests immediately
+fixMatplotlib = true
+
+[client]
+# Whether to show error details in the browser
+# Set to false for production to hide sensitive error information
+showErrorDetails = false
+
+# Whether to show the "Deploy" button in the toolbar
+showToolbarMode = "viewer"
+
+# Display the sourcecode footer
+# Set to false for cleaner production apps
+toolbarMode = "viewer"
+
+[logger]
+# Level of logging: 'error', 'warning', 'info', 'debug'
+# Use 'debug' for troubleshooting, 'info' for production
+level = "info"
+
+# Message format
+messageFormat = "%(asctime)s %(levelname)s: %(message)s"
+
+[theme]
+# Theme settings (optional, customize for your brand)
+# primaryColor = "#1f77b4"
+# backgroundColor = "#0e1117"
+# secondaryBackgroundColor = "#262730"
+# textColor = "#fafafa"
+# font = "sans serif"
+
+[deprecation]
+# Whether to show deprecation warnings
+showPyplotGlobalUse = false
+

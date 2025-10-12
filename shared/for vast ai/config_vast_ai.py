@@ -66,7 +66,7 @@ PROCESSING_CONFIG = {
 
 # Upload configuration
 UPLOAD_CONFIG = {
-    'use_base64_preview': False,  # Enable Base64 encoding for video previews (recommended for mobile/load-balanced deployments)
+    'use_base64_preview': True,  # Enable Base64 encoding for video previews (recommended for mobile/load-balanced deployments)
     'base64_size_threshold_mb': 50,  # Max file size for Base64 encoding (larger files use standard preview)
     'enable_mobile_camera': True,  # Enable camera capture on mobile devices
     'show_upload_feedback': True,  # Show visual feedback during uploads

@@ -35,8 +35,19 @@ def get_all_files_to_show():
 
 def render_preprocessing_stage():
     """Render the preprocessing stage with video files and preprocessing controls."""
+    # Add CSS to prevent button text wrapping
+    st.markdown("""
+    <style>
+    .stButton > button {
+        white-space: nowrap !important;
+        overflow: hidden !important;
+        text-overflow: ellipsis !important;
+    }
+    </style>
+    """, unsafe_allow_html=True)
+    
     # Navigation header
-    col1, col2, col3, col4 = st.columns([2, 6, 1, 1])
+    col1, col2, col3, col4 = st.columns([2, 8.5, 5.5, 2])
     with col1:
         if st.button("← Back to Upload", help="Return to upload stage", type="secondary"):
             # Clear video files when going back to upload

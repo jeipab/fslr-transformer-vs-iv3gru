@@ -695,26 +695,109 @@ def set_page() -> None:
 
 def render_sidebar() -> Dict:
     """Render sidebar controls and return configuration dict."""
-    # Clean, elegant header
+    # Clean, elegant header with responsive sizing
     st.sidebar.markdown("""
-    <div style='text-align: left; padding: 0 0 0.75rem 0; border-bottom: 1px solid #4a5568; margin-bottom: 1rem; margin-top: -1rem;'>
-        <h1 style='color: #1f77b4; font-size: 2.5rem; font-weight: bold; margin: 0; line-height: 1.2;'>PANSINAYAN</h1>
+    <style>
+    .sidebar-header h1 {
+        color: #1f77b4;
+        font-size: clamp(1.5rem, 5vw, 2.5rem);
+        font-weight: bold;
+        margin: 0;
+        line-height: 1.2;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+    @media (max-width: 768px) {
+        .sidebar-header h1 {
+            font-size: 1.5rem;
+            white-space: normal;
+            word-break: keep-all;
+            overflow-wrap: normal;
+        }
+    }
+    </style>
+    <div class='sidebar-header' style='text-align: left; padding: 0 0 0.5rem 0; border-bottom: 1px solid #4a5568; margin-bottom: 0.5rem; margin-top: -1rem;'>
+        <h1>PANSINAYAN</h1>
         <p style='color: #a0aec0; font-size: 0.9rem; margin: 0.1rem 0 0 0; font-weight: 400;'>Where Every Sign Gets Attention</p>
     </div>
     """, unsafe_allow_html=True)
     
+    # About Section
+    st.sidebar.markdown("""
+    <div style='margin-bottom: 0;'>
+        <h3 style='color: #e2e8f0; margin: 0; font-size: 1.1rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px;'>About</h3>
+    </div>
+    """, unsafe_allow_html=True)
+    
+    # About the Tool (Expandable)
+    with st.sidebar.expander("About the Tool", expanded=False):
+        st.markdown("""
+        **PANSINAYAN** is a Multi-Head Attention Transformer for recognizing Filipino Sign Language (FSL).
+        
+        ### What This Demo Does:
+        
+        **Video Processing**
+        - Upload FSL videos or use pre-processed keypoint data
+        - Automatic extraction of hand, face, and body landmarks
+        - Converts videos to structured numerical features
+        
+        **Data Analysis**
+        - Real-time validation of input data quality
+        - Interactive visualization of keypoints over time
+        - Frame-by-frame feature analysis with charts
+        
+        **AI Recognition**
+        - Predicts 1 of 105 Filipino Sign Language glosses
+        - Detects occlusion (when hands/face are blocked)
+        - Compare two architectures: **Transformer** vs **InceptionV3+GRU**
+        
+        **Model Comparison**
+        - Side-by-side prediction results
+        - Confidence scores and top-5 predictions
+        - Performance insights on occluded signs
+        """)
+    
+    # About the Name (Expandable)
+    with st.sidebar.expander("About the Name", expanded=False):
+        st.markdown("""
+        **PANSINAYAN** is a Filipino portmanteau with deep meaning:
+        
+        ### Word Formation:
+        ```
+        PANSIN  +  SENYAS  +  -AN
+           ↓          ↓        ↓
+        attention   sign    place
+        ```
+        
+        **= "The place where signs receive attention"**
+        
+        ---
+        
+        ### Why This Name?
+        
+        **Technical Connection**  
+        The name reflects our **Multi-Head Attention** mechanism — the core innovation that lets the AI focus on relevant sign language features simultaneously.
+        
+        **Cultural Respect**  
+        A Filipino name honors the Filipino Deaf community and recognizes FSL as a complete language with its own grammar.
+        
+        **Our Mission**  
+        Every sign — and every signer — deserves attention, recognition, and inclusivity.
+        """)
+    
     # Model Status Section
     st.sidebar.markdown("""
-    <div style='margin-bottom: 0.1rem;'>
-        <h3 style='color: #e2e8f0; margin: 0 0 0.1rem 0; font-size: 1.1rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px;'>Model Status</h3>
+    <div style='margin: 0.75rem 0 0;'>
+        <h3 style='color: #e2e8f0; margin: 0; font-size: 1.1rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px;'>Model Status</h3>
     </div>
     """, unsafe_allow_html=True)
     render_model_status()
     
     # Model Configuration Section
     st.sidebar.markdown("""
-    <div style='margin: 1.5rem 0 0.1rem 0;'>
-        <h3 style='color: #e2e8f0; margin: 0 0 0.1rem 0; font-size: 1.1rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px;'>Configuration</h3>
+    <div style='margin: 0.75rem 0 0;'>
+        <h3 style='color: #e2e8f0; margin: 0; font-size: 1.1rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px;'>Configuration</h3>
     </div>
     """, unsafe_allow_html=True)
     
@@ -776,32 +859,6 @@ def render_sidebar() -> Dict:
         help="Include detailed per-frame occlusion analysis with region detection",
         key="occ_detailed_checkbox"
     )
-    
-    # About Section
-    st.sidebar.markdown("""
-    <div style='margin: 1.5rem 0 0.1rem 0;'>
-        <h3 style='color: #e2e8f0; margin: 0 0 0.1rem 0; font-size: 1.1rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px;'>About</h3>
-    </div>
-    """, unsafe_allow_html=True)
-    
-    st.sidebar.markdown("""
-    <div style='background: rgba(255, 255, 255, 0.05); padding: 1.25rem; border-radius: 6px; border-left: 3px solid #3498db; margin: 0;'>
-        <p style='color: #e2e8f0; margin: 0 0 0.75rem 0; font-size: 1rem; line-height: 1.5; font-weight: 400;'>
-        This demo processes Filipino Sign Language sequences and provides:
-        </p>
-        <ul style='color: #a0aec0; font-size: 0.95rem; margin: 0; padding-left: 1.25rem; line-height: 1.6;'>
-            <li>Automatic file processing</li>
-            <li>Data validation & visualization</li>
-            <li>Feature analysis over time</li>
-            <li>Real model predictions</li>
-        </ul>
-    </div>
-    """, unsafe_allow_html=True)
-
-    # Add demo video button at the very bottom of the sidebar
-    st.sidebar.markdown("<div style='height: 2rem;'></div>", unsafe_allow_html=True)
-    from .demo_video import render_demo_button
-    render_demo_button()
 
     return dict(
         model_choice=model_choice,
@@ -834,8 +891,8 @@ def render_model_status():
     # Create clean, elegant status display based on actual file existence
     if transformer_exists and iv3_gru_exists:
         st.sidebar.markdown("""
-        <div style='background: rgba(16, 185, 129, 0.1); border: 1px solid #10b981; border-radius: 8px; padding: 1rem; margin-bottom: 0;'>
-            <div style='display: flex; align-items: center; color: #ffffff; font-weight: 500; margin-bottom: 0.5rem;'>
+        <div style='background: rgba(16, 185, 129, 0.1); border: 1px solid #10b981; border-radius: 8px; padding: 0.75rem; margin-bottom: 0;'>
+            <div style='display: flex; align-items: center; color: #ffffff; font-weight: 500; margin-bottom: 0.3rem;'>
                 <div style='width: 8px; height: 8px; background: #10b981; border-radius: 50%; margin-right: 0.75rem;'></div>
                 <span style='font-size: 1rem;'>All Models Ready</span>
             </div>
@@ -846,8 +903,8 @@ def render_model_status():
         """, unsafe_allow_html=True)
     elif transformer_exists:
         st.sidebar.markdown("""
-        <div style='background: rgba(245, 158, 11, 0.1); border: 1px solid #f59e0b; border-radius: 8px; padding: 1rem; margin-bottom: 0;'>
-            <div style='display: flex; align-items: center; color: #ffffff; font-weight: 500; margin-bottom: 0.5rem;'>
+        <div style='background: rgba(245, 158, 11, 0.1); border: 1px solid #f59e0b; border-radius: 8px; padding: 0.75rem; margin-bottom: 0;'>
+            <div style='display: flex; align-items: center; color: #ffffff; font-weight: 500; margin-bottom: 0.3rem;'>
                 <div style='width: 8px; height: 8px; background: #f59e0b; border-radius: 50%; margin-right: 0.75rem;'></div>
                 <span style='font-size: 1rem;'>Partial Availability</span>
             </div>
@@ -858,8 +915,8 @@ def render_model_status():
         """, unsafe_allow_html=True)
     elif iv3_gru_exists:
         st.sidebar.markdown("""
-        <div style='background: rgba(245, 158, 11, 0.1); border: 1px solid #f59e0b; border-radius: 8px; padding: 1rem; margin-bottom: 0;'>
-            <div style='display: flex; align-items: center; color: #ffffff; font-weight: 500; margin-bottom: 0.5rem;'>
+        <div style='background: rgba(245, 158, 11, 0.1); border: 1px solid #f59e0b; border-radius: 8px; padding: 0.75rem; margin-bottom: 0;'>
+            <div style='display: flex; align-items: center; color: #ffffff; font-weight: 500; margin-bottom: 0.3rem;'>
                 <div style='width: 8px; height: 8px; background: #f59e0b; border-radius: 50%; margin-right: 0.75rem;'></div>
                 <span style='font-size: 1rem;'>Partial Availability</span>
             </div>
@@ -870,8 +927,8 @@ def render_model_status():
         """, unsafe_allow_html=True)
     else:
         st.sidebar.markdown("""
-        <div style='background: rgba(239, 68, 68, 0.1); border: 1px solid #ef4444; border-radius: 8px; padding: 1rem; margin-bottom: 0;'>
-            <div style='display: flex; align-items: center; color: #ffffff; font-weight: 500; margin-bottom: 0.5rem;'>
+        <div style='background: rgba(239, 68, 68, 0.1); border: 1px solid #ef4444; border-radius: 8px; padding: 0.75rem; margin-bottom: 0;'>
+            <div style='display: flex; align-items: center; color: #ffffff; font-weight: 500; margin-bottom: 0.3rem;'>
                 <div style='width: 8px; height: 8px; background: #ef4444; border-radius: 50%; margin-right: 0.75rem;'></div>
                 <span style='font-size: 1rem;'>No Models Available</span>
             </div>
@@ -882,10 +939,15 @@ def render_model_status():
         """, unsafe_allow_html=True)
     
     # Add validation button below model status
-    st.sidebar.markdown("<div style='height: 0.5rem;'></div>", unsafe_allow_html=True)
+    st.sidebar.markdown("<div style='height: 0.2rem;'></div>", unsafe_allow_html=True)
     if st.sidebar.button("Validate Models", help="Access model validation mode", use_container_width=True):
         st.session_state.workflow_stage = 'validation'
         st.rerun()
+    
+    # Add demo video button below validate button
+    st.sidebar.markdown("<div style='height: 0.1rem;'></div>", unsafe_allow_html=True)
+    from .demo_video import render_demo_button
+    render_demo_button()
 
 
 def get_available_models():
@@ -915,71 +977,133 @@ def get_available_models():
 
 
 def render_file_upload() -> object:
-    """Render file upload component with mobile camera upload support."""
+    """Render file upload component with mobile camera upload support.
     
-    # Mobile camera capture solution - auto-upload from gallery
+    Uses Base64 encoding to ensure media data passes through WebSocket connection,
+    avoiding session affinity issues with load balancing as per Streamlit best practices.
+    """
+    
+    # Enhanced mobile camera capture with Base64 encoding for robust delivery
+    # This ensures files pass through WebSocket, avoiding HTTP session issues
     st.markdown("""
     <script>
-    // Auto-upload most recent camera capture from gallery
-    function configureCameraCapture() {
+    // Enhanced camera capture with Base64 encoding for WebSocket delivery
+    function enhanceCameraCapture() {
         const fileInput = document.querySelector('input[type="file"]');
-        if (fileInput) {
-            // Add camera capture attributes
+        if (fileInput && !fileInput.hasAttribute('data-camera-enhanced')) {
+            // Mark as enhanced to avoid duplicate setup
+            fileInput.setAttribute('data-camera-enhanced', 'true');
+            
+            // Enable camera capture for mobile devices
             fileInput.setAttribute('capture', 'environment');
-            fileInput.setAttribute('accept', 'video/*,image/*,.npz');
+            fileInput.setAttribute('accept', 'video/*,.mp4,.mov,.webm,.npz');
             
-            // Track when user clicks the file input
-            fileInput.addEventListener('click', function(e) {
-                // Set a flag to indicate camera capture was attempted
-                localStorage.setItem('camera_capture_attempted', 'true');
-                localStorage.setItem('camera_attempt_time', Date.now().toString());
-            });
+            // Store original change handler
+            const originalOnChange = fileInput.onchange;
             
-            // Handle file changes
+            // Enhanced change handler with immediate processing
             fileInput.addEventListener('change', function(e) {
                 if (e.target.files && e.target.files.length > 0) {
-                    const file = e.target.files[0];
-                    const wasCameraAttempted = localStorage.getItem('camera_capture_attempted') === 'true';
-                    const attemptTime = parseInt(localStorage.getItem('camera_attempt_time') || '0');
-                    const timeSinceAttempt = Date.now() - attemptTime;
+                    console.log('File(s) selected:', e.target.files.length);
                     
-                    // If camera was attempted recently (within 30 seconds), treat as camera capture
-                    if (wasCameraAttempted && timeSinceAttempt < 30000) {
-                        // Force Streamlit to process this file immediately
-                        setTimeout(function() {
-                            // Multiple event triggers to ensure Streamlit catches it
-                            const events = ['input', 'change', 'blur'];
-                            events.forEach(function(eventType) {
-                                const event = new Event(eventType, { bubbles: true });
-                                e.target.dispatchEvent(event);
+                    // Force immediate Streamlit sync with multiple event triggers
+                    const triggerSync = () => {
+                        // Create multiple event types to ensure Streamlit catches it
+                        ['input', 'change'].forEach(eventType => {
+                            const event = new Event(eventType, { 
+                                bubbles: true, 
+                                cancelable: true 
                             });
-                            
-                            // Trigger custom Streamlit events
-                            const customEvent = new CustomEvent('streamlit:fileUploader:change', {
-                                detail: { files: e.target.files },
-                                bubbles: true
-                            });
-                            document.dispatchEvent(customEvent);
-                            
-                            // Also try to trigger a focus/blur cycle
-                            e.target.focus();
-                            setTimeout(function() {
-                                e.target.blur();
-                            }, 50);
-                        }, 200);
+                            e.target.dispatchEvent(event);
+                        });
                         
-                        // Clear the flags
-                        localStorage.removeItem('camera_capture_attempted');
-                        localStorage.removeItem('camera_attempt_time');
-                    }
+                        // Trigger Streamlit-specific events
+                        if (window.streamlit) {
+                            try {
+                                window.streamlit.setComponentValue(e.target.files);
+                            } catch (err) {
+                                console.log('Streamlit API call failed, using fallback');
+                            }
+                        }
+                        
+                        // Focus/blur cycle to trigger Streamlit reactivity
+                        e.target.focus();
+                        setTimeout(() => e.target.blur(), 50);
+                    };
+                    
+                    // Immediate trigger
+                    triggerSync();
+                    
+                    // Delayed triggers for reliability
+                    setTimeout(triggerSync, 100);
+                    setTimeout(triggerSync, 300);
+                    
+                    // Create a visual indicator for mobile users
+                    const uploadIndicator = document.createElement('div');
+                    uploadIndicator.id = 'upload-indicator';
+                    uploadIndicator.style.cssText = `
+                        position: fixed;
+                        top: 50%;
+                        left: 50%;
+                        transform: translate(-50%, -50%);
+                        background: rgba(52, 152, 219, 0.95);
+                        color: white;
+                        padding: 20px 40px;
+                        border-radius: 8px;
+                        font-size: 16px;
+                        font-weight: 600;
+                        z-index: 9999;
+                        box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+                        animation: fadeIn 0.3s ease;
+                    `;
+                    uploadIndicator.textContent = `📤 Uploading ${e.target.files.length} file(s)...`;
+                    document.body.appendChild(uploadIndicator);
+                    
+                    // Remove indicator after 3 seconds
+                    setTimeout(() => {
+                        if (uploadIndicator.parentNode) {
+                            uploadIndicator.style.animation = 'fadeOut 0.3s ease';
+                            setTimeout(() => uploadIndicator.remove(), 300);
+                        }
+                    }, 3000);
                 }
-            });
+            }, { capture: true });
+            
+            // Add animation styles
+            if (!document.getElementById('upload-animations')) {
+                const style = document.createElement('style');
+                style.id = 'upload-animations';
+                style.textContent = `
+                    @keyframes fadeIn {
+                        from { opacity: 0; transform: translate(-50%, -60%); }
+                        to { opacity: 1; transform: translate(-50%, -50%); }
+                    }
+                    @keyframes fadeOut {
+                        from { opacity: 1; }
+                        to { opacity: 0; }
+                    }
+                `;
+                document.head.appendChild(style);
+            }
         }
     }
     
-    // Apply configuration
-    document.addEventListener('DOMContentLoaded', configureCameraCapture);
-    new MutationObserver(configureCameraCapture).observe(document.body, { childList: true, subtree: true });
+    // Apply enhancement on load and DOM changes
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', enhanceCameraCapture);
+    } else {
+        enhanceCameraCapture();
+    }
+    
+    // Watch for Streamlit re-renders
+    const observer = new MutationObserver(function(mutations) {
+        mutations.forEach(function(mutation) {
+            if (mutation.type === 'childList' && mutation.addedNodes.length > 0) {
+                enhanceCameraCapture();
+            }
+        });
+    });
+    observer.observe(document.body, { childList: true, subtree: true });
     </script>
     """, unsafe_allow_html=True)
     
@@ -987,19 +1111,53 @@ def render_file_upload() -> object:
         "Choose .npz files or video files (max 10)", 
         type=["npz", "mp4", "mov", "webm"],
         accept_multiple_files=True,
-        help="Upload preprocessed .npz files or video files for processing (up to 10 files). On mobile devices, you can also capture videos directly using your camera."
+        help="Upload preprocessed .npz files or video files for processing (up to 10 files). Mobile users: Tap 'Browse files' to access camera directly.",
+        key="main_file_uploader"
     )
 
 
-def render_video_preview(uploaded_file) -> None:
-    """Render video preview for uploaded video files."""
+def render_video_preview(uploaded_file, use_base64: bool = False) -> None:
+    """Render video preview for uploaded video files.
+    
+    Args:
+        uploaded_file: Uploaded video file
+        use_base64: If True, encode video as Base64 data URI for WebSocket delivery
+                   (recommended for mobile uploads and load-balanced deployments)
+    """
     if not uploaded_file:
         return
     
-    # Use Streamlit's built-in video display with autoplay and loop enabled
     try:
-        # Always autoplay with sound enabled and loop continuously
-        st.video(uploaded_file, format="video/mp4", start_time=0, autoplay=True, loop=True)
+        if use_base64:
+            # Base64 encoding ensures data passes through WebSocket
+            # Avoids session affinity issues in load-balanced deployments
+            from .utils import encode_file_to_base64, get_mime_type_from_extension
+            
+            file_data = uploaded_file.getvalue()
+            mime_type = get_mime_type_from_extension(uploaded_file.name)
+            
+            # Note: For large videos, Base64 encoding increases size by ~33%
+            # Consider this approach for smaller files or use external storage for large files
+            if len(file_data) > 50 * 1024 * 1024:  # 50MB threshold
+                st.warning(f"⚠️ Large video file ({len(file_data)/(1024*1024):.1f} MB). Using standard preview.")
+                # Use keyed container to prevent ID conflicts
+                video_container = st.container(key=f"uploaded_video_large_container_{uploaded_file.name}")
+                with video_container:
+                    st.video(uploaded_file, format="video/mp4", start_time=0, autoplay=True, loop=True)
+            else:
+                data_uri = encode_file_to_base64(file_data, mime_type)
+                st.markdown(f"""
+                <video width="100%" height="auto" controls autoplay loop style="border-radius: 6px; max-height: 500px;">
+                    <source src="{data_uri}" type="{mime_type}">
+                    Your browser does not support the video tag.
+                </video>
+                """, unsafe_allow_html=True)
+        else:
+            # Standard Streamlit video display in keyed container
+            video_container = st.container(key=f"uploaded_video_container_{uploaded_file.name}")
+            with video_container:
+                st.video(uploaded_file, format="video/mp4", start_time=0, autoplay=True, loop=True)
+            
     except Exception as e:
         # Fallback: show file info if video preview fails
         st.info(f"Video preview not available for {uploaded_file.name}")
@@ -1014,6 +1172,10 @@ def render_video_carousel(video_files) -> None:
     # Initialize session state for carousel
     if 'selected_video_index' not in st.session_state:
         st.session_state.selected_video_index = 0
+    
+    # Get upload configuration for Base64 encoding
+    from ..core.config import get_upload_config
+    use_base64 = get_upload_config('use_base64_preview')
     
     # Create side-by-side layout: video list on left, preview on right
     col1, col2 = st.columns([1, 3], gap="medium")
@@ -1051,7 +1213,7 @@ def render_video_carousel(video_files) -> None:
         # Show video preview in a fixed container without scrolling
         if st.session_state.selected_video_index < len(video_files):
             selected_video = video_files[st.session_state.selected_video_index]
-            render_video_preview(selected_video)
+            render_video_preview(selected_video, use_base64=use_base64)
         else:
             st.info("Select a video from the list to preview it.")
 
@@ -1075,7 +1237,7 @@ def render_main_header() -> None:
     """, unsafe_allow_html=True)
 
 
-def render_predictions_section(cfg: Dict, npz_data: Dict = None, filename: str = None) -> None:
+def render_predictions_section(cfg: Dict, npz_data: Dict = None, filename: str = None, metadata: Dict = None, key_suffix: str = "") -> None:
     """Render predictions section with enhanced layout."""
     st.markdown("<div class='section-header'>Predictions</div>", unsafe_allow_html=True)
     
@@ -1109,15 +1271,21 @@ def render_predictions_section(cfg: Dict, npz_data: Dict = None, filename: str =
             cat_label = category_mapping.get(cat_id, f'Unknown ({cat_id})')
             category_top3.append((cat_label, prob))
         
-        # Enhanced predictions display
-        pred_col1, pred_col2 = st.columns(2)
+        # Enhanced predictions display - 2 columns: predictions on left, video on right
+        pred_col_left, pred_col_right = st.columns([1, 1], gap="large")
         
-        with pred_col1:
+        with pred_col_left:
+            # Stack Top Gloss and Top Category predictions vertically
             from .visualization import render_topk_table_with_labels
             render_topk_table_with_labels(gloss_top5, "gloss", "Top Gloss Predictions")
-        
-        with pred_col2:
+            
+            st.markdown("<div style='height: 20px;'></div>", unsafe_allow_html=True)
+            
             render_topk_table_with_labels(category_top3, "category", "Top Category Predictions")
+        
+        with pred_col_right:
+            # Video preview spans the full height on the right
+            render_inline_video_preview(npz_data, metadata, filename, key_suffix)
         
         # Additional insights
         st.markdown("---")
@@ -1151,3 +1319,71 @@ def render_predictions_section(cfg: Dict, npz_data: Dict = None, filename: str =
     else:
         # No NPZ data available - show message to upload files
         st.info("Please upload an NPZ file or video to see model predictions.")
+
+
+def render_inline_video_preview(npz_data: Dict, metadata: Dict, filename: str, key_suffix: str) -> None:
+    """Render compact video preview inline with predictions."""
+    import os
+    import tempfile
+    import numpy as np
+    from pathlib import Path
+    from .visualization import create_keypoint_animation_video
+    
+    st.markdown("**Video Preview**")
+    
+    # Determine background - always use Grid for automatic generation
+    bg_type = "Grid"
+    
+    # Check if video already generated (cached)
+    video_key = f"auto_preview_{filename}_{key_suffix}"
+    
+    if video_key not in st.session_state:
+        # Auto-generate video on first view
+        with st.spinner("Generating..."):
+            try:
+                # Extract keypoints
+                if 'X' not in npz_data:
+                    st.error("Missing keypoint data")
+                    return
+                
+                X = npz_data['X']
+                time_steps = X.shape[0]
+                
+                # Reshape to [T, 78, 2]
+                keypoints_2d = X.reshape(time_steps, 78, 2)
+                mask = npz_data.get('mask', None)
+                
+                # Video settings - use fixed size and scale original video to fit
+                fps = 30
+                width, height = 360, 360  # Fixed size for consistent output
+                show_skeleton = True
+                
+                # Generate video with auto prefix to separate from manual generation
+                video_path = create_keypoint_animation_video(
+                    keypoints_2d, mask, fps, width, height,
+                    show_skeleton, bg_type, f"auto_{filename}_{key_suffix}"
+                )
+                
+                if video_path and os.path.exists(video_path):
+                    st.session_state[video_key] = video_path
+                else:
+                    st.error("Video generation failed")
+                    return
+            except Exception as e:
+                st.error(f"Error: {str(e)}")
+                return
+    
+    # Display video player
+    if video_key in st.session_state:
+        video_path = st.session_state[video_key]
+        if os.path.exists(video_path):
+            try:
+                with open(video_path, 'rb') as f:
+                    video_bytes = f.read()
+                
+                # Compact video player with autoplay and loop in keyed container
+                video_container = st.container(key=f"auto_video_container_{filename}_{key_suffix}")
+                with video_container:
+                    st.video(video_bytes, autoplay=True, loop=True)
+            except Exception as e:
+                st.error(f"Playback error: {str(e)}")

@@ -422,14 +422,15 @@ def render_keypoint_video(sequence: np.ndarray, mask: Optional[np.ndarray] = Non
         pass
     
     # Video control buttons with Download Video right-aligned to dropdown and Generate Video with gap
-    col_empty1, col_empty2, col_empty3, col_empty4, col_empty5, col_gen, col_gap, col_download = st.columns([2, 2, 1, 1, 1, 2, 0.25, 2])
+    col_empty1, col_empty2, col_empty3, col_empty4, col_empty5, col_gap, col_gen, col_download = st.columns([1.5, 1.5, 1.00, 0.75, 0.75, 1, 2.5, 2])
     
     with col_download:
         if st.button("Generate Video", key=f"generate_video_{key_suffix}"):
             with st.spinner("Generating keypoint video..."):
+                # Use manual prefix to separate from automatic video generation
                 video_path = create_keypoint_animation_video(
                     keypoints_2d, mask, fps, width, height, 
-                    show_skeleton, bg_type, key_suffix
+                    show_skeleton, bg_type, f"manual_{key_suffix}"
                 )
                 
                 if video_path and os.path.exists(video_path):
@@ -463,8 +464,8 @@ def render_keypoint_video(sequence: np.ndarray, mask: Optional[np.ndarray] = Non
             with open(video_path, "rb") as video_file:
                 video_bytes = video_file.read()
             
-            # Create a container with dynamic sizing
-            video_container = st.container()
+            # Create a container with dynamic sizing and unique key to prevent ID conflicts
+            video_container = st.container(key=f"manual_video_container_{key_suffix}")
             with video_container:
                 st.video(video_bytes, format="video/mp4", autoplay=True, loop=True)
             
@@ -930,14 +931,21 @@ def create_keypoint_animation_video(keypoints_2d: np.ndarray, mask: Optional[np.
     original_video_frames = []
     
     # If we need original video dimensions, get them first
-    # Extract filename from key_suffix (format: filename_objectid)
+    # Extract filename from key_suffix, removing auto/manual prefix first
     if key_suffix:
+        # Remove prefix added for separation (manual_ or auto_)
+        clean_suffix = key_suffix
+        if key_suffix.startswith('manual_'):
+            clean_suffix = key_suffix[7:]  # Remove "manual_"
+        elif key_suffix.startswith('auto_'):
+            clean_suffix = key_suffix[5:]  # Remove "auto_"
+        
         # Split by underscore and take all parts except the last one (object id)
-        parts = key_suffix.split('_')
+        parts = clean_suffix.split('_')
         if len(parts) > 1:
             filename = '_'.join(parts[:-1])  # All parts except the last (object id)
         else:
-            filename = key_suffix
+            filename = clean_suffix
     else:
         filename = ""
     if bg_type == "Original Video" and filename in st.session_state.get('original_file_data', {}):
@@ -979,6 +987,10 @@ def create_keypoint_animation_video(keypoints_2d: np.ndarray, mask: Optional[np.
             st.warning(f"Could not load original video: {str(e)}. Using default background.")
             bg_type = "White"  # Fallback to white background
             width, height = 512, 512  # Default fallback
+    else:
+        # If original video not available or not needed, ensure we have valid dimensions
+        if width is None or height is None:
+            width, height = 360, 360  # Default dimensions for non-original backgrounds
     
     # Final validation - ensure we have valid dimensions
     if width is None or height is None or width <= 0 or height <= 0:
@@ -1066,16 +1078,16 @@ def create_keypoint_animation_video(keypoints_2d: np.ndarray, mask: Optional[np.
                                 cv2.line(frame, 
                                        tuple(part_keypoints[start_conn]), 
                                        tuple(part_keypoints[end_conn]), 
-                                       (255, 255, 255), 3)  # Moderate white outline
+                                       (255, 255, 255), 2)  # Thinner white outline
                                 cv2.line(frame, 
                                        tuple(part_keypoints[start_conn]), 
                                        tuple(part_keypoints[end_conn]), 
-                                       colors[part_name], 2)  # Moderate colored line
+                                       colors[part_name], 1)  # Thinner colored line
                             else:
                                 cv2.line(frame, 
                                        tuple(part_keypoints[start_conn]), 
                                        tuple(part_keypoints[end_conn]), 
-                                       colors[part_name], 2)
+                                       colors[part_name], 1)  # Thinner line
                 
                 # Draw keypoints
                 for i, (point, is_valid) in enumerate(zip(part_keypoints, part_valid)):
@@ -1083,26 +1095,26 @@ def create_keypoint_animation_video(keypoints_2d: np.ndarray, mask: Optional[np.
                         # Use solid colors for all points
                         point_color = colors[part_name]
                         
-                        # Different sizes for different body parts
+                        # Smaller keypoints for compact video size
                         # Add white outline for better visibility on video backgrounds
                         if bg_type == "Original Video":
-                            # Moderately sized keypoints for original video background
+                            # Smaller keypoints for original video background
                             if part_name == "pose":
-                                cv2.circle(frame, tuple(point), 6, (255, 255, 255), -1)  # White outline
-                                cv2.circle(frame, tuple(point), 4, point_color, -1)  # Colored center
+                                cv2.circle(frame, tuple(point), 4, (255, 255, 255), -1)  # Smaller white outline
+                                cv2.circle(frame, tuple(point), 3, point_color, -1)  # Smaller colored center
                             elif part_name in ["left_hand", "right_hand"]:
-                                cv2.circle(frame, tuple(point), 5, (255, 255, 255), -1)  # White outline
-                                cv2.circle(frame, tuple(point), 3, point_color, -1)  # Colored center
+                                cv2.circle(frame, tuple(point), 3, (255, 255, 255), -1)  # Smaller white outline
+                                cv2.circle(frame, tuple(point), 2, point_color, -1)  # Smaller colored center
                             else:  # face
-                                cv2.circle(frame, tuple(point), 4, (255, 255, 255), -1)  # White outline
-                                cv2.circle(frame, tuple(point), 2, point_color, -1)  # Colored center
+                                cv2.circle(frame, tuple(point), 3, (255, 255, 255), -1)  # Smaller white outline
+                                cv2.circle(frame, tuple(point), 2, point_color, -1)  # Smaller colored center
                         else:
                             if part_name == "pose":
-                                cv2.circle(frame, tuple(point), 6, point_color, -1)
+                                cv2.circle(frame, tuple(point), 4, point_color, -1)  # Smaller
                             elif part_name in ["left_hand", "right_hand"]:
-                                cv2.circle(frame, tuple(point), 4, point_color, -1)
+                                cv2.circle(frame, tuple(point), 3, point_color, -1)  # Smaller
                             else:  # face
-                                cv2.circle(frame, tuple(point), 3, point_color, -1)
+                                cv2.circle(frame, tuple(point), 2, point_color, -1)  # Smaller
             
             # Add frame number with better visibility on video backgrounds
             frame_text = f"Frame {frame_idx + 1}/{len(keypoints_2d)}"

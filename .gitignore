@@ -1,6 +1,7 @@
 # Python
 __pycache__/
 *.pyc
+*.ipynb
 
 # Virtual Environments
 .venv/
@@ -10,6 +11,9 @@ venv311/
 
 # Archive
 .archive/
+
+# Streamlit
+.streamlit/Guides/
 
 # Data Directory Structure
 # Ignore everything in data/ by default
@@ -40,6 +44,11 @@ data/splitting/**/*.pyc
 *.mp4
 *.avi
 *.mov
+
+# Exception: Allow demo files
+!data/demo/*.npz
+!data/demo/*.mov
+!data/demo/*.MOV
 
 # Exception: Allow specific CSV files
 !preprocessing/utils/rename.csv
