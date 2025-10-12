@@ -14,24 +14,9 @@ This directory contains comprehensive documentation for the **PANSINAYAN Filipin
 
 **Visual overview and command cheat sheet**
 
-**Contents**:
+**Contents**: Visual pipeline overview, session state flow, file status state machine, workflow transitions, configuration reference, performance benchmarks, error handling, command cheat sheet, troubleshooting guide
 
-- 🎨 Complete visual pipeline overview (ASCII diagram)
-- 🔄 Session state flow diagram
-- 🎯 File status state machine
-- 🔀 Workflow stage transitions
-- ⚙️ Configuration quick reference
-- 📊 Performance benchmarks
-- ⚠️ Error handling summary
-- 📁 Key file locations map
-- 💻 Command cheat sheet
-- 🔧 Troubleshooting quick guide
-- 📚 Documentation index
-
-**Audience**: All users  
-**Format**: Quick-reference tables and diagrams  
-**Use Case**: Fast lookup, troubleshooting, command reference  
-**Scope**: Streamlit application workflow
+**Best for**: Fast lookup, troubleshooting, command reference | **Audience**: All users
 
 ---
 
@@ -39,93 +24,19 @@ This directory contains comprehensive documentation for the **PANSINAYAN Filipin
 
 **Complete technical architecture of the web application**
 
-**Contents**:
+**Contents**: System architecture, entry points, configuration layer, manager layer (upload/preprocessing/prediction/validation), backend processing (feature extractors, occlusion detection), UI components, model inference, model implementations (Transformer & InceptionV3-GRU), data flow, design patterns, security, performance optimizations
 
-- 🏗️ System architecture overview
-- 📍 Entry points and application flow
-- ⚙️ Configuration layer
-- 👔 Manager layer (workflow orchestration)
-  - Upload manager
-  - Preprocessing manager
-  - Prediction manager
-  - Validation manager
-- 🔧 Backend processing layer
-  - Data processing
-  - Feature extractors (MediaPipe, InceptionV3)
-  - Occlusion detection
-- 🎨 UI components layer
-  - Reusable components
-  - Validation components
-  - Visualization components
-- 🤖 Model inference layer
-  - Prediction module
-  - Validation module
-- 🏛️ Model implementations
-  - SignTransformer architecture
-  - InceptionV3-GRU architecture
-- 📊 Data flow architecture
-- 🎯 Design patterns & principles
-- 🔒 Security & validation
-- 📈 Performance optimizations
-- 📖 Documentation & resources
-
-**File Size**: ~75KB  
-**Depth**: Very deep technical analysis  
-**Audience**: Developers, system architects  
-**Use Case**: Understanding Streamlit tool architecture  
-**Scope**: Web application only (not training/research pipeline)
+**Best for**: Understanding web app architecture, extending the system | **Audience**: Developers, system architects
 
 ---
 
-#### 3. **pansinayan_training_pipeline.md** (ML Research Pipeline) **[NEW]**
+#### 3. **pansinayan_training_pipeline.md** (ML Research Pipeline)
 
 **Complete machine learning pipeline from data to trained models**
 
-**Contents**:
+**Contents**: Data collection (FSL-105 dataset), preprocessing pipeline (video processing, feature extraction, occlusion detection), data splitting strategy (stratified 80/20), training workflow (configuration, training loop, checkpointing), model evaluation (metrics, occlusion analysis, comparison), pipeline flow, hardware recommendations, integration with Streamlit tool
 
-- 📦 Data collection & preparation
-  - FSL-105 dataset overview
-  - Raw data structure
-  - Semantic categories
-- ⚙️ Preprocessing pipeline
-  - Video downsampling
-  - Background removal (MediaPipe Selfie Segmentation)
-  - Keypoint extraction (78 landmarks → 156-D)
-  - InceptionV3 feature extraction (→ 2048-D)
-  - Gap interpolation
-  - Occlusion detection
-  - NPZ file generation
-- 🔀 Data splitting strategy
-  - Stratified 80/20 methodology
-  - Hash-based determinism
-  - Train/val structure
-- 🎓 Training workflow
-  - Dataset loading
-  - Model initialization (both models)
-  - Training configuration (optimizer, loss, scheduler)
-  - Training loop
-  - Advanced features (AMP, gradient clipping)
-- 📊 Model evaluation
-  - Validation script
-  - Metrics computation
-  - Occlusion-based analysis
-  - Model comparison
-- 🔄 Complete pipeline flow
-  - End-to-end diagram
-  - Timeline estimates
-  - Hardware recommendations
-  - Reproducibility checklist
-- 🔗 Integration with Streamlit tool
-- 📁 Key files reference
-- 🔧 Common issues & solutions
-- 📋 Research workflow summary
-- 🎯 Connection to thesis methodology
-
-**File Size**: ~25KB  
-**Depth**: Comprehensive research workflow  
-**Audience**: Researchers, ML engineers  
-**Use Case**: Training models, understanding ML pipeline  
-**Scope**: Data → Preprocessing → Training → Evaluation (not the Streamlit tool)
+**Best for**: Training models, understanding ML research workflow | **Audience**: Researchers, ML engineers
 
 ---
 
@@ -133,21 +44,9 @@ This directory contains comprehensive documentation for the **PANSINAYAN Filipin
 
 **End-to-end usage guide for the Streamlit application**
 
-**Contents**:
+**Contents**: Getting started, upload workflow, preprocessing workflow, prediction workflow, visualization features, validation workflow, export options, troubleshooting
 
-- 🚀 Getting started
-- 📤 Upload workflow
-- ⚙️ Preprocessing workflow
-- 🤖 Prediction workflow
-- 📊 Visualization features
-- 📈 Validation workflow
-- 💾 Export and download options
-- 🔧 Troubleshooting
-
-**Audience**: End users  
-**Format**: Step-by-step workflow guide  
-**Use Case**: Learning how to use the Streamlit application  
-**Scope**: User-facing Streamlit tool features
+**Best for**: Learning how to use the application step-by-step | **Audience**: End users
 
 ---
 
@@ -155,40 +54,9 @@ This directory contains comprehensive documentation for the **PANSINAYAN Filipin
 
 **Theoretical methodology and experimental design**
 
-**Contents**:
+**Contents**: Research design (framework, variables, hypothesis), data sources (FSL-105 dataset details), research instrument (system architecture, preprocessing pipeline, Transformer & InceptionV3-GRU models), data generation procedure, data analysis (metrics, statistical tests)
 
-- 🔬 Research design
-  - Research framework
-  - Variables (independent and dependent)
-  - Experimental conditions
-  - Hypothesis testing
-- 📊 Data sources: FSL-105 dataset
-  - Dataset overview
-  - Dataset composition
-  - Participant information
-  - Recording specifications
-  - Sign language features captured
-  - Data split (80/20)
-- 🏗️ Research instrument: System architecture
-  - Overall system design
-  - Preprocessing pipeline (detailed)
-  - Transformer architecture (detailed)
-  - Multi-head attention mechanism (MHAM)
-  - Baseline model: InceptionV3-GRU
-- 📋 Data generation procedure
-  - Pre-experimentation phase
-  - Experimentation phase
-  - Post-experimentation phase
-- 📈 Data analysis
-  - Performance metric formulas
-  - Statistical test selection
-  - Multiple comparison correction
-
-**File Size**: ~90KB  
-**Depth**: Very deep theoretical analysis  
-**Audience**: Researchers, thesis reviewers  
-**Use Case**: Understanding research methodology and theoretical framework  
-**Scope**: Academic/research perspective
+**Best for**: Understanding research methodology and theoretical framework | **Audience**: Researchers, thesis reviewers
 
 ---
 
@@ -196,21 +64,11 @@ This directory contains comprehensive documentation for the **PANSINAYAN Filipin
 
 #### 6. **streamlit_app/TOOL_GUIDE.md** (Application User Guide)
 
-**How to use the PANSINAYAN web interface**
-
-**Audience**: End users  
-**Format**: Step-by-step tutorial
-
----
+**How to use the PANSINAYAN web interface** | **Audience**: End users
 
 #### 7. **README.md** (Project Overview)
 
-**Quick start and project introduction**
-
-**Audience**: All users (first contact)  
-**Format**: Quick start guide
-
----
+**Quick start and project introduction** | **Audience**: All users (first contact)
 
 ## 🗺️ Navigation Guide
 
@@ -227,8 +85,6 @@ This directory contains comprehensive documentation for the **PANSINAYAN Filipin
 
 **Quick Start**: Launch app (`streamlit run run_app.py`) → Follow in-app guidance
 
----
-
 #### 👨‍💻 **Developers** (Want to understand or extend the system)
 
 **Recommended Reading Order**:
@@ -240,8 +96,6 @@ This directory contains comprehensive documentation for the **PANSINAYAN Filipin
 5. Source code with documentation as reference
 
 **Quick Start**: Read architecture docs → Explore code with docstrings
-
----
 
 #### 🔬 **Researchers** (Want to understand the methodology and train models)
 
@@ -255,78 +109,76 @@ This directory contains comprehensive documentation for the **PANSINAYAN Filipin
 
 **Quick Start**: Follow training pipeline commands → Run experiments → Analyze results
 
----
-
 ### By Topic
 
-#### 📤 **File Upload & Input Handling**
+#### 📤 File Upload & Input Handling
 
 - **pansinayan_system_architecture.md** → Section II.1: Upload Manager
 - **pansinayan_complete_pipeline.md** → Upload workflow
 - **pansinayan_quick_reference.md** → Stage 1: Upload
 
-#### ⚙️ **Video Preprocessing & Feature Extraction**
+#### ⚙️ Video Preprocessing & Feature Extraction
 
 - **pansinayan_training_pipeline.md** → Section 2: Preprocessing Pipeline (detailed)
 - **pansinayan_system_architecture.md** → Section III: Backend Processing Layer
 - **preprocessing/docs/PREPROCESS_GUIDE.MD** → Detailed preprocessing guide
 - **preprocessing/docs/OCCLUSION_GUIDE.md** → Occlusion detection details
 
-#### ✅ **Data Validation**
+#### ✅ Data Validation
 
 - **pansinayan_system_architecture.md** → Section III: Backend Processing
 - **pansinayan_quick_reference.md** → Stage 3: Data Validation
 
-#### 🤖 **Model Architecture & Implementation**
+#### 🤖 Model Architecture & Implementation
 
 - **thesis_methodology.md** → Section 3: Research Instrument
 - **pansinayan_system_architecture.md** → Section VI: Model Implementations
 - **models/MODEL_GUIDE.md** → Architecture specifications
 
-#### 🎓 **Model Training**
+#### 🎓 Model Training
 
 - **pansinayan_training_pipeline.md** → Section 4: Training Workflow (complete)
 - **training/TRAINING_GUIDE.md** → Training instructions
 - **thesis_methodology.md** → Section 4: Data Generation Procedure
 
-#### 📊 **Data Splitting**
+#### 📊 Data Splitting
 
 - **pansinayan_training_pipeline.md** → Section 3: Data Splitting Strategy
 - **data/splitting/data_split.py** → Implementation
 
-#### 🔮 **Model Inference & Prediction**
+#### 🔮 Model Inference & Prediction
 
 - **pansinayan_system_architecture.md** → Section V: Model Inference Layer
 - **evaluation/prediction/PREDICTION_GUIDE.md** → Prediction guide
 
-#### 📊 **Results & Visualization**
+#### 📊 Results & Visualization
 
 - **pansinayan_system_architecture.md** → Section IV.3: Visualization Components
 - **pansinayan_complete_pipeline.md** → Visualization workflow
 
-#### 📈 **Model Validation & Evaluation**
+#### 📈 Model Validation & Evaluation
 
 - **pansinayan_training_pipeline.md** → Section 5: Model Evaluation
 - **pansinayan_system_architecture.md** → Section II.4: Validation Manager
 - **evaluation/validation/VALIDATION_GUIDE.md** → Validation guide
 
-#### 🔄 **Data Flow & State Management**
+#### 🔄 Data Flow & State Management
 
 - **pansinayan_system_architecture.md** → Section VIII: Data Flow Architecture
 - **pansinayan_quick_reference.md** → Session State Flow
 
-#### ⚠️ **Error Handling & Troubleshooting**
+#### ⚠️ Error Handling & Troubleshooting
 
 - **pansinayan_system_architecture.md** → Section XI: Error Handling & Recovery
 - **pansinayan_quick_reference.md** → Troubleshooting Quick Guide
 - **streamlit_app/TOOL_GUIDE.md** → Troubleshooting section
 
-#### ⚡ **Performance Optimization**
+#### ⚡ Performance Optimization
 
 - **pansinayan_system_architecture.md** → Section XII: Performance Optimizations
 - **pansinayan_quick_reference.md** → Performance Benchmarks
 
-#### ⚙️ **Configuration**
+#### ⚙️ Configuration
 
 - **pansinayan_system_architecture.md** → Section I.2: Configuration Layer
 - **pansinayan_quick_reference.md** → Configuration Quick Reference
@@ -335,15 +187,15 @@ This directory contains comprehensive documentation for the **PANSINAYAN Filipin
 
 ## 📋 Document Comparison Matrix
 
-| Document                              | Length | Depth        | Audience    | Scope          | Best For                               |
-| ------------------------------------- | ------ | ------------ | ----------- | -------------- | -------------------------------------- |
-| **pansinayan_quick_reference.md**     | 20KB   | Overview     | All users   | Streamlit tool | Fast lookup, commands, troubleshooting |
-| **pansinayan_system_architecture.md** | 75KB   | Very deep    | Developers  | Streamlit tool | Understanding web app architecture     |
-| **pansinayan_training_pipeline.md**   | 25KB   | Deep         | Researchers | ML pipeline    | Training models, research workflow     |
-| **pansinayan_complete_pipeline.md**   | Medium | User-focused | End users   | Streamlit tool | Using the application step-by-step     |
-| **thesis_methodology.md**             | 90KB   | Very deep    | Researchers | Research       | Theoretical framework, methodology     |
-| **streamlit_app/TOOL_GUIDE.md**       | Medium | User-focused | End users   | Streamlit tool | Application features and usage         |
-| **README.md**                         | Short  | Overview     | All         | Project        | Getting started, installation          |
+| Document                              | Purpose                        | Audience    | Best For                               |
+| ------------------------------------- | ------------------------------ | ----------- | -------------------------------------- |
+| **pansinayan_quick_reference.md**     | Quick reference & commands     | All users   | Fast lookup, commands, troubleshooting |
+| **pansinayan_system_architecture.md** | Streamlit tool architecture    | Developers  | Understanding web app architecture     |
+| **pansinayan_training_pipeline.md**   | ML research pipeline           | Researchers | Training models, research workflow     |
+| **pansinayan_complete_pipeline.md**   | User workflow guide            | End users   | Using the application step-by-step     |
+| **thesis_methodology.md**             | Research methodology           | Researchers | Theoretical framework, methodology     |
+| **streamlit_app/TOOL_GUIDE.md**       | Application user guide         | End users   | Application features and usage         |
+| **README.md**                         | Project overview & quick start | All         | Getting started, installation          |
 
 ---
 
@@ -594,8 +446,6 @@ Stage 6: DEPLOYMENT
 
 **Outcome**: Can upload and get predictions
 
----
-
 ### Path 2: Application User (2-3 hours)
 
 **Goal**: Master the Streamlit application features
@@ -607,8 +457,6 @@ Stage 6: DEPLOYMENT
 5. Hands-on practice (60 min)
 
 **Outcome**: Proficient with all application features
-
----
 
 ### Path 3: System Developer (1-2 days)
 
@@ -622,8 +470,6 @@ Stage 6: DEPLOYMENT
 
 **Outcome**: Can modify and extend the system
 
----
-
 ### Path 4: ML Researcher (2-3 days)
 
 **Goal**: Understand methodology and train new models
@@ -636,8 +482,6 @@ Stage 6: DEPLOYMENT
 6. Run experiments following pipeline commands
 
 **Outcome**: Can conduct research and train models
-
----
 
 ## 📖 Documentation Reading Sequence
 
@@ -785,96 +629,6 @@ Stage 6: DEPLOYMENT
 5. **Code exploration**: Read architecture docs first, then explore code with docstrings
 6. **Research**: Start with `thesis_methodology.md` for theoretical background
 
----
-
-## 📊 Statistics
-
-### Documentation Coverage
-
-- **Total Documentation Files**: 20+ files
-- **PANSINAYAN Core Docs**: 6 files (~200KB total)
-- **Supporting Guides**: 14+ files
-- **Code Examples**: 150+ across all docs
-- **Diagrams**: 15+ visual diagrams
-- **Command Examples**: 50+ CLI commands
-
-### Content Breakdown
-
-- **Streamlit Tool**: 3 dedicated docs + 1 user guide
-- **ML Research Pipeline**: 2 dedicated docs + training/eval guides
-- **Preprocessing**: 2 dedicated guides + 3 source files
-- **Models**: 1 guide + 2 implementation files + thesis section
-- **Deployment**: 2 guides
-
----
-
-## 🔄 Document Update History
-
-### October 12, 2025
-
-- ✅ Created `pansinayan_training_pipeline.md` - Complete ML pipeline documentation
-- ✅ Updated `pansinayan_system_architecture.md` - Added design rationales, background removal, coordinate normalization
-- ✅ Updated `pansinayan_quick_reference.md` - Added background removal, fixed document references
-- ✅ Updated `pansinayan_doc_index.md` - Complete rewrite with accurate references
-
-### October 11, 2025
-
-- ✅ Created `pansinayan_system_architecture.md` - System architecture analysis
-- ✅ Created `pansinayan_complete_pipeline.md` - User workflow guide
-- ✅ Created `pansinayan_quick_reference.md` - Quick reference
-- ✅ Created `thesis_methodology.md` - Research methodology
-
----
-
-## ✅ Documentation Completeness Checklist
-
-**Core Documentation**:
-
-- [x] Quick reference guide
-- [x] System architecture (Streamlit tool)
-- [x] Training pipeline (ML research)
-- [x] User workflow guide
-- [x] Research methodology (thesis)
-- [x] Document index (this file)
-
-**Application Features**:
-
-- [x] Upload & input handling
-- [x] Video preprocessing
-- [x] Data validation
-- [x] Model prediction
-- [x] Results visualization
-- [x] Model validation
-
-**Technical Details**:
-
-- [x] Manager layer patterns
-- [x] Data flow architecture
-- [x] Session state management
-- [x] Model implementations
-- [x] Performance optimizations
-- [x] Error handling
-
-**Research Pipeline**:
-
-- [x] Data collection
-- [x] Preprocessing methodology
-- [x] Data splitting strategy
-- [x] Training workflow
-- [x] Model evaluation
-- [x] Statistical analysis approach
-
-**Supporting Materials**:
-
-- [x] Command cheat sheets
-- [x] Troubleshooting guides
-- [x] Configuration references
-- [x] Performance benchmarks
-- [x] Code examples
-- [x] Visual diagrams
-
----
-
 ## 🚀 Getting Started Recommendations
 
 ### First-Time Users
@@ -893,53 +647,15 @@ Stage 6: DEPLOYMENT
 
 **Start here**: pansinayan_quick_reference.md → Troubleshooting section
 
----
-
 ## 📞 Additional Resources
 
-### In-Code Documentation
+**In-Code Documentation**: All source files contain comprehensive docstrings (module, class, function-level)
 
-All source files contain comprehensive docstrings:
-
-- Module-level: Purpose and usage
-- Class-level: Responsibilities and design
-- Function-level: Args, returns, raises
-- Inline comments: Complex logic explanations
-
-### Configuration Files
-
-- `.streamlit/config.toml` - Streamlit server configuration
-- `streamlit_app/core/config.py` - Application configuration
-- `requirements.txt` - Python dependencies
+**Configuration Files**: `.streamlit/config.toml`, `streamlit_app/core/config.py`, `requirements.txt`
 
 ---
 
-## 🎯 Documentation Maintenance
-
-### Keeping Documentation Updated
-
-**When to Update**:
-
-- New features added to Streamlit tool → Update `pansinayan_system_architecture.md`
-- New preprocessing steps → Update `pansinayan_training_pipeline.md`
-- Changed ML pipeline → Update `pansinayan_training_pipeline.md` and `thesis_methodology.md`
-- New commands/options → Update `pansinayan_quick_reference.md`
-- Architecture changes → Update `pansinayan_system_architecture.md`
-
-**Update Checklist**:
-
-1. Update relevant core document
-2. Update quick reference if adding commands/configs
-3. Update this index if adding new documents
-4. Update version history section
-5. Check cross-references are still valid
-
----
-
-**Documentation Index Status**: ✅ Complete and Accurate  
-**Last Updated**: October 12, 2025  
-**Current Documents**: 6 core docs + 14 supporting guides  
-**Maintainer**: PANSINAYAN Development Team
+**Last Updated**: October 12, 2025 | **Status**: ✅ Complete
 
 ---
 
