@@ -45,22 +45,11 @@ from ..extractors.keypoints_features import (
 )
 
 # ----------------------------
-# Global InceptionV3 Model Setup
+# Model Configuration
 # ----------------------------
-# Initialize once at module import for efficiency across multiple calls
-
-# Load pre-trained InceptionV3 with ImageNet weights
+# Define model weights to use (weights are cached by PyTorch after first download)
+# Each worker creates its own model instance for proper GPU isolation
 _iv3_weights = Inception_V3_Weights.IMAGENET1K_V1
-_iv3_model = inception_v3(weights=_iv3_weights)
-
-# Configure model for feature extraction (not classification)
-_iv3_model.aux_logits = False  # Disable auxiliary classifier outputs
-_iv3_model.fc = nn.Identity()  # Replace final layer to return 2048D features
-_iv3_model.eval()  # Set to evaluation mode (disable dropout, batch norm updates)
-
-# Freeze all parameters for inference-only mode
-for p in _iv3_model.parameters():
-    p.requires_grad = False
 
 # ImageNet normalization constants (RGB channel means and standard deviations)
 _IMAGENET_MEAN = torch.tensor([0.485, 0.456, 0.406]).view(3, 1, 1)
@@ -126,9 +115,19 @@ class BatchedInceptionV3Processor:
         self._init_model()
     
     def _init_model(self):
-        """Initialize InceptionV3 model using the global model for consistency."""
-        # Use the global model and move it to target device
-        self.model = _iv3_model.to(self.device)
+        """Initialize a NEW InceptionV3 model instance for this worker."""
+        # Create independent model instance per worker (weights are cached by PyTorch)
+        model = inception_v3(weights=_iv3_weights)
+        model.aux_logits = False
+        model.fc = nn.Identity()
+        model.eval()
+        
+        # Move to target device and keep it there
+        self.model = model.to(self.device)
+        
+        # Freeze parameters for inference
+        for p in self.model.parameters():
+            p.requires_grad = False
     
     def preprocess_frame(self, frame_bgr, image_size=(299, 299)):
         """Preprocess a single BGR frame for InceptionV3 input."""
@@ -181,25 +180,36 @@ def extract_iv3_features(frame_bgr, image_size=(299, 299), device=None):
     4. Forward pass through pre-trained InceptionV3
     5. Return 2048-dimensional feature vector
     
+    Note: This function creates a new model instance for thread safety.
+    For batch processing, use BatchedInceptionV3Processor instead.
+    
     Args:
         frame_bgr: OpenCV BGR image (H, W, 3) in [0, 255] pixel range
         image_size: Target image size for InceptionV3 (default: 299x299)
-        device: PyTorch device for computation (default: CPU)
+        device: PyTorch device for computation (default: CUDA if available)
         
     Returns:
         Feature vector [2048] as float32 numpy array
     """
     if device is None:
-        device = torch.device("cpu")
+        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+    # Create model instance for thread safety (weights cached by PyTorch)
+    model = inception_v3(weights=_iv3_weights)
+    model.aux_logits = False
+    model.fc = nn.Identity()
+    model.eval()
+    model = model.to(device)
+    
+    for p in model.parameters():
+        p.requires_grad = False
 
     # STEP 1-3: Preprocess frame using shared utility
     tensor = _preprocess_frame_to_tensor(frame_bgr, image_size, device)
 
     # STEP 4: Forward pass through InceptionV3 (no gradient computation needed)
     with torch.no_grad():
-        # Ensure model is on the correct device
-        model_on_device = _iv3_model.to(device)
-        feats = model_on_device(tensor)  # Shape: [1, 2048]
+        feats = model(tensor)  # Shape: [1, 2048]
     
     # STEP 5: Return as numpy array on CPU
     return feats.squeeze(0).cpu().numpy()
