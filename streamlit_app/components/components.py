@@ -940,7 +940,7 @@ def render_model_status():
     
     # Add validation button below model status
     st.sidebar.markdown("<div style='height: 0.2rem;'></div>", unsafe_allow_html=True)
-    if st.sidebar.button("Validate Models", help="Access model validation mode", use_container_width=True):
+    if st.sidebar.button("Validate Models", help="Access model validation mode", width='stretch'):
         st.session_state.workflow_stage = 'validation'
         st.rerun()
     
@@ -1200,7 +1200,7 @@ def render_video_carousel(video_files) -> None:
                     help=f"Click to view {video_file.name}" if not is_selected else f"Currently viewing {video_file.name}",
                     type="primary" if is_selected else "secondary",
                     disabled=False,
-                    use_container_width=True
+                    width='stretch'
                 ):
                     st.session_state.selected_video_index = i
                     st.rerun()

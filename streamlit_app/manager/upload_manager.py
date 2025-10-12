@@ -100,7 +100,7 @@ def render_upload_stage():
                 button_text = "Proceed to Processing"
                 button_help = "Move to appropriate processing stage"
             
-            if st.button(button_text, type="primary", help=button_help, use_container_width=True):
+            if st.button(button_text, type="primary", help=button_help, width='stretch'):
                 proceed_to_next_stage()
             
         

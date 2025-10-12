@@ -86,7 +86,7 @@ def render_validation_stage(cfg: Dict):
     batch_size, device = render_validation_configuration()
     
     # Run validation
-    if st.button("Run Validation", type="primary", use_container_width=True):
+    if st.button("Run Validation", type="primary", width='stretch'):
         try:
             progress_bar = st.progress(0)
             status_text = st.empty()

@@ -686,7 +686,7 @@ def render_batch_summary_tab(cfg: Dict):
     # Interactive table with row selection
     selected_rows = st.dataframe(
         summary_data, 
-        use_container_width=True,
+        width='stretch',
         on_select="rerun",
         selection_mode="single-row",
         key="summary_table_selection"

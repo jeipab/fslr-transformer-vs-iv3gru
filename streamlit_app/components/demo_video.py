@@ -31,7 +31,7 @@ def render_demo_button():
     if st.sidebar.button(
         "Play Demo Video", 
         help="Watch the FSLR demo video",
-        use_container_width=True,
+        width='stretch',
         type="secondary"
     ):
         # Open the dialog
