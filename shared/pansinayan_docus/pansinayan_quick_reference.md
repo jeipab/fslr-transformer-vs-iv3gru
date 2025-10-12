@@ -1,5 +1,9 @@
 # PANSINAYAN Pipeline - Quick Reference Guide
 
+**Scope**: This quick reference covers the **Streamlit application workflow** (Upload → Preprocess → Predict → Validate). For the complete research/training pipeline (Data Collection → Preprocessing → Training → Model Evaluation), see `pansinayan_training_pipeline.md`.
+
+---
+
 ## Visual Pipeline Overview
 
 ```
@@ -29,26 +33,32 @@
 │ Processor: preprocessing/core/preprocess.py → process_videos_multiprocess()          │
 ├──────────────────────────────────────────────────────────────────────────────────────┤
 │ Feature Extractors:                                                                  │
-│   1. MediaPipe Keypoints (156-D)                                                     │
+│   1. Background Removal                                                              │
+│      • Tool: MediaPipe Selfie Segmentation                                           │
+│      • Process: Isolate signer from background using binary mask                     │
+│      • Purpose: Focus on relevant features, improve generalization                   │
+│                                                                                      │
+│   2. MediaPipe Keypoints (156-D)                                                     │
 │      • File: preprocessing/extractors/keypoints_features.py                          │
 │      • Components: Pose (25) + Hands (42) + Face (11) = 78 keypoints × 2 coords      │
+│      • Normalized: [0, 1] coordinates (translation/scale invariant)                  │
 │      • Output: X [T, 156]                                                            │
 │                                                                                      │
-│   2. InceptionV3 Features (2048-D)                                                   │
+│   3. InceptionV3 Features (2048-D)                                                   │
 │      • File: preprocessing/extractors/iv3_features.py                                │
 │      • Pretrained CNN (ImageNet, frozen)                                             │
 │      • Output: X2048 [T, 2048]                                                       │
 │                                                                                      │
-│   3. Occlusion Detection                                                             │
+│   4. Occlusion Detection                                                             │
 │      • File: preprocessing/core/occlusion_detection.py                               │
-│      • Frame-level: <60% keypoints visible                                           │
-│      • Clip-level: ≥40% frames OR ≥15 consecutive frames occluded                    │
+│      • Multi-method: fingertip intersection, proximity, trajectory, orientation      │
+│      • Temporal filtering: 5 consecutive frames (2 skips allowed)                    │
 │      • Output: occluded_flag (0 or 1)                                                │
 ├──────────────────────────────────────────────────────────────────────────────────────┤
 │ Processing Options (config.py):                                                      │
 │   • target_fps: 30 (frame sampling rate)                                             │
 │   • out_size: 256 (frame resize dimension)                                           │
-│   • write_keypoints: True (extract MediaPipe)                                        │ 
+│   • write_keypoints: True (extract MediaPipe)                                        │
 │   • write_iv3_features: True (extract InceptionV3)                                   │
 │   • occ_detailed: False (detailed metrics)                                           │
 ├──────────────────────────────────────────────────────────────────────────────────────┤
@@ -428,26 +438,26 @@ enableWebsocketCompression = true  # Performance
 
 ## Performance Benchmarks
 
-| Operation | Sequential | Optimized | Speedup |
-|-----------|-----------|-----------|---------|
-| Model Loading (first) | 5-10s | 100-500ms (cached) | 10-100x |
-| Video Preprocessing (single) | 45-60s | 5-8s (GPU, parallel) | 6-12x |
-| Batch Preprocessing (10 videos) | 450-600s | 60-90s | 5-10x |
-| Feature Extraction | 30-45s | 3-5s (GPU, batched) | 6-9x |
-| Model Inference | 2-5s | 100-500ms (GPU, cached) | 4-50x |
-| NPZ File Size | 50-200 KB | 10-50 KB (compressed) | 3-5x |
+| Operation                       | Sequential | Optimized               | Speedup |
+| ------------------------------- | ---------- | ----------------------- | ------- |
+| Model Loading (first)           | 5-10s      | 100-500ms (cached)      | 10-100x |
+| Video Preprocessing (single)    | 45-60s     | 5-8s (GPU, parallel)    | 6-12x   |
+| Batch Preprocessing (10 videos) | 450-600s   | 60-90s                  | 5-10x   |
+| Feature Extraction              | 30-45s     | 3-5s (GPU, batched)     | 6-9x    |
+| Model Inference                 | 2-5s       | 100-500ms (GPU, cached) | 4-50x   |
+| NPZ File Size                   | 50-200 KB  | 10-50 KB (compressed)   | 3-5x    |
 
 ---
 
 ## Error Handling Summary
 
-| Stage | Common Errors | Recovery |
-|-------|--------------|----------|
-| **Upload** | File too large, unsupported format | Reject with message |
-| **Preprocessing** | Video codec, MediaPipe failure, CUDA OOM | Mark error, allow retry |
-| **Validation** | Shape mismatch, NaN/Inf, incompatible | Show details, allow re-upload |
-| **Prediction** | Model load failure, CUDA OOM | Use dummy data or show error |
-| **Export** | Disk full, permission error | Retry with delay |
+| Stage             | Common Errors                            | Recovery                      |
+| ----------------- | ---------------------------------------- | ----------------------------- |
+| **Upload**        | File too large, unsupported format       | Reject with message           |
+| **Preprocessing** | Video codec, MediaPipe failure, CUDA OOM | Mark error, allow retry       |
+| **Validation**    | Shape mismatch, NaN/Inf, incompatible    | Show details, allow re-upload |
+| **Prediction**    | Model load failure, CUDA OOM             | Use dummy data or show error  |
+| **Export**        | Disk full, permission error              | Retry with delay              |
 
 ---
 
@@ -564,33 +574,37 @@ python -m preprocessing.utils.validate_npz data/processed/cmb_val --require-x204
 
 ## Documentation Index
 
-| Document | Description | Content |
-|----------|-------------|---------|
-| **PANSINAYAN_PIPELINE.md** | Part 1: Stages 1-4 | Upload, Preprocessing, Validation, Prediction |
-| **PANSINAYAN_PIPELINE_PART2.md** | Part 2: Stages 5-6 + System | Visualization, Model Validation, Data Flow, Config, Performance |
-| **PIPELINE_QUICK_REFERENCE.md** | This document | Visual overview, quick reference, cheat sheet |
-| **system_archi_analysis.md** | System architecture | Complete technical architecture analysis |
-| **streamlit_app/TOOL_GUIDE.md** | User guide | How to use PANSINAYAN application |
-| **README.md** | Project overview | Quick start, features, workflow |
+| Document                              | Purpose                     | Content                                                   |
+| ------------------------------------- | --------------------------- | --------------------------------------------------------- |
+| **pansinayan_quick_reference.md**     | This document               | Visual overview, quick reference, command cheat sheet     |
+| **pansinayan_system_architecture.md** | Streamlit tool architecture | Complete technical architecture of the web application    |
+| **pansinayan_training_pipeline.md**   | ML research pipeline        | Data preprocessing → Training → Model evaluation workflow |
+| **pansinayan_complete_pipeline.md**   | User workflow guide         | End-to-end usage guide for the Streamlit tool             |
+| **thesis_methodology.md**             | Research framework          | Theoretical methodology and experimental design           |
+| **streamlit_app/TOOL_GUIDE.md**       | Application guide           | How to use PANSINAYAN web interface                       |
+| **README.md**                         | Project overview            | Quick start, installation, features                       |
 
 ---
 
 ## Troubleshooting Quick Guide
 
-| Issue | Likely Cause | Solution |
-|-------|-------------|----------|
-| **Upload fails** | File > 500MB | Compress video or split file |
-| **Video processing slow** | CPU-only processing | Check CUDA availability |
-| **Prediction shows error** | Incompatible NPZ | Check compatibility badges |
-| **Model fails to load** | Checkpoint missing | Verify checkpoint path in config.py |
-| **CUDA out of memory** | Batch size too large | Reduce batch size or use CPU |
-| **Validation fails** | Shape mismatch | Check NPZ structure with validate_npz.py |
-| **Skeleton not visible** | No keypoints (X) | Need 156-D keypoint data |
-| **Reset doesn't work** | original_file_data missing | Re-upload files |
+| Issue                      | Likely Cause               | Solution                                 |
+| -------------------------- | -------------------------- | ---------------------------------------- |
+| **Upload fails**           | File > 500MB               | Compress video or split file             |
+| **Video processing slow**  | CPU-only processing        | Check CUDA availability                  |
+| **Prediction shows error** | Incompatible NPZ           | Check compatibility badges               |
+| **Model fails to load**    | Checkpoint missing         | Verify checkpoint path in config.py      |
+| **CUDA out of memory**     | Batch size too large       | Reduce batch size or use CPU             |
+| **Validation fails**       | Shape mismatch             | Check NPZ structure with validate_npz.py |
+| **Skeleton not visible**   | No keypoints (X)           | Need 156-D keypoint data                 |
+| **Reset doesn't work**     | original_file_data missing | Re-upload files                          |
 
 ---
 
 **Document Status**: Complete Quick Reference  
-**Last Updated**: October 11, 2025  
-**For Detailed Information**: See full pipeline documentation (PANSINAYAN_PIPELINE.md + PART2)
+**Last Updated**: October 12, 2025  
+**For Detailed Information**:
 
+- **Streamlit Tool Architecture**: See `pansinayan_system_architecture.md`
+- **ML Training Pipeline**: See `pansinayan_training_pipeline.md`
+- **User Workflow Guide**: See `pansinayan_complete_pipeline.md`

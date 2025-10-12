@@ -5,6 +5,7 @@
 **PANSINAYAN** (Filipino: "Where Every Sign Gets Attention") is a comprehensive Filipino Sign Language Recognition system that leverages Multi-Head Attention mechanisms. The system is built on a **4-layer architecture** with clear separation of concerns, following the Manager Pattern for workflow orchestration and implementing a complete ML pipeline from video upload to model validation.
 
 ### Core Statistics
+
 - **105 Filipino Sign Glosses** across **10 Semantic Categories**
 - **2 Model Architectures**: Transformer (attention-based) and InceptionV3-GRU (CNN-RNN hybrid)
 - **156-D Keypoint Features** (MediaPipe) and **2048-D Visual Features** (InceptionV3)
@@ -17,6 +18,7 @@
 ### 1.1 Entry Points and Application Flow
 
 #### Primary Entry Point
+
 ```
 run_app.py (8 lines)
   ↓
@@ -28,18 +30,21 @@ Workflow Router: {upload, preprocessing, predictions, validation}
 ```
 
 **File: `run_app.py`**
+
 - Simple launcher script that imports and calls `main()` from streamlit_app
 - Allows execution from project root: `streamlit run run_app.py`
 
 **File: `streamlit_app/core/main.py`**
+
 - **Application Core**: Entry point function that orchestrates the entire workflow
 - **Responsibilities**:
   - Page configuration and sidebar rendering
   - Session state initialization
   - Workflow stage routing (4 stages)
   - Manager delegation pattern
-  
+
 **Workflow Stage Router**:
+
 ```python
 if st.session_state.workflow_stage == 'upload':
     render_upload_stage()           # → upload_manager
@@ -58,6 +63,7 @@ else:  # predictions stage
 Central configuration hub that manages:
 
 1. **Model Configuration** (`MODEL_CONFIG`):
+
    ```python
    {
      'transformer': {
@@ -78,11 +84,13 @@ Central configuration hub that manages:
    ```
 
 2. **Processing Configuration** (`PROCESSING_CONFIG`):
+
    - Video: FPS (30), frame size (256), extraction options
    - NPZ: Sequence length (150), dimensions (156/2048)
    - File limits: Max files (10), max size (100MB)
 
 3. **UI Configuration** (`UI_CONFIG`):
+
    - Color scheme, font sizes, layout parameters
    - Chart heights, sidebar width
 
@@ -92,6 +100,7 @@ Central configuration hub that manages:
    - Enhanced sync for uploads
 
 **Key Design Pattern**: Configuration functions provide encapsulation:
+
 - `get_model_config(model_name)` → model-specific settings
 - `get_checkpoint_path(model_name)` → model path
 - `get_model_supports_keypoints(model_name)` → compatibility check
@@ -108,6 +117,7 @@ The Manager Layer implements the **Manager Pattern** for workflow orchestration,
 **File: `streamlit_app/manager/upload_manager.py`**
 
 **Responsibilities**:
+
 - File upload interface (drag-and-drop, file browser)
 - File type detection and routing
 - Session state initialization
@@ -116,12 +126,14 @@ The Manager Layer implements the **Manager Pattern** for workflow orchestration,
 **Key Functions**:
 
 1. **`initialize_upload_session_state()`**:
+
    - Initializes 10+ session state variables
    - File lists: `uploaded_files`, `npz_files`, `video_files`, `preprocessed_files`
    - Status tracking: `file_status`, `processed_data`, `file_metadata`
    - Workflow control: `workflow_stage`, `current_tab`, `validation_mode`
 
 2. **`render_upload_stage()`**:
+
    - Main upload interface
    - File uploader component (max 10 files)
    - File type routing: NPZ vs Video
@@ -130,6 +142,7 @@ The Manager Layer implements the **Manager Pattern** for workflow orchestration,
    - File statistics dashboard
 
 3. **`route_files_to_stages(uploaded_files)`**:
+
    - **Input**: List of uploaded files
    - **Process**: Detect file type using extension/MIME
    - **Output**: Separates into `npz_files` and `video_files`
@@ -150,6 +163,7 @@ The Manager Layer implements the **Manager Pattern** for workflow orchestration,
      - Mixed → 'preprocessing' (user navigates later)
 
 **Session State Management**:
+
 ```python
 st.session_state = {
     'uploaded_files': [],           # All uploaded files
@@ -169,6 +183,7 @@ st.session_state = {
 **File: `streamlit_app/manager/preprocessing_manager.py`**
 
 **Responsibilities**:
+
 - Video preprocessing workflow
 - Feature extraction control (Keypoints, IV3, Both)
 - Batch and individual processing
@@ -178,6 +193,7 @@ st.session_state = {
 **Key Functions**:
 
 1. **`render_preprocessing_stage()`**:
+
    - Main preprocessing interface
    - Navigation: Back to Upload, Go to Inference
    - File list with status indicators
@@ -185,6 +201,7 @@ st.session_state = {
    - Download buttons for NPZ files
 
 2. **`preprocess_single_video(uploaded_file, filename)`**:
+
    - **Input**: Single video file
    - **Process**:
      ```python
@@ -200,13 +217,15 @@ st.session_state = {
    - **Output**: NPZ data in `st.session_state.processed_data[filename]`
 
 3. **`preprocess_all_pending_videos()`**:
+
    - Batch processing for multiple videos
    - Uses `preprocess_multiple_videos_batch()` for parallel processing
    - Consolidated success/error reporting
 
 4. **`preprocess_multiple_videos_batch(uploaded_files)`**:
+
    - **Multi-processing**: Automatic GPU acceleration
-   - **Resource Detection**: 
+   - **Resource Detection**:
      - CPU count, GPU availability
      - Available memory (RAM/VRAM)
      - Optimal worker calculation
@@ -224,6 +243,7 @@ st.session_state = {
      ```
 
 5. **`reset_preprocessed_videos()`**:
+
    - Reset files back to pending
    - Restore original video data from `original_file_data`
    - Move from preprocessed_files → video_files
@@ -235,6 +255,7 @@ st.session_state = {
    - Timestamp-based ZIP naming
 
 **Preprocessing Options**:
+
 ```python
 options = {
     'target_fps': 30,              # Frame sampling rate
@@ -250,6 +271,7 @@ options = {
 **File: `streamlit_app/manager/prediction_manager.py`**
 
 **Responsibilities**:
+
 - Model loading and caching (Singleton pattern)
 - Real-time predictions for both models
 - Visualization interface (keypoints, features)
@@ -263,17 +285,17 @@ options = {
 ```python
 class ModelManager:
     """Singleton model manager for loading and caching prediction models."""
-    
+
     _instance = None
     _models = {}          # Cache loaded models
     _label_mappings = None
-    
+
     def get_model(self, model_name: str):
         """Get or load model - lazy loading pattern"""
         if model_name not in self._models:
             self._load_model(model_name)
         return self._models.get(model_name)
-    
+
     def _load_model(self, model_name: str):
         """Load model from checkpoint using ModelPredictor"""
         from evaluation.prediction.predict import ModelPredictor
@@ -286,6 +308,7 @@ class ModelManager:
 ```
 
 **Design Pattern**: Singleton with lazy loading
+
 - Single instance shared across the application
 - Models loaded on first use
 - Cached for subsequent predictions
@@ -294,6 +317,7 @@ class ModelManager:
 #### 2.3.2 Prediction Functions
 
 1. **`make_real_prediction(npz_data, model_name)`**:
+
    - **Input**: NPZ data dictionary, model name
    - **Process**:
      ```python
@@ -316,6 +340,7 @@ class ModelManager:
      ```
 
 2. **`render_predictions_stage(cfg)`**:
+
    - Main inference interface
    - Navigation: Back to Preprocessing/Upload, Upload New
    - File management with pagination (5 files per page)
@@ -323,6 +348,7 @@ class ModelManager:
    - Batch summary view
 
 3. **`render_visualization_tabs(cfg)`**:
+
    - File selection dropdown
    - Individual file visualization:
      - Consolidated file info
@@ -343,6 +369,7 @@ class ModelManager:
    - Batch download functionality
 
 **File Pagination**:
+
 ```python
 files_per_page = 5
 total_pages = (len(all_npz_files) - 1) // files_per_page + 1
@@ -358,6 +385,7 @@ page_files = all_npz_files[start_idx:end_idx]
 **File: `streamlit_app/manager/validation_manager.py`**
 
 **Responsibilities**:
+
 - Model evaluation on validation datasets
 - Comprehensive metrics computation
 - Confusion matrix generation
@@ -371,13 +399,13 @@ page_files = all_npz_files[start_idx:end_idx]
 ```python
 class ValidationDataset:
     """Dataset class for loading validation data efficiently."""
-    
+
     def __init__(self, data_dir, labels_csv, model_type):
         # Load labels CSV with encoding handling
         self.labels_df = pd.read_csv(labels_csv)
         # Filter existing NPZ files
         self.valid_files = [...]
-        
+
     def __getitem__(self, idx):
         # Load NPZ data
         # Extract features based on model_type
@@ -386,6 +414,7 @@ class ValidationDataset:
 ```
 
 **Input Dimension Handling**:
+
 ```python
 # Transformer: Auto-detect from config
 input_dim = get_model_input_dim('transformer')
@@ -408,16 +437,16 @@ X = torch.from_numpy(data['X2048']).float()
 ```python
 class ModelValidator:
     """Main validation class for comprehensive model evaluation."""
-    
+
     def __init__(self, model_type, checkpoint_path, device='auto'):
         self.model = self._load_model()
         self._load_checkpoint()
         self.gloss_mapping, self.category_mapping = self._load_label_mappings()
-        
+
     def validate(self, dataset, batch_size=32, progress_callback=None):
         """
         Perform comprehensive validation.
-        
+
         Process:
         1. Batch processing with progress tracking
         2. Prediction collection (gloss, category, probs)
@@ -431,6 +460,7 @@ class ModelValidator:
 ```
 
 **Validation Results Structure**:
+
 ```python
 results = {
     'model_info': {
@@ -479,13 +509,14 @@ results = {
 **Core Function**: `process_videos_unified()`
 
 **Unified Processing Pipeline**:
+
 ```python
 def process_videos_unified(uploaded_files, target_fps=30, out_size=256,
                           write_keypoints=True, write_iv3_features=True,
                           occ_detailed=False):
     """
     Unified processing for single or multiple videos with GPU acceleration.
-    
+
     Process:
     1. Save uploaded files to temporary directory
     2. Get real-time resource information (CPU, GPU, RAM, VRAM)
@@ -500,6 +531,7 @@ def process_videos_unified(uploaded_files, target_fps=30, out_size=256,
 **Resource Optimization**:
 
 1. **`get_dynamic_resource_info()`**:
+
    ```python
    {
      'cpu_count': int,
@@ -513,6 +545,7 @@ def process_videos_unified(uploaded_files, target_fps=30, out_size=256,
    ```
 
 2. **`calculate_optimal_workers(resource_info, video_count)`**:
+
    - Memory-based limit: `available_memory / 2.5GB per video`
    - CPU-based limit: `cpu_count * (100 - cpu_percent) / 100`
    - Conservative choice: `min(memory_limit, cpu_limit, 8)`
@@ -529,6 +562,7 @@ def process_videos_unified(uploaded_files, target_fps=30, out_size=256,
 **Main Processing Functions**:
 
 1. **`process_video(video_path, out_dir, ...)`**:
+
    - Single video processing (sequential)
    - Frame-by-frame extraction and feature computation
    - Saves to NPZ with metadata
@@ -540,16 +574,21 @@ def process_videos_unified(uploaded_files, target_fps=30, out_size=256,
    - Progress tracking with tqdm
 
 **Processing Pipeline per Video**:
+
 ```python
 1. Open video with OpenCV
 2. Extract frames at target FPS
-3. For each frame:
+3. Background Removal (MediaPipe Selfie Segmentation):
+   - Segment person from background using binary mask
+   - Isolates signer to focus on relevant features
+   - Improves model generalization across different environments
+4. For each frame:
    a. Extract MediaPipe keypoints (pose, hands, face) → [78, 2] → flatten to [156]
    b. Extract InceptionV3 features → [2048]
    c. Detect occlusion (hand-face interactions)
-4. Interpolate gaps in keypoints
-5. Compute clip-level occlusion flag
-6. Save to NPZ:
+5. Interpolate gaps in keypoints
+6. Compute clip-level occlusion flag
+7. Save to NPZ:
    - X: [T, 156] keypoints
    - X2048: [T, 2048] features
    - mask: [T, 78] visibility
@@ -563,7 +602,10 @@ def process_videos_unified(uploaded_files, target_fps=30, out_size=256,
 
 **File: `preprocessing/extractors/keypoints_features.py`**
 
+**Why MediaPipe?** MediaPipe Holistic provides real-time, unified detection (pose + hands + face in a single model) with proven reliability for sign language recognition, requiring no GPU for efficient processing.
+
 **MediaPipe Components**:
+
 - **Pose**: 25 upper body landmarks (POSE_UPPER_25)
 - **Hands**: 21 landmarks per hand × 2 hands = 42 points (N_HAND)
 - **Face**: 11 key facial landmarks (FACEMESH_11)
@@ -572,6 +614,7 @@ def process_videos_unified(uploaded_files, target_fps=30, out_size=256,
 **Key Functions**:
 
 1. **`create_models()`** → `MPModels`:
+
    - Initializes MediaPipe Holistic model
    - Configuration:
      - `static_image_mode=False` (video mode)
@@ -585,6 +628,8 @@ def process_videos_unified(uploaded_files, target_fps=30, out_size=256,
    - Returns: `(X[156], mask[78], None, None)`
    - Handles missing detections with zeros
 
+**Coordinate Normalization**: MediaPipe provides landmarks already normalized to [0, 1] range, ensuring translation invariance (signer position independent), scale invariance (camera distance independent), and numerical stability for neural network training.
+
 3. **`interpolate_gaps(X, mask, max_gap=5)`**:
    - Fill short gaps in keypoint sequences
    - Linear interpolation for missing frames
@@ -597,6 +642,7 @@ def process_videos_unified(uploaded_files, target_fps=30, out_size=256,
 **Classes**:
 
 1. **`BatchedInceptionV3Processor`**:
+
    - Batched feature extraction for efficiency
    - GPU acceleration support
    - ImageNet normalization
@@ -619,9 +665,34 @@ def process_videos_unified(uploaded_files, target_fps=30, out_size=256,
 
 **Function**: `compute_occlusion_detection(X, mask, conf_thresh=0.6, consec_thresh=15, frac_thresh=0.4)`
 
+**Why This Approach?** Multi-method detection with consecutive frame filtering reduces false positives from momentary tracking failures and ensures only persistent occlusions are flagged, providing robust quality assessment for sign language videos.
+
+**How It Works**:
+
+1. **Per-Frame Analysis**:
+
+   - Extract hand positions (palm center + fingertips)
+   - Define face regions (forehead, cheeks, nose, mouth, neck)
+   - Check if hand keypoints enter face regions using multiple methods:
+     - Direct fingertip intersection
+     - Palm proximity analysis
+     - Hand trajectory tracking
+     - Hand orientation toward face
+
+2. **Temporal Filtering**:
+
+   - Require 5 consecutive frames with occlusion detection
+   - Allow up to 2 missed frames within window
+   - Minimum confidence threshold: 0.2 per frame
+
+3. **Binary Flag Decision**:
+   - `0` = Clean video (no persistent occlusion)
+   - `1` = Occluded video (hands obscure face)
+
 **Two-Level Occlusion Detection**:
 
 1. **Frame-Level**:
+
    - Check keypoint visibility: `visible_count / total_count < conf_thresh`
    - Detects when hands occlude face landmarks
    - Returns binary mask for each frame
@@ -632,6 +703,7 @@ def process_videos_unified(uploaded_files, target_fps=30, out_size=256,
    - Returns: `0` (clean) or `1` (occluded)
 
 **Output**:
+
 ```python
 {
   'occluded_flag': 0 or 1,           # Clip-level binary flag
@@ -653,21 +725,25 @@ def process_videos_unified(uploaded_files, target_fps=30, out_size=256,
 **Key Components**:
 
 1. **`set_page()`**:
+
    - Configure Streamlit page settings
    - Custom CSS injection for styling
    - Wide layout, custom colors
 
 2. **`render_sidebar()`**:
+
    - Model selection dropdown (SignTransformer / InceptionV3+GRU)
    - Sequence length slider (50-200)
    - Device selection (Auto/CPU)
    - Returns configuration dictionary
 
 3. **`render_main_header()`**:
+
    - Application title and tagline
    - Description of system capabilities
 
 4. **`render_file_upload()`**:
+
    - Multi-file uploader component
    - Supported formats: .npz, .mp4, .mov, .webm
    - Max files: 10
@@ -687,27 +763,32 @@ def process_videos_unified(uploaded_files, target_fps=30, out_size=256,
 **Key Components**:
 
 1. **`render_model_selection()`**:
+
    - Model choice: Transformer / IV3-GRU
    - Checkpoint path display
    - Model status indicator
 
 2. **`render_dataset_upload()`**:
+
    - NPZ folder path input
    - Labels CSV file uploader
    - Validation instructions
 
 3. **`render_validation_configuration()`**:
+
    - Batch size slider (1-64)
    - Device selection
    - Returns (batch_size, device)
 
 4. **`render_validation_summary(results)`**:
+
    - High-level metrics dashboard
    - Overall accuracy, precision, recall, F1
    - Occluded vs non-occluded comparison
    - Visual metric cards
 
 5. **`render_validation_results(results)`**:
+
    - Detailed results tabs:
      - Confusion matrices (heatmaps)
      - Per-class performance
@@ -726,6 +807,7 @@ def process_videos_unified(uploaded_files, target_fps=30, out_size=256,
 **Key Visualization Functions**:
 
 1. **`render_consolidated_file_info(filename, npz_data, metadata, seq_length)`**:
+
    - File details: name, size, frames, duration
    - Compatibility: Transformer/IV3-GRU badges
    - Occlusion status
@@ -733,6 +815,7 @@ def process_videos_unified(uploaded_files, target_fps=30, out_size=256,
    - Returns (X_pad, mask, meta) for downstream visualization
 
 2. **`render_animated_keypoints(X_pad, mask, key_suffix, meta_dict)`**:
+
    - Interactive skeleton animation
    - Frame slider for manual control
    - Play/pause controls with adjustable FPS
@@ -745,17 +828,20 @@ def process_videos_unified(uploaded_files, target_fps=30, out_size=256,
    - Generate video animation option
 
 3. **`render_feature_charts(X_pad, mask, key_suffix)`**:
+
    - Body part selector (Pose/Left Hand/Right Hand/Face)
    - Trajectory plots over time
    - Heatmap visualization
    - Statistical analysis (mean, std, range)
 
 4. **`render_topk_table(top_predictions, k, label_type)`**:
+
    - Formatted table for Top-K predictions
    - Rank, label, ID, probability columns
    - Visual probability bars
 
 5. **`render_file_details_horizontal(filename, npz_data, metadata)`**:
+
    - Compact horizontal file info display
    - Model compatibility badges
    - Occlusion status
@@ -774,10 +860,12 @@ def process_videos_unified(uploaded_files, target_fps=30, out_size=256,
 **Key Utilities**:
 
 1. **`detect_file_type(uploaded_file)`**:
+
    - Detects: 'npz', 'video', 'unknown'
    - Based on file extension and MIME type
 
 2. **`check_npz_compatibility(npz_data)`**:
+
    ```python
    {
      'transformer': has 'X' (156) or 'X2048' (2048),
@@ -786,17 +874,21 @@ def process_videos_unified(uploaded_files, target_fps=30, out_size=256,
    ```
 
 3. **`format_file_size(size_bytes)`**:
+
    - Human-readable file size (B/KB/MB/GB)
 
 4. **`create_npz_bytes(npz_data)`**:
+
    - Convert NPZ dictionary to bytes for download
    - Compressed format
 
 5. **`extract_occlusion_flag(npz_data)`**:
+
    - Extract occlusion flag from metadata
    - Returns 0 or 1
 
 6. **`interpret_occlusion_flag(flag)`**:
+
    - Convert flag to human-readable status
    - Returns "Yes", "No", or "Unknown"
 
@@ -815,6 +907,7 @@ def process_videos_unified(uploaded_files, target_fps=30, out_size=256,
 **Class**: `ModelPredictor`
 
 **Responsibilities**:
+
 - Unified prediction interface for both models
 - Automatic input dimension detection
 - Support for NPZ and video inputs
@@ -823,12 +916,14 @@ def process_videos_unified(uploaded_files, target_fps=30, out_size=256,
 **Key Methods**:
 
 1. **`__init__(model_type, checkpoint_path, device=None)`**:
+
    - Load model architecture
    - Auto-detect input dimension from checkpoint
    - Load trained weights
    - Set to evaluation mode
 
 2. **`_load_model()`**:
+
    - **Transformer**:
      - Detect input_dim from embedding layer shape
      - Supported: 156 (keypoints), 2048 (features), 2204 (combined)
@@ -839,6 +934,7 @@ def process_videos_unified(uploaded_files, target_fps=30, out_size=256,
      - Create InceptionV3GRU with detected parameters
 
 3. **`_load_checkpoint()`**:
+
    - Handle multiple checkpoint formats:
      - `model_state_dict`
      - `state_dict`
@@ -847,6 +943,7 @@ def process_videos_unified(uploaded_files, target_fps=30, out_size=256,
    - Load weights and set to eval mode
 
 4. **`predict_from_npz(npz_path)`**:
+
    - Load NPZ file
    - Extract appropriate features based on model type
    - Prepare input tensor (padding, batching)
@@ -861,6 +958,7 @@ def process_videos_unified(uploaded_files, target_fps=30, out_size=256,
    - Return results + frame count
 
 **Prediction Results Format**:
+
 ```python
 {
   'gloss_prediction': int,           # Predicted gloss ID (0-104)
@@ -880,6 +978,7 @@ def process_videos_unified(uploaded_files, target_fps=30, out_size=256,
 Already covered in Manager Layer section 2.4 (Validation Manager).
 
 Additional capabilities:
+
 - Batch inference with progress tracking
 - Comprehensive metrics computation
 - Scikit-learn integration for metrics
@@ -894,41 +993,52 @@ Additional capabilities:
 
 **File: `models/transformer.py`**
 
+**Why Transformer?** Transformers enable parallel processing of entire sequences with global attention, allowing the model to "look ahead" and capture long-range dependencies. This is particularly beneficial for sign language where context from any frame can inform recognition, and attention mechanisms can dynamically reweight features when occlusion occurs.
+
 **Architecture Components**:
 
 1. **Input Embedding**:
+
    ```python
    nn.Linear(input_dim, emb_dim)  # input_dim=156/2048/2204 → emb_dim=256
    ```
 
 2. **Positional Encoding**:
+
    - Sinusoidal encoding: `PE(pos, 2i) = sin(pos / 10000^(2i/d))`
    - Adds temporal order information
    - Max sequence length: 300
 
 3. **Layer Normalization**:
+
    - Pre-layer normalization for stability
    - Learnable scale and shift parameters
 
 4. **Transformer Encoder Stack** (4 layers):
+
    - Multi-head self-attention (8 heads)
    - Feed-forward network (emb_dim → 4×emb_dim → emb_dim)
    - Residual connections
    - Dropout (0.1)
 
 5. **Pooling**:
+
    - **Mean Pooling**: Average across sequence dimension
    - **Max Pooling**: Max across sequence dimension
    - **CLS Pooling**: Use first token embedding
    - Configurable via `pooling_method`
 
-6. **Classification Heads**:
+6. **Classification Heads** (Dual-Task Learning):
+
    ```python
    gloss_head: Linear(emb_dim → num_gloss=105)
    category_head: Linear(emb_dim → num_cat=10)
    ```
 
+   **Why Dual Heads?** Simultaneous gloss and category prediction enables multi-task learning where semantic categories provide regularization signals, improve feature representations, and aid interpretability through hierarchical evaluation.
+
 **Forward Pass**:
+
 ```python
 Input: X [B, T, input_dim], mask [B, T]
   ↓
@@ -948,6 +1058,7 @@ Output: gloss_logits [B, 105], cat_logits [B, 10]
 ```
 
 **Key Features**:
+
 - Attention weights accessible for interpretability
 - Variable sequence length support
 - Mask handling for padded sequences
@@ -957,9 +1068,12 @@ Output: gloss_logits [B, 105], cat_logits [B, 10]
 
 **File: `models/iv3_gru.py`**
 
+**Why InceptionV3-GRU?** This hybrid CNN-RNN baseline leverages proven ImageNet-pretrained features and sequential temporal modeling, providing a strong comparison point for the Transformer's global attention approach. The simpler architecture with fewer parameters serves as an efficient alternative for resource-constrained deployment.
+
 **Architecture Components**:
 
 1. **InceptionV3 Feature Extractor**:
+
    ```python
    Pretrained InceptionV3 (ImageNet)
    Input: [B, T, 3, 299, 299]
@@ -968,6 +1082,7 @@ Output: gloss_logits [B, 105], cat_logits [B, 10]
    ```
 
 2. **Two-Layer GRU**:
+
    ```python
    GRU1: input_size=2048, hidden_size=16, bidirectional=False
    Dropout(0.3)
@@ -984,6 +1099,7 @@ Output: gloss_logits [B, 105], cat_logits [B, 10]
 **Forward Pass Options**:
 
 1. **From Raw Frames** (`features_already=False`):
+
    ```python
    Input: frames [B, T, 3, 299, 299]
      ↓
@@ -1016,6 +1132,7 @@ Output: gloss_logits [B, 105], cat_logits [B, 10]
    ```
 
 **Key Features**:
+
 - Transfer learning from ImageNet
 - Variable sequence length with packed sequences
 - Efficient: Precomputed features bypass CNN during training
@@ -1032,6 +1149,7 @@ Output: gloss_logits [B, 105], cat_logits [B, 10]
 **Functions**:
 
 1. **`load_label_mappings()`**:
+
    - Loads from `data/splitting/labels_reference.csv`
    - Returns:
      ```python
@@ -1042,6 +1160,7 @@ Output: gloss_logits [B, 105], cat_logits [B, 10]
      ```
 
 2. **`format_prediction_results(results, gloss_mapping, category_mapping)`**:
+
    - Converts model outputs to human-readable format
    - Embeds IDs in labels: `"hello (0)"`
    - Formats top-K predictions
@@ -1051,6 +1170,7 @@ Output: gloss_logits [B, 105], cat_logits [B, 10]
    - Formatted with confidence scores
 
 **Label Categories** (10 categories):
+
 1. GREETING
 2. SURVIVAL
 3. NUMBER
@@ -1073,23 +1193,23 @@ st.session_state = {
     'npz_files': List[UploadedFile],
     'video_files': List[UploadedFile],
     'preprocessed_files': List[TempUploadedFile],
-    
+
     # Processing State
     'file_status': Dict[str, str],          # filename → status
     'processed_data': Dict[str, Dict],      # filename → npz_data
     'file_metadata': Dict[str, Dict],       # filename → metadata
     'original_file_data': Dict[str, Dict],  # filename → original_data
-    
+
     # UI State
     'workflow_stage': str,                  # 'upload'|'preprocessing'|'predictions'|'validation'
     'current_tab': Optional[str],           # Selected file for visualization
     'file_selector': str,                   # Dropdown selection
     'current_file_page': int,               # Pagination
-    
+
     # Validation State
     'validation_mode': bool,
     'validation_results': Optional[Dict],
-    
+
     # Preprocessing Options (cached)
     'occ_detailed_checkbox': bool
 }
@@ -1260,12 +1380,14 @@ Video File (.mp4, .mov)
 ### 9.1 Manager Pattern (Workflow Orchestration)
 
 **Pattern**: Separate managers for each workflow stage
+
 - `upload_manager`: File intake and routing
 - `preprocessing_manager`: Feature extraction workflow
 - `prediction_manager`: Model inference and visualization
 - `validation_manager`: Model evaluation
 
 **Benefits**:
+
 - Clear separation of concerns
 - Independent development/testing
 - Reusable across different UI frameworks
@@ -1274,12 +1396,14 @@ Video File (.mp4, .mov)
 ### 9.2 Singleton Pattern (Model Management)
 
 **Implementation**: `ModelManager` class
+
 - Single instance shared across application
 - Lazy loading: Models loaded on first use
 - Caching: Avoid redundant model loading
 - Resource management: Centralized cleanup
 
 **Benefits**:
+
 - Memory efficiency (single model instance)
 - Performance (avoid repeated loading)
 - Consistent model state
@@ -1288,12 +1412,14 @@ Video File (.mp4, .mov)
 ### 9.3 Session State Management
 
 **Pattern**: Centralized state in `st.session_state`
+
 - All workflow state stored in session
 - Persistent across user interactions
 - Enables complex workflows with navigation
 - Reset/cleanup capabilities
 
 **Benefits**:
+
 - Stateful web application
 - User can navigate between stages
 - Undo/reset functionality
@@ -1302,12 +1428,14 @@ Video File (.mp4, .mov)
 ### 9.4 Configuration-Driven Architecture
 
 **Pattern**: Central configuration in `config.py`
+
 - Model paths and parameters
 - Processing options and defaults
 - UI settings and styling
 - Feature flags
 
 **Benefits**:
+
 - Single source of truth
 - Easy parameter tuning
 - Environment-specific configs
@@ -1316,12 +1444,14 @@ Video File (.mp4, .mov)
 ### 9.5 Compatibility Layer
 
 **Pattern**: Auto-detection and adaptation
+
 - Input dimension detection from checkpoints
 - Feature type detection from NPZ files
 - Model compatibility checking
 - Graceful degradation
 
 **Benefits**:
+
 - Backward compatibility
 - Flexible model loading
 - Support for multiple model variants
@@ -1330,12 +1460,14 @@ Video File (.mp4, .mov)
 ### 9.6 Resource Optimization
 
 **Pattern**: Dynamic resource allocation
+
 - Real-time system metrics (CPU, GPU, RAM)
 - Automatic worker calculation
 - Adaptive batch sizing
 - GPU acceleration when available
 
 **Benefits**:
+
 - Efficient resource utilization
 - Prevents OOM errors
 - Scalable from laptop to server
@@ -1348,10 +1480,12 @@ Video File (.mp4, .mov)
 ### 10.1 Automatic Input Dimension Detection
 
 **Problem**: Models can be trained with different input dimensions
+
 - Transformer: 156 (keypoints), 2048 (features), 2204 (combined)
 - IV3-GRU: Always 2048
 
 **Solution**: Checkpoint introspection
+
 ```python
 # Read checkpoint state dict
 checkpoint = torch.load(checkpoint_path, map_location='cpu')
@@ -1372,6 +1506,7 @@ if 'gru1.weight_hh_l0' in state_dict:
 **Function**: `check_npz_compatibility(npz_data)`
 
 **Logic**:
+
 ```python
 compatibility = {
     'transformer': ('X' in npz_data) or ('X2048' in npz_data),
@@ -1380,6 +1515,7 @@ compatibility = {
 ```
 
 **UI Integration**:
+
 - File metadata includes compatibility info
 - Model selector filters compatible files
 - Warning messages for incompatible selections
@@ -1390,14 +1526,17 @@ compatibility = {
 **Transformer with Combined Features** (156 + 2048 = 2204):
 
 **Preprocessing**:
+
 - Extract both keypoints and IV3 features
 - Save both `X` and `X2048` in NPZ
 
 **Model Loading**:
+
 - Detect `input_dim=2204` from checkpoint
 - Create model with 2204 input dimension
 
 **Data Loading**:
+
 ```python
 if input_dim == 2204:
     X_keypoints = data['X']      # [T, 156]
@@ -1406,6 +1545,7 @@ if input_dim == 2204:
 ```
 
 **Benefits**:
+
 - Leverages both visual and structural features
 - Potential performance improvement
 - Flexible feature combination strategies
@@ -1417,12 +1557,14 @@ if input_dim == 2204:
 ### 11.1 File Processing Errors
 
 **Strategy**: Per-file error isolation
+
 - Status tracking: `'pending'`, `'processing'`, `'completed'`, `'error'`
 - Individual retry buttons
 - Batch processing continues on error
 - Consolidated error reporting
 
 **Recovery**:
+
 - Retry individual files
 - Reset to pending state
 - Clear and re-upload
@@ -1431,12 +1573,14 @@ if input_dim == 2204:
 ### 11.2 Model Loading Errors
 
 **Strategy**: Graceful degradation
+
 - Try multiple checkpoint formats
 - Fallback to default parameters
 - Display error toasts (non-blocking)
 - Allow continuing with other models
 
 **Recovery**:
+
 - Check checkpoint paths
 - Verify model compatibility
 - Re-download checkpoints if needed
@@ -1445,12 +1589,14 @@ if input_dim == 2204:
 ### 11.3 Temporary File Cleanup
 
 **Strategy**: Robust cleanup with retry
+
 - Try multiple times with delays
 - Catch PermissionError (Windows file locks)
 - Use `finally` blocks
 - Clean up on app exit
 
 **Implementation**:
+
 ```python
 for attempt in range(max_retries):
     try:
@@ -1465,12 +1611,14 @@ for attempt in range(max_retries):
 ### 11.4 Session State Recovery
 
 **Strategy**: Initialize with defaults
+
 - Check existence before access
 - Initialize missing keys
 - Reset on major errors
 - Maintain consistency
 
 **Implementation**:
+
 ```python
 if 'key' not in st.session_state:
     st.session_state.key = default_value
@@ -1483,66 +1631,78 @@ if 'key' not in st.session_state:
 ### 12.1 Model Caching (Singleton)
 
 **Optimization**: Load models once, reuse across predictions
+
 - Lazy loading: Load on first use
 - Memory sharing: Single instance
 - Avoid redundant I/O and GPU transfers
 
 **Impact**:
+
 - First prediction: ~5-10 seconds (load time)
 - Subsequent predictions: ~100-500ms (inference only)
 
 ### 12.2 Batch Processing
 
 **Optimization**: Process multiple files in parallel
+
 - Multiprocessing for videos
 - GPU batch inference
 - Optimal worker calculation
 
 **Impact**:
+
 - 30-50x speedup for video preprocessing
 - 5-10x speedup for batch predictions
 
 ### 12.3 GPU Acceleration
 
 **Optimization**: Automatic CUDA utilization
+
 - Device detection: `torch.cuda.is_available()`
 - InceptionV3 feature extraction on GPU
 - Model inference on GPU
 - Batch optimization for GPU memory
 
 **Impact**:
+
 - 10-100x speedup for feature extraction
 - 5-10x speedup for inference
 
 ### 12.4 NPZ Compression
 
 **Optimization**: Use `np.savez_compressed()`
+
 - Smaller file sizes (3-5x reduction)
 - Faster I/O
 - Less storage required
 
 **Impact**:
+
 - Typical file: 10-50 KB (compressed) vs 50-200 KB (uncompressed)
 
 ### 12.5 Streamlit Caching
 
 **Optimization**: Cache expensive computations
+
 - `@st.cache_data`: Data loading
 - `@st.cache_resource`: Model loading
 - Automatic invalidation on parameter change
 
 **Impact**:
+
 - Instant page refreshes after initial load
 - Reduced redundant computation
 
 ### 12.6 Pagination
 
 **Optimization**: Display files in pages
+
 - Files per page: 5
 - Load only visible files
 - Reduce DOM complexity
 
 **Impact**:
+
 - Fast rendering even with 100+ files
 - Responsive UI
 
@@ -1553,12 +1713,14 @@ if 'key' not in st.session_state:
 ### 13.1 File Upload Validation
 
 **Checks**:
+
 - File type validation (extension + MIME)
 - File size limits (500 MB)
 - File count limits (10 files)
 - Malicious content detection (via OpenCV/NumPy load)
 
 **Configuration**: `.streamlit/config.toml`
+
 ```toml
 [server]
 maxUploadSize = 500
@@ -1570,6 +1732,7 @@ enableWebsocketCompression = true
 ### 13.2 Input Validation
 
 **Checks**:
+
 - NPZ structure validation (required keys)
 - Tensor shape validation
 - Value range validation (probabilities 0-1)
@@ -1578,6 +1741,7 @@ enableWebsocketCompression = true
 ### 13.3 Model Checkpoint Validation
 
 **Checks**:
+
 - File existence
 - Loadable checkpoint format
 - Compatible state dict keys
@@ -1590,11 +1754,13 @@ enableWebsocketCompression = true
 ### 14.1 Local Development
 
 **Command**:
+
 ```bash
 streamlit run run_app.py
 ```
 
 **Features**:
+
 - Auto-reload on file changes
 - Debug mode available
 - Local network access
@@ -1602,12 +1768,14 @@ streamlit run run_app.py
 ### 14.2 Production Deployment
 
 **Platforms**:
+
 1. **Streamlit Cloud**: Native integration
 2. **Heroku/Railway**: Container deployment
 3. **AWS/GCP/Azure**: VM or container deployment
 4. **Vast.ai**: GPU instance deployment
 
 **Configuration**:
+
 - `.streamlit/config.toml`: Server settings
 - `requirements.txt`: Dependencies
 - Environment variables: Paths, API keys
@@ -1615,17 +1783,21 @@ streamlit run run_app.py
 ### 14.3 Scalability Considerations
 
 **Current Limitations**:
+
 - Single-user session state
 - In-memory model caching
 - Synchronous processing
 
 **Scaling Strategies**:
+
 1. **Horizontal Scaling**:
+
    - Load balancer across multiple instances
    - Shared model cache (Redis)
    - Distributed session storage
 
 2. **Vertical Scaling**:
+
    - Larger GPU instances
    - More RAM for batch processing
    - Faster storage (SSD/NVMe)
@@ -1643,23 +1815,27 @@ streamlit run run_app.py
 ### 15.1 Planned Features
 
 1. **Real-time Video Recognition**:
+
    - Webcam integration
    - Live prediction streaming
    - Frame-by-frame annotations
 
 2. **Model Training Interface**:
+
    - Upload custom datasets
    - Configure training parameters
    - Monitor training progress
    - Download trained models
 
 3. **Explainability**:
+
    - Attention weight visualization (Transformer)
    - Grad-CAM heatmaps (IV3-GRU)
    - Keypoint importance analysis
    - Error analysis tools
 
 4. **Multi-user Support**:
+
    - User accounts and authentication
    - Workspace management
    - Shared datasets and models
@@ -1674,12 +1850,14 @@ streamlit run run_app.py
 ### 15.2 Research Directions
 
 1. **Model Architectures**:
+
    - Vision Transformer (ViT)
    - Temporal Convolutional Networks (TCN)
    - Graph Neural Networks (GNN)
    - Hybrid attention mechanisms
 
 2. **Data Augmentation**:
+
    - Temporal augmentation
    - Occlusion synthesis
    - Style transfer
@@ -1698,6 +1876,7 @@ streamlit run run_app.py
 ### 16.1 System Documentation
 
 1. **User Guides**:
+
    - `streamlit_app/TOOL_GUIDE.md`: Application usage
    - `README.md`: System overview and quick start
    - `data/DATA_GUIDE.md`: Data formats and structures
@@ -1706,40 +1885,50 @@ streamlit run run_app.py
    - `evaluation/validation/VALIDATION_GUIDE.md`: Model evaluation
 
 2. **Technical Documentation**:
+
    - `models/MODEL_GUIDE.md`: Architecture details
    - `training/TRAINING_GUIDE.md`: Training instructions
    - `data/labels/LABEL_MAPPING_TABLE.md`: Label reference
    - `trained_models/TRAINED_MODEL_GUIDE.md`: Model checkpoints
 
-3. **Deployment**:
+3. **System Architecture Documentation** (PANSINAYAN Docs):
+
+   - `shared/pansinayan_docus/pansinayan_system_architecture.md`: This document - Streamlit tool architecture
+   - `shared/pansinayan_docus/pansinayan_training_pipeline.md`: Complete ML pipeline (preprocessing → training → evaluation)
+   - `shared/pansinayan_docus/pansinayan_complete_pipeline.md`: End-to-end user workflow
+   - `shared/pansinayan_docus/thesis_methodology.md`: Research methodology and theoretical framework
+
+4. **Deployment**:
    - `shared/SHARING_GUIDE.md`: Deployment strategies
    - `shared/for vast ai/VAST.AI_GUIDE.md`: Vast.ai deployment
 
 ### 16.2 Code Documentation
 
 **Documentation Standards**:
+
 - Module-level docstrings: Purpose and usage
 - Function docstrings: Args, returns, raises
 - Inline comments: Complex logic explanation
 - Type hints: Function signatures
 
 **Example**:
+
 ```python
 def make_real_prediction(npz_data: Dict[str, np.ndarray], model_name: str) -> Dict:
     """
     Make real prediction using the specified model.
-    
+
     Args:
         npz_data: NPZ data dictionary with keys 'X' and/or 'X2048'
         model_name: Name of the model ('transformer' or 'iv3_gru')
-        
+
     Returns:
         Dictionary with prediction results:
         - gloss_prediction: Predicted gloss ID
         - category_prediction: Predicted category ID
         - gloss_probability: Confidence score
         - ...
-        
+
     Raises:
         ValueError: If model is not available
         RuntimeError: If prediction fails
@@ -1753,11 +1942,13 @@ def make_real_prediction(npz_data: Dict[str, np.ndarray], model_name: str) -> Di
 ### 17.1 Core Technologies
 
 **Frontend**:
+
 - **Streamlit**: Web application framework
 - **Plotly**: Interactive visualizations
 - **HTML/CSS**: Custom styling
 
 **Backend**:
+
 - **PyTorch**: Deep learning framework
 - **NumPy**: Numerical computing
 - **Pandas**: Data manipulation
@@ -1765,6 +1956,7 @@ def make_real_prediction(npz_data: Dict[str, np.ndarray], model_name: str) -> Di
 - **MediaPipe**: Keypoint extraction
 
 **Machine Learning**:
+
 - **torchvision**: Pretrained models (InceptionV3)
 - **scikit-learn**: Metrics and evaluation
 - **tqdm**: Progress tracking
@@ -1772,15 +1964,18 @@ def make_real_prediction(npz_data: Dict[str, np.ndarray], model_name: str) -> Di
 ### 17.2 Development Tools
 
 **Code Quality**:
+
 - Type hints (Python 3.9+)
 - Docstrings (Google style)
 - Modular architecture
 
 **Version Control**:
+
 - Git
 - GitHub
 
 **Dependencies**:
+
 - `requirements.txt`: Production dependencies
 - Virtual environment: `venv/` or `.venv/`
 
@@ -1798,11 +1993,13 @@ PANSINAYAN represents a comprehensive, production-ready Filipino Sign Language R
 6. **Extensible Design**: Easy to add new models, features, datasets
 
 The system successfully balances:
+
 - **Academic Research**: Novel attention mechanisms, comprehensive evaluation
 - **Practical Application**: Real-time predictions, user-friendly interface
 - **Software Engineering**: Clean code, documentation, testing, deployment
 
 **Key Strengths**:
+
 - Manager pattern for clean workflow orchestration
 - Singleton model caching for performance
 - Automatic resource optimization
@@ -1811,16 +2008,18 @@ The system successfully balances:
 - Detailed documentation
 
 This architecture analysis provides a complete technical reference for:
-- Understanding the system structure
+
+- Understanding the Streamlit tool structure
 - Extending functionality
 - Deploying in production
 - Training new developers
 - Research collaboration
 
+**Note**: This document focuses on the **Streamlit application architecture**. For the complete machine learning pipeline (data preprocessing, training, and model evaluation), see `pansinayan_training_pipeline.md`.
+
 ---
 
-**Document Version**: 1.0  
-**Last Updated**: October 11, 2025  
+**Document Version**: 1.1  
+**Last Updated**: October 12, 2025  
 **Author**: System Architecture Analysis Tool  
 **Status**: Complete and Production-Ready
-
