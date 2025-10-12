@@ -1,228 +1,234 @@
 # Preprocessing Guide
 
-Convert raw sign language videos to training-ready data for both Transformer and IV3-GRU models.
-
-> **Performance**: Use `--workers` parameter for 30-50x faster parallel processing.
+Convert raw videos to `.npz` files for model training and inference.
 
 ## Overview
 
-This preprocessing pipeline extracts two types of features from sign language videos:
+Extracts features from sign language videos:
 
-- **Transformer input**: `.npz` files with MediaPipe keypoints `X` shaped `[T,156]` (78 keypoints × 2D coordinates)
-- **IV3-GRU input**: `.npz` files with InceptionV3 CNN features `X2048` shaped `[T,2048]`
-- **Metadata**: `mask` (keypoint visibility), `timestamps_ms`, `meta` JSON, optional `.parquet`
-- **Occlusion detection**: Automatic frame and clip-level occlusion flagging
+- **Keypoints** (`X`): MediaPipe keypoints `[T, 156]` - pose, hands, face
+- **CNN Features** (`X2048`): InceptionV3 features `[T, 2048]`
+- **Metadata**: Visibility masks, timestamps, occlusion flags
+
+**Performance**: Parallel processing provides 30-50x speedup.
 
 ## Prerequisites
 
 ```powershell
 pip install -r requirements.txt
-pip install pyarrow  # optional, for parquet inspection
 ```
 
 ## Data Structure
 
 ```
 data/
-├── raw/
-│   ├── fsl-105/              # Main dataset videos
-│   └── sample-105/           # Supplementary dataset videos
+├── raw/fsl-105/              # Input videos
 ├── processed/
-│   ├── fsl-105_10-08/       # Processed fsl-105 with labels.csv
-│   ├── smp-105_10-08/       # Processed sample-105 with labels.csv
-│   ├── cmb_train/           # Combined training split (80%)
-│   ├── cmb_val/             # Combined validation split (20%)
-│   ├── cmb_train.csv        # Training labels
-│   └── cmb_val.csv          # Validation labels
+│   ├── fsl-105_10-08/       # Processed NPZ files + labels.csv
+│   ├── fsl_train/           # Training split (80%)
+│   ├── fsl_val/             # Validation split (20%)
 ```
 
-## Processing Videos
-
-### Preprocessing Module
-
-The `preprocessing.core.preprocess` module provides both sequential and parallel processing:
-
-- **Sequential Processing**: `--workers 1` (default) - Process videos one by one
-- **Parallel Processing**: `--workers N` - Process N videos simultaneously with GPU optimization
-- **Batch GPU Processing**: Automatic batched InceptionV3 inference for efficiency
-- **Occlusion Detection**: Automatic detection when `--write-keypoints` is used
+## Quick Start
 
 ### Single Video
 
 ```powershell
-# Extract both keypoints and CNN features (sequential)
 python -m preprocessing.core.preprocess ^
   video.mp4 ^
   output_dir ^
   --write-keypoints ^
   --write-iv3-features
-
-# Extract with parallel processing (8 workers)
-python -m preprocessing.core.preprocess ^
-  video.mp4 ^
-  output_dir ^
-  --write-keypoints ^
-  --write-iv3-features ^
-  --workers 8 ^
-  --batch-size 32
 ```
 
-### Batch Processing (Directory)
+### Batch Processing
 
 ```powershell
-# Process entire directory of videos
 python -m preprocessing.core.preprocess ^
   data\raw\fsl-105 ^
   data\processed\fsl-105_10-08 ^
   --write-keypoints ^
   --write-iv3-features ^
   --workers 8 ^
-  --batch-size 32 ^
-  --target-fps 30 ^
-  --out-size 256
+  --batch-size 32
 ```
 
-After batch processing:
+## Processing Pipeline
 
-1. Create `labels.csv` in the output directory
-2. Run `assign.py` to add gloss and category IDs
-3. Use `data_split.py` to create train/val splits
+**Main Functions**:
+
+- `process_video(video_path, out_dir, target_fps=30, out_size=256, ...)`
+- `process_videos_multiprocess(video_files, out_dir, workers=None, batch_size=32, ...)`
+
+### 1. Frame Extraction
+
+- Sample frames at target FPS (default: 30)
+- Resize to consistent dimensions (default: 256×256)
+
+### 2. Background Removal
+
+Function: `create_models(seg_model=1, detection_conf=0.5, tracking_conf=0.5)`
+
+- MediaPipe Selfie Segmentation isolates signer from background
+- Creates binary mask to focus on relevant features
+- Improves generalization across environments
+
+### 3. Feature Extraction
+
+**MediaPipe Keypoints** (`X`):
+
+Function: `extract_keypoints_from_frame(img_rgb, models, conf_thresh=0.5)`
+
+- Pose: 25 upper body landmarks
+- Hands: 21 landmarks per hand (42 total)
+- Face: 11 key facial points
+- Output: `[T, 156]` normalized coordinates `[0, 1]`
+
+**InceptionV3 Features** (`X2048`):
+
+Function: `extract_iv3_features(frame_bgr, image_size=(299, 299), device=None)`  
+Class: `BatchedInceptionV3Processor(device=None, batch_size=32)`
+
+- Pretrained CNN (ImageNet, frozen)
+- Global average pooling layer
+- Output: `[T, 2048]` feature vectors
+
+### 4. Post-Processing
+
+**Gap Interpolation**:
+
+Function: `interpolate_gaps(X, mask, max_gap=5)`
+
+- Fill missing keypoints (max gap: 5 frames)
+- Linear interpolation for temporal continuity
+
+**Occlusion Detection**:
+
+Function: `compute_occlusion_detection(X, mask, output_format='compatible', ...)`
+
+- Flag hand-face interactions
+- Multi-method detection with temporal filtering
+
+**Metadata**: FPS, dimensions, processing parameters
 
 ## Performance Optimization
 
-### Multi-Process Parallel Processing (30-50x Speedup)
+### Parallel Processing
 
-For large datasets, use parallel processing with optimized parameters:
+**High-performance** (RTX 4090, 24GB VRAM):
 
 ```powershell
-# High-performance configuration (RTX 4090/5090, 24GB+ VRAM)
 python -m preprocessing.core.preprocess ^
   data\raw\fsl-105 ^
   data\processed\fsl-105_output ^
   --write-keypoints ^
   --write-iv3-features ^
   --workers 12 ^
-  --batch-size 64 ^
-  --target-fps 15 ^
-  --disable-parquet
+  --batch-size 64
+```
 
-# Balanced configuration (RTX 3080/4080, 10-16GB VRAM)
+**Balanced** (RTX 3080, 16GB VRAM):
+
+```powershell
 python -m preprocessing.core.preprocess ^
   data\raw\fsl-105 ^
   data\processed\fsl-105_output ^
   --write-keypoints ^
   --write-iv3-features ^
   --workers 8 ^
-  --batch-size 32 ^
-  --target-fps 20
+  --batch-size 32
+```
 
-# CPU-only processing
+**CPU-only**:
+
+```powershell
 python -m preprocessing.core.preprocess ^
   data\raw\fsl-105 ^
   data\processed\fsl-105_output ^
   --write-keypoints ^
   --write-iv3-features ^
   --workers 4 ^
-  --batch-size 8 ^
-  --target-fps 30
+  --batch-size 8
 ```
 
-### Parameter Guidelines
+### Parameters
 
-- **`--workers`**: Number of parallel processes (recommended: CPU cores - 2)
-- **`--batch-size`**: GPU batch size for InceptionV3 (32 for 16GB VRAM, 64 for 24GB+)
-- **`--target-fps`**: Lower FPS = faster processing (15-30 recommended)
-- **`--disable-parquet`**: Skip parquet files for maximum I/O speed
-- **`--out-size`**: Image size for InceptionV3 (default: 256)
+- `--workers`: Parallel processes (recommended: CPU cores - 2)
+- `--batch-size`: GPU batch size (32 for 16GB VRAM, 64 for 24GB+)
+- `--target-fps`: Frame sampling rate (default: 30)
+- `--out-size`: Frame dimensions (default: 256)
+- `--disable-parquet`: Skip parquet export for faster I/O
 
-### Expected Performance
+### Benchmark
 
-| Hardware               | Workers | Batch Size | Videos/Hour |
-| ---------------------- | ------- | ---------- | ----------- |
-| RTX 5090 + 12-core CPU | 12      | 64         | 800-1200    |
-| RTX 4090 + 8-core CPU  | 8       | 48         | 600-900     |
-| RTX 3080 + 6-core CPU  | 6       | 32         | 400-600     |
+| Hardware | Workers | Batch Size | Videos/Hour |
+| -------- | ------- | ---------- | ----------- |
+| RTX 5090 | 12      | 64         | 800-1200    |
+| RTX 4090 | 8       | 48         | 600-900     |
+| RTX 3080 | 6       | 32         | 400-600     |
 
-## NPZ File Contents
+## Output Format
 
-Each processed `.npz` file contains:
+### NPZ File Structure
 
-- `X`: `[T,156]` MediaPipe keypoints (pose25, left_hand21, right_hand21, face11)
-- `X2048`: `[T,2048]` InceptionV3 CNN features
-- `mask`: `[T,78]` keypoint visibility mask (boolean)
-- `timestamps_ms`: `[T]` frame timestamps in milliseconds
-- `meta`: JSON metadata with processing parameters and occlusion info
+Each `.npz` file contains:
 
-**Keypoint Structure (156 dimensions):**
+- `X`: `[T, 156]` - MediaPipe keypoints (normalized to [0, 1])
+- `X2048`: `[T, 2048]` - InceptionV3 features
+- `mask`: `[T, 78]` - Keypoint visibility (boolean)
+- `timestamps_ms`: `[T]` - Frame timestamps (milliseconds)
+- `meta`: JSON metadata (FPS, dimensions, occlusion flag)
 
-- Pose: 25 landmarks × 2 coords = 50 dims
-- Left hand: 21 landmarks × 2 coords = 42 dims
-- Right hand: 21 landmarks × 2 coords = 42 dims
-- Face: 11 landmarks × 2 coords = 22 dims
+**Keypoint Layout** (156 dimensions):
 
-## Creating Labels CSV
+- Pose: 25 points × 2 coords = 50
+- Left hand: 21 points × 2 coords = 42
+- Right hand: 21 points × 2 coords = 42
+- Face: 11 points × 2 coords = 22
 
-After preprocessing, create a `labels.csv` file in the output directory:
+## Labels CSV Workflow
 
-```csv
-file,occluded
-clip_0001_hello,0
-clip_0002_thank you,1
-clip_0003_good morning,0
-```
-
-### Step 1: Generate Initial Labels
+### 1. Generate Initial Labels
 
 ```python
-import os
+import os, json
 import numpy as np
 import pandas as pd
-import json
 
-# Get all npz files in processed directory
 processed_dir = 'data/processed/fsl-105_10-08'
 files = [f for f in os.listdir(processed_dir) if f.endswith('.npz')]
 
-# Extract occluded flag from each NPZ file's metadata
 data = []
 for f in files:
-    npz_path = os.path.join(processed_dir, f)
-    npz_data = np.load(npz_path, allow_pickle=True)
+    npz_data = np.load(os.path.join(processed_dir, f), allow_pickle=True)
     meta = json.loads(str(npz_data['meta']))
-    occluded = meta.get('occluded_flag', 0)
-    data.append({'file': f.replace('.npz', ''), 'occluded': occluded})
+    data.append({
+        'file': f.replace('.npz', ''),
+        'occluded': meta.get('occluded_flag', 0)
+    })
 
-df = pd.DataFrame(data)
-df.to_csv(f'{processed_dir}/labels.csv', index=False)
-print(f'Created labels.csv with {len(files)} files')
+pd.DataFrame(data).to_csv(f'{processed_dir}/labels.csv', index=False)
 ```
 
-### Step 2: Assign Gloss and Category IDs
+### 2. Add Gloss and Category IDs
 
 ```powershell
-# Copy labels to main processed directory
 copy data\processed\fsl-105_10-08\labels.csv data\processed\labels.csv
-
-# Run assign script to add gloss and category IDs
 python data\splitting\assign.py
-
-# Copy updated labels back
 copy data\processed\labels.csv data\processed\fsl-105_10-08\labels.csv
 ```
 
-This updates the CSV to:
+Result:
 
 ```csv
 file,gloss,cat,occluded
 clip_0001_hello,3,0,0
 clip_0002_thank you,7,0,1
-clip_0003_good morning,0,0,0
 ```
 
-### Step 3: Split Data
+### 3. Split Train/Val
 
 ```powershell
-# Split into train/val sets
 python data\splitting\data_split.py ^
   --processed-root data\processed\fsl-105_10-08 ^
   --labels data\processed\fsl-105_10-08\labels.csv ^
@@ -230,133 +236,75 @@ python data\splitting\data_split.py ^
   --copy ^
   --train-ratio 0.8 ^
   --train-dir fsl_train ^
-  --val-dir fsl_val ^
-  --train-csv fsl_train.csv ^
-  --val-csv fsl_val.csv
+  --val-dir fsl_val
 ```
-
-For combined datasets, see [Data Guide](../../data/DATA_GUIDE.md).
 
 ## Occlusion Detection
 
-Automatically enabled when `--write-keypoints` is used:
+Function: `compute_occlusion_detection(video_path=None, X=None, mask_bool_array=None, output_format='compatible', ...)`
 
-**Frame-level occlusion:**
+Enabled automatically with `--write-keypoints`.
 
-- Frame marked as occluded if `visible_keypoints / 78 < 0.6` (default threshold)
+**Detection Methods**:
 
-**Clip-level occlusion:**
+- Fingertip intersection with face regions
+- Palm proximity analysis
+- Hand trajectory tracking
+- Multi-point hand orientation
 
-- Clip marked as occluded if:
-  - Occluded frames ≥ 40% of total frames, OR
-  - Consecutive occluded run ≥ 15 frames
+**Temporal Filtering**:
 
-For detailed information, see [Occlusion Guide](OCCLUSION_GUIDE.md).
+- Requires 5 consecutive frames (allows 2 skips)
+- Minimum confidence: 0.2 per frame
+- Reduces false positives from tracking failures
 
-## Training Integration
+**Output**: Binary flag in `meta['occluded_flag']` (0 = clean, 1 = occluded)
 
-### Transformer Model
-
-```powershell
-python -m training.train ^
-  --model transformer ^
-  --keypoints-train data\processed\cmb_train ^
-  --keypoints-val data\processed\cmb_val ^
-  --labels-train-csv data\processed\cmb_train.csv ^
-  --labels-val-csv data\processed\cmb_val.csv ^
-  --num-gloss 105 ^
-  --num-cat 10 ^
-  --epochs 100 ^
-  --batch-size 32
-```
-
-### IV3-GRU Model
-
-```powershell
-python -m training.train ^
-  --model iv3_gru ^
-  --features-train data\processed\cmb_train ^
-  --features-val data\processed\cmb_val ^
-  --labels-train-csv data\processed\cmb_train.csv ^
-  --labels-val-csv data\processed\cmb_val.csv ^
-  --feature-key X2048 ^
-  --num-gloss 105 ^
-  --num-cat 10 ^
-  --epochs 100 ^
-  --batch-size 32
-```
-
-For detailed training instructions, see [Training Guide](../../training/TRAINING_GUIDE.md).
+Details: [Occlusion Guide](OCCLUSION_GUIDE.md)
 
 ## Validation
 
-### Validate NPZ Files
+Check NPZ files:
 
 ```powershell
-# Check NPZ file structure and contents
-python -m preprocessing.utils.validate_npz data\processed\cmb_train
-
-# Check with InceptionV3 features requirement
-python -m preprocessing.utils.validate_npz data\processed\cmb_val --require-x2048
+python -m preprocessing.utils.validate_npz data\processed\fsl_train
+python -m preprocessing.utils.validate_npz data\processed\fsl_val --require-x2048
 ```
 
-### Quick Smoke Test
+Test training:
 
 ```powershell
-# Test training pipeline
-python -m training.train ^
-  --model transformer ^
-  --smoke-test ^
-  --num-gloss 105 ^
-  --num-cat 10
+python -m training.train --model transformer --smoke-test --num-gloss 105 --num-cat 10
 ```
 
 ## Common Issues
 
-**Mismatched names:**
-
-- CSV `file` entries must match NPZ filenames (without `.npz` extension)
-
-**Wrong shape:**
-
-- Ensure `X` is `[T,156]` for keypoints
-- Ensure `X2048` is `[T,2048]` for InceptionV3 features
-
-**Label ranges:**
-
-- `gloss` in `[0, 104]` (105 classes: 0-based)
-- `cat` in `[0, 9]` (10 categories: 0-based)
-
-**Empty sequences:**
-
-- Preprocessing skips clips with < 1 valid frame
-- Check video quality and MediaPipe detection
-
-**Memory errors:**
-
-- Reduce `--batch-size` for GPU processing
-- Reduce `--workers` for CPU/RAM constraints
+| Issue              | Solution                                                    |
+| ------------------ | ----------------------------------------------------------- |
+| Mismatched names   | CSV `file` column must match NPZ filenames (without `.npz`) |
+| Wrong shape        | Check `X` is `[T, 156]` and `X2048` is `[T, 2048]`          |
+| Label range errors | `gloss` in [0, 104], `cat` in [0, 9] (zero-indexed)         |
+| Empty sequences    | Preprocessing skips videos with no valid frames             |
+| Memory errors      | Reduce `--batch-size` and `--workers`                       |
+| Slow processing    | Use `--workers 8` and GPU acceleration                      |
 
 ## FAQ
 
-**Q: Are CSVs separate from NPZ files?**
-A: Yes, they are linked by the `file` column (basename without extension).
+**CSV and NPZ relationship?**  
+CSV links to NPZ via `file` column (basename without extension).
 
-**Q: Can I use X2048 with Transformer?**
-A: Yes, extra keys in NPZ files are ignored by the training pipeline.
+**Keypoint order?**  
+`pose25, left_hand21, right_hand21, face11` - normalized to [0, 1].
 
-**Q: What is the keypoint order?**
-A: `pose25, left_hand21, right_hand21, face11` - all normalized to `[0,1]`.
+**Use X2048 with Transformer?**  
+Yes, Transformer supports keypoints (156-D), features (2048-D), or both (2204-D).
 
-**Q: How do I process videos on Vast.ai?**
-A: See [Vast.ai Preprocessing Guide](../../shared/for vast ai/PREPROCESS_VAST.md).
+**Processing speed?**  
+8 workers + batch size 32 on RTX 3080: 400-600 videos/hour.
 
-**Q: How long does preprocessing take?**
-A: With 8 workers and batch size 32, expect 400-600 videos/hour on RTX 3080.
+## Related Guides
 
-## Additional Resources
-
-- [Data Guide](../../data/DATA_GUIDE.md): Data organization and splitting
-- [Occlusion Guide](OCCLUSION_GUIDE.md): Occlusion detection details
-- [Training Guide](../../training/TRAINING_GUIDE.md): Training instructions
-- [Vast.ai Guide](../../shared/for vast ai/PREPROCESS_VAST.md): Remote preprocessing
+- [Data Guide](../../data/DATA_GUIDE.md) - Data organization and splitting
+- [Occlusion Guide](OCCLUSION_GUIDE.md) - Occlusion detection details
+- [Training Guide](../../training/TRAINING_GUIDE.md) - Model training
+- [Vast.ai Guide](../../shared/for vast ai/PREPROCESS_VAST.md) - Remote processing
