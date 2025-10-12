@@ -2,18 +2,31 @@
 
 ## Purpose
 
-The `shared/` directory contains deployment resources for running the project on Vast.ai instances, enabling remote access to the sign language recognition application.
+The `shared/` directory contains:
+
+1. **Comprehensive system documentation** (`pansinayan_docus/`) - All system and research documentation
+2. **Deployment resources** (`for vast ai/`) - Vast.ai-specific configurations and components
+
+This guide provides an overview of the directory structure and contents.
 
 ## Directory Structure
 
 ```
 shared/
-├── for vast ai/
-│   ├── VAST.AI_GUIDE.md              # Complete Vast.ai setup and deployment guide
+├── pansinayan_docus/                  # Comprehensive system documentation
+│   ├── pansinayan_doc_index.md        # Master documentation index
+│   ├── pansinayan_quick_reference.md  # Quick reference & commands
+│   ├── pansinayan_system_architecture.md  # Streamlit tool architecture
+│   ├── pansinayan_training_pipeline.md    # ML research pipeline
+│   ├── pansinayan_complete_pipeline.md    # User workflow guide
+│   └── thesis_methodology.md          # Research methodology
+├── for vast ai/                       # Vast.ai deployment resources
+│   ├── VAST.AI_GUIDE.md              # Complete Vast.ai setup guide
 │   ├── PREPROCESS_VAST.md            # Video preprocessing on Vast.ai
-│   ├── visualization_vast_ai.py       # Vast.ai-compatible visualization component
-│   └── validation_components_vast_ai.py  # Vast.ai-compatible validation component
-└── SHARING_GUIDE.md                   # This file
+│   ├── config_vast_ai.py             # Vast.ai-specific configuration
+│   ├── visualization_vast_ai.py      # Vast.ai-compatible visualization
+│   └── validation_components_vast_ai.py  # Vast.ai-compatible validation
+└── SHARING_GUIDE.md                  # This file
 ```
 
 ## Vast.ai Deployment Resources
@@ -29,6 +42,19 @@ The `for vast ai/` folder contains modified Streamlit components that are compat
 
 - **VAST.AI_GUIDE.md**: Complete setup instructions including port configuration, data download, model deployment, and tunnel setup
 - **PREPROCESS_VAST.md**: Instructions for preprocessing raw video data on Vast.ai instances
+
+## PANSINAYAN Documentation (`pansinayan_docus/`)
+
+This folder contains the complete system documentation for PANSINAYAN:
+
+- **pansinayan_doc_index.md**: Master index to navigate all documentation - **start here**
+- **pansinayan_quick_reference.md**: Visual overview, command cheat sheet, and troubleshooting guide
+- **pansinayan_system_architecture.md**: Complete Streamlit tool architecture (managers, components, data flow)
+- **pansinayan_training_pipeline.md**: ML research pipeline (data preprocessing → training → evaluation)
+- **pansinayan_complete_pipeline.md**: End-to-end user workflow guide for the Streamlit application
+- **thesis_methodology.md**: Research methodology and theoretical framework
+
+**To navigate the documentation**, start with `pansinayan_doc_index.md` for a complete index and learning paths.
 
 ## Using Shared Resources
 
@@ -100,7 +126,17 @@ python -m preprocessing.utils.validate_npz data\processed\cmb_val --require-x204
 
 ## Notes
 
+**Documentation**:
+
+- Complete system documentation is in `shared/pansinayan_docus/`
+- Start with `pansinayan_doc_index.md` for navigation
+
+**Data**:
+
 - NPZ files contain both keypoints (X) and InceptionV3 features (X2048)
+
+**Deployment**:
+
 - Vast.ai components are optimized for remote/headless environments
 - Port 8081 must be exposed for Vast.ai deployment
 - Use cloudflared for external tunnel access
