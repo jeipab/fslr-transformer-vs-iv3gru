@@ -9,21 +9,15 @@ data/
 ├── raw/                    # Original videos (fsl-105, sample-105)
 ├── processed/              # Preprocessed NPZ files and splits
 │   ├── fsl-105_10-08/     # Processed fsl-105 source
-│   ├── smp-105_10-08/     # Processed sample-105 source
 │   ├── fsl_train/         # FSL-105 training split
 │   ├── fsl_val/           # FSL-105 validation split
-│   ├── smp_train/         # Sample-105 training split
-│   ├── smp_val/           # Sample-105 validation split
-│   ├── cmb_train/         # Combined training split
-│   ├── cmb_val/           # Combined validation split
 │   └── *.csv              # Label files for each split
 ├── demo/                   # Demo clips for testing
 └── splitting/              # Data splitting utilities
 
 trained_models/
-└── cmb/                    # Models trained on combined dataset
-    ├── transformer/        # Transformer model checkpoints
-    └── iv3_gru/           # InceptionV3-GRU model checkpoints
+└── transformer/        # Transformer model checkpoints
+└── iv3_gru/           # InceptionV3-GRU model checkpoints
 ```
 
 ## File Types
@@ -94,13 +88,9 @@ For details, see [Occlusion Guide](../preprocessing/docs/OCCLUSION_GUIDE.md)
 
 ### Overview
 
-The project supports three dataset configurations:
+The project supports this dataset configurations:
 
 1. **fsl-105**: Main FSL dataset only
-2. **sample-105**: Supplementary dataset only
-3. **cmb**: Combined dataset (fsl-105 + sample-105)
-
-Current trained models use the combined dataset (`cmb`).
 
 ### Splitting Strategy
 
@@ -139,48 +129,6 @@ python data\splitting\data_split.py ^
   --val-dir fsl_val ^
   --train-csv fsl_train.csv ^
   --val-csv fsl_val.csv
-```
-
-**Split sample-105 dataset:**
-
-```powershell
-python data\splitting\data_split.py ^
-  --processed-root data\processed\smp-105_10-08 ^
-  --labels data\processed\smp-105_10-08\labels.csv ^
-  --out-root data\processed ^
-  --copy ^
-  --train-ratio 0.8 ^
-  --train-dir smp_train ^
-  --val-dir smp_val ^
-  --train-csv smp_train.csv ^
-  --val-csv smp_val.csv
-```
-
-**Split combined dataset:**
-
-```powershell
-python data\splitting\data_split.py ^
-  --processed-root data\processed\fsl-105_10-08 data\processed\smp-105_10-08 ^
-  --labels data\processed\fsl-105_10-08\labels.csv data\processed\smp-105_10-08\labels.csv ^
-  --out-root data\processed ^
-  --copy ^
-  --train-ratio 0.8 ^
-  --train-dir cmb_train ^
-  --val-dir cmb_val ^
-  --train-csv cmb_train.csv ^
-  --val-csv cmb_val.csv
-```
-
-### Output Structure
-
-```
-data/processed/
-├── cmb_train/             # Combined training set
-│   └── *.npz
-├── cmb_val/               # Combined validation set
-│   └── *.npz
-├── cmb_train.csv          # Training labels
-└── cmb_val.csv            # Validation labels
 ```
 
 ### Label CSV Format
@@ -258,7 +206,7 @@ gloss_id,label,cat_id,category
 ### Directory Structure
 
 ```
-trained_models/cmb/
+trained_models/
 ├── transformer/
 │   ├── SignTransformer_best.pt
 │   ├── SignTransformer_last.pt
@@ -296,10 +244,10 @@ For details, see [Trained Model Guide](../trained_models/TRAINED_MODEL_GUIDE.md)
 ```powershell
 python -m training.train ^
   --model transformer ^
-  --keypoints-train data\processed\cmb_train ^
-  --keypoints-val data\processed\cmb_val ^
-  --labels-train-csv data\processed\cmb_train.csv ^
-  --labels-val-csv data\processed\cmb_val.csv ^
+  --keypoints-train data\processed\fsl_train ^
+  --keypoints-val data\processed\fsl_val ^
+  --labels-train-csv data\processed\fsl_train.csv ^
+  --labels-val-csv data\processed\fsl_val.csv ^
   --num-gloss 105 ^
   --num-cat 10 ^
   --epochs 100 ^
@@ -311,10 +259,10 @@ python -m training.train ^
 ```powershell
 python -m training.train ^
   --model iv3_gru ^
-  --features-train data\processed\cmb_train ^
-  --features-val data\processed\cmb_val ^
-  --labels-train-csv data\processed\cmb_train.csv ^
-  --labels-val-csv data\processed\cmb_val.csv ^
+  --features-train data\processed\fsl_train ^
+  --features-val data\processed\fsl_val ^
+  --labels-train-csv data\processed\fsl_train.csv ^
+  --labels-val-csv data\processed\fsl_val.csv ^
   --feature-key X2048 ^
   --num-gloss 105 ^
   --num-cat 10 ^
@@ -333,8 +281,8 @@ For details, see [Training Guide](../training/TRAINING_GUIDE.md)
 Validate preprocessed files before training:
 
 ```powershell
-python -m preprocessing.utils.validate_npz data\processed\cmb_train
-python -m preprocessing.utils.validate_npz data\processed\cmb_val --require-x2048
+python -m preprocessing.utils.validate_npz data\processed\fsl_train
+python -m preprocessing.utils.validate_npz data\processed\fsl_val --require-x2048
 ```
 
 ### Model Validation
@@ -344,9 +292,9 @@ Validate trained models:
 ```powershell
 python -m evaluation.validation.validate ^
   --model-type transformer ^
-  --model-path trained_models\cmb\transformer\SignTransformer_best.pt ^
-  --data-dir data\processed\cmb_val ^
-  --labels-csv data\processed\cmb_val.csv
+  --model-path trained_models\transformer\SignTransformer_best.pt ^
+  --data-dir data\processed\fsl_val ^
+  --labels-csv data\processed\fsl_val.csv
 ```
 
 For details, see [Validation Guide](../evaluation/validation/VALIDATION_GUIDE.md)
@@ -400,16 +348,13 @@ data/
 │   │   ├── clip_0001_hello.npz
 │   │   ├── clip_0002_thank you.npz
 │   │   └── labels.csv
-│   ├── smp-105_10-08/
-│   │   ├── clip_0003_good morning.npz
-│   │   └── labels.csv
-│   ├── cmb_train/                  # Combined training split (80%)
+│   ├── fsl_train/                  # Training split (80%)
 │   │   ├── clip_0001_hello.npz
 │   │   └── clip_0003_good morning.npz
-│   ├── cmb_val/                    # Combined validation split (20%)
+│   ├── fsl_val/                    # Validation split (20%)
 │   │   └── clip_0002_thank you.npz
-│   ├── cmb_train.csv               # file,gloss,cat,occluded
-│   └── cmb_val.csv
+│   ├── fsl_train.csv               # file,gloss,cat,occluded
+│   └── fsl_val.csv
 ├── demo/
 │   ├── clip_0138_nice to meet you.npz
 │   └── clip_0585_nine.npz
@@ -418,7 +363,7 @@ data/
     ├── data_split.py
     └── labels_reference.csv
 
-trained_models/cmb/
+trained_models/
 ├── transformer/
 │   ├── SignTransformer_best.pt
 │   ├── SignTransformer_last.pt

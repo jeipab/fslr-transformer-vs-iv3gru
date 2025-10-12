@@ -10,7 +10,7 @@ Multi-Head Attention Transformer vs InceptionV3-GRU for Filipino Sign Language R
 
 - **Glosses**: 105 Filipino sign words
 - **Categories**: 10 semantic categories (Greeting, Survival, Number, Calendar, Days, Family, Relationships, Color, Food, Drink)
-- **Training Data**: Combined fsl-105 + sample-105 datasets
+- **Training Data**: fsl-105 dataset
 - **Models**: Pre-trained Transformer and IV3-GRU models available
 
 ## 🚀 Quick Start
@@ -67,13 +67,13 @@ python show_network_info.py
 # Transformer model
 python -m evaluation.prediction.predict ^
   --model transformer ^
-  --checkpoint trained_models\transformer\cmb_optimal\SignTransformer_best.pt ^
+  --checkpoint trained_models\transformer\optimal\SignTransformer_best.pt ^
   --input data\demo\clip_0138_nice to meet you.npz
 
 # IV3-GRU model
 python -m evaluation.prediction.predict ^
   --model iv3_gru ^
-  --checkpoint trained_models\iv3_gru\cmb_optimal\InceptionV3GRU_best.pt ^
+  --checkpoint trained_models\iv3_gru\optimal\InceptionV3GRU_best.pt ^
   --input data\demo\clip_1146_grandfather.npz
 ```
 
@@ -82,7 +82,7 @@ python -m evaluation.prediction.predict ^
 ```powershell
 python -m evaluation.prediction.predict ^
   --model transformer ^
-  --checkpoint trained_models\transformer\cmb_optimal\SignTransformer_best.pt ^
+  --checkpoint trained_models\transformer\optimal\SignTransformer_best.pt ^
   --input video.mp4
 ```
 
@@ -101,10 +101,10 @@ fslr-transformer-vs-iv3gru/
 │   ├── demo/                   # Demo NPZ files for testing
 │   ├── labels/                 # Label mappings (105 glosses, 10 categories)
 │   ├── processed/              # Preprocessed NPZ files
-│   │   ├── cmb_train/         # Combined training set (80%)
-│   │   ├── cmb_val/           # Combined validation set (20%)
-│   │   ├── cmb_train.csv      # Training labels
-│   │   └── cmb_val.csv        # Validation labels
+│   │   ├── fsl_train/         # Training set (80%)
+│   │   ├── fsl_val/           # Validation set (20%)
+│   │   ├── fsl_train.csv      # Training labels
+│   │   └── fsl_val.csv        # Validation labels
 │   ├── raw/                    # Raw video files
 │   └── splitting/              # Data splitting utilities
 ├── 📈 evaluation/              # Model validation and prediction
@@ -121,8 +121,8 @@ fslr-transformer-vs-iv3gru/
 │   └── for vast ai/           # Vast.ai deployment resources
 ├── 🖥️ streamlit_app/          # Interactive web application
 ├── 💾 trained_models/          # Model checkpoints and weights
-│   ├── transformer\cmb_optimal\  # Transformer models
-│   └── iv3_gru\cmb_optimal\      # IV3-GRU models
+│   ├── transformer\optimal\  # Transformer models
+│   └── iv3_gru\optimal\      # IV3-GRU models
 └── 🏋️ training/               # Model training and evaluation
 ```
 
@@ -180,10 +180,10 @@ python data\splitting\data_split.py ^
   --out-root data\processed ^
   --copy ^
   --train-ratio 0.8 ^
-  --train-dir cmb_train ^
-  --val-dir cmb_val ^
-  --train-csv cmb_train.csv ^
-  --val-csv cmb_val.csv
+  --train-dir fsl_train ^
+  --val-dir fsl_val ^
+  --train-csv fsl_train.csv ^
+  --val-csv fsl_val.csv
 ```
 
 For detailed data splitting instructions, see [Data Guide](data/DATA_GUIDE.md).
@@ -195,10 +195,10 @@ For detailed data splitting instructions, see [Data Guide](data/DATA_GUIDE.md).
 ```powershell
 python -m training.train ^
   --model transformer ^
-  --keypoints-train data\processed\cmb_train ^
-  --keypoints-val data\processed\cmb_val ^
-  --labels-train-csv data\processed\cmb_train.csv ^
-  --labels-val-csv data\processed\cmb_val.csv ^
+  --keypoints-train data\processed\fsl_train ^
+  --keypoints-val data\processed\fsl_val ^
+  --labels-train-csv data\processed\fsl_train.csv ^
+  --labels-val-csv data\processed\fsl_val.csv ^
   --num-gloss 105 ^
   --num-cat 10 ^
   --epochs 100 ^
@@ -213,10 +213,10 @@ python -m training.train ^
 ```powershell
 python -m training.train ^
   --model iv3_gru ^
-  --features-train data\processed\cmb_train ^
-  --features-val data\processed\cmb_val ^
-  --labels-train-csv data\processed\cmb_train.csv ^
-  --labels-val-csv data\processed\cmb_val.csv ^
+  --features-train data\processed\fsl_train ^
+  --features-val data\processed\fsl_val ^
+  --labels-train-csv data\processed\fsl_train.csv ^
+  --labels-val-csv data\processed\fsl_val.csv ^
   --feature-key X2048 ^
   --num-gloss 105 ^
   --num-cat 10 ^
@@ -235,8 +235,8 @@ For detailed training instructions, see [Training Guide](training/TRAINING_GUIDE
 
 ```powershell
 # Validate NPZ files
-python -m preprocessing.utils.validate_npz data\processed\cmb_train
-python -m preprocessing.utils.validate_npz data\processed\cmb_val --require-x2048
+python -m preprocessing.utils.validate_npz data\processed\fsl_train
+python -m preprocessing.utils.validate_npz data\processed\fsl_val --require-x2048
 ```
 
 **Model Validation:**
@@ -245,16 +245,16 @@ python -m preprocessing.utils.validate_npz data\processed\cmb_val --require-x204
 # Transformer model
 python -m evaluation.validation.validate ^
   --model transformer ^
-  --checkpoint trained_models\transformer\cmb_optimal\SignTransformer_best.pt ^
-  --data-dir data\processed\cmb_val ^
-  --labels-csv data\processed\cmb_val.csv
+  --checkpoint trained_models\transformer\optimal\SignTransformer_best.pt ^
+  --data-dir data\processed\fsl_val ^
+  --labels-csv data\processed\fsl_val.csv
 
 # IV3-GRU model
 python -m evaluation.validation.validate ^
   --model iv3_gru ^
-  --checkpoint trained_models\iv3_gru\cmb_optimal\InceptionV3GRU_best.pt ^
-  --data-dir data\processed\cmb_val ^
-  --labels-csv data\processed\cmb_val.csv
+  --checkpoint trained_models\iv3_gru\optimal\InceptionV3GRU_best.pt ^
+  --data-dir data\processed\fsl_val ^
+  --labels-csv data\processed\fsl_val.csv
 ```
 
 **Smoke Tests:**

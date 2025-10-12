@@ -15,7 +15,7 @@ The application includes pre-trained models for 105 Filipino sign words across 1
 - **Glosses**: 105 sign words (IDs: 0-104)
 - **Categories**: 10 semantic categories (IDs: 0-9)
   - GREETING, SURVIVAL, NUMBER, CALENDAR, DAYS, FAMILY, RELATIONSHIPS, COLOR, FOOD, DRINK
-- **Pre-trained Models**: Transformer and IV3-GRU models trained on combined dataset
+- **Pre-trained Models**: Transformer and IV3-GRU models trained on fsl-105 dataset
 - **Demo Files**: Available in `data/demo/` for testing
 
 ## Quick Start
@@ -77,8 +77,8 @@ For mobile-specific configuration and troubleshooting, see:
 
 **Model Paths:**
 
-- Transformer: `trained_models/transformer/cmb_optimal/SignTransformer_best.pt`
-- IV3-GRU: `trained_models/iv3_gru/cmb_optimal/InceptionV3GRU_best.pt`
+- Transformer: `trained_models/transformer/optimal/SignTransformer_best.pt`
+- IV3-GRU: `trained_models/iv3_gru/optimal/InceptionV3GRU_best.pt`
 
 ### 2. Video Preprocessing Pipeline
 
