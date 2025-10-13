@@ -17,6 +17,8 @@ trained_models/
 ├── iv3_gru/
 │   └── optimal/
 │       ├── InceptionV3GRU_best.pt
+│       ├── InceptionV3GRU_last.pt
+│       ├── training_20251009_083917_metrics.csv
 │       └── training_20251009_083917.log
 └── TRAINED_MODEL_GUIDE.md
 ```
