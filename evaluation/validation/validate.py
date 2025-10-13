@@ -46,7 +46,7 @@ class ValidationDataset:
     and providing data in the format expected by the models.
     """
     
-    def __init__(self, data_dir: str, labels_csv: str, model_type: str):
+    def __init__(self, data_dir: str, labels_csv: str, model_type: str, model=None):
         """
         Initialize validation dataset by loading labels and filtering valid NPZ files.
         
@@ -60,10 +60,12 @@ class ValidationDataset:
             data_dir: Directory containing NPZ files
             labels_csv: Path to labels CSV file
             model_type: 'transformer' or 'iv3_gru' (determines data format)
+            model: Model instance (needed to check expected input dimensions)
         """
         self.data_dir = Path(data_dir)
         self.labels_csv = labels_csv
         self.model_type = model_type
+        self.model = model
         
         # Step 1: Load labels CSV with encoding fallbacks
         # Try UTF-8 first, then fallback encodings for compatibility
@@ -124,13 +126,35 @@ class ValidationDataset:
         
         if self.model_type == 'transformer':
             # Step 2: Extract features for transformer model
-            # Transformer can use either 156-keypoint features or 2048-InceptionV3 features
-            if 'X2048' in data:
-                X = torch.from_numpy(data['X2048']).float()  # InceptionV3 features
+            # Check what input dimension the model expects
+            expected_dim = self.model.embedding.weight.shape[1]
+            
+            # Load appropriate features based on expected dimension
+            if expected_dim == 2204 and 'X' in data and 'X2048' in data:
+                # Concatenated features: keypoints (156) + InceptionV3 (2048) = 2204
+                X_keypoints = torch.from_numpy(data['X']).float()
+                X_iv3 = torch.from_numpy(data['X2048']).float()
+                # Ensure same sequence length
+                min_len = min(X_keypoints.shape[0], X_iv3.shape[0])
+                X = torch.cat([X_keypoints[:min_len], X_iv3[:min_len]], dim=1)
+            elif expected_dim == 2048 and 'X2048' in data:
+                # InceptionV3 features only
+                X = torch.from_numpy(data['X2048']).float()
+            elif expected_dim == 156 and 'X' in data:
+                # Keypoint features only
+                X = torch.from_numpy(data['X']).float()
+            elif 'X2048' in data:
+                # Default to InceptionV3 if available
+                X = torch.from_numpy(data['X2048']).float()
             elif 'X' in data:
-                X = torch.from_numpy(data['X']).float()      # Keypoint features
+                # Fallback to keypoints
+                X = torch.from_numpy(data['X']).float()
             else:
                 raise ValueError(f"NPZ file {sample['npz_path']} missing both 'X' and 'X2048' keys for transformer")
+            
+            # Verify dimension matches
+            if X.shape[1] != expected_dim:
+                raise ValueError(f"Expected {expected_dim} input features, got {X.shape[1]}")
             
             # Step 3: Handle sequence length truncation (max 300 frames)
             if X.shape[0] > 300:
@@ -406,6 +430,8 @@ class ModelValidator:
         all_ground_truth = []     # Ground truth labels
         all_occlusions = []       # Occlusion flags
         all_files = []            # File names
+        all_gloss_probs = []      # All gloss probabilities for top-k accuracy
+        all_cat_probs = []        # All category probabilities for top-k accuracy
         
         # Step 2: Process dataset in batches for memory efficiency
         num_batches = (len(dataset) + batch_size - 1) // batch_size
@@ -457,6 +483,10 @@ class ModelValidator:
                         'cat_top3': [(int(j), float(cat_probs[i][j]))         # Top 3 category predictions
                                    for j in np.argsort(cat_probs[i])[-3:][::-1]]
                     })
+                    
+                    # Store probabilities for top-k accuracy computation
+                    all_gloss_probs.append(gloss_probs[i])
+                    all_cat_probs.append(cat_probs[i])
                 
                 # Store batch metadata
                 all_ground_truth.extend(list(zip(batch_gloss, batch_cat)))
@@ -471,23 +501,31 @@ class ModelValidator:
         gloss_gts = np.array([p['gloss_gt'] for p in all_predictions])
         cat_gts = np.array([p['cat_gt'] for p in all_predictions])
         occlusions = np.array(all_occlusions)
+        gloss_probs = np.array(all_gloss_probs)
+        cat_probs = np.array(all_cat_probs)
         
         # Step 8: Compute comprehensive metrics
         results = self._compute_metrics(
             gloss_preds, cat_preds, gloss_gts, cat_gts, 
-            occlusions, all_predictions, save_predictions, output_dir
+            occlusions, gloss_probs, cat_probs,
+            all_predictions, save_predictions, output_dir
         )
         
         return results
     
     def _compute_metrics(self, gloss_preds: np.ndarray, cat_preds: np.ndarray,
                         gloss_gts: np.ndarray, cat_gts: np.ndarray,
-                        occlusions: np.ndarray, all_predictions: List[Dict],
+                        occlusions: np.ndarray, gloss_probs: np.ndarray, cat_probs: np.ndarray,
+                        all_predictions: List[Dict],
                         save_predictions: bool, output_dir: str) -> Dict[str, Any]:
         """Compute comprehensive evaluation metrics."""
         
         # Overall metrics
         overall_results = self._compute_overall_metrics(gloss_preds, cat_preds, gloss_gts, cat_gts)
+        
+        # Top-k accuracy for overall
+        overall_topk = self._compute_topk_accuracy(gloss_probs, cat_probs, gloss_gts, cat_gts)
+        overall_results.update(overall_topk)
         
         # Occlusion-based metrics
         occluded_mask = occlusions == 1
@@ -497,11 +535,21 @@ class ModelValidator:
             gloss_preds[occluded_mask], cat_preds[occluded_mask],
             gloss_gts[occluded_mask], cat_gts[occluded_mask]
         )
+        occluded_topk = self._compute_topk_accuracy(
+            gloss_probs[occluded_mask], cat_probs[occluded_mask],
+            gloss_gts[occluded_mask], cat_gts[occluded_mask]
+        )
+        occluded_results.update(occluded_topk)
         
         non_occluded_results = self._compute_overall_metrics(
             gloss_preds[non_occluded_mask], cat_preds[non_occluded_mask],
             gloss_gts[non_occluded_mask], cat_gts[non_occluded_mask]
         )
+        non_occluded_topk = self._compute_topk_accuracy(
+            gloss_probs[non_occluded_mask], cat_probs[non_occluded_mask],
+            gloss_gts[non_occluded_mask], cat_gts[non_occluded_mask]
+        )
+        non_occluded_results.update(non_occluded_topk)
         
         # Per-class metrics
         per_class_results = self._compute_per_class_metrics(gloss_preds, cat_preds, gloss_gts, cat_gts)
@@ -565,6 +613,44 @@ class ModelValidator:
             'category_f1_score': float(cat_f1),
             'num_samples': int(len(gloss_preds))
         }
+    
+    def _compute_topk_accuracy(self, gloss_probs: np.ndarray, cat_probs: np.ndarray,
+                               gloss_gts: np.ndarray, cat_gts: np.ndarray) -> Dict[str, Any]:
+        """
+        Compute top-k accuracy for gloss and category predictions.
+        
+        Args:
+            gloss_probs: Probability distributions for gloss predictions [num_samples, num_gloss_classes]
+            cat_probs: Probability distributions for category predictions [num_samples, num_cat_classes]
+            gloss_gts: Ground truth gloss labels [num_samples]
+            cat_gts: Ground truth category labels [num_samples]
+            
+        Returns:
+            Dictionary containing top-k accuracy metrics
+        """
+        if len(gloss_probs) == 0:
+            return {}
+        
+        results = {}
+        
+        # Compute top-k accuracy for gloss (top-1, top-5, top-10)
+        for k in [1, 5, 10]:
+            # Get top-k predictions
+            top_k_preds = np.argsort(gloss_probs, axis=1)[:, -k:]
+            # Check if ground truth is in top-k
+            correct = np.array([gt in top_k_preds[i] for i, gt in enumerate(gloss_gts)])
+            results[f'gloss_top{k}_accuracy'] = float(np.mean(correct))
+        
+        # Compute top-k accuracy for category (top-1, top-5)
+        # (only top-5 since there are 10 categories total)
+        for k in [1, 5]:
+            # Get top-k predictions
+            top_k_preds = np.argsort(cat_probs, axis=1)[:, -k:]
+            # Check if ground truth is in top-k
+            correct = np.array([gt in top_k_preds[i] for i, gt in enumerate(cat_gts)])
+            results[f'category_top{k}_accuracy'] = float(np.mean(correct))
+        
+        return results
     
     def _compute_per_class_metrics(self, gloss_preds: np.ndarray, cat_preds: np.ndarray,
                                  gloss_gts: np.ndarray, cat_gts: np.ndarray) -> Dict[str, Any]:
@@ -750,10 +836,10 @@ def main():
     
     # Optional arguments
     parser.add_argument('--data-dir', type=str, 
-                       default='../data/processed/seq prepro_30 fps_09-13',
+                       default='data/processed/fsl_val',
                        help='Directory containing validation NPZ files')
     parser.add_argument('--labels-csv', type=str, 
-                       default='../data/processed/val_labels.csv',
+                       default='data/processed/fsl_val.csv',
                        help='Path to validation labels CSV')
     parser.add_argument('--output-dir', type=str, 
                        default='results-validate',
@@ -775,7 +861,7 @@ def main():
         validator = ModelValidator(args.model, args.checkpoint, args.device)
         
         # Load dataset
-        dataset = ValidationDataset(args.data_dir, args.labels_csv, args.model)
+        dataset = ValidationDataset(args.data_dir, args.labels_csv, args.model, validator.model)
         
         # Perform validation
         results = validator.validate(

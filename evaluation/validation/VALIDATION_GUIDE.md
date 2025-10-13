@@ -15,8 +15,8 @@ python -m evaluation.validation.validate --model <model_type> --checkpoint <chec
 
 ### Optional Arguments
 
-- `--data-dir`: Directory with validation NPZ files (default: `data\processed\cmb_val`)
-- `--labels-csv`: Path to labels CSV (default: `data\processed\cmb_val.csv`)
+- `--data-dir`: Directory with validation NPZ files (default: `data/processed/fsl_val`)
+- `--labels-csv`: Path to labels CSV (default: `data/processed/fsl_val.csv`)
 - `--output-dir`: Output directory (default: `results-validate`)
 - `--device`: Device (`cpu`, `cuda`, `auto`) (default: `auto`)
 - `--batch-size`: Batch size (default: `32`)
@@ -44,26 +44,26 @@ results-validate/
 
 ### Transformer Model
 
-```powershell
-python -m evaluation.validation.validate --model transformer --checkpoint trained_models\transformer\cmb_optimal\SignTransformer_best.pt
+```bash
+python -m evaluation.validation.validate --model transformer --checkpoint trained_models/transformer/optimal/SignTransformer_best.pt
 ```
 
 ### IV3-GRU Model
 
-```powershell
-python -m evaluation.validation.validate --model iv3_gru --checkpoint trained_models\iv3_gru\cmb_optimal\InceptionV3GRU_best.pt
+```bash
+python -m evaluation.validation.validate --model iv3_gru --checkpoint trained_models/iv3_gru/optimal/InceptionV3GRU_best.pt
 ```
 
 ### With Options
 
-```powershell
-python -m evaluation.validation.validate --model transformer --checkpoint trained_models\transformer\cmb_optimal\SignTransformer_best.pt --batch-size 16 --save-predictions --device cpu
+```bash
+python -m evaluation.validation.validate --model transformer --checkpoint trained_models/transformer/optimal/SignTransformer_best.pt --batch-size 16 --save-predictions --device cpu
 ```
 
 ### Custom Dataset
 
-```powershell
-python -m evaluation.validation.validate --model transformer --checkpoint trained_models\transformer\cmb_optimal\SignTransformer_best.pt --data-dir data\processed\fsl_val --labels-csv data\processed\fsl_val.csv
+```bash
+python -m evaluation.validation.validate --model transformer --checkpoint trained_models/transformer/optimal/SignTransformer_best.pt --data-dir data/processed/fsl_train --labels-csv data/processed/fsl_train.csv
 ```
 
 ## Output Format
@@ -161,12 +161,12 @@ Metrics computed for:
 
 ## Model Comparison
 
-```powershell
+```bash
 # Transformer
-python -m evaluation.validation.validate --model transformer --checkpoint trained_models\transformer\cmb_optimal\SignTransformer_best.pt --output-dir results_transformer
+python -m evaluation.validation.validate --model transformer --checkpoint trained_models/transformer/optimal/SignTransformer_best.pt --output-dir results_transformer
 
 # IV3-GRU
-python -m evaluation.validation.validate --model iv3_gru --checkpoint trained_models\iv3_gru\cmb_optimal\InceptionV3GRU_best.pt --output-dir results_iv3gru
+python -m evaluation.validation.validate --model iv3_gru --checkpoint trained_models/iv3_gru/optimal/InceptionV3GRU_best.pt --output-dir results_iv3gru
 ```
 
 Compare `overall_results.json` from each output directory.
@@ -183,8 +183,8 @@ Compare `overall_results.json` from each output directory.
 
 ## Dataset
 
-- **Training**: `data\processed\cmb_train` (80%)
-- **Validation**: `data\processed\cmb_val` (20%)
+- **Training**: `data/processed/fsl_train` (80%)
+- **Validation**: `data/processed/fsl_val` (20%)
 - **Glosses**: 105 classes (0-104)
 - **Categories**: 10 classes (0-9): GREETING, SURVIVAL, NUMBER, CALENDAR, DAYS, FAMILY, RELATIONSHIPS, COLOR, FOOD, DRINK
 
