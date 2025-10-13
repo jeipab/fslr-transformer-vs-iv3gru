@@ -1,429 +1,606 @@
 # Model Guide
 
-Technical documentation for Filipino Sign Language Recognition (FSLR) model architectures.
+Technical documentation for Filipino Sign Language Recognition model architectures.
 
 ## Overview
 
-This project implements two architectures for Filipino Sign Language Recognition:
+Two architectures for dual-task learning (gloss + category prediction):
 
-- **SignTransformer**: Transformer-based model for keypoint sequence processing
-- **InceptionV3GRU**: CNN-RNN model for video frame processing
+- **SignTransformer**: Attention-based encoder for keypoint sequences
+- **InceptionV3GRU**: CNN-RNN hybrid for visual features
 
-Both models predict sign words (gloss) and semantic categories.
+Both models output `(gloss_logits, category_logits)` for 105 glosses and 10 categories.
 
-## Dataset Configuration
-
-- **Glosses**: 105 sign words (IDs: 0-104)
-- **Categories**: 10 semantic categories (IDs: 0-9)
-  - 0: GREETING
-  - 1: SURVIVAL
-  - 2: NUMBER
-  - 3: CALENDAR
-  - 4: DAYS
-  - 5: FAMILY
-  - 6: RELATIONSHIPS
-  - 7: COLOR
-  - 8: FOOD
-  - 9: DRINK
+---
 
 ## SignTransformer
 
-### Architecture Overview
+Multi-head attention Transformer encoder that processes temporal sequences of body keypoints.
 
-The SignTransformer processes sequences of body keypoints using a Transformer encoder:
+### Architecture Flow
 
 ```
-Input: [B, T, 156] keypoint sequences
+Input: [B, T, 156]
   ↓
-Linear Embedding: [B, T, 156] → [B, T, E]
+Linear Embedding → [B, T, E]
   ↓
-Positional Encoding: Adds temporal order information
++ Positional Encoding
   ↓
-Layer Normalization: Stabilizes training
+Layer Norm
   ↓
-Transformer Encoder Stack (N layers):
-  • Multi-Head Self-Attention + Residual Connection
-  • Feed-Forward Network + Residual Connection
+Transformer Encoder (×N layers)
+  ├─ Multi-Head Self-Attention
+  ├─ Residual + Layer Norm
+  ├─ Feed-Forward Network
+  └─ Residual + Layer Norm
   ↓
-Pooling Strategy (mean/max/cls): [B, T, E] → [B, E]
+Pooling → [B, E]
   ↓
-Dual Output Heads:
-  • Gloss Head: [B, E] → [B, num_gloss]
-  • Category Head: [B, E] → [B, num_cat]
+Dual Heads → [B, 105], [B, 10]
 ```
 
-### Key Components
+### Core Implementation
 
-- **PositionalEncoding**: Sinusoidal temporal encoding
-- **MultiHeadAttentionBlock**: Self-attention mechanism
-- **FeedForwardBlock**: Position-wise feed-forward network
-- **ResidualConnection**: Pre-layer normalization with residual connections
-- **EncoderLayer**: Transformer layer with attention and feed-forward
-- **Pooling Strategies**: Mean, max, or CLS token pooling
-- **Classification Heads**: Separate heads for gloss and category prediction
-
-### Usage
+**Class Signature**:
 
 ```python
-from models.transformer import SignTransformer
-
-# Initialize model with default parameters
-model = SignTransformer(
-    input_dim=156,        # 78 keypoints × 2 coordinates
+SignTransformer.__init__(
+    input_dim=156,        # Keypoint features per frame
     emb_dim=256,          # Embedding dimension
-    num_heads=8,          # Number of attention heads
-    num_layers=4,         # Number of encoder layers
-    num_gloss=105,        # Number of gloss classes
-    num_cat=10,           # Number of category classes
+    n_heads=8,            # Attention heads
+    n_layers=4,           # Encoder layers
+    num_gloss=105,        # Gloss classes
+    num_cat=10,           # Category classes
     dropout=0.1,          # Dropout rate
-    pooling_method='mean' # Pooling strategy: 'mean', 'max', or 'cls'
+    max_len=300,          # Max sequence length
+    ff_dim=None,          # FFN hidden dim (default: 4×emb_dim)
+    pooling_method='mean' # 'mean' | 'max' | 'cls'
 )
-
-# Forward pass with keypoint sequences
-gloss_logits, cat_logits = model(x)  # x: [B, T, 156]
-
-# Forward pass with attention mask for variable lengths
-mask = torch.ones(B, T)  # 1 = valid frame, 0 = padding
-gloss_logits, cat_logits = model(x, mask=mask)
-
-# Get attention weights for visualization
-attention_weights = model.get_attention_weights(x)
 ```
 
-### Parameters
+**Forward Pass**:
 
-- `input_dim` (int): Input feature dimension per frame (default: 156)
-- `emb_dim` (int): Embedding dimension (default: 256)
-- `num_heads` (int): Number of attention heads (default: 8)
-- `num_layers` (int): Number of encoder layers (default: 4)
-- `num_gloss` (int): Number of gloss classes (default: 105)
-- `num_cat` (int): Number of category classes (default: 10)
-- `dropout` (float): Dropout rate (default: 0.1)
-- `max_len` (int): Maximum sequence length (default: 300)
-- `ff_dim` (int): Feed-forward hidden dimension (default: 4×emb_dim)
-- `pooling_method` (str): Pooling strategy - 'mean', 'max', or 'cls' (default: 'mean')
+```python
+def forward(x, mask=None):
+    """
+    Args:
+        x: [B, T, 156] keypoint sequences
+        mask: [B, T] binary mask (1=valid, 0=padding)
+
+    Returns:
+        gloss_logits: [B, 105]
+        cat_logits: [B, 10]
+    """
+```
+
+**Attention Extraction**:
+
+```python
+def get_attention_weights(x, mask=None):
+    """
+    Returns: List of [B, H, T, T] attention matrices (one per layer)
+    """
+```
+
+### Components
+
+#### 1. Input Embedding
+
+**Implementation**: `nn.Linear(input_dim, emb_dim)`
+
+Projects 156-D keypoint vectors to embedding space. Trainable linear transformation applied per frame independently.
+
+#### 2. Positional Encoding
+
+**Class**: `PositionalEncoding(emb_dim, dropout=0.1, max_len=300)`
+
+Adds temporal position information using sinusoidal functions:
+
+```
+PE(pos, 2i)   = sin(pos / 10000^(2i/d))
+PE(pos, 2i+1) = cos(pos / 10000^(2i/d))
+```
+
+Where `pos` is frame position, `i` is dimension index. Fixed encodings computed at initialization, applied via addition in `forward()`. Enables model to distinguish frame order without recurrence.
+
+#### 3. Multi-Head Self-Attention
+
+**Class**: `MultiHeadAttentionBlock(emb_dim, num_heads, dropout=0.1)`
+
+**Key Method**:
+
+```python
+@staticmethod
+def SelfAttention(Q, K, V, mask=None, dropout=None):
+    """
+    Scaled dot-product attention:
+    Attention(Q,K,V) = softmax(QK^T / √d_k) V
+
+    Args:
+        Q, K, V: [B, H, T, D] query/key/value matrices
+        mask: [B, 1, 1, T] attention mask
+
+    Returns:
+        out: [B, H, T, D] attended values
+        attn: [B, H, T, T] attention weights
+    """
+```
+
+Splits embedding into `num_heads` parallel attention operations. Each head learns different attention patterns (e.g., hand-face proximity, bilateral coordination, temporal boundaries).
+
+**Process**:
+
+1. Linear projections: `Q = X·W_q`, `K = X·W_k`, `V = X·W_v`
+2. Split into heads: `[B, T, E] → [B, H, T, D]` where `D = E/H`
+3. Scaled attention: `scores = (Q·K^T) / √D`
+4. Apply mask if provided
+5. Softmax: `weights = softmax(scores)`
+6. Weighted sum: `out = weights·V`
+7. Concatenate heads: `[B, H, T, D] → [B, T, E]`
+8. Final projection: `out·W_o`
+
+#### 4. Feed-Forward Network
+
+**Class**: `FeedForwardBlock(emb_dim, ff_dim=emb_dim*4, dropout=0.1)`
+
+Position-wise two-layer MLP with expansion:
+
+```python
+FFN(x) = ReLU(x·W_1 + b_1)·W_2 + b_2
+```
+
+Where `W_1: [E, 4E]` expands, `W_2: [4E, E]` compresses. Applied identically to each frame. The expansion allows learning complex non-linear transformations.
+
+#### 5. Residual Connection
+
+**Class**: `ResidualConnection(emb_dim, dropout=0.1)`
+
+Pre-layer normalization with residual:
+
+```python
+out = x + Dropout(Sublayer(LayerNorm(x)))
+```
+
+Enables gradient flow through deep networks (6+ layers). Layer norm before sublayer (pre-norm) provides more stable training than post-norm.
+
+#### 6. Layer Normalization
+
+**Class**: `LayerNormalization(features, eps=1e-6)`
+
+Normalizes across feature dimension:
+
+```
+LN(x) = γ ⊙ (x - μ) / √(σ² + ε) + β
+```
+
+Where `μ, σ²` computed per sample across features. Learnable `γ, β` parameters. More stable than batch norm for variable-length sequences.
+
+#### 7. Encoder Layer
+
+**Class**: `EncoderLayer(emb_dim, num_heads, ff_dim, dropout=0.1)`
+
+Single Transformer block combining attention and feed-forward:
+
+```python
+def forward(x, mask=None, return_attn=False):
+    # Attention sublayer
+    x = x + dropout(attention(layer_norm(x)))
+    # Feed-forward sublayer
+    x = x + dropout(ffn(layer_norm(x)))
+    return x
+```
+
+Stacked `n_layers` times (default: 4).
+
+#### 8. Pooling Strategies
+
+**Mean Pooling**:
+
+```python
+pooled = x.mean(dim=1)  # Average across time
+```
+
+**Max Pooling**:
+
+```python
+pooled = x.max(dim=1)[0]  # Max across time
+```
+
+**CLS Token**:
+
+```python
+cls = nn.Parameter(torch.randn(1, 1, emb_dim))
+x = torch.cat([cls, x], dim=1)  # Prepend learnable token
+# After encoding:
+pooled = x[:, 0, :]  # Extract CLS representation
+```
+
+CLS token "attends to" all frames and learns to aggregate sequence-level information (inspired by BERT).
+
+#### 9. Classification Heads
+
+Two independent linear layers:
+
+```python
+gloss_head = nn.Sequential(
+    nn.Linear(emb_dim, emb_dim // 2),
+    nn.ReLU(),
+    nn.Dropout(dropout),
+    nn.Linear(emb_dim // 2, num_gloss)
+)
+
+category_head = nn.Sequential(
+    nn.Linear(emb_dim, emb_dim // 2),
+    nn.ReLU(),
+    nn.Dropout(dropout),
+    nn.Linear(emb_dim // 2, num_cat)
+)
+```
+
+Both receive same pooled representation, enabling multi-task learning.
+
+### Design Decisions
+
+**Why Transformer?**
+
+- Global attention allows any frame to attend to any other frame
+- Parallel processing (faster than RNN sequential)
+- Dynamic attention reweighting handles occlusions
+- Attention weights provide interpretability
+
+**Why these hyperparameters?**
+
+- 256 embedding dimensions: Balance expressiveness and efficiency
+- 8 attention heads: Captures multiple relationship types simultaneously
+- 4 encoder layers: Sufficient depth for FSL-105 dataset size
+- 4× FFN expansion: Standard Transformer ratio
+
+**Why multi-task learning?**
+
+- Category task provides regularization signal
+- Shared representations learn semantic groupings
+- Hierarchical evaluation (gloss + category accuracy)
+
+---
 
 ## InceptionV3GRU
 
-### Architecture Overview
+Hybrid CNN-RNN architecture combining pretrained visual features with temporal modeling.
 
-The InceptionV3GRU combines visual feature extraction with temporal sequence modeling:
+### Architecture Flow
 
 ```
-Input: [B, T, 2048] precomputed InceptionV3 features
+Input: [B, T, 2048]
   ↓
-First GRU Layer: [B, T, 2048] → [B, T, hidden1] + Dropout
+GRU Layer 1: 2048 → 16
   ↓
-Second GRU Layer: [B, T, hidden1] → [B, T, hidden2] + Dropout
+Dropout(0.3)
   ↓
-Final Hidden State: [B, hidden2]
+GRU Layer 2: 16 → 12
   ↓
-Dual Classification Heads:
-  • Gloss Head: [B, hidden2] → [B, num_gloss]
-  • Category Head: [B, hidden2] → [B, num_cat]
+Dropout(0.3)
+  ↓
+Final Hidden State: [B, 12]
+  ↓
+Dual Heads → [B, 105], [B, 10]
 ```
 
-### Key Components
+### Core Implementation
 
-- **InceptionV3FeatureExtractor**: CNN backbone for visual feature extraction
-- **GRU Layers**: Two-layer GRU network for temporal sequence modeling
-- **Dropout Regularization**: Applied after each GRU layer
-- **Weight Initialization**: Xavier/orthogonal initialization
-- **Classification Heads**: Separate heads for gloss and category prediction
-- **Packed Sequence Support**: Handling of variable-length sequences
-
-### Usage
+**Class Signature**:
 
 ```python
-from models.iv3_gru import InceptionV3GRU
-
-# Initialize model
-model = InceptionV3GRU(
-    num_gloss=105,           # Number of gloss classes
-    num_cat=10,              # Number of category classes
-    hidden1=16,              # First GRU hidden dimension
-    hidden2=12,              # Second GRU hidden dimension
-    dropout=0.3,             # Dropout rate
-    pretrained_backbone=True, # Load ImageNet weights
-    freeze_backbone=True     # Freeze backbone for transfer learning
+InceptionV3GRU.__init__(
+    num_gloss,              # Gloss classes
+    num_cat,                # Category classes
+    hidden1=16,             # First GRU hidden size
+    hidden2=12,             # Second GRU hidden size
+    dropout=0.3,            # Dropout rate
+    pretrained_backbone=True,  # Load ImageNet weights
+    freeze_backbone=True    # Freeze CNN weights
 )
-
-# Forward pass with precomputed features
-gloss_logits, cat_logits = model(features, features_already=True)
-
-# Forward pass with raw frames
-gloss_logits, cat_logits = model(frames, features_already=False)
-
-# Forward pass with variable-length sequences
-lengths = torch.tensor([10, 15, 8])  # True sequence lengths
-gloss_logits, cat_logits = model(frames, lengths=lengths, features_already=False)
-
-# Get probabilities instead of logits
-gloss_probs, cat_probs = model.predict_proba(frames, features_already=False)
 ```
 
-### Parameters
+**Forward Pass**:
 
-- `num_gloss` (int): Number of gloss classes
-- `num_cat` (int): Number of category classes
-- `hidden1` (int): First GRU hidden dimension (default: 16)
-- `hidden2` (int): Second GRU hidden dimension (default: 12)
-- `dropout` (float): Dropout rate (default: 0.3)
-- `pretrained_backbone` (bool): Load ImageNet weights (default: True)
-- `freeze_backbone` (bool): Freeze InceptionV3 weights (default: True)
+```python
+def forward(
+    frames_or_feats,        # Input data
+    lengths=None,           # [B] true sequence lengths
+    return_probs=False,     # Return probabilities vs logits
+    features_already=False  # Input is precomputed features
+):
+    """
+    Args:
+        frames_or_feats: [B, T, 3, H, W] raw frames OR
+                        [B, T, 2048] precomputed features
+        lengths: [B] true lengths for packed sequences
+
+    Returns:
+        gloss_logits: [B, 105]
+        cat_logits: [B, 10]
+    """
+```
+
+**Feature Extraction**:
+
+```python
+def extract_features(frames):
+    """
+    Args:
+        frames: [B, T, 3, H, W]
+
+    Returns:
+        features: [B, T, 2048]
+    """
+```
+
+**Probability Output**:
+
+```python
+def predict_proba(frames_or_feats, lengths=None, features_already=False):
+    """Returns softmax probabilities instead of logits"""
+```
+
+### Components
+
+#### 1. InceptionV3 Feature Extractor
+
+**Class**: `InceptionV3FeatureExtractor(pretrained=True, freeze=True)`
+
+Pretrained CNN backbone (ImageNet weights):
+
+- 48 convolutional layers
+- ~23.8M parameters
+- Input: 256×256 RGB
+- Output: 2048-D feature vector per frame
+
+**Freezing behavior**:
+
+```python
+if freeze:
+    for param in self.backbone.parameters():
+        param.requires_grad = False
+    self.backbone.eval()  # Fix BatchNorm statistics
+```
+
+Frozen backbone enables transfer learning while reducing training time.
+
+**Feature extraction**:
+
+```python
+def forward(x):
+    # x: [N, 3, H, W]
+    # Parallel convolutions at multiple scales (Inception modules)
+    # Final layer removed, returns raw features
+    return self.backbone(x)  # [N, 2048]
+```
+
+#### 2. Two-Layer GRU
+
+**Configuration**:
+
+```python
+self.gru1 = nn.GRU(
+    input_size=2048,
+    hidden_size=16,
+    num_layers=1,
+    batch_first=True
+)
+
+self.gru2 = nn.GRU(
+    input_size=16,
+    hidden_size=12,
+    num_layers=1,
+    batch_first=True
+)
+```
+
+**GRU Cell Operations**:
+
+```
+Update gate: z_t = σ(W_z·[h_{t-1}, x_t])
+Reset gate:  r_t = σ(W_r·[h_{t-1}, x_t])
+Candidate:   h̃_t = tanh(W_h·[r_t⊙h_{t-1}, x_t])
+New state:   h_t = (1-z_t)⊙h_{t-1} + z_t⊙h̃_t
+```
+
+Sequential processing maintains temporal dependencies.
+
+**Weight Initialization**:
+
+```python
+for name, param in gru.named_parameters():
+    if "weight_ih" in name:
+        nn.init.xavier_uniform_(param)  # Input-hidden weights
+    elif "weight_hh" in name:
+        nn.init.orthogonal_(param)      # Hidden-hidden weights
+    elif "bias" in name:
+        nn.init.zeros_(param)           # Bias terms
+```
+
+Xavier/orthogonal initialization provides stability for small hidden sizes.
+
+#### 3. Packed Sequences
+
+**Helper Function**:
+
+```python
+def _dropout_packed(packed_seq, p, training):
+    """Apply dropout to PackedSequence data tensor"""
+    if p <= 0.0:
+        return packed_seq
+    data = F.dropout(packed_seq.data, p=p, training=training)
+    return nn.utils.rnn.PackedSequence(
+        data, packed_seq.batch_sizes,
+        packed_seq.sorted_indices, packed_seq.unsorted_indices
+    )
+```
+
+Handles variable-length sequences efficiently:
+
+```python
+# Pack sequences
+packed = nn.utils.rnn.pack_padded_sequence(
+    seq, lengths_cpu, batch_first=True, enforce_sorted=False
+)
+
+# Process through GRU
+y1, h1 = self.gru1(packed)
+y1 = _dropout_packed(y1, 0.3, training=True)
+
+# Extract final hidden state
+h_final = h2[-1]  # [B, 12]
+```
+
+Avoids computation on padding, more efficient than masking.
+
+#### 4. Classification Heads
+
+Simple linear projections from final GRU hidden state:
+
+```python
+self.gloss_head = nn.Linear(hidden2, num_gloss)      # 12 → 105
+self.category_head = nn.Linear(hidden2, num_cat)     # 12 → 10
+```
+
+### Design Decisions
+
+**Why InceptionV3-GRU?**
+
+- Pretrained visual features provide strong baseline
+- Transfer learning from ImageNet
+- Efficient with precomputed features
+- Standard baseline for comparison
+
+**Why freeze backbone?**
+
+- Reduces parameters from ~25M to ~50K trainable
+- Faster training convergence
+- Prevents overfitting on small dataset
+- Transfer learning principle: keep pretrained features
+
+**Why small GRU hidden sizes (16, 12)?**
+
+- Precomputed features already contain rich information
+- Small sizes prevent overfitting
+- Faster training and inference
+- Sufficient capacity for 105-class problem
+
+**Why two GRU layers?**
+
+- First layer: Temporal smoothing and local patterns
+- Second layer: High-level sequence modeling
+- Hierarchical temporal abstraction
+
+---
 
 ## Model Comparison
 
-| Aspect               | SignTransformer              | InceptionV3GRU                          |
-| :------------------- | :--------------------------- | :-------------------------------------- |
-| **Input**            | Keypoints `[B, T, 156]`      | InceptionV3 features `[B, T, 2048]`     |
-| **Architecture**     | Multi-head attention         | CNN + GRU                               |
-| **Pretrained**       | No                           | InceptionV3 (ImageNet)                  |
-| **Parameters**       | ~2M                          | ~25M (with frozen backbone)             |
-| **Training**         | End-to-end                   | Can freeze backbone                     |
-| **Memory**           | Lower                        | Higher                                  |
-| **Interpretability** | Attention weights available  | Less interpretable                      |
-| **Sequence Length**  | Fixed max length             | Variable length support                 |
-| **Preprocessing**    | Requires keypoint extraction | Requires InceptionV3 feature extraction |
+| Aspect            | SignTransformer     | InceptionV3GRU           |
+| ----------------- | ------------------- | ------------------------ |
+| **Input**         | Keypoints [T, 156]  | Features [T, 2048]       |
+| **Architecture**  | Attention encoder   | CNN + RNN                |
+| **Context**       | Global (parallel)   | Local (sequential)       |
+| **Pretrained**    | No                  | Yes (ImageNet)           |
+| **Parameters**    | ~2M                 | ~25M (50K trainable)     |
+| **Memory**        | Lower               | Higher                   |
+| **Occlusion**     | Dynamic reweighting | Fixed feature extraction |
+| **Interpretable** | Attention weights   | Hidden states (opaque)   |
+| **Speed**         | GPU-parallelizable  | Sequential bottleneck    |
 
-## Training Considerations
+**When to use Transformer:**
 
-### SignTransformer
+- Need interpretability (attention visualization)
+- Handle occlusions gracefully
+- Lower memory constraints
+- Prefer end-to-end learning
 
-**Advantages:**
+**When to use InceptionV3-GRU:**
 
-- Lower memory footprint and faster training
-- Suitable for keypoint-based data
-- Attention weights provide interpretability
-- End-to-end training from scratch
+- Have precomputed features
+- Want transfer learning benefits
+- Need strong baseline quickly
+- Limited training data
 
-**Considerations:**
+---
 
-- Requires keypoint extraction preprocessing
-- Fixed maximum sequence length
-- No pretrained weights available
-
-**Training Tips:**
-
-- Use attention masks for variable-length sequences
-- Apply gradient clipping for training stability
-- Monitor attention patterns for model interpretability
-- Test different pooling strategies
-
-### InceptionV3GRU
-
-**Advantages:**
-
-- Pretrained ImageNet features provide visual representations
-- Precomputed features enable efficient training
-- Variable-length sequence support with packed sequences
-- Transfer learning capabilities
-
-**Considerations:**
-
-- Higher memory requirements
-- Requires InceptionV3 feature extraction
-- Less interpretable than attention-based models
-
-**Training Tips:**
-
-- Use precomputed features for faster training
-- Start with frozen backbone for transfer learning
-- Use mixed precision training (`--amp`) for efficiency
-- Gradually unfreeze backbone after GRU head stabilizes
-
-## Input Requirements
+## Input/Output Specifications
 
 ### SignTransformer
 
-**Keypoint Sequences:**
+**Input**:
 
-- Shape: `[batch_size, sequence_length, 156]`
-- 78 keypoints × 2 coordinates (x, y)
-- Normalized coordinates in range `[0, 1]`
-- Extracted using MediaPipe (pose, hands, face landmarks)
-- Maximum sequence length: 300 frames (configurable)
+- Shape: `[batch, time, 156]`
+- Type: `torch.FloatTensor`
+- Range: Normalized [0, 1]
+- Content: 78 keypoints × 2 coordinates
 
-**Keypoint Breakdown (78 points):**
+**Optional Mask**:
 
-- Pose: 25 landmarks
-- Left hand: 21 landmarks
-- Right hand: 21 landmarks
-- Face: 11 landmarks
+- Shape: `[batch, time]`
+- Type: `torch.FloatTensor`
+- Values: 1 (valid) or 0 (padding)
 
-**Optional Attention Mask:**
+**Output**:
 
-- Shape: `[batch_size, sequence_length]`
-- Values: 1 for valid frames, 0 for padding
-- Used for variable-length sequence handling
+- `gloss_logits`: `[batch, 105]` raw scores
+- `cat_logits`: `[batch, 10]` raw scores
 
 ### InceptionV3GRU
 
-**Precomputed InceptionV3 Features:**
+**Input (features)**:
 
-- Shape: `[batch_size, sequence_length, 2048]`
-- Extracted using InceptionV3 backbone during preprocessing
-- Stored in NPZ files with key `X2048`
-- All training uses precomputed features for efficiency
+- Shape: `[batch, time, 2048]`
+- Type: `torch.FloatTensor`
+- Content: Precomputed InceptionV3 features
 
-**Variable-Length Sequences:**
+**Input (raw frames)**:
 
-- Supported through packed sequences
-- Lengths tensor: `[batch_size]` with true sequence lengths
+- Shape: `[batch, time, 3, 256, 256]`
+- Type: `torch.FloatTensor`
+- Range: ImageNet normalized
+- Content: RGB frames
 
-## Output Format
+**Optional Lengths**:
 
-Both models return a tuple of two tensors:
+- Shape: `[batch]`
+- Type: `torch.LongTensor`
+- Content: True sequence lengths for packing
 
-- `gloss_logits`: `[batch_size, num_gloss]` - Raw classification scores for specific sign words
-- `cat_logits`: `[batch_size, num_cat]` - Raw classification scores for semantic categories
+**Output**:
 
-**Converting to Predictions:**
+- `gloss_logits`: `[batch, 105]` raw scores
+- `cat_logits`: `[batch, 10]` raw scores
+
+### Converting to Predictions
 
 ```python
+# Get class predictions
+gloss_pred = torch.argmax(gloss_logits, dim=-1)
+cat_pred = torch.argmax(cat_logits, dim=-1)
+
 # Get probabilities
 gloss_probs = torch.softmax(gloss_logits, dim=-1)
 cat_probs = torch.softmax(cat_logits, dim=-1)
 
-# Get predicted classes
-gloss_pred = torch.argmax(gloss_logits, dim=-1)
-cat_pred = torch.argmax(cat_logits, dim=-1)
+# Get confidence scores
+gloss_confidence = gloss_probs.gather(1, gloss_pred.unsqueeze(1))
 ```
 
-## Performance Tips
+---
 
-### SignTransformer
+## Implementation Files
 
-**Training Optimization:**
+- `models/transformer.py`: SignTransformer implementation (~819 lines)
+- `models/iv3_gru.py`: InceptionV3GRU implementation (~430 lines)
+- `models/__init__.py`: Module exports
 
-- Use attention masks for variable-length sequences
-- Apply gradient clipping (max_norm=1.0) for training stability
-- Monitor attention patterns for model interpretability
-- Experiment with different pooling strategies (mean, max, cls)
-
-**Memory Optimization:**
-
-- Use smaller batch sizes if memory is limited
-- Consider reducing embedding dimension for faster training
-- Use gradient accumulation for effective larger batch sizes
-
-### InceptionV3GRU
-
-**Training Optimization:**
-
-- Use precomputed features stored in NPZ files
-- Start with frozen backbone for transfer learning
-- Use mixed precision training (`--amp`) for efficiency
-- Gradually unfreeze backbone after GRU head stabilizes
-
-**Memory Optimization:**
-
-- Precomputed features reduce memory footprint significantly
-- Use smaller hidden dimensions for GRU layers
-- Implement gradient checkpointing for memory efficiency
-
-## Training Integration
-
-### SignTransformer Training
-
-```powershell
-python -m training.train ^
-  --model transformer ^
-  --keypoints-train data\processed\cmb_train ^
-  --keypoints-val data\processed\cmb_val ^
-  --labels-train-csv data\processed\cmb_train.csv ^
-  --labels-val-csv data\processed\cmb_val.csv ^
-  --num-gloss 105 ^
-  --num-cat 10 ^
-  --epochs 100 ^
-  --batch-size 32
-```
-
-### InceptionV3GRU Training
-
-```powershell
-python -m training.train ^
-  --model iv3_gru ^
-  --features-train data\processed\cmb_train ^
-  --features-val data\processed\cmb_val ^
-  --labels-train-csv data\processed\cmb_train.csv ^
-  --labels-val-csv data\processed\cmb_val.csv ^
-  --feature-key X2048 ^
-  --num-gloss 105 ^
-  --num-cat 10 ^
-  --epochs 100 ^
-  --batch-size 32
-```
-
-For detailed training instructions, see [Training Guide](../training/TRAINING_GUIDE.md)
-
-## Model Files
-
-- `transformer.py`: SignTransformer implementation with documentation
-- `iv3_gru.py`: InceptionV3GRU implementation with documentation
-- `__init__.py`: Module initialization and imports
-- `MODEL_GUIDE.md`: This guide
-
-## Trained Models
-
-Pre-trained models are available in `trained_models/`:
-
-```
-trained_models/
-├── transformer/
-│   └── cmb_optimal/
-│       ├── SignTransformer_best.pt   # Best validation performance
-│       └── SignTransformer_last.pt   # Most recent epoch
-└── iv3_gru/
-    └── cmb_optimal/
-        ├── InceptionV3GRU_best.pt    # Best validation performance
-        └── InceptionV3GRU_last.pt    # Most recent epoch
-```
-
-All models are trained on the combined dataset (fsl-105 + sample-105).
-
-For model management details, see [Trained Model Guide](../trained_models/TRAINED_MODEL_GUIDE.md)
+---
 
 ## Additional Resources
 
-- [Training Guide](../training/TRAINING_GUIDE.md): Training instructions and hyperparameters
-- [Data Guide](../data/DATA_GUIDE.md): Data preprocessing and preparation
-- [Prediction Guide](../evaluation/prediction/PREDICTION_GUIDE.md): Model inference
-- [Validation Guide](../evaluation/validation/VALIDATION_GUIDE.md): Model evaluation
-- [Tool Guide](../streamlit_app/TOOL_GUIDE.md): Streamlit app usage
-
-## Troubleshooting
-
-### Common Issues
-
-**SignTransformer:**
-
-- `ValueError: Sequence length exceeds max_len`: Increase `max_len` parameter or reduce sequence length
-- `ValueError: Expected 156 input features`: Ensure keypoint extraction produces correct dimensions
-- Memory issues: Reduce batch size or embedding dimension
-
-**InceptionV3GRU:**
-
-- `ValueError: Expected features with 2048 dimensions`: Check NPZ files contain `X2048` key
-- `KeyError: 'X2048'`: Use NPZ files with InceptionV3 features extracted during preprocessing
-- CUDA out of memory: Use smaller batch sizes or mixed precision training
-
-### Data Format Verification
-
-**Check NPZ file contents:**
-
-```python
-import numpy as np
-
-# Load NPZ file
-data = np.load('data/processed/cmb_train/clip_0001.npz')
-
-# Check available keys
-print(data.files)  # Should include: ['X', 'X2048', 'mask', 'timestamps_ms', 'meta']
-
-# Check shapes
-print(f"X shape: {data['X'].shape}")        # [T, 156]
-print(f"X2048 shape: {data['X2048'].shape}") # [T, 2048]
-```
-
-For NPZ validation, see [Preprocess Guide](../preprocessing/docs/PREPROCESS_GUIDE.MD)
+- [Training Guide](../training/TRAINING_GUIDE.md): How to train both models
+- [Trained Model Guide](../trained_models/TRAINED_MODEL_GUIDE.md): Loading and using trained models
+- [Data Guide](../data/DATA_GUIDE.md): Data preparation and format
+- [Preprocessing Guide](../preprocessing/docs/PREPROCESS_GUIDE.MD): Video to NPZ conversion

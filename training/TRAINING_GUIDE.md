@@ -1,8 +1,6 @@
 # Training Guide
 
-## Overview
-
-This guide covers training sign language recognition models using either Transformer (keypoints) or InceptionV3+GRU (features) architectures. The training script has been **completely optimized** for real data training with performance optimizations for CUDA, memory management, data loading, and **automatic parallelization** for multi-GPU setups.
+This guide covers training sign language recognition models using Transformer or InceptionV3-GRU architectures.
 
 ## Prerequisites
 
@@ -14,463 +12,338 @@ pip install -r requirements.txt
 
 - **Glosses**: 105 sign words (IDs: 0-104)
 - **Categories**: 10 semantic categories (IDs: 0-9)
-  - 0: GREETING
-  - 1: SURVIVAL
-  - 2: NUMBER
-  - 3: CALENDAR
-  - 4: DAYS
-  - 5: FAMILY
-  - 6: RELATIONSHIPS
-  - 7: COLOR
-  - 8: FOOD
-  - 9: DRINK
+
+Category mapping:
+
+```
+0: GREETING    5: FAMILY
+1: SURVIVAL    6: RELATIONSHIPS
+2: NUMBER      7: COLOR
+3: CALENDAR    8: FOOD
+4: DAYS        9: DRINK
+```
 
 For complete label mappings, see [Label Mapping Table](../data/labels/LABEL_MAPPING_TABLE.md).
 
+---
+
 ## Quick Start
 
-### Basic Training Commands
+### Basic Training
 
 **Transformer (Keypoints)**:
 
 ```powershell
-python -m training.train ^
+python training/train.py ^
   --model transformer ^
-  --keypoints-train data\processed\cmb_train ^
-  --keypoints-val data\processed\cmb_val ^
-  --labels-train-csv data\processed\cmb_train.csv ^
-  --labels-val-csv data\processed\cmb_val.csv ^
+  --keypoints-train data/processed/fsl_train ^
+  --keypoints-val data/processed/fsl_val ^
+  --labels-train-csv data/processed/fsl_train.csv ^
+  --labels-val-csv data/processed/fsl_val.csv ^
   --num-gloss 105 ^
   --num-cat 10 ^
   --epochs 100 ^
   --batch-size 32 ^
-  --auto-workers ^
-  --auto-batch-size ^
-  --amp ^
-  --compile-model
+  --output-dir trained_models/transformer/run1
 ```
 
-**IV3-GRU (InceptionV3 Features)**:
+**InceptionV3-GRU (Features)**:
 
 ```powershell
-python -m training.train ^
+python training/train.py ^
   --model iv3_gru ^
-  --features-train data\processed\cmb_train ^
-  --features-val data\processed\cmb_val ^
-  --labels-train-csv data\processed\cmb_train.csv ^
-  --labels-val-csv data\processed\cmb_val.csv ^
+  --features-train data/processed/fsl_train ^
+  --features-val data/processed/fsl_val ^
+  --labels-train-csv data/processed/fsl_train.csv ^
+  --labels-val-csv data/processed/fsl_val.csv ^
   --feature-key X2048 ^
   --num-gloss 105 ^
   --num-cat 10 ^
   --epochs 100 ^
   --batch-size 32 ^
-  --auto-workers ^
-  --auto-batch-size ^
-  --amp ^
-  --compile-model
+  --output-dir trained_models/iv3_gru/run1
 ```
 
-### Multi-GPU Training
+### Performance Options
 
-**For Vast AI or Multi-GPU Systems**:
+**GPU Training**:
 
 ```powershell
-python -m training.train ^
+python training/train.py ^
   --model transformer ^
-  --keypoints-train data\processed\cmb_train ^
-  --keypoints-val data\processed\cmb_val ^
-  --labels-train-csv data\processed\cmb_train.csv ^
-  --labels-val-csv data\processed\cmb_val.csv ^
+  --keypoints-train data/processed/fsl_train ^
+  --keypoints-val data/processed/fsl_val ^
+  --labels-train-csv data/processed/fsl_train.csv ^
+  --labels-val-csv data/processed/fsl_val.csv ^
+  --num-gloss 105 ^
+  --num-cat 10 ^
+  --epochs 100 ^
+  --batch-size 32 ^
+  --amp ^
+  --auto-workers ^
+  --scheduler plateau ^
+  --early-stop 10 ^
+  --output-dir trained_models/transformer/run1
+```
+
+**Multi-GPU Training**:
+
+```powershell
+python training/train.py ^
+  --model transformer ^
+  --keypoints-train data/processed/fsl_train ^
+  --keypoints-val data/processed/fsl_val ^
+  --labels-train-csv data/processed/fsl_train.csv ^
+  --labels-val-csv data/processed/fsl_val.csv ^
   --num-gloss 105 ^
   --num-cat 10 ^
   --epochs 100 ^
   --batch-size 64 ^
-  --auto-workers ^
-  --auto-batch-size ^
-  --enable-parallel ^
   --amp ^
-  --compile-model ^
-  --lr 5e-5 ^
-  --weight-decay 1e-4 ^
-  --scheduler plateau ^
-  --grad-clip 1.0
+  --enable-parallel ^
+  --auto-workers ^
+  --output-dir trained_models/transformer/run1
 ```
 
-**For Local Machine (CPU/Single GPU)**:
+**Smoke Test**:
 
 ```powershell
-python -m training.train ^
-  --model transformer ^
-  --keypoints-train data\processed\cmb_train ^
-  --keypoints-val data\processed\cmb_val ^
-  --labels-train-csv data\processed\cmb_train.csv ^
-  --labels-val-csv data\processed\cmb_val.csv ^
-  --num-gloss 105 ^
-  --num-cat 10 ^
-  --epochs 50 ^
-  --batch-size 16 ^
-  --auto-workers ^
-  --auto-batch-size ^
-  --lr 1e-4 ^
-  --weight-decay 1e-3 ^
-  --scheduler plateau
+python training/train.py --smoke-test
 ```
 
-## Data Structure Requirements
+---
 
-### Directory Structure
+## Data Structure
+
+### Directory Layout
 
 ```
 data/processed/
-├── cmb_train/                    # Combined training data (80%)
+├── fsl_train/                    # Training data (80%)
 │   ├── clip_0315_yes.npz
 │   ├── clip_1601_orange.npz
 │   └── ...
-├── cmb_val/                      # Combined validation data (20%)
+├── fsl_val/                      # Validation data (20%)
 │   ├── clip_0138_nice to meet you.npz
 │   ├── clip_1146_grandfather.npz
 │   └── ...
-├── cmb_train.csv                 # Training labels
-└── cmb_val.csv                   # Validation labels
+├── fsl_train.csv                 # Training labels
+└── fsl_val.csv                   # Validation labels
 ```
 
-Alternative splits available:
+### NPZ File Format
 
-- `fsl_train/`, `fsl_val/` - FSL-105 dataset only
-- `smp_train/`, `smp_val/` - Sample-105 dataset only
-- `cmb_train/`, `cmb_val/` - Combined dataset (recommended)
+**Transformer (Keypoints)**:
 
-### Data Format Requirements
+- Key: `X`
+- Shape: `[T, 156]`
+- Content: 78 keypoints × 2 coordinates (x, y)
 
-**NPZ Files**:
+**InceptionV3-GRU (Features)**:
 
-- **Transformer (Keypoints)**: Key `X` with shape `[T, 156]` (variable sequence lengths)
-- **IV3-GRU (Features)**: Key `X2048` with shape `[T, 2048]` (variable sequence lengths)
-- **Additional keys**: `mask` [T, 78], `timestamps_ms` [T], `meta` (JSON)
+- Key: `X2048`
+- Shape: `[T, 2048]`
+- Content: Precomputed InceptionV3 features
 
-**Labels CSV**:
+**Additional keys**:
+
+- `mask`: `[T, 78]` - Keypoint visibility
+- `timestamps_ms`: `[T]` - Frame timestamps
+- `meta`: JSON metadata
+
+### Labels CSV Format
 
 Required columns: `file`, `gloss`, `cat`, `occluded`
 
-- `file`: NPZ filename without extension (e.g., `clip_0315_yes`)
-- `gloss`: Gloss class ID (0-based, range: 0-104)
-- `cat`: Category class ID (0-based, range: 0-9)
-- `occluded`: Binary flag (0 = clean, 1 = occluded)
-
-Example `cmb_train.csv`:
+Example:
 
 ```csv
 file,gloss,cat,occluded
 clip_0315_yes,15,1,0
 clip_1601_orange,79,7,0
 clip_2062_no sugar,104,9,1
-clip_1314_man,64,6,1
 ```
+
+- `file`: NPZ filename without extension
+- `gloss`: Gloss ID (0-104)
+- `cat`: Category ID (0-9)
+- `occluded`: Binary flag (0=clean, 1=occluded)
+
+---
 
 ## Training Parameters
 
 ### Essential Parameters
 
-| Parameter      | Description                | Default       | Notes                                    |
-| -------------- | -------------------------- | ------------- | ---------------------------------------- |
-| `--model`      | Model architecture         | `transformer` | `transformer` or `iv3_gru`               |
-| `--epochs`     | Training epochs            | `20`          | Adjust based on convergence              |
-| `--batch-size` | Batch size                 | `32`          | Reduce if OOM, increase if memory allows |
-| `--lr`         | Learning rate              | `1e-4`        | Start conservative, adjust based on loss |
-| `--num-gloss`  | Number of gloss classes    | `105`         | Must match dataset (105 for FSLR)        |
-| `--num-cat`    | Number of category classes | `10`          | Must match dataset (10 for FSLR)         |
+| Parameter      | Default       | Description                       |
+| -------------- | ------------- | --------------------------------- |
+| `--model`      | `transformer` | Model: `transformer` or `iv3_gru` |
+| `--epochs`     | `20`          | Number of training epochs         |
+| `--batch-size` | `32`          | Batch size                        |
+| `--lr`         | `1e-4`        | Learning rate                     |
+| `--num-gloss`  | `105`         | Number of gloss classes           |
+| `--num-cat`    | `10`          | Number of category classes        |
 
 ### Data Parameters
 
-| Parameter            | Description                    | Default | Notes                        |
-| -------------------- | ------------------------------ | ------- | ---------------------------- |
-| `--keypoints-train`  | Training keypoints directory   | `None`  | Required for transformer     |
-| `--keypoints-val`    | Validation keypoints directory | `None`  | Required for transformer     |
-| `--features-train`   | Training features directory    | `None`  | Required for iv3_gru         |
-| `--features-val`     | Validation features directory  | `None`  | Required for iv3_gru         |
-| `--labels-train-csv` | Training labels CSV            | `None`  | Required                     |
-| `--labels-val-csv`   | Validation labels CSV          | `None`  | Required                     |
-| `--kp-key`           | Keypoint NPZ key               | `X`     | Key containing [T,156] data  |
-| `--feature-key`      | Feature NPZ key                | `X2048` | Key containing [T,2048] data |
+| Parameter            | Required For | Description                        |
+| -------------------- | ------------ | ---------------------------------- |
+| `--keypoints-train`  | Transformer  | Training keypoints directory       |
+| `--keypoints-val`    | Transformer  | Validation keypoints directory     |
+| `--features-train`   | IV3-GRU      | Training features directory        |
+| `--features-val`     | IV3-GRU      | Validation features directory      |
+| `--labels-train-csv` | Both         | Training labels CSV                |
+| `--labels-val-csv`   | Both         | Validation labels CSV              |
+| `--kp-key`           | Transformer  | Keypoint NPZ key (default: `X`)    |
+| `--feature-key`      | IV3-GRU      | Feature NPZ key (default: `X2048`) |
 
 ### Performance Parameters
 
-| Parameter                       | Description                       | Default | Notes                       |
-| ------------------------------- | --------------------------------- | ------- | --------------------------- |
-| `--amp`                         | Enable mixed precision            | `False` | Faster training on CUDA     |
-| `--compile-model`               | Compile model (PyTorch 2.0+)      | `False` | Better performance          |
-| `--auto-workers`                | Auto-detect DataLoader workers    | `False` | Worker count (up to 8)      |
-| `--auto-batch-size`             | Auto-calculate batch size         | `False` | Based on available memory   |
-| `--enable-parallel`             | Enable DataParallel for multi-GPU | `False` | Automatic multi-GPU support |
-| `--gradient-accumulation-steps` | Gradient accumulation             | `1`     | Effective larger batch size |
-| `--num-workers`                 | DataLoader workers                | `0`     | 0 = auto-detect             |
-| `--pin-memory`                  | Pin memory for GPU                | `False` | Faster GPU transfers        |
+| Parameter           | Default | Description                    |
+| ------------------- | ------- | ------------------------------ |
+| `--amp`             | `False` | Enable mixed precision         |
+| `--compile-model`   | `False` | Compile model (PyTorch 2.0+)   |
+| `--auto-workers`    | `False` | Auto-detect DataLoader workers |
+| `--enable-parallel` | `False` | Enable multi-GPU DataParallel  |
+| `--num-workers`     | `0`     | DataLoader workers (0=auto)    |
+| `--pin-memory`      | `False` | Pin memory for GPU             |
 
-### Training Control Parameters
+### Training Control
 
-| Parameter              | Description             | Default | Notes                       |
-| ---------------------- | ----------------------- | ------- | --------------------------- |
-| `--weight-decay`       | Weight decay            | `0.0`   | L2 regularization           |
-| `--grad-clip`          | Gradient clipping       | `None`  | Prevent exploding gradients |
-| `--scheduler`          | Learning rate scheduler | `None`  | `plateau` or `cosine`       |
-| `--scheduler-patience` | Scheduler patience      | `5`     | Epochs before LR reduction  |
-| `--early-stop`         | Early stopping patience | `None`  | Stop if no improvement      |
-| `--resume`             | Resume from checkpoint  | `None`  | Path to checkpoint file     |
+| Parameter              | Default | Description                       |
+| ---------------------- | ------- | --------------------------------- |
+| `--weight-decay`       | `0.0`   | L2 regularization                 |
+| `--grad-clip`          | `None`  | Gradient clipping max norm        |
+| `--scheduler`          | `None`  | LR scheduler: `plateau`, `cosine` |
+| `--scheduler-patience` | `5`     | Epochs before LR reduction        |
+| `--early-stop`         | `None`  | Early stopping patience           |
+| `--resume`             | `None`  | Resume from checkpoint path       |
+| `--output-dir`         | `.`     | Output directory for models       |
 
-### Loss Weighting Parameters
+### Loss Weighting
 
-| Parameter | Description          | Default | Notes                               |
-| --------- | -------------------- | ------- | ----------------------------------- |
-| `--alpha` | Gloss loss weight    | `0.5`   | Higher = focus on gloss accuracy    |
-| `--beta`  | Category loss weight | `0.5`   | Higher = focus on category accuracy |
+| Parameter | Default | Description          |
+| --------- | ------- | -------------------- |
+| `--alpha` | `0.5`   | Gloss loss weight    |
+| `--beta`  | `0.5`   | Category loss weight |
 
-### Curriculum Training Parameters
+### Curriculum Learning
 
-| Parameter                 | Description                               | Default  | Notes                                      |
-| ------------------------- | ----------------------------------------- | -------- | ------------------------------------------ |
-| `--curriculum`            | Curriculum strategy                       | `None`   | `gloss-first`, `category-first`, `dynamic` |
-| `--curriculum-epochs`     | Number of epochs for curriculum phase     | `10`     | When to start balancing tasks              |
-| `--curriculum-warmup`     | Warmup epochs before curriculum (dynamic) | `5`      | Only for dynamic strategy                  |
-| `--curriculum-min-weight` | Minimum weight for secondary task         | `0.1`    | Range: 0.0-1.0                             |
-| `--curriculum-schedule`   | Weight scheduling function                | `linear` | `linear`, `cosine`, `exponential`          |
+| Parameter                 | Default  | Description                                          |
+| ------------------------- | -------- | ---------------------------------------------------- |
+| `--curriculum`            | `None`   | Strategy: `gloss-first`, `category-first`, `dynamic` |
+| `--curriculum-epochs`     | `10`     | Epochs for curriculum phase                          |
+| `--curriculum-min-weight` | `0.1`    | Minimum weight for secondary task                    |
+| `--curriculum-schedule`   | `linear` | Schedule: `linear`, `cosine`, `exponential`          |
 
-## Performance Optimizations
+---
 
-The training script automatically optimizes for your hardware:
+## Training Features
 
-- **Device Detection**: CUDA, MPS (Apple Silicon), or CPU
-- **Memory Management**: Optimized GPU memory allocation
-- **DataLoader Optimization**: Auto-detects workers (up to 8) and prefetch settings
-- **Mixed Precision**: AMP on CUDA devices
-- **Dynamic Batch Sizing**: Calculates batch size based on available memory
-- **Multi-GPU Support**: Automatic DataParallel when multiple GPUs detected
+### Optimization
 
-### Resource Adaptation
+- **Automatic Mixed Precision (AMP)**: Faster training on CUDA devices
+- **Model Compilation**: PyTorch 2.0+ optimization
+- **Auto Workers**: Automatically detects optimal DataLoader workers
+- **Multi-GPU**: Automatic DataParallel when multiple GPUs available
 
-- **GPU Memory**: Batch size adjusts (8-64) based on available memory
-- **CPU Cores**: Uses up to 8 DataLoader workers
-- **Multi-GPU**: Distributes training across available GPUs
+### Regularization
 
-### Performance Examples
+- **Dropout**: Applied in model layers
+- **Weight Decay**: L2 regularization on model parameters
+- **Gradient Clipping**: Prevents exploding gradients
+- **Label Smoothing**: Optional for better generalization
 
-**Multi-GPU**:
+### Scheduling
 
-```powershell
-python -m training.train ^
-  --model transformer ^
-  --batch-size 64 ^
-  --amp ^
-  --compile-model ^
-  --auto-workers ^
-  --auto-batch-size ^
-  --enable-parallel ^
-  --gradient-accumulation-steps 2
-```
+- **ReduceLROnPlateau**: Reduces LR when validation loss plateaus
+- **CosineAnnealingLR**: Smooth learning rate annealing
+- **Early Stopping**: Stops training when validation performance stops improving
 
-**Limited Memory**:
+### Monitoring
 
-```powershell
-python -m training.train ^
-  --model transformer ^
-  --batch-size 16 ^
-  --auto-batch-size ^
-  --gradient-accumulation-steps 4 ^
-  --amp ^
-  --auto-workers
-```
+- **CSV Logging**: Automatic metrics logging with timestamps
+- **Console Output**: Real-time training progress
+- **Checkpointing**: Best and last model saved automatically
 
-**CPU Training**:
-
-```powershell
-python -m training.train ^
-  --model transformer ^
-  --batch-size 8 ^
-  --auto-workers ^
-  --auto-batch-size
-```
+---
 
 ## Curriculum Training
 
-Curriculum training focuses on one task initially, then gradually introduces the other task. Useful when tasks have different difficulty levels.
+Curriculum training focuses on one task initially, then gradually introduces the other.
 
-### Curriculum Examples
+### Strategies
 
 **Gloss-First**:
 
 ```powershell
-python -m training.train ^
+python training/train.py ^
   --model transformer ^
-  --keypoints-train data\processed\cmb_train ^
-  --keypoints-val data\processed\cmb_val ^
-  --labels-train-csv data\processed\cmb_train.csv ^
-  --labels-val-csv data\processed\cmb_val.csv ^
+  --keypoints-train data/processed/fsl_train ^
+  --keypoints-val data/processed/fsl_val ^
+  --labels-train-csv data/processed/fsl_train.csv ^
+  --labels-val-csv data/processed/fsl_val.csv ^
   --num-gloss 105 ^
   --num-cat 10 ^
   --epochs 50 ^
-  --batch-size 32 ^
   --curriculum gloss-first ^
   --curriculum-epochs 15 ^
-  --curriculum-min-weight 0.1 ^
-  --curriculum-schedule linear ^
-  --amp ^
-  --compile-model ^
-  --auto-workers ^
-  --auto-batch-size
+  --output-dir trained_models/transformer/curriculum
 ```
 
 **Category-First**:
 
 ```powershell
-python -m training.train ^
+python training/train.py ^
   --model iv3_gru ^
-  --features-train data\processed\cmb_train ^
-  --features-val data\processed\cmb_val ^
-  --labels-train-csv data\processed\cmb_train.csv ^
-  --labels-val-csv data\processed\cmb_val.csv ^
+  --features-train data/processed/fsl_train ^
+  --features-val data/processed/fsl_val ^
+  --labels-train-csv data/processed/fsl_train.csv ^
+  --labels-val-csv data/processed/fsl_val.csv ^
   --feature-key X2048 ^
   --num-gloss 105 ^
   --num-cat 10 ^
   --epochs 50 ^
-  --batch-size 32 ^
   --curriculum category-first ^
   --curriculum-epochs 20 ^
-  --curriculum-min-weight 0.05 ^
-  --curriculum-schedule cosine ^
-  --amp ^
-  --compile-model ^
-  --auto-workers ^
-  --auto-batch-size
+  --output-dir trained_models/iv3_gru/curriculum
 ```
 
 **Dynamic**:
 
 ```powershell
-python -m training.train ^
+python training/train.py ^
   --model transformer ^
-  --keypoints-train data\processed\cmb_train ^
-  --keypoints-val data\processed\cmb_val ^
-  --labels-train-csv data\processed\cmb_train.csv ^
-  --labels-val-csv data\processed\cmb_val.csv ^
+  --keypoints-train data/processed/fsl_train ^
+  --keypoints-val data/processed/fsl_val ^
+  --labels-train-csv data/processed/fsl_train.csv ^
+  --labels-val-csv data/processed/fsl_val.csv ^
   --num-gloss 105 ^
   --num-cat 10 ^
   --epochs 60 ^
-  --batch-size 32 ^
   --curriculum dynamic ^
-  --curriculum-warmup 5 ^
   --curriculum-epochs 20 ^
-  --curriculum-min-weight 0.1 ^
-  --curriculum-schedule exponential ^
-  --amp ^
-  --compile-model ^
-  --auto-workers ^
-  --auto-batch-size
+  --output-dir trained_models/transformer/dynamic
 ```
 
-### Weight Scheduling
+### Weight Schedules
 
 - **Linear**: Gradual increase from min_weight to 0.5
-- **Cosine**: Smooth transitions with slower initial changes
-- **Exponential**: Quick initial progress with rapid final balancing
+- **Cosine**: Smooth transitions
+- **Exponential**: Quick initial progress
 
-### Benefits
+---
 
-- **Better Convergence**: More stable training with fewer oscillations
-- **Higher Accuracy**: Often achieves better final performance
-- **Faster Training**: May converge faster than balanced training
-- **Use When**: Tasks have different difficulty levels or balanced training struggles
+## Checkpointing
 
-## Training Examples
+### Automatic Saves
 
-**Multi-GPU (High Performance)**:
+Models are saved to the output directory:
 
-```powershell
-python -m training.train ^
-  --model transformer ^
-  --keypoints-train data\processed\cmb_train ^
-  --keypoints-val data\processed\cmb_val ^
-  --labels-train-csv data\processed\cmb_train.csv ^
-  --labels-val-csv data\processed\cmb_val.csv ^
-  --num-gloss 105 ^
-  --num-cat 10 ^
-  --epochs 100 ^
-  --batch-size 64 ^
-  --lr 5e-5 ^
-  --amp ^
-  --compile-model ^
-  --auto-workers ^
-  --auto-batch-size ^
-  --enable-parallel ^
-  --gradient-accumulation-steps 2 ^
-  --grad-clip 1.0 ^
-  --scheduler plateau ^
-  --early-stop 15 ^
-  --log-csv logs\transformer_multi_gpu.csv
-```
+- `{ModelName}_best.pt`: Best validation performance
+- `{ModelName}_last.pt`: Latest epoch
 
-**Single GPU (Balanced)**:
-
-```powershell
-python -m training.train ^
-  --model transformer ^
-  --keypoints-train data\processed\cmb_train ^
-  --keypoints-val data\processed\cmb_val ^
-  --labels-train-csv data\processed\cmb_train.csv ^
-  --labels-val-csv data\processed\cmb_val.csv ^
-  --num-gloss 105 ^
-  --num-cat 10 ^
-  --epochs 50 ^
-  --batch-size 32 ^
-  --lr 3e-4 ^
-  --amp ^
-  --compile-model ^
-  --auto-workers ^
-  --auto-batch-size ^
-  --gradient-accumulation-steps 2 ^
-  --grad-clip 1.0 ^
-  --scheduler cosine ^
-  --early-stop 10 ^
-  --log-csv logs\transformer_single_gpu.csv
-```
-
-**CPU Training**:
-
-```powershell
-python -m training.train ^
-  --model transformer ^
-  --keypoints-train data\processed\cmb_train ^
-  --keypoints-val data\processed\cmb_val ^
-  --labels-train-csv data\processed\cmb_train.csv ^
-  --labels-val-csv data\processed\cmb_val.csv ^
-  --num-gloss 105 ^
-  --num-cat 10 ^
-  --epochs 30 ^
-  --batch-size 8 ^
-  --auto-workers ^
-  --auto-batch-size ^
-  --scheduler plateau ^
-  --log-csv logs\cpu_training.csv
-```
-
-## Monitoring & Checkpointing
-
-### CSV Logging
-
-Enable detailed logging:
-
-```powershell
---log-csv logs\training_metrics.csv
-```
-
-Logs include: epoch, train_loss, val_loss, val_gloss_acc, val_cat_acc, lr, epoch_time, gpu_memory
-
-### Automatic Checkpointing
-
-Checkpoints are saved in the current directory:
-
-- `{ModelName}_last.pt`: Latest checkpoint (saved every epoch)
-- `{ModelName}_best.pt`: Best checkpoint (highest validation accuracy)
-
-**Checkpoint contents:**
+**Checkpoint contents**:
 
 - Model state_dict
 - Optimizer state
@@ -481,180 +354,153 @@ Checkpoints are saved in the current directory:
 ### Resume Training
 
 ```powershell
-python -m training.train ^
-  --resume SignTransformer_last.pt ^
-  --keypoints-train data\processed\cmb_train ^
-  --keypoints-val data\processed\cmb_val ^
-  --labels-train-csv data\processed\cmb_train.csv ^
-  --labels-val-csv data\processed\cmb_val.csv
+python training/train.py ^
+  --resume trained_models/transformer/run1/SignTransformer_last.pt ^
+  --keypoints-train data/processed/fsl_train ^
+  --keypoints-val data/processed/fsl_val ^
+  --labels-train-csv data/processed/fsl_train.csv ^
+  --labels-val-csv data/processed/fsl_val.csv
 ```
 
-## Smoke Tests
+### CSV Logging
 
-Quick tests to verify setup without real data:
-
-**Transformer**:
+Enable with `--log-csv`:
 
 ```powershell
-python -m training.train ^
-  --model transformer ^
-  --smoke-test ^
-  --num-gloss 105 ^
-  --num-cat 10
+python training/train.py --log-csv logs/training_metrics.csv
 ```
 
-**IV3-GRU**:
+Logs include: epoch, train_loss, val_loss, val_gloss_acc, val_cat_acc, lr, epoch_time
 
-```powershell
-python -m training.train ^
-  --model iv3_gru ^
-  --smoke-test ^
-  --num-gloss 105 ^
-  --num-cat 10 ^
-  --no-pretrained-backbone
-```
+---
 
 ## Troubleshooting
 
-### Common Issues
+### Out of Memory
 
-**Out of Memory (OOM)**:
+**Solutions**:
 
 - Reduce `--batch-size`
+- Enable `--amp`
 - Increase `--gradient-accumulation-steps`
-- Enable `--amp` for mixed precision
 - Reduce sequence lengths in preprocessing
 
-**Slow Training**:
+### Slow Training
+
+**Solutions**:
 
 - Enable `--amp` for faster computation
-- Enable `--compile-model` for optimized execution
+- Enable `--compile-model` for optimization
 - Use `--auto-workers` for parallel data loading
-- Use `--auto-batch-size` for optimal batch size
 - Enable `--enable-parallel` for multi-GPU
 
-**Data Loading Issues**:
+### Data Loading Issues
 
-- Verify file paths exist
-- Check CSV format has required columns: `file`, `gloss`, `cat`, `occluded`
-- Ensure NPZ files contain correct keys (`X` for keypoints, `X2048` for features)
-- Verify gloss IDs in range [0, 104] and cat IDs in range [0, 9]
+**Check**:
 
-**Convergence Problems**:
+- File paths exist
+- CSV has required columns: `file`, `gloss`, `cat`, `occluded`
+- NPZ files contain correct keys (`X` or `X2048`)
+- Gloss IDs in range [0, 104]
+- Category IDs in range [0, 9]
+
+### Convergence Problems
+
+**Try**:
 
 - Adjust `--lr` (try 1e-4, 5e-5, 3e-4)
-- Use `--scheduler` (plateau or cosine)
+- Use `--scheduler plateau` or `cosine`
 - Adjust `--alpha` and `--beta` for loss balancing
-- Enable `--grad-clip` to prevent exploding gradients
-- Try curriculum learning strategies
+- Enable `--grad-clip 1.0`
+- Try curriculum learning
 
 ### Data Validation
 
 ```powershell
 # Validate NPZ files
-python -m preprocessing.utils.validate_npz data\processed\cmb_train
+python preprocessing/utils/validate_npz.py data/processed/fsl_train
 
-# Validate with InceptionV3 features requirement
-python -m preprocessing.utils.validate_npz data\processed\cmb_val --require-x2048
+# Require X2048 features
+python preprocessing/utils/validate_npz.py data/processed/fsl_val --require-x2048
 ```
+
+---
 
 ## Best Practices
 
 ### Training Strategy
 
-1. **Validate data** before training using `validate_npz`
-2. **Start small** with few epochs to verify setup
-3. **Monitor GPU memory** usage during first epoch
-4. **Enable CSV logging** with `--log-csv` for tracking metrics
-5. **Use checkpoints** with `--resume` for long training runs
-6. **Early stopping** with `--early-stop` to prevent overfitting
+1. Validate data before training
+2. Start with few epochs to verify setup
+3. Monitor GPU memory during first epoch
+4. Enable CSV logging for tracking
+5. Use checkpoints for long runs
+6. Enable early stopping to prevent overfitting
 
 ### Performance Tips
 
-**For GPU Training:**
+**GPU Training**:
 
 - Enable `--amp` for mixed precision
 - Enable `--compile-model` for PyTorch 2.0+ optimization
-- Use `--auto-batch-size` for optimal memory utilization
 - Use `--auto-workers` for parallel data loading
 
-**For Multi-GPU:**
+**Multi-GPU**:
 
-- Enable `--enable-parallel` for automatic DataParallel
-- Increase `--batch-size` to utilize multiple GPUs
-- Use gradient accumulation for even larger effective batch sizes
+- Enable `--enable-parallel`
+- Increase `--batch-size` to utilize GPUs
+- Use gradient accumulation for larger effective batch sizes
 
-**For Memory Constraints:**
+**Memory Constraints**:
 
 - Reduce `--batch-size` and increase `--gradient-accumulation-steps`
 - Enable `--amp` to reduce memory footprint
-- Reduce sequence lengths during preprocessing
 
 ### Hyperparameter Tuning
 
-**Learning Rate:**
+**Learning Rate**:
 
-- Start with `1e-4` (conservative)
+- Start with `1e-4`
 - Try `5e-5` (multi-GPU) or `3e-4` (single GPU)
-- Monitor loss curves and adjust accordingly
+- Monitor loss curves
 
-**Scheduler:**
+**Scheduler**:
 
-- Use `plateau` for stable training with automatic LR reduction
-- Use `cosine` for faster convergence with smooth annealing
+- Use `plateau` for stable training
+- Use `cosine` for faster convergence
 
-**Loss Weights:**
+**Loss Weights**:
 
-- Balance `--alpha` and `--beta` based on task priorities
-- Start with default (0.5, 0.5) and adjust if one task is harder
-- Use curriculum learning if tasks have very different difficulties
+- Start with defaults (0.5, 0.5)
+- Adjust based on task difficulty
+- Use curriculum learning if tasks differ significantly
+
+---
 
 ## Model Notes
 
-**Transformer:**
+**Transformer**:
 
 - Uses attention masks for variable-length sequences
 - Benefits from larger batch sizes
-- Lighter memory footprint than IV3-GRU
+- Lower memory footprint
 - Provides attention weights for interpretability
 
-**IV3-GRU:**
+**InceptionV3-GRU**:
 
-- Uses InceptionV3 backbone with pretrained ImageNet weights
-- Processes precomputed visual features efficiently
+- Uses pretrained ImageNet weights
+- Processes precomputed features
 - Requires `X2048` key in NPZ files
-- Higher memory requirements than Transformer
+- Higher memory requirements
 
 Both models support multi-task learning with configurable loss weights and curriculum strategies.
 
-## Output Location
-
-Trained models are saved in the current working directory:
-
-```
-.
-├── SignTransformer_best.pt
-├── SignTransformer_last.pt
-├── InceptionV3GRU_best.pt
-├── InceptionV3GRU_last.pt
-└── logs\
-    └── training_metrics.csv
-```
-
-Move models to `trained_models/` directory for organization:
-
-```powershell
-# Organize trained models
-New-Item -ItemType Directory -Force -Path trained_models\transformer\my_run
-Move-Item SignTransformer_*.pt trained_models\transformer\my_run\
-
-New-Item -ItemType Directory -Force -Path trained_models\iv3_gru\my_run
-Move-Item InceptionV3GRU_*.pt trained_models\iv3_gru\my_run\
-```
+---
 
 ## Additional Resources
 
 - [Model Guide](../models/MODEL_GUIDE.md): Model architectures and details
-- [Data Guide](../data/DATA_GUIDE.md): Data preparation and organization
+- [Data Guide](../data/DATA_GUIDE.md): Data preparation
 - [Preprocessing Guide](../preprocessing/docs/PREPROCESS_GUIDE.MD): Video preprocessing
 - [Validation Guide](../evaluation/validation/VALIDATION_GUIDE.md): Model evaluation
+- [Trained Model Guide](../trained_models/TRAINED_MODEL_GUIDE.md): Model management
