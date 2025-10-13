@@ -1,0 +1,16 @@
+{
+  "gloss_accuracy": 0.9516908212560387,
+  "category_accuracy": 1.0,
+  "gloss_precision": 0.9746376811594203,
+  "gloss_recall": 0.9516908212560387,
+  "gloss_f1_score": 0.9530557472586458,
+  "category_precision": 1.0,
+  "category_recall": 1.0,
+  "category_f1_score": 1.0,
+  "num_samples": 207,
+  "gloss_top1_accuracy": 0.9516908212560387,
+  "gloss_top5_accuracy": 0.9951690821256038,
+  "gloss_top10_accuracy": 1.0,
+  "category_top1_accuracy": 1.0,
+  "category_top5_accuracy": 1.0
+}
