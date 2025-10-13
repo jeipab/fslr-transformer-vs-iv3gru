@@ -5,6 +5,40 @@
 
 ---
 
+## TL;DR
+
+**The Computing Problem**: Filipino Sign Language recognition requires solving temporal dependencies (120-frame sequences), multi-modal fusion (hands + face keypoints), and occlusion robustness—all while maintaining real-time performance. Sequential models fail under partial information loss.
+
+**The Results**:
+
+- **Gloss Recognition**: Transformer **95.6%** vs InceptionV3-GRU 75.0% (**+20.6%**)
+- **Under Occlusion**: Transformer **95.2%** vs IV3-GRU 70.5% (**+24.7%**)
+- **Degradation**: Transformer **-0.8%** vs IV3-GRU -8.6% (**10.75× more robust**)
+- **Category Classification**: Transformer 99.5% vs IV3-GRU 99.1% (no significant difference)
+
+**Why Transformer Wins**:
+
+- **Global Attention**: O(1) access to any frame, no sequential bottleneck
+- **Parallel Processing**: All 120 frames processed simultaneously, no error propagation
+- **Dynamic Weighting**: Occlusion triggers weight redistribution to visible frames
+
+**Why IV3-GRU Struggles**:
+
+- **Sequential Bottleneck**: O(T) access, processes frame-by-frame
+- **Hidden State Compression**: 12-D bottleneck loses information across 120 frames
+- **Error Propagation**: Corrupted frames contaminate future time steps
+
+**Statistical Significance**:
+
+- **H₀₁ REJECTED**: Transformer significantly outperforms on gloss recognition (p < 0.05)
+- **H₀₂ REJECTED**: Transformer significantly more robust under occlusion (p < 0.05)
+- **H₀₃ FAIL TO REJECT**: No significant difference in category classification
+- **H₀₄ FAIL TO REJECT**: Both maintain category accuracy under occlusion
+
+**Research Impact**: First production-ready FSL system with multi-head attention achieving 95.6% gloss accuracy, 99.5% category accuracy, and exceptional occlusion robustness. Provides empirical evidence that attention mechanisms outperform CNN-RNN architectures for sign language recognition.
+
+---
+
 ## 1. The Computing Problem
 
 Filipino Sign Language recognition requires solving:

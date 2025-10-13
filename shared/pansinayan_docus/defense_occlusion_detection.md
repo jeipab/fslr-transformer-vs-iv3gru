@@ -5,6 +5,29 @@
 
 ---
 
+## TL;DR
+
+**The Problem**: Sign language research needs automated, reliable detection of hand-face occlusion to test model robustness under partial information loss.
+
+**The Solution**:
+
+- **4 Detection Methods**: Fingertip intersection (0.5), palm proximity (0.3), trajectory analysis (0.15), hand orientation (0.05)
+- **Temporal Filtering**: 5-frame window (167ms @ 30 FPS), 60% consensus (3/5 frames), tolerates 2-frame gaps
+- **Adaptive Regions**: 5 face zones scale with signer dimensions
+
+**The Results**:
+
+- Partitioned 432 test samples: **207 occluded (48%)**, 225 non-occluded (52%)
+- Transformer degradation: **-0.8%** (96.0% → 95.2%)
+- InceptionV3-GRU degradation: **-8.6%** (79.1% → 70.5%)
+- **10.75× more robust** with attention mechanism
+
+**Why It Works**: Multi-method fusion provides redundancy, weighted scoring prioritizes direct evidence, temporal filtering eliminates noise, adaptive scaling works across signers.
+
+**Research Impact**: Enables hypothesis testing (H₀₂, H₀₄), provides empirical proof that global attention mechanisms maintain performance under occlusion while sequential models degrade significantly.
+
+---
+
 ## 1. Purpose
 
 ### Research Requirement
