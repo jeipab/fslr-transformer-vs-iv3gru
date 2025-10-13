@@ -221,10 +221,10 @@ def render_overall_performance(results: Dict[str, Any]):
     df = pd.DataFrame(metrics_data)
     
     # Performance table
-    st.markdown("#### Detailed Metrics")
+    st.markdown("#### Standard Metrics")
     st.dataframe(df, width='stretch')
     
-    # Create comparison chart (moved below table)
+    # Create comparison chart
     fig = go.Figure()
     
     fig.add_trace(go.Bar(
@@ -250,6 +250,36 @@ def render_overall_performance(results: Dict[str, Any]):
     )
     
     st.plotly_chart(fig, width='stretch')
+    
+    # Top-k Accuracy metrics
+    if 'gloss_top1_accuracy' in overall:
+        st.markdown("#### Top-k Accuracy")
+        topk_col1, topk_col2 = st.columns(2)
+        
+        with topk_col1:
+            st.markdown("**Gloss Recognition**")
+            topk_gloss_data = {
+                'Top-k': ['Top-1', 'Top-5', 'Top-10'],
+                'Accuracy': [
+                    overall.get('gloss_top1_accuracy', 0.0) if 'error' not in overall else 0.0,
+                    overall.get('gloss_top5_accuracy', 0.0) if 'error' not in overall else 0.0,
+                    overall.get('gloss_top10_accuracy', 0.0) if 'error' not in overall else 0.0,
+                ]
+            }
+            topk_gloss_df = pd.DataFrame(topk_gloss_data)
+            st.dataframe(topk_gloss_df, width='stretch', hide_index=True)
+        
+        with topk_col2:
+            st.markdown("**Category Classification**")
+            topk_cat_data = {
+                'Top-k': ['Top-1', 'Top-5'],
+                'Accuracy': [
+                    overall.get('category_top1_accuracy', 0.0) if 'error' not in overall else 0.0,
+                    overall.get('category_top5_accuracy', 0.0) if 'error' not in overall else 0.0,
+                ]
+            }
+            topk_cat_df = pd.DataFrame(topk_cat_data)
+            st.dataframe(topk_cat_df, width='stretch', hide_index=True)
 
 
 def render_per_class_analysis(results: Dict[str, Any]):

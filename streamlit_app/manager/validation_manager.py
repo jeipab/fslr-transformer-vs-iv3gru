@@ -338,6 +338,8 @@ class ModelValidator:
         all_ground_truth = []
         all_occlusions = []
         all_files = []
+        all_gloss_probs = []  # For top-k accuracy computation
+        all_cat_probs = []    # For top-k accuracy computation
         
         # Process in batches
         num_batches = (len(dataset) + batch_size - 1) // batch_size
@@ -383,11 +385,15 @@ class ModelValidator:
                     'occluded': batch_occluded[i],
                     'gloss_prob': float(gloss_probs[i][gloss_preds[i]]),
                     'cat_prob': float(cat_probs[i][cat_preds[i]]),
-                    'gloss_top5': [(int(j), float(gloss_probs[i][j])) 
-                                 for j in np.argsort(gloss_probs[i])[-5:][::-1]],
-                    'cat_top3': [(int(j), float(cat_probs[i][j])) 
-                               for j in np.argsort(cat_probs[i])[-3:][::-1]]
+                    'gloss_top10': [(int(j), float(gloss_probs[i][j])) 
+                                  for j in np.argsort(gloss_probs[i])[-10:][::-1]],
+                    'cat_top5': [(int(j), float(cat_probs[i][j])) 
+                               for j in np.argsort(cat_probs[i])[-5:][::-1]]
                 })
+                
+                # Store probabilities for top-k accuracy computation
+                all_gloss_probs.append(gloss_probs[i])
+                all_cat_probs.append(cat_probs[i])
             
             all_ground_truth.extend(list(zip(batch_gloss, batch_cat)))
             all_occlusions.extend(batch_occluded)
@@ -403,22 +409,29 @@ class ModelValidator:
         gloss_gts = np.array([p['gloss_gt'] for p in all_predictions])
         cat_gts = np.array([p['cat_gt'] for p in all_predictions])
         occlusions = np.array(all_occlusions)
+        gloss_probs = np.array(all_gloss_probs)
+        cat_probs = np.array(all_cat_probs)
         
         # Compute comprehensive metrics
         results = self._compute_metrics(
             gloss_preds, cat_preds, gloss_gts, cat_gts, 
-            occlusions, all_predictions
+            occlusions, gloss_probs, cat_probs, all_predictions
         )
         
         return results
     
     def _compute_metrics(self, gloss_preds: np.ndarray, cat_preds: np.ndarray,
                         gloss_gts: np.ndarray, cat_gts: np.ndarray,
-                        occlusions: np.ndarray, all_predictions: List[Dict]) -> Dict[str, Any]:
+                        occlusions: np.ndarray, gloss_probs: np.ndarray, cat_probs: np.ndarray,
+                        all_predictions: List[Dict]) -> Dict[str, Any]:
         """Compute comprehensive evaluation metrics."""
         
         # Overall metrics
         overall_results = self._compute_overall_metrics(gloss_preds, cat_preds, gloss_gts, cat_gts)
+        
+        # Top-k accuracy for overall
+        overall_topk = self._compute_topk_accuracy(gloss_probs, cat_probs, gloss_gts, cat_gts)
+        overall_results.update(overall_topk)
         
         # Occlusion-based metrics
         occluded_mask = occlusions == 1
@@ -428,11 +441,21 @@ class ModelValidator:
             gloss_preds[occluded_mask], cat_preds[occluded_mask],
             gloss_gts[occluded_mask], cat_gts[occluded_mask]
         )
+        occluded_topk = self._compute_topk_accuracy(
+            gloss_probs[occluded_mask], cat_probs[occluded_mask],
+            gloss_gts[occluded_mask], cat_gts[occluded_mask]
+        )
+        occluded_results.update(occluded_topk)
         
         non_occluded_results = self._compute_overall_metrics(
             gloss_preds[non_occluded_mask], cat_preds[non_occluded_mask],
             gloss_gts[non_occluded_mask], cat_gts[non_occluded_mask]
         )
+        non_occluded_topk = self._compute_topk_accuracy(
+            gloss_probs[non_occluded_mask], cat_probs[non_occluded_mask],
+            gloss_gts[non_occluded_mask], cat_gts[non_occluded_mask]
+        )
+        non_occluded_results.update(non_occluded_topk)
         
         # Per-class metrics
         per_class_results = self._compute_per_class_metrics(gloss_preds, cat_preds, gloss_gts, cat_gts)
@@ -494,6 +517,44 @@ class ModelValidator:
             'category_f1_score': float(cat_f1),
             'num_samples': int(len(gloss_preds))
         }
+    
+    def _compute_topk_accuracy(self, gloss_probs: np.ndarray, cat_probs: np.ndarray,
+                               gloss_gts: np.ndarray, cat_gts: np.ndarray) -> Dict[str, Any]:
+        """
+        Compute top-k accuracy for gloss and category predictions.
+        
+        Args:
+            gloss_probs: Probability distributions for gloss predictions [num_samples, num_gloss_classes]
+            cat_probs: Probability distributions for category predictions [num_samples, num_cat_classes]
+            gloss_gts: Ground truth gloss labels [num_samples]
+            cat_gts: Ground truth category labels [num_samples]
+            
+        Returns:
+            Dictionary containing top-k accuracy metrics
+        """
+        if len(gloss_probs) == 0:
+            return {}
+        
+        results = {}
+        
+        # Compute top-k accuracy for gloss (top-1, top-5, top-10)
+        for k in [1, 5, 10]:
+            # Get top-k predictions
+            top_k_preds = np.argsort(gloss_probs, axis=1)[:, -k:]
+            # Check if ground truth is in top-k
+            correct = np.array([gt in top_k_preds[i] for i, gt in enumerate(gloss_gts)])
+            results[f'gloss_top{k}_accuracy'] = float(np.mean(correct))
+        
+        # Compute top-k accuracy for category (top-1, top-5)
+        # (only top-5 since there are 10 categories total)
+        for k in [1, 5]:
+            # Get top-k predictions
+            top_k_preds = np.argsort(cat_probs, axis=1)[:, -k:]
+            # Check if ground truth is in top-k
+            correct = np.array([gt in top_k_preds[i] for i, gt in enumerate(cat_gts)])
+            results[f'category_top{k}_accuracy'] = float(np.mean(correct))
+        
+        return results
     
     def _compute_per_class_metrics(self, gloss_preds: np.ndarray, cat_preds: np.ndarray,
                                  gloss_gts: np.ndarray, cat_gts: np.ndarray) -> Dict[str, Any]:

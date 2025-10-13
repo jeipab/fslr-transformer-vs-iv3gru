@@ -478,10 +478,10 @@ class ModelValidator:
                         'occluded': batch_occluded[i],             # Occlusion flag
                         'gloss_prob': float(gloss_probs[i][gloss_preds[i]]),  # Prediction confidence
                         'cat_prob': float(cat_probs[i][cat_preds[i]]),        # Prediction confidence
-                        'gloss_top5': [(int(j), float(gloss_probs[i][j]))     # Top 5 gloss predictions
-                                     for j in np.argsort(gloss_probs[i])[-5:][::-1]],
-                        'cat_top3': [(int(j), float(cat_probs[i][j]))         # Top 3 category predictions
-                                   for j in np.argsort(cat_probs[i])[-3:][::-1]]
+                        'gloss_top10': [(int(j), float(gloss_probs[i][j]))    # Top 10 gloss predictions
+                                      for j in np.argsort(gloss_probs[i])[-10:][::-1]],
+                        'cat_top5': [(int(j), float(cat_probs[i][j]))         # Top 5 category predictions
+                                   for j in np.argsort(cat_probs[i])[-5:][::-1]]
                     })
                     
                     # Store probabilities for top-k accuracy computation
@@ -734,13 +734,13 @@ class ModelValidator:
                     'gloss_probability': pred['gloss_prob'],
                     'category_probability': pred['cat_prob']
                 },
-                'gloss_top5': [
+                'gloss_top10': [
                     [f"{self.gloss_mapping.get(gloss_id, 'Unknown')} ({gloss_id})", prob]
-                    for gloss_id, prob in pred['gloss_top5']
+                    for gloss_id, prob in pred['gloss_top10']
                 ],
-                'category_top3': [
+                'category_top5': [
                     [f"{self.category_mapping.get(cat_id, 'Unknown')} ({cat_id})", prob]
-                    for cat_id, prob in pred['cat_top3']
+                    for cat_id, prob in pred['cat_top5']
                 ],
                 'correct': {
                     'gloss': pred['gloss_pred'] == pred['gloss_gt'],
