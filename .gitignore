@@ -45,6 +45,9 @@ data/splitting/**/*.pyc
 *.avi
 *.mov
 
+# Notebooks folder
+notebooks/
+
 # Exception: Allow demo files
 !data/demo/*.npz
 !data/demo/*.mov
