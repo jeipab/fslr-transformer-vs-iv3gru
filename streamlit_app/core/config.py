@@ -25,9 +25,9 @@ MODEL_CONFIG = {
         'num_gloss_classes': 105,
         'num_category_classes': 10,
         'display_name': 'SignTransformer',
-        'input_dim': None,  # Will be auto-detected from checkpoint (2204 for combined model)
-        'supports_keypoints': True,  # Can use 156-D keypoints
-        'supports_features': True    # Can use 2048-D features
+        'input_dim': None, 
+        'supports_keypoints': True,  
+        'supports_features': True    
     },
     'iv3_gru': {
         'enabled': True,
@@ -36,9 +36,9 @@ MODEL_CONFIG = {
         'num_gloss_classes': 105,
         'num_category_classes': 10,
         'display_name': 'InceptionV3+GRU',
-        'input_dim': 2048,  # Always uses 2048-D features
-        'supports_keypoints': False,  # Cannot use 156-D keypoints
-        'supports_features': True     # Can use 2048-D features
+        'input_dim': 2048, 
+        'supports_keypoints': False,  
+        'supports_features': True    
     }
 }
 
