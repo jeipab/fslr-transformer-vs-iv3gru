@@ -185,6 +185,64 @@ def _append_label_row(path, file_entry, gloss_id, cat_id, occluded_flag=0):
         print(f"[WARN] Failed to append to labels csv '{path}': {e}")
 
 
+def resize_with_aspect_ratio_and_pad(frame, target_size=256, pad_color=(0, 0, 0)):
+    """
+    Resize frame preserving aspect ratio, then pad to square.
+    
+    This prevents geometric distortion of keypoint spatial relationships while
+    ensuring consistent input dimensions for MediaPipe.
+    
+    For 640×360 input with target_size=256:
+    - Resizes to 256×144 (preserves 16:9 aspect ratio)
+    - Adds 56px black padding on top and bottom
+    - Output: 256×256 with content centered
+    
+    Args:
+        frame: Input BGR frame (H, W, 3)
+        target_size: Target square dimension (default 256)
+        pad_color: RGB color for padding (default black)
+    
+    Returns:
+        tuple: (padded_frame, metadata_dict)
+            padded_frame: (target_size, target_size, 3) numpy array
+            metadata_dict: {
+                'scale': scaling factor applied,
+                'x_offset': horizontal padding offset,
+                'y_offset': vertical padding offset,
+                'original_size': (orig_h, orig_w),
+                'resized_size': (new_h, new_w)
+            }
+    """
+    h, w = frame.shape[:2]
+    
+    # Calculate scaling to fit within target_size while preserving aspect ratio
+    scale = target_size / max(h, w)
+    new_w = int(w * scale)
+    new_h = int(h * scale)
+    
+    # Resize preserving aspect ratio
+    resized = cv2.resize(frame, (new_w, new_h), interpolation=cv2.INTER_AREA)
+    
+    # Create padded canvas
+    canvas = np.full((target_size, target_size, 3), pad_color, dtype=np.uint8)
+    
+    # Center the resized frame on canvas
+    y_offset = (target_size - new_h) // 2
+    x_offset = (target_size - new_w) // 2
+    canvas[y_offset:y_offset+new_h, x_offset:x_offset+new_w] = resized
+    
+    # Store metadata for debugging and validation
+    metadata = {
+        'scale': scale,
+        'x_offset': x_offset,
+        'y_offset': y_offset,
+        'original_size': (h, w),
+        'resized_size': (new_h, new_w)
+    }
+    
+    return canvas, metadata
+
+
 def process_video(video_path, out_dir, target_fps=30, out_size=256, conf_thresh=0.5, max_gap=5, write_keypoints=True, write_iv3_features=True, feature_key='X2048',
                  compute_occlusion=True, occ_detailed=False, labels_csv_path=None, gloss_id=None, cat_id=None):
     """Process a single video file and extract multi-modal features for sign language recognition.
@@ -265,8 +323,8 @@ def process_video(video_path, out_dir, target_fps=30, out_size=256, conf_thresh=
             if ms < next_t * 1000.0:  # Skip frame if not at target sampling time
                 continue
 
-            # STEP 4a: Resize frame for consistent processing
-            frame_bgr_resized = cv2.resize(frame_bgr, (out_size, out_size), interpolation=cv2.INTER_AREA)
+            # STEP 4a: Resize frame for consistent processing (preserving aspect ratio)
+            frame_bgr_resized, resize_meta = resize_with_aspect_ratio_and_pad(frame_bgr, out_size)
 
             # STEP 4b: Person segmentation to remove background
             frame_rgb = cv2.cvtColor(frame_bgr_resized, cv2.COLOR_BGR2RGB)  # Convert to RGB for MediaPipe
@@ -492,8 +550,8 @@ def process_video_worker(args):
                 if ms < next_t * 1000.0:
                     continue
 
-                # Resize frame
-                frame_bgr_resized = cv2.resize(frame_bgr, (out_size, out_size), interpolation=cv2.INTER_AREA)
+                # Resize frame (preserving aspect ratio)
+                frame_bgr_resized, resize_meta = resize_with_aspect_ratio_and_pad(frame_bgr, out_size)
 
                 # Person segmentation
                 frame_rgb = cv2.cvtColor(frame_bgr_resized, cv2.COLOR_BGR2RGB)
