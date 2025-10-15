@@ -61,7 +61,7 @@ import torch.optim as optim
 from torch.utils.data import DataLoader, Dataset
 
 # Local imports
-from models import InceptionV3GRU, SignTransformer
+from models import InceptionV3GRU, SignTransformer, MediaPipeGRU
 
 # ============================================================================
 # LOGGING UTILITIES
@@ -2179,8 +2179,8 @@ Examples:
     # ============================================================================
     # BASIC TRAINING CONFIGURATION
     # ============================================================================
-    parser.add_argument("--model", choices=["transformer", "iv3_gru"], default="transformer", 
-                       help="Model architecture to train: 'transformer' for keypoints, 'iv3_gru' for features")
+    parser.add_argument("--model", choices=["transformer", "mediapipe_gru", "iv3_gru"], default="transformer", 
+                       help="Model architecture: 'transformer' (keypoints), 'mediapipe_gru' (keypoints, lightweight), 'iv3_gru' (features, offline baseline)")
     parser.add_argument("--epochs", type=int, default=20, 
                        help="Number of training epochs to run")
     parser.add_argument("--batch-size", type=int, default=32, 
@@ -2556,8 +2556,9 @@ if __name__ == "__main__":
     print("="*60)
     
     print("Available models:")
-    print("- transformer: Multi-head attention transformer")
-    print("- iv3_gru: InceptionV3 + GRU hybrid")
+    print("- transformer: Multi-head attention transformer (keypoints)")
+    print("- mediapipe_gru: Lightweight GRU (keypoints, mobile-friendly)")
+    print("- iv3_gru: InceptionV3 + GRU hybrid (features, offline baseline)")
     
     if args.model == "transformer":
         # Determine input dimension based on the data mode being used
@@ -2574,6 +2575,29 @@ if __name__ == "__main__":
             num_cat=args.num_cat,
         ).to(device)
         print(f"✓ Using SignTransformer model (input_dim={input_dim})")
+    
+    elif args.model == "mediapipe_gru":
+        # MediaPipeGRU always uses keypoints (156D)
+        if use_feature_files or args.kp_key == "X2048":
+            raise ValueError(
+                "MediaPipeGRU requires keypoint data (156D), not features (2048D). "
+                "Use --kp-files or ensure --kp-key='X' (default)"
+            )
+        
+        input_dim = 156  # Keypoints only
+        
+        model = MediaPipeGRU(
+            input_dim=input_dim,
+            num_gloss=args.num_gloss,
+            num_cat=args.num_cat,
+            projection_dim=None,  # No projection by default
+            hidden1=args.hidden1,
+            hidden2=args.hidden2,
+            dropout=args.dropout,
+            bidirectional=False,  # Default to unidirectional for speed
+        ).to(device)
+        print(f"✓ Using MediaPipeGRU model (input_dim={input_dim}, hidden1={args.hidden1}, hidden2={args.hidden2})")
+    
     elif args.model == "iv3_gru":
         model = InceptionV3GRU(
             num_gloss=args.num_gloss,
@@ -2585,6 +2609,7 @@ if __name__ == "__main__":
             freeze_backbone=args.freeze_backbone,
         ).to(device)
         print("✓ Using InceptionV3GRU model")
+    
     else:
         raise ValueError(f"Invalid --model {args.model}")
     
@@ -2608,7 +2633,13 @@ if __name__ == "__main__":
             else:
                 mask = None
             return m(X, mask=mask)
-    else:
+    
+    elif args.model == "mediapipe_gru":
+        def forward_fn(m, X, lengths=None):
+            # MediaPipeGRU accepts keypoint sequences directly
+            return m(X, lengths=lengths)
+    
+    else:  # iv3_gru
         def forward_fn(m, X, lengths=None):
             return m(X, lengths=lengths, features_already=True)
 
