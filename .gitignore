@@ -49,7 +49,7 @@ data/splitting/**/*.pyc
 notebooks/
 
 # Tool folder
-tool/
+android/
 
 # Exception: Allow demo files
 !data/demo/*.npz
