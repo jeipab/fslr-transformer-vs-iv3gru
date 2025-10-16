@@ -53,6 +53,8 @@ from ..extractors.keypoints_features import (
     FACEMESH_11,          # Face mesh keypoint indices (11 key facial points)
     extract_keypoints_from_frame,  # Main keypoint extraction function
     interpolate_gaps,     # Fill missing keypoints using interpolation
+    smooth_keypoints_ema, # Apply EMA smoothing for temporal consistency
+    validate_and_clean_keypoints,  # Remove outlier keypoints
     xy_from_landmark,     # Convert MediaPipe landmarks to normalized coordinates
     create_models,        # Initialize MediaPipe models
     close_models,         # Clean up MediaPipe models
@@ -243,7 +245,7 @@ def resize_with_aspect_ratio_and_pad(frame, target_size=256, pad_color=(0, 0, 0)
     return canvas, metadata
 
 
-def process_video(video_path, out_dir, target_fps=30, out_size=256, conf_thresh=0.5, max_gap=5, write_keypoints=True, write_iv3_features=True, feature_key='X2048',
+def process_video(video_path, out_dir, target_fps=30, out_size=256, conf_thresh=0.35, max_gap=8, write_keypoints=True, write_iv3_features=True, feature_key='X2048',
                  compute_occlusion=True, occ_detailed=False, labels_csv_path=None, gloss_id=None, cat_id=None):
     """Process a single video file and extract multi-modal features for sign language recognition.
     
@@ -252,18 +254,20 @@ def process_video(video_path, out_dir, target_fps=30, out_size=256, conf_thresh=
     1. Video loading and frame sampling at target FPS
     2. Person segmentation to remove background
     3. MediaPipe keypoint extraction (pose, hands, face)
-    4. InceptionV3 CNN feature extraction
-    5. Gap interpolation for missing keypoints
-    6. Occlusion detection and quality assessment
-    7. Data saving in compressed .npz format
+    4. Outlier detection and removal
+    5. EMA temporal smoothing
+    6. Multi-strategy gap interpolatio
+    7. InceptionV3 CNN feature extraction
+    8. Occlusion detection and quality assessment
+    9. Data saving in compressed .npz format
     
     Args:
         video_path: Path to input video file (.mp4, .mov, .avi, .mkv)
         out_dir: Output directory for processed .npz files
         target_fps: Target frame sampling rate (downsamples high FPS videos)
         out_size: Image resize dimension for keypoint extraction (256x256)
-        conf_thresh: Confidence threshold for keypoint detection (0.0-1.0)
-        max_gap: Maximum gap size for interpolation (frames)
+        conf_thresh: Confidence threshold for keypoint detection (0.0-1.0, default=0.35)
+        max_gap: Maximum gap size for interpolation (frames, default=8)
         write_keypoints: Extract MediaPipe keypoints (156D vectors per frame)
         write_iv3_features: Extract InceptionV3 features (2048D vectors per frame)
         feature_key: Unused parameter (kept for compatibility)
@@ -375,10 +379,16 @@ def process_video(video_path, out_dir, target_fps=30, out_size=256, conf_thresh=
     X = np.stack(X_frames, axis=0)  # Shape: [T, 156] - keypoint coordinates over time
     M = np.stack(M_frames, axis=0)  # Shape: [T, 78] - visibility masks over time
     
-    # Fill gaps in keypoint sequences using interpolation
-    X_filled, M_filled = interpolate_gaps(X, M, max_gap=max_gap)
+    # Step 1: Remove outlier keypoints (physically impossible jumps)
+    M_cleaned = validate_and_clean_keypoints(X, M, max_jump=0.3)
     
-    # Ensure keypoint coordinates stay within valid bounds [0, 1]
+    # Step 2: Apply EMA smoothing to reduce jitter (alpha=0.3)
+    X_smooth = smooth_keypoints_ema(X, M_cleaned, alpha=0.3)
+    
+    # Step 3: Fill gaps in keypoint sequences using multi-strategy interpolation
+    X_filled, M_filled = interpolate_gaps(X_smooth, M_cleaned, max_gap=max_gap)
+    
+    # Step 4: Ensure keypoint coordinates stay within valid bounds [0, 1]
     X_filled = np.clip(X_filled, 0.0, 1.0).astype(np.float32)
     
     # STEP 7b: Process InceptionV3 features
@@ -595,7 +605,10 @@ def process_video_worker(args):
         if write_keypoints:
             X = np.stack(X_frames, axis=0)
             M = np.stack(M_frames, axis=0)
-            X_filled, M_filled = interpolate_gaps(X, M, max_gap=max_gap)
+            
+            M_cleaned = validate_and_clean_keypoints(X, M, max_jump=0.3)
+            X_smooth = smooth_keypoints_ema(X, M_cleaned, alpha=0.3)
+            X_filled, M_filled = interpolate_gaps(X_smooth, M_cleaned, max_gap=max_gap)
             X_filled = np.clip(X_filled, 0.0, 1.0).astype(np.float32)
         else:
             X_filled = M_filled = None
@@ -671,8 +684,8 @@ def process_video_worker(args):
         return {"error": f"Error processing {video_path}: {str(e)}", "video": os.path.splitext(os.path.basename(video_path))[0]}
 
 
-def process_videos_multiprocess(video_files, out_dir, target_fps=30, out_size=256, conf_thresh=0.5, 
-                               max_gap=5, write_keypoints=True, write_iv3_features=True, feature_key='X2048',
+def process_videos_multiprocess(video_files, out_dir, target_fps=30, out_size=256, conf_thresh=0.35, 
+                               max_gap=8, write_keypoints=True, write_iv3_features=True, feature_key='X2048',
                                compute_occlusion=True, occ_detailed=False, labels_csv_path=None, gloss_id=None, cat_id=None, 
                                workers=None, batch_size=32, disable_parquet=False):
     """Orchestrate parallel video processing with multi-GPU support and batched inference.
@@ -689,8 +702,8 @@ def process_videos_multiprocess(video_files, out_dir, target_fps=30, out_size=25
         out_dir: Output directory for processed .npz files
         target_fps: Target frame sampling rate (lower = faster processing)
         out_size: Image resize dimension for keypoint extraction (256x256)
-        conf_thresh: Confidence threshold for keypoint detection (0.0-1.0)
-        max_gap: Maximum gap size for keypoint interpolation (frames)
+        conf_thresh: Confidence threshold for keypoint detection (0.0-1.0, default=0.35)
+        max_gap: Maximum gap size for keypoint interpolation (frames, default=8)
         write_keypoints: Extract MediaPipe keypoints (156D vectors per frame)
         write_iv3_features: Extract InceptionV3 features (2048D vectors per frame)
         feature_key: Unused parameter (kept for compatibility)
@@ -780,8 +793,8 @@ if __name__ == "__main__":
     # Video processing parameters
     parser.add_argument('--target-fps', type=int, default=30, help='Target frames per second (default: 30)')
     parser.add_argument('--out-size', type=int, default=256, help='Output image size for keypoint extraction (default: 256)')
-    parser.add_argument('--conf-thresh', type=float, default=0.5, help='Confidence threshold for keypoint detection (default: 0.5)')
-    parser.add_argument('--max-gap', type=int, default=5, help='Maximum gap for keypoint interpolation (default: 5)')
+    parser.add_argument('--conf-thresh', type=float, default=0.35, help='Confidence threshold for keypoint detection (default: 0.35, lowered for v2.0)')
+    parser.add_argument('--max-gap', type=int, default=8, help='Maximum gap for keypoint interpolation (default: 8, increased for v2.0)')
     
     # Feature extraction controls
     parser.add_argument('--write-keypoints', action='store_true', help='Extract and save MediaPipe keypoints (156D vectors)')

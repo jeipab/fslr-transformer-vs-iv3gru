@@ -51,6 +51,8 @@ try:
     from .extractors.keypoints_features import (
         extract_keypoints_from_frame,
         interpolate_gaps,
+        smooth_keypoints_ema,
+        validate_and_clean_keypoints,
         create_models,
         close_models
     )
@@ -59,6 +61,8 @@ except ImportError:
     KEYPOINTS_FEATURES_AVAILABLE = False
     extract_keypoints_from_frame = None
     interpolate_gaps = None
+    smooth_keypoints_ema = None
+    validate_and_clean_keypoints = None
     create_models = None
     close_models = None
 
@@ -105,7 +109,8 @@ if IV3_FEATURES_AVAILABLE:
     __all__.extend(['extract_iv3_features', 'BatchedInceptionV3Processor'])
 
 if KEYPOINTS_FEATURES_AVAILABLE:
-    __all__.extend(['extract_keypoints_from_frame', 'interpolate_gaps', 'create_models', 'close_models'])
+    __all__.extend(['extract_keypoints_from_frame', 'interpolate_gaps', 'smooth_keypoints_ema', 
+                    'validate_and_clean_keypoints', 'create_models', 'close_models'])
 
 if VALIDATE_NPZ_AVAILABLE:
     __all__.append('validate_dataset')

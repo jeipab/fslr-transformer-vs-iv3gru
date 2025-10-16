@@ -38,6 +38,8 @@ from torchvision.models import inception_v3, Inception_V3_Weights  # Pre-trained
 from ..extractors.keypoints_features import (
     extract_keypoints_from_frame,  # Main keypoint extraction function
     interpolate_gaps,     # Fill missing keypoints using interpolation
+    smooth_keypoints_ema, # Apply EMA smoothing for temporal consistency (v2.0)
+    validate_and_clean_keypoints,  # Remove outlier keypoints (v2.0)
     POSE_UPPER_25,        # Upper body pose keypoint indices (25 points)
     FACEMESH_11,          # Face mesh keypoint indices (11 key facial points)
     create_models,        # Initialize MediaPipe models
@@ -434,9 +436,13 @@ def process_video(video_path, out_dir, label_file=None, target_fps=30, out_size=
     if write_iv3_features and len(X2048_frames) == 0:
         print("[WARN] No IV3 features extracted.")
 
-    # Fill gaps in keypoint sequences using interpolation
-    X_filled, M_filled = interpolate_gaps(X, M, max_gap=max_gap)
-    # Ensure keypoint coordinates stay within valid bounds [0, 1]
+    # Step 1: Remove outlier keypoints (physically impossible jumps)
+    M_cleaned = validate_and_clean_keypoints(X, M, max_jump=0.3)
+    # Step 2: Apply EMA smoothing to reduce jitter (alpha=0.3)
+    X_smooth = smooth_keypoints_ema(X, M_cleaned, alpha=0.3)
+    # Step 3: Fill gaps in keypoint sequences using multi-strategy interpolation
+    X_filled, M_filled = interpolate_gaps(X_smooth, M_cleaned, max_gap=max_gap)
+    # Step 4: Ensure keypoint coordinates stay within valid bounds [0, 1]
     X_filled = np.clip(X_filled, 0.0, 1.0).astype(np.float32)
     # Note: Do not interpolate CNN features - keep raw temporal values
     X2048_filled = X2048

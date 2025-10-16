@@ -79,7 +79,7 @@ class MPModels:
 # Model Initialization and Cleanup
 # ----------------------------
 
-def create_models(seg_model=1, detection_conf=0.5, tracking_conf=0.5):
+def create_models(seg_model=1, detection_conf=0.35, tracking_conf=0.25):
     """Initialize MediaPipe models for comprehensive keypoint extraction.
     
     Creates and configures MediaPipe models for:
@@ -88,8 +88,8 @@ def create_models(seg_model=1, detection_conf=0.5, tracking_conf=0.5):
     
     Args:
         seg_model: Selfie segmentation model selection (0=general, 1=landscape)
-        detection_conf: Minimum detection confidence threshold (0.0-1.0)
-        tracking_conf: Minimum tracking confidence threshold (0.0-1.0)
+        detection_conf: Minimum detection confidence threshold (0.0-1.0, default=0.35)
+        tracking_conf: Minimum tracking confidence threshold (0.0-1.0, default=0.25)
         
     Returns:
         MPModels: Container with initialized and configured models
@@ -158,26 +158,186 @@ def _lerp(a, b, t):
 
 
 # ----------------------------
+# Temporal Smoothing and Validation
+# ----------------------------
+
+def smooth_keypoints_ema(X, mask, alpha=0.3):
+    """Apply Exponential Moving Average (EMA) smoothing to keypoint sequences.
+    
+    This function reduces jitter and creates smoother temporal trajectories by
+    blending each frame with historical keypoint positions. Only keypoints marked
+    as visible in the mask are smoothed; missing keypoints are skipped.
+    
+    EMA Formula: smoothed[t] = alpha * raw[t] + (1 - alpha) * smoothed[t-1]
+    
+    Args:
+        X: Keypoint coordinates [T, 156] as float32 - flattened x,y coords for 78 keypoints
+        mask: Keypoint visibility mask [T, 78] as bool - True if keypoint is visible
+        alpha: Smoothing factor (0.0-1.0). Higher = more responsive, lower = smoother
+               Default 0.3 = 30% current frame, 70% history (optimal for sign language)
+        
+    Returns:
+        X_smooth: Smoothed keypoint coordinates [T, 156] as float32
+    """
+    T = X.shape[0]
+    X_smooth = X.copy()
+    
+    # Process each keypoint independently
+    for k in range(mask.shape[1]):  # 78 keypoints
+        xi = 2 * k      # X coordinate index
+        yi = 2 * k + 1  # Y coordinate index
+        
+        # Find first valid frame to initialize EMA
+        valid_frames = np.where(mask[:, k])[0]
+        if len(valid_frames) == 0:
+            continue  # Skip if keypoint never appears
+        
+        # Initialize EMA with first valid detection
+        first_valid = valid_frames[0]
+        ema_x = X[first_valid, xi]
+        ema_y = X[first_valid, yi]
+        
+        # Apply EMA to subsequent frames
+        for t in range(first_valid + 1, T):
+            if mask[t, k]:  # Only smooth visible keypoints
+                # Update EMA: blend current with history
+                ema_x = alpha * X[t, xi] + (1 - alpha) * ema_x
+                ema_y = alpha * X[t, yi] + (1 - alpha) * ema_y
+                
+                # Store smoothed values
+                X_smooth[t, xi] = ema_x
+                X_smooth[t, yi] = ema_y
+    
+    return X_smooth
+
+
+def validate_and_clean_keypoints(X, mask, max_jump=0.3):
+    """Detect and remove outlier keypoints based on physically impossible movements.
+    
+    This function identifies keypoints that jump unrealistically far between frames,
+    which typically indicates detection errors. Such outliers are marked as invalid
+    in the mask to be handled by interpolation.
+    
+    In normalized coordinate space [0,1], hand movements rarely exceed 0.3 distance
+    between consecutive frames at 30fps (equivalent to ~10 meters/second in real space).
+    
+    Args:
+        X: Keypoint coordinates [T, 156] as float32 - flattened x,y coords for 78 keypoints
+        mask: Keypoint visibility mask [T, 78] as bool - True if keypoint is visible
+        max_jump: Maximum allowed distance between consecutive frames (default 0.3)
+        
+    Returns:
+        mask_cleaned: Updated visibility mask with outliers marked as invalid
+    """
+    T = X.shape[0]
+    K = mask.shape[1]
+    mask_cleaned = mask.copy()
+    
+    # Check each keypoint for outliers
+    for k in range(K):
+        xi = 2 * k
+        yi = 2 * k + 1
+        
+        # Find all valid frames for this keypoint
+        valid_frames = np.where(mask[:, k])[0]
+        if len(valid_frames) < 2:
+            continue  # Need at least 2 points to check jumps
+        
+        # Check jumps between consecutive valid detections
+        for i in range(len(valid_frames) - 1):
+            t_curr = valid_frames[i]
+            t_next = valid_frames[i + 1]
+            
+            # Calculate Euclidean distance between consecutive detections
+            dx = X[t_next, xi] - X[t_curr, xi]
+            dy = X[t_next, yi] - X[t_curr, yi]
+            dist = np.sqrt(dx * dx + dy * dy)
+            
+            # Mark as outlier if jump is too large
+            if dist > max_jump:
+                # Invalidate the next point (assume current is more reliable)
+                mask_cleaned[t_next, k] = False
+    
+    return mask_cleaned
+
+
+def interpolate_cubic_spline(X, mask, k, gap_start, gap_end):
+    """Interpolate missing keypoints using cubic spline for smooth trajectories.
+    
+    Cubic splines provide C2 continuity (continuous second derivatives), resulting
+    in smoother and more natural-looking trajectories than linear interpolation.
+    This is particularly important for hand movements in sign language.
+    
+    Args:
+        X: Keypoint coordinates [T, 156] as float32
+        mask: Keypoint visibility mask [T, 78] as bool
+        k: Keypoint index (0-77)
+        gap_start: First frame in the gap (inclusive)
+        gap_end: Last frame in the gap (inclusive)
+        
+    Returns:
+        x_interp: Interpolated x coordinates for gap frames [gap_len]
+        y_interp: Interpolated y coordinates for gap frames [gap_len]
+    """
+    from scipy.interpolate import CubicSpline
+    
+    xi = 2 * k
+    yi = 2 * k + 1
+    
+    # Find valid points around the gap for spline fitting
+    valid_frames = np.where(mask[:, k])[0]
+    
+    # Get context points: 2 before and 2 after gap if available
+    context_before = valid_frames[valid_frames < gap_start][-2:] if len(valid_frames[valid_frames < gap_start]) >= 2 else valid_frames[valid_frames < gap_start]
+    context_after = valid_frames[valid_frames > gap_end][:2] if len(valid_frames[valid_frames > gap_end]) >= 2 else valid_frames[valid_frames > gap_end]
+    
+    # Combine boundary points
+    if len(context_before) > 0 and len(context_after) > 0:
+        boundary_frames = np.concatenate([context_before, context_after])
+        boundary_x = X[boundary_frames, xi]
+        boundary_y = X[boundary_frames, yi]
+        
+        # Create cubic splines for x and y coordinates
+        try:
+            cs_x = CubicSpline(boundary_frames, boundary_x, bc_type='natural')
+            cs_y = CubicSpline(boundary_frames, boundary_y, bc_type='natural')
+            
+            # Interpolate gap frames
+            gap_frames = np.arange(gap_start, gap_end + 1)
+            x_interp = cs_x(gap_frames)
+            y_interp = cs_y(gap_frames)
+            
+            # Clamp to valid bounds
+            x_interp = np.clip(x_interp, 0.0, 1.0)
+            y_interp = np.clip(y_interp, 0.0, 1.0)
+            
+            return x_interp, y_interp
+        except:
+            # Fall back to linear if spline fails
+            return None, None
+    
+    return None, None
+
+
+# ----------------------------
 # Gap Interpolation for Temporal Consistency
 # ----------------------------
 
-def interpolate_gaps(X, mask, max_gap=5):
-    """Interpolate missing keypoints in temporal sequences using linear interpolation.
+def interpolate_gaps(X, mask, max_gap=8):
+    """Interpolate missing keypoints using multi-strategy approach for optimal quality.
     
-    This function fills gaps in keypoint sequences to improve temporal consistency.
-    It only interpolates gaps within the specified maximum length to avoid
-    unrealistic interpolation across long missing sequences.
+    This function uses different interpolation strategies based on gap length:
+    - Short gaps (1-3 frames): Linear interpolation with high confidence
+    - Medium gaps (4-8 frames): Cubic spline interpolation with medium confidence
+    - Long gaps (>8 frames): Not interpolated (unreliable)
     
-    The algorithm:
-    1. For each keypoint, find all valid (detected) frames
-    2. Identify gaps between valid detections
-    3. If gap length ≤ max_gap, linearly interpolate x,y coordinates
-    4. Update visibility mask to mark interpolated points as valid
+    The multi-strategy approach balances smoothness for short gaps with caution
+    for longer gaps where interpolation becomes increasingly speculative.
     
     Args:
         X: Keypoint coordinates [T, 156] as float32 - flattened x,y coords for 78 keypoints
         mask: Keypoint visibility mask [T, 78] as bool - True if keypoint is visible/confident
-        max_gap: Maximum gap length to interpolate (frames)
+        max_gap: Maximum gap length to interpolate (frames, default=8)
         
     Returns:
         Tuple of (X_filled, mask_filled) with interpolated values
@@ -212,16 +372,40 @@ def interpolate_gaps(X, mask, max_gap=5):
             
             # Only interpolate if gap is within acceptable length
             if 1 <= gap_len <= max_gap:
-                # Get start and end coordinates for interpolation
-                x0, y0 = X_out[prev, xi], X_out[prev, yi]  # Start point
-                x1, y1 = X_out[vi, xi], X_out[vi, yi]      # End point
+                # STRATEGY 1: Short gaps (1-3 frames) - Linear interpolation
+                if gap_len <= 3:
+                    # Get start and end coordinates for interpolation
+                    x0, y0 = X_out[prev, xi], X_out[prev, yi]  # Start point
+                    x1, y1 = X_out[vi, xi], X_out[vi, yi]      # End point
+                    
+                    # Linearly interpolate coordinates for each frame in the gap
+                    for t_idx, t_rel in enumerate(range(gap_start, gap_end + 1), start=1):
+                        t = t_idx / (gap_len + 1)  # Interpolation factor [0, 1]
+                        X_out[t_rel, xi] = _lerp(x0, x1, t)  # Interpolate x coordinate
+                        X_out[t_rel, yi] = _lerp(y0, y1, t)  # Interpolate y coordinate
+                        mask_out[t_rel, k] = True  # Mark as valid (interpolated)
                 
-                # Linearly interpolate coordinates for each frame in the gap
-                for t_idx, t_rel in enumerate(range(gap_start, gap_end + 1), start=1):
-                    t = t_idx / (gap_len + 1)  # Interpolation factor [0, 1]
-                    X_out[t_rel, xi] = _lerp(x0, x1, t)  # Interpolate x coordinate
-                    X_out[t_rel, yi] = _lerp(y0, y1, t)  # Interpolate y coordinate
-                    mask_out[t_rel, k] = True  # Mark as valid (interpolated)
+                # STRATEGY 2: Medium gaps (4-8 frames) - Cubic spline interpolation
+                elif gap_len <= 8:
+                    # Try cubic spline for smoother interpolation
+                    x_interp, y_interp = interpolate_cubic_spline(X_out, mask, k, gap_start, gap_end)
+                    
+                    if x_interp is not None and y_interp is not None:
+                        # Use cubic spline results
+                        for t_idx, t_rel in enumerate(range(gap_start, gap_end + 1)):
+                            X_out[t_rel, xi] = x_interp[t_idx]
+                            X_out[t_rel, yi] = y_interp[t_idx]
+                            mask_out[t_rel, k] = True
+                    else:
+                        # Fall back to linear interpolation if spline fails
+                        x0, y0 = X_out[prev, xi], X_out[prev, yi]
+                        x1, y1 = X_out[vi, xi], X_out[vi, yi]
+                        
+                        for t_idx, t_rel in enumerate(range(gap_start, gap_end + 1), start=1):
+                            t = t_idx / (gap_len + 1)
+                            X_out[t_rel, xi] = _lerp(x0, x1, t)
+                            X_out[t_rel, yi] = _lerp(y0, y1, t)
+                            mask_out[t_rel, k] = True
             
             prev = vi  # Move to next valid detection
 
