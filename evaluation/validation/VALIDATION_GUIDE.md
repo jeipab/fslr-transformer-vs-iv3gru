@@ -181,6 +181,77 @@ Compare `overall_results.json` from each output directory.
 
 **Empty Results**: Verify data directory contains NPZ files and CSV format is correct
 
+## CTC Evaluation (Continuous Recognition)
+
+### Quick Start
+
+```powershell
+python evaluation\validation\evaluate_ctc.py ^
+  --model transformer_ctc ^
+  --checkpoint trained_models\transformer_ctc\optimal\SignTransformerCtc_best.pt ^
+  --test-data data\processed\fsl_val ^
+  --test-labels data\processed\fsl_val.csv ^
+  --batch-size 32 ^
+  --output results_ctc.json
+```
+
+### Metrics
+
+**Word Error Rate (WER)**: Edit distance / reference length
+
+- WER = 0.0: Perfect (0% error)
+- WER < 0.2: Good (< 20% error)
+- WER > 0.5: Needs improvement
+
+**Sequence Accuracy**: Percentage of perfectly predicted sequences
+
+### Arguments
+
+| Argument          | Description                 | Default  |
+| ----------------- | --------------------------- | -------- |
+| `--model`         | CTC model type              | Required |
+| `--checkpoint`    | Model checkpoint path       | Required |
+| `--test-data`     | Test NPZ directory          | Required |
+| `--test-labels`   | Test CSV file               | Required |
+| `--decode-method` | greedy or beam_search       | greedy   |
+| `--beam-width`    | Beam width (if beam_search) | 10       |
+| `--batch-size`    | Batch size                  | 32       |
+| `--output`        | Save results to JSON        | None     |
+
+### Python API
+
+```python
+from evaluation.validation.evaluate_ctc import CTCEvaluator, load_model
+from training.train import FSLKeypointFileDataset, collate_for_ctc
+from torch.utils.data import DataLoader
+
+# Load model
+model = load_model('transformer_ctc', 'model.pt', device)
+
+# Create dataset
+dataset = FSLKeypointFileDataset('data/val', 'labels.csv', mode='ctc')
+loader = DataLoader(dataset, batch_size=32, collate_fn=collate_for_ctc)
+
+# Evaluate
+evaluator = CTCEvaluator(model, blank_id=105, device=device)
+results = evaluator.evaluate_dataset(loader)
+
+print(f"WER: {results['wer']:.4f}")
+print(f"Accuracy: {results['sequence_accuracy']:.4f}")
+```
+
+### Comparing Models
+
+```powershell
+# Evaluate Transformer CTC
+python evaluation\validation\evaluate_ctc.py --model transformer_ctc --checkpoint model_t.pt --test-data data\val --test-labels val.csv --output transformer_results.json
+
+# Evaluate GRU CTC
+python evaluation\validation\evaluate_ctc.py --model mediapipe_gru_ctc --checkpoint model_g.pt --test-data data\val --test-labels val.csv --output gru_results.json
+```
+
+---
+
 ## Dataset
 
 - **Training**: `data/processed/fsl_train` (80%)

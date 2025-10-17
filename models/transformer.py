@@ -817,3 +817,204 @@ class SignTransformer(nn.Module):
             attention_weights.append(attn_weights.detach().cpu())
 
         return attention_weights
+
+
+class SignTransformerCtc(nn.Module):
+    """
+    Transformer-based model for Continuous Sign Language Recognition using CTC.
+    
+    This model is designed for sequence-to-sequence learning with CTC loss,
+    enabling continuous sign language recognition without frame-level alignment.
+    Unlike the classification-based SignTransformer, this model:
+    - Does NOT pool the sequence (preserves temporal dimension)
+    - Outputs per-frame predictions for CTC decoding
+    - Uses a single CTC head instead of dual classification heads
+    - Supports variable-length output sequences
+    
+    Architecture:
+    Input: [B, T, 156] keypoint sequences
+      ↓
+    Linear Embedding: [B, T, 156] → [B, T, E]
+      ↓
+    Positional Encoding: Adds temporal order information
+      ↓
+    Layer Normalization: Stabilizes training
+      ↓
+    Transformer Encoder Stack (N layers)
+      ↓
+    CTC Head: [B, T, E] → [B, T, num_ctc_classes]
+      ↓
+    LogSoftmax: [B, T, num_ctc_classes] → log probabilities
+    
+    Output: [B, T, num_ctc_classes] log probabilities for CTC loss
+    
+    Args:
+        input_dim (int): Input feature dimension per frame (default: 156).
+        emb_dim (int): Embedding dimension E (default: 256).
+        n_heads (int): Number of attention heads H (default: 8).
+        n_layers (int): Number of encoder layers (default: 4).
+        num_ctc_classes (int): Number of CTC classes including blank (default: 106).
+        dropout (float): Dropout rate (default: 0.1).
+        max_len (int): Maximum sequence length (default: 300).
+        ff_dim (int): Feed-forward hidden dimension (default: 4× emb_dim).
+    
+    Usage:
+        model = SignTransformerCtc(input_dim=156, num_ctc_classes=106)
+        log_probs = model(x)  # x: [B, T, 156] → log_probs: [B, T, 106]
+        
+        # For CTC loss, permute to [T, B, C]
+        log_probs = log_probs.permute(1, 0, 2)
+        loss = ctc_loss(log_probs, targets, input_lengths, target_lengths)
+    """
+    
+    def __init__(self,
+                 input_dim=156,
+                 emb_dim=256,
+                 n_heads=8,
+                 n_layers=4,
+                 num_ctc_classes=106,
+                 dropout=0.1,
+                 max_len=300,
+                 ff_dim=None):
+        super(SignTransformerCtc, self).__init__()
+        
+        # ===== INPUT PROCESSING =====
+        # Linear projection from raw keypoints to model embedding space
+        self.embedding = nn.Linear(input_dim, emb_dim)
+        
+        # Positional encoding for temporal sequence understanding
+        self.pos_encoder = PositionalEncoding(emb_dim, dropout, max_len)
+        
+        # Input normalization for training stability
+        self.input_norm = LayerNormalization(emb_dim)
+        
+        # ===== TRANSFORMER ENCODER =====
+        # Set feed-forward dimension (typically 4× embedding dimension)
+        if ff_dim is None:
+            ff_dim = emb_dim * 4
+        
+        # Stack of Transformer encoder layers
+        self.encoder_layers = nn.ModuleList([
+            EncoderLayer(emb_dim, n_heads, ff_dim=ff_dim, dropout=dropout)
+            for _ in range(n_layers)
+        ])
+        
+        # ===== CTC OUTPUT HEAD =====
+        # Single linear layer for CTC predictions
+        # Maps from embedding dimension to CTC vocabulary (including blank token)
+        self.ctc_head = nn.Linear(emb_dim, num_ctc_classes)
+        
+        # Store configuration
+        self.num_ctc_classes = num_ctc_classes
+        self.emb_dim = emb_dim
+        self.max_len = max_len
+    
+    def forward(self, x, mask=None):
+        """
+        Forward pass through the CTC Transformer model.
+        
+        Args:
+            x (Tensor): Input keypoint sequence of shape [B, T, 156].
+            mask (Tensor or None): Binary mask of shape [B, T].
+                                  1 = valid frame, 0 = padding.
+                                  Internally broadcast to [B, 1, 1, T] for attention.
+        
+        Returns:
+            Tensor: Log probabilities of shape [B, T, num_ctc_classes].
+                   Use .permute(1, 0, 2) for CTCLoss which expects [T, B, C].
+        
+        Raises:
+            ValueError: If input dimensions are invalid or mask dimensions don't match.
+        """
+        # ===== INPUT VALIDATION =====
+        if len(x.shape) != 3:
+            raise ValueError(
+                f"Expected input with 3 dimensions [B, T, features], got shape {x.shape}"
+            )
+        if x.shape[-1] != self.embedding.in_features:
+            raise ValueError(
+                f"Expected {self.embedding.in_features} input features, got {x.shape[-1]}"
+            )
+        
+        B, T, _ = x.size()
+        
+        # ===== EMBEDDING LAYER =====
+        # Project raw keypoints to embedding space
+        # [B, T, 156] → [B, T, E]
+        x = self.embedding(x)
+        
+        # ===== POSITIONAL ENCODING =====
+        # Add temporal order information to embeddings
+        x = self.pos_encoder(x)
+        
+        # ===== INPUT NORMALIZATION =====
+        # Apply layer normalization for training stability
+        x = self.input_norm(x)
+        
+        # ===== ATTENTION MASK PREPARATION =====
+        # Prepare mask for attention mechanism
+        if mask is not None:
+            # Validate mask dimensions
+            if mask.shape[0] != B:
+                raise ValueError(
+                    f"Mask batch size {mask.shape[0]} doesn't match input batch size {B}"
+                )
+            if mask.shape[1] != T:
+                raise ValueError(
+                    f"Mask sequence length {mask.shape[1]} doesn't match input length {T}"
+                )
+            # Broadcast mask for attention: [B, T] → [B, 1, 1, T]
+            attention_mask = mask.unsqueeze(1).unsqueeze(2)
+        else:
+            attention_mask = None
+        
+        # ===== TRANSFORMER ENCODER =====
+        # Pass through stack of encoder layers
+        # Output shape: [B, T, E]
+        for encoder_layer in self.encoder_layers:
+            x = encoder_layer(x, attention_mask)
+        
+        # ===== CTC HEAD =====
+        # Project to CTC vocabulary size
+        # [B, T, E] → [B, T, num_ctc_classes]
+        logits = self.ctc_head(x)
+        
+        # ===== LOG SOFTMAX =====
+        # Apply log softmax for CTC loss
+        # CTCLoss expects log probabilities, not raw logits
+        log_probs = F.log_softmax(logits, dim=2)
+        
+        return log_probs
+    
+    def get_attention_weights(self, x, mask=None):
+        """
+        Extract attention weights from all encoder layers for visualization.
+        
+        Args:
+            x (Tensor): Input keypoint sequence of shape [B, T, 156].
+            mask (Tensor or None): Binary mask of shape [B, T].
+        
+        Returns:
+            List[Tensor]: List of attention weight tensors, one per encoder layer.
+                         Each tensor has shape [B, H, T, T].
+        """
+        B, T, _ = x.size()
+        attention_weights = []
+        
+        # ===== INPUT PROCESSING =====
+        x = self.embedding(x)
+        x = self.pos_encoder(x)
+        x = self.input_norm(x)
+        
+        # Prepare attention mask
+        if mask is not None:
+            attention_mask = mask.unsqueeze(1).unsqueeze(2)
+        else:
+            attention_mask = None
+        
+        # ===== COLLECT ATTENTION WEIGHTS =====
+        for encoder_layer in self.encoder_layers:
+            x, attn_weights = encoder_layer(x, attention_mask, return_attn=True)
+            attention_weights.append(attn_weights.detach().cpu())
+        
+        return attention_weights

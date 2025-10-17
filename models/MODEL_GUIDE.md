@@ -590,17 +590,114 @@ gloss_confidence = gloss_probs.gather(1, gloss_pred.unsqueeze(1))
 
 ---
 
+## CTC Models (Continuous Recognition)
+
+Two CTC models for sequence-to-sequence sign language recognition without frame-level alignment.
+
+### SignTransformerCtc
+
+**Architecture**: Transformer encoder + CTC head (no pooling)
+
+**Input/Output**:
+
+- Input: `[B, T, 156]` keypoints
+- Output: `[B, T, 106]` log probabilities (105 glosses + 1 blank)
+
+**Usage**:
+
+```python
+from models import SignTransformerCtc
+
+model = SignTransformerCtc(input_dim=156, num_ctc_classes=106)
+log_probs = model(x)  # [B, T, 106]
+
+# For CTCLoss
+log_probs = log_probs.permute(1, 0, 2)  # [T, B, C]
+```
+
+**Key Differences from SignTransformer**:
+
+- ❌ No pooling layer
+- ❌ No category head
+- ✅ Full temporal output
+- ✅ Single CTC head
+
+### MediaPipeGRUCtc
+
+**Architecture**: Bidirectional 2-layer GRU + CTC head
+
+**Input/Output**:
+
+- Input: `[B, T, 156]` keypoints
+- Output: `[B, T, 106]` log probabilities
+
+**Usage**:
+
+```python
+from models import MediaPipeGRUCtc
+
+model = MediaPipeGRUCtc(num_ctc_classes=106, hidden1=256, hidden2=128)
+log_probs = model(x, lengths=lengths)  # [B, T, 106]
+```
+
+**Advantages**: Lightweight (~500KB), faster inference, mobile-friendly
+
+### CTC vs Classification
+
+| Feature      | Classification     | CTC                         |
+| ------------ | ------------------ | --------------------------- |
+| **Task**     | One sign per video | Multiple signs per sequence |
+| **Output**   | `[B, num_classes]` | `[B, T, num_classes]`       |
+| **Pooling**  | Required           | None                        |
+| **Loss**     | CrossEntropy       | CTCLoss                     |
+| **Use Case** | Isolated signs     | Continuous signs            |
+
+### CTC Technical Details
+
+**CTCLoss Requirements**:
+
+```python
+# Model output
+log_probs = model(X)  # [B, T, C]
+log_probs = log_probs.permute(1, 0, 2)  # [T, B, C] for CTCLoss
+
+# Compute loss
+criterion = nn.CTCLoss(blank=105, zero_infinity=True)
+loss = criterion(log_probs, targets, input_lengths, target_lengths)
+```
+
+**Decoding Strategies**:
+
+- **Greedy**: Fast (O(T)), deterministic, good for real-time
+- **Beam Search**: Accurate, explores multiple paths, slower
+
+```python
+from evaluation.ctc_utils import greedy_ctc_decoder, beam_search_ctc_decoder
+
+# Greedy
+decoded = greedy_ctc_decoder(log_probs, blank_id=105)
+
+# Beam search
+decoded, score = beam_search_ctc_decoder(log_probs, blank_id=105, beam_width=10)
+```
+
+---
+
 ## Implementation Files
 
-- `models/transformer.py`: SignTransformer implementation (~819 lines)
+- `models/transformer.py`: SignTransformer + SignTransformerCtc (~1020 lines)
+- `models/mediapipe_gru.py`: MediaPipeGRU + MediaPipeGRUCtc (~679 lines)
 - `models/iv3_gru.py`: InceptionV3GRU implementation (~430 lines)
 - `models/__init__.py`: Module exports
+- `evaluation/ctc_utils.py`: CTC decoders and utilities
 
 ---
 
 ## Additional Resources
 
-- [Training Guide](../training/TRAINING_GUIDE.md): How to train both models
+- [Training Guide](../training/TRAINING_GUIDE.md): How to train both classification and CTC models
+- [Prediction Guide](../evaluation/prediction/PREDICTION_GUIDE.md): Making predictions with all models
+- [Validation Guide](../evaluation/validation/VALIDATION_GUIDE.md): Evaluating model performance
 - [Trained Model Guide](../trained_models/TRAINED_MODEL_GUIDE.md): Loading and using trained models
 - [Data Guide](../data/DATA_GUIDE.md): Data preparation and format
 - [Preprocessing Guide](../preprocessing/docs/PREPROCESS_GUIDE.MD): Video to NPZ conversion

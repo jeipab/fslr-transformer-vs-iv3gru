@@ -497,10 +497,104 @@ Both models support multi-task learning with configurable loss weights and curri
 
 ---
 
+## CTC Training (Continuous Recognition)
+
+Train sequence-to-sequence models for continuous sign language recognition using CTCLoss.
+
+### Quick Start
+
+**SignTransformerCtc** (Windows):
+
+```powershell
+python training/train.py ^
+  --model transformer_ctc ^
+  --keypoints-train data\processed\fsl_train ^
+  --keypoints-val data\processed\fsl_val ^
+  --labels-train-csv data\processed\fsl_train.csv ^
+  --labels-val-csv data\processed\fsl_val.csv ^
+  --epochs 100 ^
+  --batch-size 32 ^
+  --lr 0.0001 ^
+  --grad-clip 1.0 ^
+  --scheduler warmup_cosine ^
+  --warmup-epochs 10 ^
+  --amp ^
+  --output-dir trained_models\transformer_ctc\run1
+```
+
+**MediaPipeGRUCtc** (baseline):
+
+```powershell
+python training/train.py ^
+  --model mediapipe_gru_ctc ^
+  --keypoints-train data\processed\fsl_train ^
+  --keypoints-val data\processed\fsl_val ^
+  --labels-train-csv data\processed\fsl_train.csv ^
+  --labels-val-csv data\processed\fsl_val.csv ^
+  --epochs 100 ^
+  --batch-size 32 ^
+  --lr 0.0001 ^
+  --hidden1 256 ^
+  --hidden2 128 ^
+  --dropout 0.3 ^
+  --grad-clip 1.0 ^
+  --output-dir trained_models\mediapipe_gru_ctc\run1
+```
+
+### CTC-Specific Parameters
+
+| Parameter           | Description       | Default        | Recommended                |
+| ------------------- | ----------------- | -------------- | -------------------------- |
+| `--training-mode`   | Training mode     | classification | Auto-detected from model   |
+| `--ctc-blank-id`    | Blank token ID    | 105            | 105 (num_gloss)            |
+| `--num-ctc-classes` | Total classes     | 106            | 106 (glosses + blank)      |
+| `--grad-clip`       | Gradient clipping | None           | **1.0** (critical for CTC) |
+| `--scheduler`       | LR scheduler      | None           | warmup_cosine              |
+
+### Best Practices
+
+1. **Always use gradient clipping**: `--grad-clip 1.0`
+2. **Use LR warmup**: `--scheduler warmup_cosine --warmup-epochs 10`
+3. **Enable AMP**: `--amp` (2x faster on GPU)
+4. **Monitor for NaN/Inf**: Training loss should decrease smoothly
+5. **Target loss**: < 5.0 for isolated signs
+
+### Troubleshooting CTC Training
+
+**CTCLoss is NaN**:
+
+```bash
+# Use gradient clipping (critical!)
+--grad-clip 1.0
+
+# Reduce learning rate
+--lr 5e-5
+```
+
+**Model predicts only blanks**:
+
+```bash
+# Use learning rate warmup
+--scheduler warmup_cosine --warmup-epochs 10
+```
+
+**Out of memory**:
+
+```bash
+# Reduce batch size
+--batch-size 16
+
+# Or use gradient accumulation
+--batch-size 8 --gradient-accumulation-steps 4
+```
+
+---
+
 ## Additional Resources
 
-- [Model Guide](../models/MODEL_GUIDE.md): Model architectures and details
+- [Model Guide](../models/MODEL_GUIDE.md): Model architectures including CTC models
+- [Prediction Guide](../evaluation/prediction/PREDICTION_GUIDE.md): Making predictions with CTC models
+- [Validation Guide](../evaluation/validation/VALIDATION_GUIDE.md): Evaluating CTC performance
 - [Data Guide](../data/DATA_GUIDE.md): Data preparation
 - [Preprocessing Guide](../preprocessing/docs/PREPROCESS_GUIDE.MD): Video preprocessing
-- [Validation Guide](../evaluation/validation/VALIDATION_GUIDE.md): Model evaluation
 - [Trained Model Guide](../trained_models/TRAINED_MODEL_GUIDE.md): Model management

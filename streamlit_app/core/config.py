@@ -16,29 +16,65 @@ PAGE_CONFIG = {
     'initial_sidebar_state': 'expanded'
 }
 
+# CTC configuration for continuous sign language recognition
+CTC_CONFIG = {
+    'num_gloss_classes': 105,
+    'blank_token_id': 105,  # The ID for the CTC blank token (num_gloss_classes)
+    'num_ctc_classes': 106,  # num_gloss_classes + 1 for blank token
+    'beam_width': 10,  # For beam search decoding
+    'window_size': 60,  # Frames per window for sliding window inference
+    'window_stride': 15  # Stride between windows for sliding window inference
+}
+
 # Model configuration
 MODEL_CONFIG = {
     'transformer': {
         'enabled': True,
         'checkpoint_path': 'trained_models/transformer/optimal/SignTransformer_best.pt',
         'model_type': 'transformer',
-        'num_gloss_classes': 105,
+        'num_gloss_classes': CTC_CONFIG['num_gloss_classes'],
         'num_category_classes': 10,
         'display_name': 'SignTransformer',
         'input_dim': None, 
         'supports_keypoints': True,  
-        'supports_features': True    
+        'supports_features': True,
+        'training_mode': 'classification'  # 'classification' or 'ctc'
+    },
+    'transformer_ctc': {
+        'enabled': False,  # Will be enabled once CTC training is complete
+        'checkpoint_path': 'trained_models/transformer_ctc/optimal/SignTransformerCtc_best.pt',
+        'model_type': 'transformer_ctc',
+        'num_gloss_classes': CTC_CONFIG['num_gloss_classes'],
+        'num_ctc_classes': CTC_CONFIG['num_ctc_classes'],
+        'display_name': 'SignTransformer-CTC',
+        'input_dim': None,
+        'supports_keypoints': True,
+        'supports_features': True,
+        'training_mode': 'ctc'
     },
     'iv3_gru': {
         'enabled': True,
         'checkpoint_path': 'trained_models/iv3_gru/optimal/InceptionV3GRU_best.pt',
         'model_type': 'iv3_gru',
-        'num_gloss_classes': 105,
+        'num_gloss_classes': CTC_CONFIG['num_gloss_classes'],
         'num_category_classes': 10,
         'display_name': 'InceptionV3+GRU',
         'input_dim': 2048, 
         'supports_keypoints': False,  
-        'supports_features': True    
+        'supports_features': True,
+        'training_mode': 'classification'
+    },
+    'mediapipe_gru_ctc': {
+        'enabled': False,  # Will be enabled once CTC training is complete
+        'checkpoint_path': 'trained_models/mediapipe_gru_ctc/optimal/MediaPipeGRUCtc_best.pt',
+        'model_type': 'mediapipe_gru_ctc',
+        'num_gloss_classes': CTC_CONFIG['num_gloss_classes'],
+        'num_ctc_classes': CTC_CONFIG['num_ctc_classes'],
+        'display_name': 'MediaPipe-GRU-CTC',
+        'input_dim': 156,
+        'supports_keypoints': True,
+        'supports_features': False,
+        'training_mode': 'ctc'
     }
 }
 
@@ -173,3 +209,28 @@ def update_upload_config(key: str, value: Any) -> None:
     """
     if key in UPLOAD_CONFIG:
         UPLOAD_CONFIG[key] = value
+
+def get_ctc_config(key: str = None) -> Any:
+    """Get CTC configuration settings.
+    
+    Args:
+        key: Optional specific config key to retrieve
+        
+    Returns:
+        Full config dict if key is None, otherwise the specific value
+    """
+    if key is None:
+        return CTC_CONFIG
+    return CTC_CONFIG.get(key, None)
+
+def is_ctc_model(model_name: str) -> bool:
+    """Check if a model is configured for CTC training mode.
+    
+    Args:
+        model_name: Name of the model to check
+        
+    Returns:
+        True if model uses CTC training mode, False otherwise
+    """
+    model_config = MODEL_CONFIG.get(model_name, {})
+    return model_config.get('training_mode') == 'ctc'
