@@ -246,9 +246,8 @@ class FSLFeatureFileDataset(Dataset):
         
         # Return tensors based on mode
         if self.mode == 'ctc':
-            # CTC mode: return sequence format for CTCLoss
-            gloss_label_seq = torch.tensor([gloss], dtype=torch.long)  # Single-element sequence for isolated sign
-            target_length = torch.tensor([1], dtype=torch.long)         # Length of label sequence is 1
+            gloss_label_seq = torch.tensor([gloss], dtype=torch.long)
+            target_length = torch.tensor([1], dtype=torch.long)
             
             return (
                 data.float(),                                    # Features as float32 [T, 2048]
@@ -393,7 +392,6 @@ class FSLKeypointFileDataset(Dataset):
         
         # Return tensors based on mode
         if self.mode == 'ctc':
-            # CTC mode: return sequence format for CTCLoss
             gloss_label_seq = torch.tensor([gloss], dtype=torch.long)
             target_length = torch.tensor([1], dtype=torch.long)
             
@@ -696,8 +694,6 @@ def collate_for_ctc(batch):
         X_pad[i, :t] = seq  # Copy sequence data, pad remainder with zeros
     
     # Concatenate all target label sequences for CTCLoss
-    # For isolated signs, each gloss_label_seq is [1], so targets will be [B]
-    # For continuous signs, targets would be [sum(target_lengths)]
     targets = torch.cat(gloss_label_seqs, dim=0)  # Shape: [sum(target_lengths)]
     
     # Stack input and target lengths into tensors
@@ -2355,7 +2351,6 @@ def train_ctc(
     # CTC LOSS AND OPTIMIZER SETUP
     # ============================================================================
     
-    # CTCLoss with blank token and zero_infinity for stability
     criterion = nn.CTCLoss(blank=blank_id, zero_infinity=True)
     print(f"✓ Using CTCLoss (blank={blank_id}, zero_infinity=True)")
     
@@ -3013,8 +3008,19 @@ if __name__ == "__main__":
     # Set blank token ID for CTC
     if args.training_mode == "ctc":
         if args.ctc_blank_id is None:
-            args.ctc_blank_id = args.num_gloss  # Default: blank = num_gloss_classes
+            args.ctc_blank_id = args.num_gloss
+        
         print(f"✓ CTC Mode: blank_id={args.ctc_blank_id}, num_ctc_classes={args.num_ctc_classes}")
+        
+        # Validate configuration
+        try:
+            from data.labels.label_mapping import validate_ctc_config
+            validate_ctc_config(args.num_gloss, args.num_ctc_classes, args.ctc_blank_id)
+        except ValueError as e:
+            print(f"✗ Configuration error: {e}")
+            sys.exit(1)
+        except ImportError:
+            pass
     
     # Select appropriate collate function based on mode
     if args.training_mode == "ctc":

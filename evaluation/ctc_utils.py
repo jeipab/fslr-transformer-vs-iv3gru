@@ -4,18 +4,8 @@ CTC Utilities for Continuous Sign Language Recognition
 This module provides utilities for Connectionist Temporal Classification (CTC)
 including decoding algorithms and label processing functions.
 
-Key Components:
-- Greedy CTC Decoder: Fast, deterministic decoding
-- Beam Search CTC Decoder: More accurate but slower decoding
-- Label processing utilities for CTC format
-
 Usage:
-    from evaluation.ctc_utils import greedy_ctc_decoder, beam_search_ctc_decoder
-    
-    # Greedy decoding
     decoded = greedy_ctc_decoder(log_probs, blank_id=105)
-    
-    # Beam search decoding
     decoded, score = beam_search_ctc_decoder(log_probs, blank_id=105, beam_width=10)
 """
 
@@ -60,8 +50,8 @@ def remove_blank_tokens(sequence: List[int], blank_id: int) -> List[int]:
     """
     Remove blank tokens from a sequence.
     
-    This is the second step in CTC decoding - removing the special blank
-    token that was introduced for temporal alignment.
+    This is the second step in CTC decoding - removing the blank token
+    that was used for temporal alignment.
     
     Args:
         sequence: List of token IDs (may contain blank tokens)
@@ -112,29 +102,20 @@ def greedy_ctc_decoder(
     """
     Greedy CTC decoder - selects most likely token at each timestep.
     
-    This is the fastest CTC decoding method. It simply takes the argmax
-    at each time step and then collapses the result according to CTC rules.
-    
-    Process:
-    1. Take argmax across vocabulary dimension at each timestep
-    2. Remove consecutive duplicates
-    3. Remove blank tokens
+    Process: Take argmax at each timestep, remove consecutive duplicates, remove blanks.
     
     Args:
         log_probs: Log probabilities from model, shape [B, T, C] or [T, B, C]
-                   where B=batch, T=time, C=num_classes
         blank_id: ID of the blank token (typically num_gloss_classes)
         input_lengths: Optional tensor of actual sequence lengths [B]
-                      If provided, only decode up to actual length for each sequence
         
     Returns:
-        List of decoded sequences (one per batch item), where each sequence
-        is a list of predicted gloss IDs
+        List of decoded sequences (one per batch item)
         
     Example:
-        >>> log_probs = torch.randn(2, 50, 106)  # 2 sequences, 50 frames, 106 classes
+        >>> log_probs = torch.randn(2, 50, 106)
         >>> decoded = greedy_ctc_decoder(log_probs, blank_id=105)
-        >>> print(decoded[0])  # First decoded sequence
+        >>> print(decoded[0])
         [4, 17, 23, 56]
     """
     # Ensure log_probs is in [B, T, C] format
@@ -305,18 +286,15 @@ def encode_label_sequence(
     """
     Encode a sequence of gloss IDs for CTC training.
     
-    Converts a list of gloss IDs into a tensor suitable for CTCLoss.
-    For isolated signs, this is simply a single-element sequence.
-    For continuous signs, this would be a multi-element sequence.
+    Note: Target sequences contain only gloss IDs (0 to num_classes-1).
+    The blank token is handled internally by CTCLoss.
     
     Args:
         gloss_ids: List of gloss IDs (e.g., [42] for isolated, [3, 17, 42] for continuous)
-        num_classes: Total number of gloss classes (not including blank)
+        num_classes: Number of gloss classes (not including blank)
         
     Returns:
-        Tuple of (encoded_tensor, target_length) where:
-        - encoded_tensor: 1D tensor of gloss IDs
-        - target_length: Length of the sequence
+        Tuple of (encoded_tensor, target_length)
         
     Example:
         >>> encode_label_sequence([42], num_classes=105)
@@ -327,11 +305,8 @@ def encode_label_sequence(
     # Validate input
     for gloss_id in gloss_ids:
         if gloss_id < 0 or gloss_id >= num_classes:
-            raise ValueError(
-                f"Gloss ID {gloss_id} out of range [0, {num_classes})"
-            )
+            raise ValueError(f"Gloss ID {gloss_id} out of range [0, {num_classes})")
     
-    # Convert to tensor
     encoded = torch.tensor(gloss_ids, dtype=torch.long)
     target_length = len(gloss_ids)
     

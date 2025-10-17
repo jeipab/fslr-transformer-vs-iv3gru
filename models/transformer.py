@@ -900,8 +900,6 @@ class SignTransformerCtc(nn.Module):
         ])
         
         # ===== CTC OUTPUT HEAD =====
-        # Single linear layer for CTC predictions
-        # Maps from embedding dimension to CTC vocabulary (including blank token)
         self.ctc_head = nn.Linear(emb_dim, num_ctc_classes)
         
         # Store configuration

@@ -202,6 +202,18 @@ For strategy 2: Signer needs videos in at least `min_glosses` different categori
 
 ---
 
+## CTC Setup
+
+```python
+from data.labels.label_mapping import get_ctc_config
+config = get_ctc_config()  # {'num_gloss': 105, 'num_ctc_classes': 106, 'blank_id': 105}
+
+model = SignTransformerCtc(num_ctc_classes=config['num_ctc_classes'])
+criterion = nn.CTCLoss(blank=config['blank_id'], zero_infinity=True)
+```
+
+---
+
 ## Timestamp Handling
 
 Timestamps are cumulative across segments:
