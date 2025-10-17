@@ -23,6 +23,7 @@ import argparse
 import glob
 import json
 import os
+import re
 import sys
 from typing import List, Tuple
 
@@ -139,6 +140,36 @@ def validate_npz_file(
             order = meta.get("order")
             if order not in ("pose25,left_hand21,right_hand21,face11",):
                 errors.append(f"meta.order unexpected: {order}")
+            
+            # Check signer field
+            signer = meta.get("signer")
+            if signer is None:
+                errors.append("meta.signer missing")
+            elif not isinstance(signer, str) or not re.match(r'^S[0-7]$', str(signer)):
+                errors.append(f"meta.signer invalid format: {signer} (must be S0-S7)")
+            
+            # Check duration_sec field
+            duration_sec = meta.get("duration_sec")
+            if duration_sec is None:
+                errors.append("meta.duration_sec missing")
+            else:
+                try:
+                    duration_val = float(duration_sec)
+                    if duration_val <= 0:
+                        errors.append(f"meta.duration_sec not positive: {duration_val}")
+                    
+                    # Check duration approximately matches timestamps
+                    if timestamps_ms.size > 0:
+                        actual_duration = timestamps_ms[-1] / 1000.0
+                        tolerance = 0.5  # 500ms tolerance
+                        if abs(duration_val - actual_duration) > tolerance:
+                            errors.append(
+                                f"meta.duration_sec ({duration_val:.2f}s) doesn't match "
+                                f"timestamps_ms ({actual_duration:.2f}s), diff > {tolerance}s"
+                            )
+                except (ValueError, TypeError):
+                    errors.append(f"meta.duration_sec not a valid number: {duration_sec}")
+                    
         except Exception as exc:
             # Already reported bad meta json above; add a hint here
             errors.append(f"meta validation failed: {exc}")
