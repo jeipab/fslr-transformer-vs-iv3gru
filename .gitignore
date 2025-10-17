@@ -59,12 +59,13 @@ android/
 # Exception: Allow specific CSV files
 !preprocessing/utils/rename.csv
 
-# Model Checkpoints
+# Model Checkpoints (ignore all model files)
 *.pt
 *.pth
 
-# Exception: Allow best model files
-!trained_models/**/*_best.pt
+# Note: Best model files are also ignored
+# If you want to track best models, uncomment the line below:
+# !trained_models/**/*_best.pt
 
 # Exception: Allow shared directory
 !shared/
