@@ -7,6 +7,9 @@ This script:
 2. Removes old files with those labels from target directory
 3. Integrates new files from source directory
 4. Renumbers ALL files sequentially to maintain proper order
+5. Preserves signer information (S0-S7) in filenames
+
+Required filename format: clip_XXXX_label_SX.ext (where X is signer S0-S7)
 
 Usage:
     # For MOV files (videos):
@@ -30,34 +33,43 @@ from collections import defaultdict
 from datetime import datetime
 
 
-def parse_filename(filename: str, ext: str = "MOV") -> Tuple[int, str, str]:
+def parse_filename(filename: str, ext: str = "MOV") -> Tuple[int, str, str, str]:
     """
-    Parse filename to extract clip number, label, and extension.
+    Parse filename to extract clip number, label, signer, and extension.
     
     Args:
-        filename: e.g., "clip_0123_good morning.MOV" or "clip_0123_good morning.npz"
+        filename: e.g., "clip_0123_good morning_S0.MOV" or "clip_0123_good morning_S0.npz"
         ext: Expected extension (default: "MOV")
     
     Returns:
-        Tuple of (clip_number, label, extension)
-        e.g., (123, "good morning", ".MOV")
+        Tuple of (clip_number, label, signer, extension)
+        e.g., (123, "good morning", "S0", ".MOV")
+        
+    Raises:
+        ValueError: If filename doesn't match required format or signer not S0-S7
     """
-    match = re.match(r'clip_(\d+)_(.+)\.([^.]+)$', filename)
+    match = re.match(r'clip_(\d+)_(.+?)_(S[0-7])\.([^.]+)$', filename)
     if not match:
-        raise ValueError(f"Invalid filename format: {filename}")
-    return int(match.group(1)), match.group(2), f".{match.group(3)}"
+        raise ValueError(f"Invalid filename format: {filename}. Expected: clip_XXXX_label_SX.{ext}")
+    
+    clip_num = int(match.group(1))
+    label = match.group(2)
+    signer = match.group(3)
+    extension = f".{match.group(4)}"
+    
+    return clip_num, label, signer, extension
 
 
-def collect_files_by_label(directory: Path, ext: str = "MOV") -> Dict[str, List[Path]]:
+def collect_files_by_label(directory: Path, ext: str = "MOV") -> Dict[str, List[Tuple[Path, str]]]:
     """
-    Collect all files grouped by their label.
+    Collect all files grouped by their label, preserving signer information.
     
     Args:
         directory: Directory to scan for files
         ext: File extension to search for (e.g., "MOV", "npz")
     
     Returns:
-        Dictionary mapping label -> list of file paths
+        Dictionary mapping label -> list of (file_path, signer) tuples
     """
     if not directory.exists():
         print(f"[ERROR] Directory not found: {directory}")
@@ -67,15 +79,15 @@ def collect_files_by_label(directory: Path, ext: str = "MOV") -> Dict[str, List[
     
     for file_path in sorted(directory.glob(f"*.{ext}")):
         try:
-            clip_num, label, file_ext = parse_filename(file_path.name, ext)
-            label_to_files[label].append(file_path)
+            clip_num, label, signer, file_ext = parse_filename(file_path.name, ext)
+            label_to_files[label].append((file_path, signer))
         except ValueError as e:
             print(f"[WARN] Skipping file: {e}")
             continue
     
     # Sort files within each label by clip number
     for label in label_to_files:
-        label_to_files[label].sort(key=lambda p: parse_filename(p.name, ext)[0])
+        label_to_files[label].sort(key=lambda p: parse_filename(p[0].name, ext)[0])
     
     return label_to_files
 
@@ -97,7 +109,7 @@ def get_label_order(target_dir: Path, ext: str = "MOV") -> List[str]:
     for file_path in sorted(target_dir.glob(f"*.{ext}"), 
                            key=lambda p: parse_filename(p.name, ext)[0]):
         try:
-            _, label, _ = parse_filename(file_path.name, ext)
+            _, label, _, _ = parse_filename(file_path.name, ext)
             if label not in seen_labels:
                 seen_labels.append(label)
         except ValueError:
@@ -106,7 +118,7 @@ def get_label_order(target_dir: Path, ext: str = "MOV") -> List[str]:
     return seen_labels
 
 
-def create_renaming_plan(target_dir: Path, source_dir: Path, ext: str = "MOV") -> List[Tuple[Path, str, str]]:
+def create_renaming_plan(target_dir: Path, source_dir: Path, ext: str = "MOV") -> List[Tuple[Path, str, str, str]]:
     """
     Create a plan for renaming and replacing files.
     
@@ -116,7 +128,7 @@ def create_renaming_plan(target_dir: Path, source_dir: Path, ext: str = "MOV") -
         ext: File extension
     
     Returns:
-        List of tuples (source_path, new_filename, source_type)
+        List of tuples (source_path, new_filename, source_type, signer)
         where source_type is either 'target' or 'source'
     """
     target_files = collect_files_by_label(target_dir, ext)
@@ -143,16 +155,16 @@ def create_renaming_plan(target_dir: Path, source_dir: Path, ext: str = "MOV") -
             files_to_use = target_files.get(label, [])
             source_type = 'target'
         
-        # Add all files for this label with sequential numbering
-        for file_path in files_to_use:
-            new_filename = f"clip_{counter:04d}_{label}.{ext}"
-            plan.append((file_path, new_filename, source_type))
+        # Add all files for this label with sequential numbering, preserving signer
+        for file_path, signer in files_to_use:
+            new_filename = f"clip_{counter:04d}_{label}_{signer}.{ext}"
+            plan.append((file_path, new_filename, source_type, signer))
             counter += 1
     
     return plan
 
 
-def print_summary(plan: List[Tuple[Path, str, str]], target_dir: Path, source_dir: Path, ext: str = "MOV"):
+def print_summary(plan: List[Tuple[Path, str, str, str]], target_dir: Path, source_dir: Path, ext: str = "MOV"):
     """Print a summary of changes."""
     target_files = collect_files_by_label(target_dir, ext)
     source_files = collect_files_by_label(source_dir, ext)
@@ -207,12 +219,12 @@ def create_backup(target_dir: Path) -> Path:
     return backup_dir
 
 
-def execute_plan(plan: List[Tuple[Path, str, str]], target_dir: Path, ext: str = "MOV", dry_run: bool = False):
+def execute_plan(plan: List[Tuple[Path, str, str, str]], target_dir: Path, ext: str = "MOV", dry_run: bool = False):
     """
     Execute the renaming and replacement plan.
     
     Args:
-        plan: List of (source_path, new_filename, source_type) tuples
+        plan: List of (source_path, new_filename, source_type, signer) tuples
         target_dir: Target directory
         ext: File extension
         dry_run: If True, only print what would happen
@@ -233,13 +245,13 @@ def execute_plan(plan: List[Tuple[Path, str, str]], target_dir: Path, ext: str =
     print(f"\n🔄 Processing {len(plan)} files...")
     
     # Stage 1: Copy all files to temp with new names
-    for i, (source_path, new_filename, source_type) in enumerate(plan, 1):
+    for i, (source_path, new_filename, source_type, signer) in enumerate(plan, 1):
         if i % 100 == 0 or i == 1:
             print(f"  Progress: {i}/{len(plan)} files...")
         
         if dry_run:
             if i <= 20 or i > len(plan) - 5:  # Show first 20 and last 5
-                print(f"  [{source_type:6s}] {source_path.name:40s} → {new_filename}")
+                print(f"  [{source_type:6s}] [{signer}] {source_path.name:40s} → {new_filename}")
             elif i == 21:
                 print(f"  ... ({len(plan) - 25} more files) ...")
         else:
@@ -282,26 +294,49 @@ def verify_result(target_dir: Path, expected_count: int, ext: str = "MOV"):
         print(f"  ⚠️  File count mismatch!")
         return False
     
-    # Check sequential numbering
+    # Check sequential numbering and signer format
     file_numbers = []
+    signer_counts = defaultdict(int)
+    invalid_signers = []
+    
     for file_path in sorted(actual_files, key=lambda p: p.name):
         try:
-            clip_num, _, _ = parse_filename(file_path.name, ext)
+            clip_num, label, signer, _ = parse_filename(file_path.name, ext)
             file_numbers.append(clip_num)
-        except ValueError:
-            print(f"  ⚠️  Invalid filename: {file_path.name}")
+            signer_counts[signer] += 1
+            
+            # Validate signer format (S0-S7)
+            if not re.match(r'^S[0-7]$', signer):
+                invalid_signers.append((file_path.name, signer))
+                
+        except ValueError as e:
+            print(f"  ⚠️  Invalid filename: {file_path.name} - {e}")
             return False
     
+    # Check sequential numbering
     expected_sequence = list(range(1, expected_count + 1))
     if file_numbers == expected_sequence:
         print(f"  ✅ Sequential numbering verified (1 to {expected_count})")
-        return True
     else:
         print(f"  ⚠️  Numbering issues detected!")
         missing = set(expected_sequence) - set(file_numbers)
         if missing:
             print(f"     Missing numbers: {sorted(missing)[:10]}")
         return False
+    
+    # Check signer consistency
+    if invalid_signers:
+        print(f"  ⚠️  Invalid signer IDs found (must be S0-S7):")
+        for filename, signer in invalid_signers[:5]:
+            print(f"     {filename}: {signer}")
+        return False
+    
+    print(f"  ✅ Signer format validation passed (S0-S7)")
+    print(f"  📊 Signer distribution:")
+    for signer in sorted(signer_counts.keys()):
+        print(f"     {signer}: {signer_counts[signer]} files")
+    
+    return True
 
 
 def main():
