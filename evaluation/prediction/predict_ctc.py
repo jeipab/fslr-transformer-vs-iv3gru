@@ -1,193 +1,225 @@
 """
-CTC Prediction Module for Continuous Sign Language Recognition
+CTC Prediction for Continuous Sign Language Recognition
 
-This module provides prediction functions for CTC-based continuous sign language
-recognition models. It implements sliding window inference for processing long
-sequences and various decoding strategies.
-
-Key Components:
-- Greedy CTC decoding
-- Beam search CTC decoding
-- Sliding window inference for continuous sequences
-- Window stitching and overlap handling
-
-Usage:
-    from evaluation.prediction.predict_ctc import predict_continuous, CTCPredictor
-    
-    # Single sequence prediction
-    predictor = CTCPredictor(model_path, blank_id=105)
-    glosses = predictor.predict_from_npz('sequence.npz')
-    
-    # Continuous prediction with sliding window
-    glosses = predictor.predict_continuous(keypoint_sequence, window_size=60, stride=15)
+Predicts gloss sequences from continuous sign language videos using CTC models.
+Supports batch prediction, ground truth comparison, and comprehensive metrics.
 """
 
-# Standard library imports
+import argparse
+import json
 import os
 import sys
+from collections import defaultdict
 from pathlib import Path
-from typing import List, Tuple, Optional, Union
+from typing import List, Tuple, Optional, Dict
 
-# Third-party imports
 import numpy as np
 import torch
-import torch.nn as nn
+from tqdm import tqdm
 
-# Add project root to path for local imports
 project_root = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(project_root))
 
-# Local imports
 from models import SignTransformerCtc, MediaPipeGRUCtc
-from evaluation.ctc_utils import greedy_ctc_decoder, beam_search_ctc_decoder
+from evaluation.ctc_utils import greedy_ctc_decoder, beam_search_ctc_decoder, calculate_wer
 from streamlit_app.core.config import CTC_CONFIG
+from data.labels.label_mapping import load_label_mappings
+
+
+def load_ground_truth_json(json_path: Path) -> Dict:
+    """Load ground truth from JSON file."""
+    with open(json_path, 'r', encoding='utf-8') as f:
+        return json.load(f)
+
+
+def calculate_wer_with_details(reference: List[int], hypothesis: List[int]) -> Tuple[float, int, int, int]:
+    """
+    Calculate WER with detailed error breakdown.
+    
+    Returns:
+        Tuple of (wer, num_insertions, num_deletions, num_substitutions)
+    """
+    if len(reference) == 0:
+        return (0.0 if len(hypothesis) == 0 else float('inf'), 0, 0, len(hypothesis))
+    
+    ref_len = len(reference)
+    hyp_len = len(hypothesis)
+    
+    dp = [[0] * (hyp_len + 1) for _ in range(ref_len + 1)]
+    ops = [[None] * (hyp_len + 1) for _ in range(ref_len + 1)]
+    
+    for i in range(ref_len + 1):
+        dp[i][0] = i
+        ops[i][0] = 'D'
+    for j in range(hyp_len + 1):
+        dp[0][j] = j
+        ops[0][j] = 'I'
+    ops[0][0] = None
+    
+    for i in range(1, ref_len + 1):
+        for j in range(1, hyp_len + 1):
+            if reference[i-1] == hypothesis[j-1]:
+                dp[i][j] = dp[i-1][j-1]
+                ops[i][j] = 'M'
+            else:
+                sub_cost = dp[i-1][j-1] + 1
+                del_cost = dp[i-1][j] + 1
+                ins_cost = dp[i][j-1] + 1
+                
+                min_cost = min(sub_cost, del_cost, ins_cost)
+                dp[i][j] = min_cost
+                
+                if min_cost == sub_cost:
+                    ops[i][j] = 'S'
+                elif min_cost == del_cost:
+                    ops[i][j] = 'D'
+                else:
+                    ops[i][j] = 'I'
+    
+    i, j = ref_len, hyp_len
+    insertions = deletions = substitutions = 0
+    
+    while i > 0 or j > 0:
+        op = ops[i][j]
+        if op == 'M':
+            i -= 1
+            j -= 1
+        elif op == 'S':
+            substitutions += 1
+            i -= 1
+            j -= 1
+        elif op == 'D':
+            deletions += 1
+            i -= 1
+        elif op == 'I':
+            insertions += 1
+            j -= 1
+        else:
+            break
+    
+    wer = dp[ref_len][hyp_len] / ref_len
+    return wer, insertions, deletions, substitutions
+
+
+def estimate_timestamps(predicted_sequence: List[int], total_frames: int, fps: int = 30) -> List[Dict]:
+    """Estimate timestamps for predicted glosses using frame-based distribution."""
+    if len(predicted_sequence) == 0:
+        return []
+    
+    timestamps = []
+    frames_per_gloss = total_frames / len(predicted_sequence)
+    
+    for idx, gloss in enumerate(predicted_sequence):
+        start_frame = int(idx * frames_per_gloss)
+        end_frame = int((idx + 1) * frames_per_gloss)
+        
+        start_ms = int((start_frame / fps) * 1000)
+        end_ms = int((end_frame / fps) * 1000)
+        
+        timestamps.append({
+            'index': idx,
+            'gloss': gloss,
+            'start_ms': start_ms,
+            'end_ms': end_ms,
+            'duration_ms': end_ms - start_ms
+        })
+    
+    return timestamps
+
+
+def calculate_temporal_alignment_accuracy(
+    pred_timestamps: List[Dict],
+    gt_timestamps: List[Dict],
+    tolerance_ms: int = 500
+) -> float:
+    """
+    Calculate temporal alignment accuracy.
+    
+    Matches predicted glosses with ground truth glosses (same gloss ID) and checks
+    if both start and end times are within tolerance.
+    """
+    if len(gt_timestamps) == 0:
+        return 0.0
+    
+    aligned = 0
+    for gt_ts in gt_timestamps:
+        for pred_ts in pred_timestamps:
+            if (gt_ts['gloss'] == pred_ts['gloss'] and
+                abs(gt_ts['start_ms'] - pred_ts['start_ms']) <= tolerance_ms and
+                abs(gt_ts['end_ms'] - pred_ts['end_ms']) <= tolerance_ms):
+                aligned += 1
+                break
+    
+    return aligned / len(gt_timestamps)
 
 
 class CTCPredictor:
-    """
-    Unified predictor for CTC-based sign language recognition models.
+    """CTC-based sign language recognition predictor."""
     
-    This class handles the complete CTC prediction pipeline:
-    1. Loads trained CTC model architecture and weights
-    2. Processes input data (NPZ files or raw keypoint sequences)
-    3. Applies CTC decoding (greedy or beam search)
-    4. Supports sliding window inference for long sequences
-    5. Manages resources and cleanup
-    
-    Example:
-        predictor = CTCPredictor('transformer_ctc', 'path/to/checkpoint.pt')
-        results = predictor.predict_from_npz('data.npz')
-        predictor.cleanup()
-    """
-    
-    def __init__(self, model_type, checkpoint_path, blank_id=None, device=None):
-        """
-        Initialize the CTC predictor with a trained model.
-        
-        Args:
-            model_type (str): Model type - 'transformer_ctc' or 'mediapipe_gru_ctc'
-            checkpoint_path (str): Path to the model checkpoint (.pt file)
-            blank_id (int, optional): Blank token ID (default: from CTC_CONFIG)
-            device (torch.device, optional): Device to use. Auto-detected if None.
-            
-        Raises:
-            ValueError: If model_type is not supported
-            FileNotFoundError: If checkpoint file doesn't exist
-        """
+    def __init__(self, model_type: str, checkpoint_path: str, blank_id: Optional[int] = None, device: Optional[torch.device] = None):
         self.model_type = model_type.lower()
         self.checkpoint_path = checkpoint_path
         self.device = device or torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         self.blank_id = blank_id if blank_id is not None else CTC_CONFIG['blank_token_id']
         
-        # Load model architecture and weights
         self.model, self.input_dim = self._load_model()
         self._load_checkpoint()
-        
-        print(f"✓ CTC Predictor initialized")
-        print(f"  Model: {self.model_type}")
-        print(f"  Input dim: {self.input_dim}")
-        print(f"  Blank ID: {self.blank_id}")
-        print(f"  Device: {self.device}")
+        self.gloss_mapping, _ = load_label_mappings()
     
-    def _load_model(self):
-        """
-        Load the appropriate CTC model architecture.
-        
-        Returns:
-            tuple: (model, input_dim)
-        """
+    def _load_model(self) -> Tuple[torch.nn.Module, int]:
         if self.model_type == 'transformer_ctc':
-            # Auto-detect input dimensions from checkpoint
             try:
                 checkpoint = torch.load(self.checkpoint_path, map_location='cpu')
                 state_dict = checkpoint.get('model_state_dict', checkpoint.get('state_dict', checkpoint.get('model', checkpoint)))
-                
-                # Extract input_dim from embedding layer
-                if 'embedding.weight' in state_dict:
-                    input_dim = state_dict['embedding.weight'].shape[1]
-                else:
-                    input_dim = 156  # Default
-            except Exception:
-                input_dim = 156  # Default
+                input_dim = state_dict['embedding.weight'].shape[1] if 'embedding.weight' in state_dict else 156
+            except:
+                input_dim = 156
             
-            # Create model
-            model = SignTransformerCtc(
-                input_dim=input_dim,
-                num_ctc_classes=CTC_CONFIG['num_ctc_classes'],
-            )
-            
+            model = SignTransformerCtc(input_dim=input_dim, num_ctc_classes=CTC_CONFIG['num_ctc_classes'])
+        
         elif self.model_type == 'mediapipe_gru_ctc':
-            # MediaPipeGRUCtc always uses 156-dimensional keypoints
             input_dim = 156
-            
-            # Auto-detect hidden sizes from checkpoint
             try:
                 checkpoint = torch.load(self.checkpoint_path, map_location='cpu')
                 state_dict = checkpoint.get('model_state_dict', checkpoint.get('state_dict', checkpoint.get('model', checkpoint)))
-                
-                # Extract GRU hidden sizes
                 if 'gru1.weight_hh_l0' in state_dict and 'gru2.weight_hh_l0' in state_dict:
-                    gru1_hidden = state_dict['gru1.weight_hh_l0'].shape[0] // 3 // 2  # // 2 for bidirectional
+                    gru1_hidden = state_dict['gru1.weight_hh_l0'].shape[0] // 3 // 2
                     gru2_hidden = state_dict['gru2.weight_hh_l0'].shape[0] // 3 // 2
                 else:
-                    gru1_hidden = 256  # Default
-                    gru2_hidden = 128  # Default
-            except Exception:
+                    gru1_hidden = 256
+                    gru2_hidden = 128
+            except:
                 gru1_hidden = 256
                 gru2_hidden = 128
             
-            model = MediaPipeGRUCtc(
-                input_dim=input_dim,
-                num_ctc_classes=CTC_CONFIG['num_ctc_classes'],
-                hidden1=gru1_hidden,
-                hidden2=gru2_hidden,
-            )
+            model = MediaPipeGRUCtc(input_dim=input_dim, num_ctc_classes=CTC_CONFIG['num_ctc_classes'],
+                                   hidden1=gru1_hidden, hidden2=gru2_hidden)
         else:
-            raise ValueError(f"Unknown CTC model type: {self.model_type}")
+            raise ValueError(f"Unknown model type: {self.model_type}")
         
         return model.to(self.device), input_dim
     
     def _load_checkpoint(self):
-        """Load model checkpoint and apply weights."""
         if not os.path.exists(self.checkpoint_path):
             raise FileNotFoundError(f"Checkpoint not found: {self.checkpoint_path}")
         
         checkpoint = torch.load(self.checkpoint_path, map_location=self.device)
-        
-        # Extract state dict
-        if 'model_state_dict' in checkpoint:
-            state_dict = checkpoint['model_state_dict']
-        elif 'state_dict' in checkpoint:
-            state_dict = checkpoint['state_dict']
-        elif 'model' in checkpoint:
-            state_dict = checkpoint['model']
-        else:
-            state_dict = checkpoint
-        
-        # Load weights and set to eval mode
+        state_dict = checkpoint.get('model_state_dict', checkpoint.get('state_dict', checkpoint.get('model', checkpoint)))
         self.model.load_state_dict(state_dict)
         self.model.eval()
     
-    def predict_from_npz(self, npz_path, decode_method='greedy', beam_width=10):
-        """
-        Make CTC prediction from preprocessed NPZ file.
-        
-        Args:
-            npz_path (str): Path to NPZ file containing preprocessed data
-            decode_method (str): Decoding method - 'greedy' or 'beam_search'
-            beam_width (int): Beam width for beam search decoding
-            
-        Returns:
-            dict: Prediction results containing:
-                - predicted_glosses: List of predicted gloss IDs
-                - decoded_sequence: Human-readable gloss sequence (if mapping available)
-                - confidence: Average confidence score
-                - decode_method: Method used for decoding
-        """
-        # Load NPZ data
+    def predict_sequence(
+        self,
+        npz_path: Path,
+        ground_truth: Optional[Dict] = None,
+        decode_method: str = 'greedy',
+        beam_width: int = 10,
+        fps: int = 30,
+        temporal_tolerance: int = 500
+    ) -> Dict:
+        """Predict single continuous sequence with full metrics."""
         data = np.load(npz_path)
         
-        # Extract appropriate features based on input dimension
         if self.input_dim == 2048:
             if 'X2048' not in data:
                 raise ValueError(f"NPZ file missing 'X2048' key")
@@ -205,425 +237,292 @@ class CTCPredictor:
         else:
             raise ValueError(f"Unsupported input dimension {self.input_dim}")
         
-        # Handle sequence length truncation
-        if X.shape[1] > 300:
-            X = X[:, :300, :]
-        
-        # Move to device
         X = X.to(self.device)
         input_length = torch.tensor([X.shape[1]], dtype=torch.long).to(self.device)
         
-        # Model inference
         with torch.no_grad():
-            log_probs = self.model(X)  # [B, T, C]
+            log_probs = self.model(X)
         
-        # Decode using specified method
         if decode_method == 'greedy':
-            decoded_sequences = greedy_ctc_decoder(log_probs, self.blank_id, input_length)
-            predicted_glosses = decoded_sequences[0]  # First (and only) sequence
-            confidence = self._calculate_confidence(log_probs[0], predicted_glosses)
-        elif decode_method == 'beam_search':
-            results = beam_search_ctc_decoder(log_probs, self.blank_id, beam_width, input_length)
-            predicted_glosses, log_prob = results[0]
-            confidence = np.exp(log_prob / max(len(predicted_glosses), 1))
+            predicted_sequence = greedy_ctc_decoder(log_probs, self.blank_id, input_length)[0]
+            probs = torch.exp(log_probs[0])
+            confidence_scores = [float(probs[:, g].max()) for g in predicted_sequence] if len(predicted_sequence) > 0 else []
         else:
-            raise ValueError(f"Unknown decode_method: {decode_method}")
+            predicted_sequence, log_prob = beam_search_ctc_decoder(log_probs, self.blank_id, beam_width, input_length)[0]
+            avg_conf = np.exp(log_prob / max(len(predicted_sequence), 1))
+            confidence_scores = [float(avg_conf)] * len(predicted_sequence)
         
-        return {
-            'predicted_glosses': predicted_glosses,
-            'num_glosses': len(predicted_glosses),
-            'confidence': float(confidence),
-            'decode_method': decode_method,
-            'input_frames': int(X.shape[1]),
+        predicted_labels = [self.gloss_mapping.get(g, f"GLOSS_{g}") for g in predicted_sequence]
+        predicted_timestamps = estimate_timestamps(predicted_sequence, X.shape[1], fps)
+        
+        result = {
+            'file_name': npz_path.name,
+            'predicted_sequence': predicted_sequence,
+            'predicted_labels': predicted_labels,
+            'confidence_scores': confidence_scores,
+            'predicted_timestamps': predicted_timestamps,
+            'num_predicted': len(predicted_sequence)
         }
-    
-    def predict_continuous(
-        self,
-        keypoint_sequence,
-        window_size=60,
-        stride=15,
-        decode_method='greedy',
-        beam_width=10
-    ):
-        """
-        Predict gloss sequence from continuous keypoint stream using sliding window.
         
-        This function implements sliding window inference for processing long
-        continuous sign language sequences. It:
-        1. Splits the sequence into overlapping windows
-        2. Processes each window independently
-        3. Stitches predictions together
-        
-        Args:
-            keypoint_sequence (np.ndarray): Keypoint sequence [T, 156]
-            window_size (int): Number of frames per window
-            stride (int): Stride between windows
-            decode_method (str): 'greedy' or 'beam_search'
-            beam_width (int): Beam width for beam search
+        if ground_truth:
+            result['signer'] = ground_truth['signer']
+            result['strategy'] = ground_truth['strategy']
+            result['ground_truth_sequence'] = ground_truth['ground_truth_sequence']
+            result['ground_truth_labels'] = ground_truth['ground_truth_labels']
             
-        Returns:
-            dict: Prediction results containing:
-                - predicted_glosses: List of predicted gloss IDs
-                - window_predictions: List of predictions per window
-                - num_windows: Number of windows processed
-                - confidence: Average confidence across all windows
-        """
-        # Validate input
-        if not isinstance(keypoint_sequence, np.ndarray):
-            keypoint_sequence = np.array(keypoint_sequence)
-        
-        if keypoint_sequence.ndim != 2 or keypoint_sequence.shape[1] != self.input_dim:
-            raise ValueError(
-                f"Expected keypoint sequence of shape [T, {self.input_dim}], "
-                f"got {keypoint_sequence.shape}"
+            wer, insertions, deletions, substitutions = calculate_wer_with_details(
+                ground_truth['ground_truth_sequence'],
+                predicted_sequence
             )
-        
-        seq_length = len(keypoint_sequence)
-        
-        # Handle short sequences (shorter than window size)
-        if seq_length <= window_size:
-            # Process entire sequence as one window
-            X = torch.from_numpy(keypoint_sequence).float().unsqueeze(0).to(self.device)
             
-            with torch.no_grad():
-                log_probs = self.model(X)
+            result['wer'] = float(wer)
+            result['cer'] = float(wer)
+            result['correct'] = wer == 0.0
+            result['num_insertions'] = insertions
+            result['num_deletions'] = deletions
+            result['num_substitutions'] = substitutions
             
-            if decode_method == 'greedy':
-                decoded = greedy_ctc_decoder(log_probs, self.blank_id)[0]
+            if wer == 0.0:
+                result['temporal_alignment_accuracy'] = calculate_temporal_alignment_accuracy(
+                    predicted_timestamps,
+                    ground_truth['ground_truth_timestamps'],
+                    temporal_tolerance
+                )
             else:
-                decoded, _ = beam_search_ctc_decoder(log_probs, self.blank_id, beam_width)[0]
+                result['temporal_alignment_accuracy'] = 0.0
+        
+        return result
+    
+    def predict_batch(
+        self,
+        input_dir: Path,
+        ground_truth_dir: Optional[Path] = None,
+        output_dir: Optional[Path] = None,
+        decode_method: str = 'greedy',
+        beam_width: int = 10,
+        fps: int = 30,
+        temporal_tolerance: int = 500
+    ) -> Dict:
+        """Predict batch of continuous sequences."""
+        npz_files = sorted(input_dir.glob('*.npz'))
+        
+        if not npz_files:
+            raise ValueError(f"No NPZ files found in {input_dir}")
+        
+        predictions = []
+        
+        print(f"\nPredicting {len(npz_files)} sequences...")
+        for npz_path in tqdm(npz_files, desc="Processing"):
+            ground_truth = None
+            if ground_truth_dir:
+                gt_path = ground_truth_dir / (npz_path.stem + '_gt.json')
+                if gt_path.exists():
+                    ground_truth = load_ground_truth_json(gt_path)
             
-            return {
-                'predicted_glosses': decoded,
-                'window_predictions': [decoded],
-                'num_windows': 1,
-                'confidence': 1.0,
-            }
-        
-        # ================================================================
-        # SLIDING WINDOW INFERENCE
-        # ================================================================
-        
-        window_predictions = []
-        window_confidences = []
-        
-        # Process each window
-        for start_idx in range(0, seq_length - window_size + 1, stride):
-            end_idx = start_idx + window_size
+            try:
+                result = self.predict_sequence(
+                    npz_path,
+                    ground_truth,
+                    decode_method,
+                    beam_width,
+                    fps,
+                    temporal_tolerance
+                )
+                predictions.append(result)
+                
+                if output_dir:
+                    pred_path = output_dir / (npz_path.stem + '_pred.json')
+                    with open(pred_path, 'w', encoding='utf-8') as f:
+                        json.dump(result, f, indent=2, ensure_ascii=False)
             
-            # Extract window
-            window = keypoint_sequence[start_idx:end_idx]
-            window_tensor = torch.from_numpy(window).float().unsqueeze(0).to(self.device)
+            except Exception as e:
+                print(f"\nError processing {npz_path.name}: {e}")
+                continue
+        
+        summary = self._generate_summary(predictions)
+        
+        if output_dir:
+            summary_path = output_dir / 'prediction_summary.json'
+            with open(summary_path, 'w', encoding='utf-8') as f:
+                json.dump(summary, f, indent=2)
             
-            # Model inference
-            with torch.no_grad():
-                log_probs = self.model(window_tensor)  # [1, T, C]
-            
-            # Decode window
-            if decode_method == 'greedy':
-                decoded = greedy_ctc_decoder(log_probs, self.blank_id)[0]
-                confidence = self._calculate_confidence(log_probs[0], decoded)
-            else:
-                decoded, log_prob = beam_search_ctc_decoder(log_probs, self.blank_id, beam_width)[0]
-                confidence = np.exp(log_prob / max(len(decoded), 1))
-            
-            window_predictions.append({
-                'start_frame': start_idx,
-                'end_frame': end_idx,
-                'glosses': decoded,
-                'confidence': confidence
-            })
-            window_confidences.append(confidence)
-        
-        # ================================================================
-        # STITCH WINDOW PREDICTIONS
-        # ================================================================
-        
-        # Simple stitching strategy: concatenate all predictions and remove duplicates
-        # More advanced strategies could use voting or weighted averaging
-        all_glosses = []
-        for pred in window_predictions:
-            all_glosses.extend(pred['glosses'])
-        
-        # Remove consecutive duplicates from stitched sequence
-        stitched_glosses = []
-        for gloss in all_glosses:
-            if len(stitched_glosses) == 0 or gloss != stitched_glosses[-1]:
-                stitched_glosses.append(gloss)
-        
-        avg_confidence = np.mean(window_confidences) if window_confidences else 0.0
+            self._generate_confusion_matrices(predictions, output_dir)
         
         return {
-            'predicted_glosses': stitched_glosses,
-            'window_predictions': window_predictions,
-            'num_windows': len(window_predictions),
-            'confidence': float(avg_confidence),
-            'window_size': window_size,
-            'stride': stride,
+            'predictions': predictions,
+            'summary': summary
         }
     
-    def predict_from_video(self, video_path, window_size=60, stride=15, decode_method='greedy'):
-        """
-        Make CTC prediction from raw video file.
+    def _generate_summary(self, predictions: List[Dict]) -> Dict:
+        """Generate summary statistics."""
+        if not predictions:
+            return {'total_sequences': 0}
         
-        This method:
-        1. Extracts keypoints from video frames
-        2. Applies sliding window inference
-        3. Returns predicted gloss sequence
+        has_gt = 'wer' in predictions[0]
         
-        Note: Requires preprocessing modules (MediaPipe, OpenCV)
+        summary = {
+            'total_sequences': len(predictions),
+            'model_type': self.model_type,
+            'decode_method': predictions[0].get('wer') is not None
+        }
         
-        Args:
-            video_path (str): Path to video file
-            window_size (int): Frames per window
-            stride (int): Stride between windows
-            decode_method (str): 'greedy' or 'beam_search'
+        if has_gt:
+            wers = [p['wer'] for p in predictions]
+            correct = sum(1 for p in predictions if p['correct'])
             
-        Returns:
-            dict: Prediction results
-        """
-        # This would require preprocessing integration
-        # For now, raise NotImplementedError
-        raise NotImplementedError(
-            "Video processing for CTC not yet implemented. "
-            "Please preprocess video to NPZ first and use predict_from_npz()"
-        )
-    
-    def _calculate_confidence(self, log_probs, predicted_glosses):
-        """
-        Calculate average confidence for predicted glosses.
-        
-        Args:
-            log_probs: Log probabilities tensor [T, C]
-            predicted_glosses: List of predicted gloss IDs
+            summary['mean_wer'] = float(np.mean(wers))
+            summary['mean_cer'] = summary['mean_wer']
+            summary['sequence_accuracy'] = correct / len(predictions)
+            summary['mean_temporal_alignment'] = float(np.mean([p.get('temporal_alignment_accuracy', 0.0) for p in predictions]))
             
-        Returns:
-            float: Average confidence score
-        """
-        if len(predicted_glosses) == 0:
-            return 0.0
+            per_signer = defaultdict(list)
+            per_strategy = defaultdict(list)
+            
+            for p in predictions:
+                if 'signer' in p:
+                    per_signer[p['signer']].append(p['wer'])
+                if 'strategy' in p:
+                    per_strategy[p['strategy']].append(p['wer'])
+            
+            summary['per_signer_wer'] = {s: float(np.mean(wers)) for s, wers in per_signer.items()}
+            summary['per_strategy_wer'] = {s: float(np.mean(wers)) for s, wers in per_strategy.items()}
+            
+            total_ins = sum(p['num_insertions'] for p in predictions)
+            total_del = sum(p['num_deletions'] for p in predictions)
+            total_sub = sum(p['num_substitutions'] for p in predictions)
+            
+            summary['total_insertions'] = total_ins
+            summary['total_deletions'] = total_del
+            summary['total_substitutions'] = total_sub
         
-        # Convert log probs to probabilities
-        probs = torch.exp(log_probs)
-        
-        # Get max probability at each timestep
-        max_probs = probs.max(dim=1)[0]
-        
-        # Return mean probability as confidence
-        return max_probs.mean().item()
+        return summary
     
-    def cleanup(self):
-        """Clean up resources."""
-        pass
+    def _generate_confusion_matrices(self, predictions: List[Dict], output_dir: Path):
+        """Generate confusion matrices."""
+        if not predictions or 'ground_truth_sequence' not in predictions[0]:
+            return
+        
+        num_classes = 105
+        
+        all_gt = []
+        all_pred = []
+        for p in predictions:
+            all_gt.extend(p['ground_truth_sequence'])
+            all_pred.extend(p['predicted_sequence'])
+        
+        global_cm = np.zeros((num_classes, num_classes), dtype=int)
+        for gt, pred in zip(all_gt, all_pred):
+            if 0 <= gt < num_classes and 0 <= pred < num_classes:
+                global_cm[gt, pred] += 1
+        
+        cm_path = output_dir / 'confusion_matrix_global.json'
+        with open(cm_path, 'w') as f:
+            json.dump(global_cm.tolist(), f)
+        
+        per_signer_cm = defaultdict(lambda: np.zeros((num_classes, num_classes), dtype=int))
+        per_strategy_cm = defaultdict(lambda: np.zeros((num_classes, num_classes), dtype=int))
+        
+        for p in predictions:
+            signer = p.get('signer')
+            strategy = p.get('strategy')
+            
+            for gt, pred in zip(p['ground_truth_sequence'], p['predicted_sequence']):
+                if 0 <= gt < num_classes and 0 <= pred < num_classes:
+                    if signer:
+                        per_signer_cm[signer][gt, pred] += 1
+                    if strategy:
+                        per_strategy_cm[strategy][gt, pred] += 1
+        
+        if per_signer_cm:
+            signer_cm_data = {s: cm.tolist() for s, cm in per_signer_cm.items()}
+            with open(output_dir / 'confusion_matrix_per_signer.json', 'w') as f:
+                json.dump(signer_cm_data, f)
+        
+        if per_strategy_cm:
+            strategy_cm_data = {s: cm.tolist() for s, cm in per_strategy_cm.items()}
+            with open(output_dir / 'confusion_matrix_per_strategy.json', 'w') as f:
+                json.dump(strategy_cm_data, f)
 
 
-def predict_continuous(
-    model,
-    keypoint_sequence,
-    blank_id,
-    window_size=60,
-    stride=15,
-    decode_method='greedy',
-    beam_width=10,
-    device=None
-):
-    """
-    Standalone function for continuous CTC prediction with sliding windows.
+def main():
+    parser = argparse.ArgumentParser(description='CTC Continuous Sign Language Prediction')
     
-    This is a convenience function that doesn't require instantiating CTCPredictor.
-    It's useful for quick predictions or when you already have a loaded model.
-    
-    Args:
-        model: Trained CTC model (SignTransformerCtc or MediaPipeGRUCtc)
-        keypoint_sequence (np.ndarray or torch.Tensor): Keypoint sequence [T, 156]
-        blank_id (int): Blank token ID for CTC decoding
-        window_size (int): Number of frames per window
-        stride (int): Stride between consecutive windows
-        decode_method (str): 'greedy' or 'beam_search'
-        beam_width (int): Beam width for beam search decoding
-        device (torch.device, optional): Device to use
-        
-    Returns:
-        List[int]: Predicted sequence of gloss IDs
-        
-    Example:
-        >>> from models import SignTransformerCtc
-        >>> model = SignTransformerCtc()
-        >>> model.load_state_dict(torch.load('model.pt'))
-        >>> keypoints = np.random.randn(200, 156)
-        >>> glosses = predict_continuous(model, keypoints, blank_id=105)
-        >>> print(glosses)
-        [4, 17, 23, 56, 89]
-    """
-    model.eval()
-    
-    # Determine device
-    if device is None:
-        device = next(model.parameters()).device
-    
-    # Convert to numpy if needed
-    if isinstance(keypoint_sequence, torch.Tensor):
-        keypoint_sequence = keypoint_sequence.cpu().numpy()
-    
-    seq_length = len(keypoint_sequence)
-    all_log_probs = []
-    
-    # ================================================================
-    # SLIDING WINDOW PROCESSING
-    # ================================================================
-    
-    # Process sequence with sliding windows
-    for start_idx in range(0, max(1, seq_length - window_size + 1), stride):
-        end_idx = min(start_idx + window_size, seq_length)
-        
-        # Extract window
-        window = keypoint_sequence[start_idx:end_idx]
-        window_tensor = torch.from_numpy(window).float().unsqueeze(0).to(device)
-        
-        # Model inference
-        with torch.no_grad():
-            log_probs = model(window_tensor)  # [1, T, C]
-            all_log_probs.append(log_probs.squeeze(0))  # [T, C]
-    
-    if not all_log_probs:
-        return []
-    
-    # ================================================================
-    # CONCATENATE AND DECODE
-    # ================================================================
-    
-    # Concatenate all window predictions
-    # This is a simple approach - more sophisticated methods could use voting
-    full_log_probs = torch.cat(all_log_probs, dim=0).unsqueeze(0)  # [1, T_full, C]
-    
-    # Decode using specified method
-    if decode_method == 'greedy':
-        decoded_sequences = greedy_ctc_decoder(full_log_probs, blank_id)
-        return decoded_sequences[0]
-    elif decode_method == 'beam_search':
-        results = beam_search_ctc_decoder(full_log_probs, blank_id, beam_width)
-        return results[0][0]  # Return sequence only, not score
-    else:
-        raise ValueError(f"Unknown decode_method: {decode_method}")
-
-
-def predict_from_file(
-    model_path,
-    input_path,
-    model_type='transformer_ctc',
-    blank_id=None,
-    window_size=60,
-    stride=15,
-    decode_method='greedy',
-    beam_width=10
-):
-    """
-    High-level prediction function for CTC models.
-    
-    This is the simplest way to make predictions - just provide paths
-    and get results.
-    
-    Args:
-        model_path (str): Path to model checkpoint
-        input_path (str): Path to input NPZ file
-        model_type (str): 'transformer_ctc' or 'mediapipe_gru_ctc'
-        blank_id (int, optional): Blank token ID
-        window_size (int): Frames per window for sliding window
-        stride (int): Stride between windows
-        decode_method (str): 'greedy' or 'beam_search'
-        beam_width (int): Beam width for beam search
-        
-    Returns:
-        dict: Prediction results
-        
-    Example:
-        >>> results = predict_from_file(
-        ...     'trained_models/transformer_ctc/best.pt',
-        ...     'data/test_clip.npz',
-        ...     model_type='transformer_ctc'
-        ... )
-        >>> print(f"Predicted: {results['predicted_glosses']}")
-    """
-    # Initialize predictor
-    predictor = CTCPredictor(model_type, model_path, blank_id)
-    
-    # Make prediction
-    results = predictor.predict_from_npz(input_path, decode_method, beam_width)
-    
-    # Cleanup
-    predictor.cleanup()
-    
-    return results
-
-
-if __name__ == "__main__":
-    """
-    Command-line interface for CTC prediction.
-    
-    Usage:
-        python predict_ctc.py --model transformer_ctc \\
-            --checkpoint path/to/model.pt \\
-            --input data.npz \\
-            --decode-method greedy
-    """
-    import argparse
-    
-    parser = argparse.ArgumentParser(description="CTC Sign Language Recognition Prediction")
-    parser.add_argument('--model', choices=['transformer_ctc', 'mediapipe_gru_ctc'],
-                       required=True, help='CTC model type')
-    parser.add_argument('--checkpoint', type=str, required=True,
-                       help='Path to model checkpoint (.pt file)')
-    parser.add_argument('--input', type=str, required=True,
-                       help='Input NPZ file with keypoint data')
-    parser.add_argument('--blank-id', type=int, default=None,
-                       help='Blank token ID (default: from config)')
-    parser.add_argument('--window-size', type=int, default=60,
-                       help='Window size for sliding window inference')
-    parser.add_argument('--stride', type=int, default=15,
-                       help='Stride between windows')
-    parser.add_argument('--decode-method', choices=['greedy', 'beam_search'], default='greedy',
-                       help='CTC decoding method')
-    parser.add_argument('--beam-width', type=int, default=10,
-                       help='Beam width for beam search decoding')
-    parser.add_argument('--device', type=str, default='auto',
-                       help='Device to use (cpu, cuda, or auto)')
+    parser.add_argument('--model', choices=['transformer_ctc', 'mediapipe_gru_ctc'], required=True)
+    parser.add_argument('--checkpoint', type=Path, required=True)
+    parser.add_argument('--input-dir', type=Path, required=True, help='Directory with continuous sequence NPZ files')
+    parser.add_argument('--ground-truth-dir', type=Path, help='Directory with ground truth JSON files')
+    parser.add_argument('--output-dir', type=Path, required=True, help='Output directory for predictions')
+    parser.add_argument('--decode-method', choices=['greedy', 'beam_search'], default='greedy')
+    parser.add_argument('--beam-width', type=int, default=10)
+    parser.add_argument('--fps', type=int, default=30, help='FPS for timestamp estimation')
+    parser.add_argument('--temporal-tolerance', type=int, default=500, help='Tolerance in ms for temporal alignment')
+    parser.add_argument('--device', type=str, default='auto', choices=['cpu', 'cuda', 'auto'])
     
     args = parser.parse_args()
     
-    # Determine device
     if args.device == 'auto':
         device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     else:
         device = torch.device(args.device)
     
-    print(f"Using device: {device}\n")
+    args.output_dir.mkdir(parents=True, exist_ok=True)
     
-    # Make prediction
-    try:
-        results = predict_from_file(
-            model_path=args.checkpoint,
-            input_path=args.input,
-            model_type=args.model,
-            blank_id=args.blank_id,
-            window_size=args.window_size,
-            stride=args.stride,
-            decode_method=args.decode_method,
-            beam_width=args.beam_width
-        )
+    print("=" * 80)
+    print("CTC CONTINUOUS SIGN PREDICTION")
+    print("=" * 80)
+    print(f"Model:              {args.model}")
+    print(f"Checkpoint:         {args.checkpoint}")
+    print(f"Input directory:    {args.input_dir}")
+    print(f"Ground truth dir:   {args.ground_truth_dir}")
+    print(f"Output directory:   {args.output_dir}")
+    print(f"Device:             {device}")
+    print(f"Decode method:      {args.decode_method}")
+    print(f"FPS:                {args.fps}")
+    print()
+    
+    predictor = CTCPredictor(args.model, str(args.checkpoint), device=device)
+    
+    results = predictor.predict_batch(
+        args.input_dir,
+        args.ground_truth_dir,
+        args.output_dir,
+        args.decode_method,
+        args.beam_width,
+        args.fps,
+        args.temporal_tolerance
+    )
+    
+    summary = results['summary']
+    
+    print("\n" + "=" * 80)
+    print("PREDICTION SUMMARY")
+    print("=" * 80)
+    print(f"Total sequences:    {summary['total_sequences']}")
+    
+    if 'mean_wer' in summary:
+        print(f"Mean WER:           {summary['mean_wer']:.4f} ({summary['mean_wer']*100:.2f}%)")
+        print(f"Sequence accuracy:  {summary['sequence_accuracy']:.4f} ({summary['sequence_accuracy']*100:.2f}%)")
+        print(f"Temporal alignment: {summary['mean_temporal_alignment']:.4f}")
+        print(f"\nError breakdown:")
+        print(f"  Insertions:       {summary['total_insertions']}")
+        print(f"  Deletions:        {summary['total_deletions']}")
+        print(f"  Substitutions:    {summary['total_substitutions']}")
         
-        # Display results
-        print("="*60)
-        print("CTC PREDICTION RESULTS")
-        print("="*60)
-        print(f"Input file: {args.input}")
-        print(f"Input frames: {results['input_frames']}")
-        print(f"Decode method: {results['decode_method']}")
-        print(f"Predicted glosses: {results['predicted_glosses']}")
-        print(f"Number of glosses: {results['num_glosses']}")
-        print(f"Confidence: {results['confidence']:.4f}")
-        print("="*60)
+        if summary.get('per_signer_wer'):
+            print(f"\nPer-signer WER:")
+            for signer, wer in sorted(summary['per_signer_wer'].items()):
+                print(f"  {signer}: {wer:.4f}")
         
-    except Exception as e:
-        print(f"Error during prediction: {e}")
-        sys.exit(1)
+        if summary.get('per_strategy_wer'):
+            print(f"\nPer-strategy WER:")
+            for strategy, wer in sorted(summary['per_strategy_wer'].items()):
+                print(f"  {strategy}: {wer:.4f}")
+    
+    print(f"\nOutput saved to: {args.output_dir}")
+    print("=" * 80)
+    
+    return 0
 
+
+if __name__ == '__main__':
+    sys.exit(main())
