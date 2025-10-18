@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Rename and flatten sign language video clips based on labels.csv.
+Rename and flatten sign language video clips based on labels_reference.csv.
 
 Input structure:
 clips/
@@ -11,9 +11,10 @@ clips/
    104/
       ...
 
-rename.csv columns: id,label,category
-- id: integer folder name (0..104)
+labels_reference.csv columns: gloss_id,label,cat_id,category
+- gloss_id: integer folder name (0..104)
 - label: e.g., "GOOD MORNING" (used in filename, lowercased)
+- cat_id: category ID (0..9)
 - category: e.g., "GREETING" (not used in current version)
 
 Output:
@@ -31,7 +32,7 @@ Optional:
 Notes:
 - Counts clips sequentially in increasing id and increasing clip filename order.
 - Only processes files with extension .mov/.MOV in two-level structure clips/<id>/<n>.MOV
-- Slugifies category: lowercase, spaces and dashes -> underscore, other non [a-z0-9_] removed.
+- Slugifies label: lowercase, spaces and dashes -> underscore, other non [a-z0-9_] removed.
 """
 
 import argparse
@@ -50,20 +51,20 @@ def slugify_category(s: str) -> str:
     return s or 'uncategorized'
 
 def read_labels(labels_csv: Path):
-    print(f"🔍 Looking for rename.csv at: {labels_csv}")  # Debugging path
+    print(f"🔍 Looking for labels_reference.csv at: {labels_csv}")  # Debugging path
     if not labels_csv.exists():
-        raise FileNotFoundError(f"rename.csv not found at {labels_csv}")
+        raise FileNotFoundError(f"labels_reference.csv not found at {labels_csv}")
     mapping: Dict[int, Tuple[str, str]] = {}  # Storing both label and category
     with labels_csv.open(newline='', encoding='utf-8-sig') as f:
         reader = csv.DictReader(f)
-        required = {'id', 'label', 'category'}
+        required = {'gloss_id', 'label', 'category'}
         if not required.issubset(reader.fieldnames or []):
-            raise ValueError(f"rename.csv must contain columns: {required}. Found: {reader.fieldnames}")
+            raise ValueError(f"labels_reference.csv must contain columns: {required}. Found: {reader.fieldnames}")
         for row in reader:
             try:
-                i = int(row['id'])
+                i = int(row['gloss_id'])
             except Exception as e:
-                print(f"[WARN] ❗ Skipping row with non-integer id={row.get('id')!r}: {e}", file=sys.stderr)
+                print(f"[WARN] ❗ Skipping row with non-integer gloss_id={row.get('gloss_id')!r}: {e}", file=sys.stderr)
                 continue
             label = row.get('label', '').strip().lower()  # Use label directly
             cat = slugify_category(row.get('category', ''))
@@ -104,11 +105,11 @@ def collect_clips(clips_dir: Path) -> List[Tuple[int, Path]]:
     return items
 
 def main():
-    ap = argparse.ArgumentParser(description="Rename and flatten video clips based on rename.csv")
-    ap.add_argument("--root", type=Path, default=Path("."), help="Project root containing rename.csv and clips/")
+    ap = argparse.ArgumentParser(description="Rename and flatten video clips based on labels_reference.csv")
+    ap.add_argument("--root", type=Path, default=Path("."), help="Project root containing labels_reference.csv and clips/")
     ap.add_argument("--clips", type=Path, default=None, help="Path to clips/ (default: <root>/data/raw/clips)")
-    ap.add_argument("--labels", type=Path, default=None, help="Path to rename.csv (default: <root>/preprocessing/utils/rename.csv)")
-    ap.add_argument("--out", type=Path, default=None, help="Output folder (default: <root>/videos)")
+    ap.add_argument("--labels", type=Path, default=None, help="Path to labels_reference.csv (default: <root>/data/labels_reference.csv)")
+    ap.add_argument("--out", type=Path, default=None, help="Output folder (default: <root>/data/raw)")
     ap.add_argument("--start-index", type=int, default=1, help="Starting index for clip numbering (default: 1)")
     ap.add_argument("--digits", type=int, default=4, help="Zero-pad width for numbers (default: 4)")
     ap.add_argument("--dry-run", action="store_true", help="Only print what would happen")
@@ -125,7 +126,7 @@ def main():
     if args.labels:
         labels_csv = args.labels.resolve()
     else:
-        labels_csv = (root / "preprocessing/utils/rename.csv").resolve()
+        labels_csv = (root / "data/labels_reference.csv").resolve()
     
     if args.out:
         out_dir = args.out.resolve()
@@ -155,7 +156,7 @@ def main():
     for id_num, src in items:
         cat = id_to_cat.get(id_num)
         if not cat:
-            print(f"[WARN] ❗ No category found in rename.csv for id={id_num}; skipping {src}", file=sys.stderr)
+            print(f"[WARN] ❗ No label found in labels_reference.csv for gloss_id={id_num}; skipping {src}", file=sys.stderr)
             continue
         label, cat = id_to_cat.get(id_num)
         new_name = f"clip_{counter:0{width}d}_{label}.MOV"

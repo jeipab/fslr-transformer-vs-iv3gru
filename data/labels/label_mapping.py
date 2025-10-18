@@ -19,7 +19,7 @@ def load_label_mappings():
         FileNotFoundError: If labels reference file is not found
     """
     # Path to the labels reference CSV
-    csv_path = Path(__file__).parent.parent.parent / "data" / "splitting" / "labels_reference.csv"
+    csv_path = Path(__file__).parent.parent / "labels_reference.csv"
     
     if not csv_path.exists():
         raise FileNotFoundError(f"Labels reference file not found: {csv_path}")

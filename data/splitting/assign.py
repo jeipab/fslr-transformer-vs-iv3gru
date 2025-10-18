@@ -123,8 +123,8 @@ Examples:
                        help="Directory containing NPZ files (creates labels.csv automatically)")
     parser.add_argument("--labels", type=str, default=None,
                        help="Path to existing labels CSV file")
-    parser.add_argument("--reference", type=str, default="data/splitting/labels_reference.csv",
-                       help="Path to reference CSV file (default: data/splitting/labels_reference.csv)")
+    parser.add_argument("--reference", type=str, default="data/labels_reference.csv",
+                       help="Path to reference CSV file (default: data/labels_reference.csv)")
     
     args = parser.parse_args()
     

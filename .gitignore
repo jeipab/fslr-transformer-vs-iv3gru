@@ -57,7 +57,7 @@ android/
 !data/demo/*.MOV
 
 # Exception: Allow specific CSV files
-!preprocessing/utils/rename.csv
+!data/labels_reference.csv
 
 # Model Checkpoints (ignore all model files)
 *.pt

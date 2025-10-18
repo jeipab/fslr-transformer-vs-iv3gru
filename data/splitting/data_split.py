@@ -30,7 +30,7 @@ Usage:
         --copy \
         --cats greeting survival number \
         --gloss yes no wrong \
-        --label-ref data/splitting/labels_reference.csv
+        --label-ref data/labels_reference.csv
 """
 
 import argparse
