@@ -57,12 +57,12 @@ def extract_metadata_from_npz(npz_path):
 
         # If signer is not in metadata, extract from filename
         if signer == 'N/A':
-            match = re.search(r'_(S\d+)\.npz$', npz_path.name)
+            match = re.search(r'_(S[0-7])\.npz$', npz_path.name)
             if match:
                 signer = match.group(1)
 
         # Validate signer format
-        if not re.match(r'^S\d$', signer):
+        if not re.match(r'^S[0-7]$', signer):
             print(f"[WARN] Invalid signer format for {npz_path.name}: {signer}")
             signer = 'N/A'
 
@@ -226,7 +226,7 @@ Examples:
             Extracted gloss text in lowercase
         """
         # Updated regex to handle signer suffix
-        match = re.match(r'clip_\d+_(.*?)_S\d+\.npz', filename)
+        match = re.match(r'clip_\d+_(.*?)_S[0-7]\.npz', filename)
         if match:
             return match.group(1).lower()
         else:
