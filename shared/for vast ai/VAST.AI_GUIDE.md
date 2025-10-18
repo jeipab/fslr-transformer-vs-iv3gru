@@ -195,10 +195,6 @@ cp "shared/for vast ai/visualization_vast_ai.py" "streamlit_app/components/visua
 cp "shared/for vast ai/validation_components_vast_ai.py" "streamlit_app/components/validation_components.py"
 ```
 
-```bash
-cp "shared/for vast ai/config_vast_ai.py" "streamlit_app/core/config.py"
-```
-
 ---
 
 ## 8. Configure Streamlit for Vast.AI
