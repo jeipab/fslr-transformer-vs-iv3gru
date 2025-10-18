@@ -74,6 +74,23 @@ def ensure_dir(p):
     os.makedirs(p, exist_ok=True)
 
 
+def validate_signer_id(signer_id):
+    """Validate signer ID format (S0-S7).
+    
+    Args:
+        signer_id (str): Signer ID to validate
+        
+    Returns:
+        bool: True if valid format, False otherwise
+    """
+    if signer_id is None:
+        return True  # Optional parameter
+    
+    import re
+    pattern = r'^S[0-7]$'
+    return bool(re.match(pattern, signer_id))
+
+
 def to_npz(out_path, X, mask, timestamps_ms, meta, also_parquet=True):
     """Save processed keypoint data to compressed .npz file with optional parquet export.
     
@@ -246,7 +263,7 @@ def resize_with_aspect_ratio_and_pad(frame, target_size=256, pad_color=(0, 0, 0)
 
 
 def process_video(video_path, out_dir, target_fps=30, out_size=256, conf_thresh=0.35, max_gap=8, write_keypoints=True, write_iv3_features=True, feature_key='X2048',
-                 compute_occlusion=True, occ_detailed=False, labels_csv_path=None, gloss_id=None, cat_id=None):
+                 compute_occlusion=True, occ_detailed=False, labels_csv_path=None, gloss_id=None, cat_id=None, signer_id=None):
     """Process a single video file and extract multi-modal features for sign language recognition.
     
     This is the main processing function that converts raw video files into structured
@@ -293,6 +310,10 @@ def process_video(video_path, out_dir, target_fps=30, out_size=256, conf_thresh=
     src_fps = cap.get(cv2.CAP_PROP_FPS)
     if not src_fps or math.isnan(src_fps) or src_fps < 1:
         src_fps = 30.0  # fallback for videos with invalid FPS metadata
+    
+    # Extract video duration in seconds
+    frame_count = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+    duration_sec = frame_count / src_fps if src_fps > 0 else 0.0
 
     # Calculate frame sampling parameters for target FPS
     step_s = 1.0 / target_fps  # Time interval between sampled frames (seconds)
@@ -417,6 +438,8 @@ def process_video(video_path, out_dir, target_fps=30, out_size=256, conf_thresh=
         conf_thresh=conf_thresh,                 # Confidence threshold used for detection
         interpolation_max_gap=max_gap,           # Maximum gap size for interpolation
         model_type=model_type,                   # T=Transformer only, I=IV3-GRU only, B=Both
+        duration_sec=duration_sec,               # Video duration in seconds
+        signer=signer_id,                        # Signer ID (S0-S7)
         occluded_flag=0                          # Will be updated after occlusion computation
     )
 
@@ -504,7 +527,7 @@ def process_video_worker(args):
     # Unpack parameters
     (video_path, out_dir, target_fps, out_size, conf_thresh, max_gap, 
      write_keypoints, write_iv3_features, feature_key, compute_occlusion, 
-     occ_detailed, labels_csv_path, gloss_id, cat_id, batch_size, device_id, disable_parquet) = args
+     occ_detailed, labels_csv_path, gloss_id, cat_id, signer_id, batch_size, device_id, disable_parquet) = args
     
     try:
         # Setup GPU device for this worker
@@ -529,6 +552,10 @@ def process_video_worker(args):
         src_fps = cap.get(cv2.CAP_PROP_FPS)
         if not src_fps or math.isnan(src_fps) or src_fps < 1:
             src_fps = 30.0
+        
+        # Extract video duration in seconds
+        frame_count = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+        duration_sec = frame_count / src_fps if src_fps > 0 else 0.0
 
         # Calculate frame sampling parameters
         step_s = 1.0 / target_fps
@@ -649,6 +676,8 @@ def process_video_worker(args):
             face_indices=FACEMESH_11,
             conf_thresh=conf_thresh,
             interpolation_max_gap=max_gap,
+            duration_sec=duration_sec,
+            signer=signer_id,
             occluded_flag=occluded_flag
         )
         
@@ -686,7 +715,7 @@ def process_video_worker(args):
 
 def process_videos_multiprocess(video_files, out_dir, target_fps=30, out_size=256, conf_thresh=0.35, 
                                max_gap=8, write_keypoints=True, write_iv3_features=True, feature_key='X2048',
-                               compute_occlusion=True, occ_detailed=False, labels_csv_path=None, gloss_id=None, cat_id=None, 
+                               compute_occlusion=True, occ_detailed=False, labels_csv_path=None, gloss_id=None, cat_id=None, signer_id=None,
                                workers=None, batch_size=32, disable_parquet=False):
     """Orchestrate parallel video processing with multi-GPU support and batched inference.
     
@@ -739,7 +768,7 @@ def process_videos_multiprocess(video_files, out_dir, target_fps=30, out_size=25
         # Pack all processing parameters for worker function
         args = (video_path, out_dir, target_fps, out_size, conf_thresh, max_gap,
                 write_keypoints, write_iv3_features, feature_key, compute_occlusion, 
-                occ_detailed, labels_csv_path, gloss_id, cat_id, batch_size, device_id, disable_parquet)
+                occ_detailed, labels_csv_path, gloss_id, cat_id, signer_id, batch_size, device_id, disable_parquet)
         worker_args.append(args)
     
     # Execute parallel processing with progress tracking
@@ -810,6 +839,7 @@ if __name__ == "__main__":
     parser.add_argument('--id', dest='single_id', type=int, default=None, help='Single integer ID to use for both gloss and category labels')
     parser.add_argument('--gloss-id', type=int, default=None, help='Override gloss class ID (defaults to --id)')
     parser.add_argument('--cat-id', type=int, default=None, help='Override category class ID (defaults to --id or --gloss-id)')
+    parser.add_argument('--signer', type=str, default=None, help='Signer ID (S0-S7)')
     parser.add_argument('--labels-csv', type=str, default=None, help='Path to labels CSV file (default: <output_directory>/labels.csv)')
     parser.add_argument('--append', action='store_true', help='Append to existing labels CSV instead of overwriting header')
     
@@ -818,6 +848,11 @@ if __name__ == "__main__":
     parser.add_argument('--occ-detailed', action='store_true', help='Output detailed occlusion analysis results')
     
     args = parser.parse_args()
+    
+    # VALIDATE SIGNER ID FORMAT
+    if args.signer is not None and not validate_signer_id(args.signer):
+        print(f"Error: Invalid signer ID format '{args.signer}'. Must be S0-S7.")
+        exit(1)
     
     # INPUT VALIDATION: Accept either a single video file or directory of videos
     input_path = args.video_directory
@@ -900,6 +935,7 @@ if __name__ == "__main__":
                     labels_csv_path=labels_csv,         # Training labels file
                     gloss_id=gloss_id,                  # Sign language class ID
                     cat_id=cat_id,                      # Category class ID
+                    signer_id=args.signer,              # Signer ID (S0-S7)
                 )
             except Exception as e:
                 print(f"Error processing {video_path}: {e}")
@@ -922,6 +958,7 @@ if __name__ == "__main__":
             labels_csv_path=labels_csv,           # Training labels file
             gloss_id=gloss_id,                    # Sign language class ID
             cat_id=cat_id,                        # Category class ID
+            signer_id=args.signer,                # Signer ID (S0-S7)
             workers=args.workers,                 # Number of parallel processes
             batch_size=args.batch_size,           # GPU batch size for efficiency
             disable_parquet=args.disable_parquet  # Disable parquet for speed
