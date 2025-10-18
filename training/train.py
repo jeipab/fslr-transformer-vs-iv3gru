@@ -120,11 +120,11 @@ class FSLFeatureFileDataset(Dataset):
     
     The dataset expects:
     - A directory of .npz files containing feature arrays
-    - A CSV file mapping filenames to gloss and category labels
+    - A CSV file mapping filenames to gloss, category, occlusion, signer, and duration labels
     - Optional temporal augmentation for training data
     
     Data Flow:
-    1. Load CSV to build filename -> (gloss, category) mapping
+    1. Load CSV to build filename -> (gloss, category, occluded, signer, duration) mapping
     2. For each sample, load corresponding .npz file
     3. Extract feature array using specified key (default: 'X2048')
     4. Apply temporal augmentation if enabled and in training mode
@@ -132,11 +132,13 @@ class FSLFeatureFileDataset(Dataset):
 
     Args:
         features_dir (str): Directory containing .npz feature files
-        labels_csv (str): CSV file with columns: file, gloss, cat
+        labels_csv (str): CSV file with columns: file, gloss, cat, occluded, signer, duration
         feature_key (str): Key in .npz files containing [T, 2048] features
         augment (bool): Enable temporal data augmentation
         augment_params (dict): Augmentation parameters (noise_std, mask_prob, etc.)
         mode (str): Dataset mode - 'classification' or 'ctc'
+        signer_filter (str, optional): Filter dataset to only include samples from this signer
+        return_metadata (bool): Whether to return signer and duration in __getitem__
 
     Returns:
         Classification mode: (features[T,2048] float32, gloss long, cat long, length long)
@@ -147,7 +149,7 @@ class FSLFeatureFileDataset(Dataset):
         FileNotFoundError: If feature file doesn't exist
         KeyError: If expected feature key not found in .npz file
     """
-    def __init__(self, features_dir, labels_csv, feature_key='X2048', augment=False, augment_params=None, mode='classification'):
+    def __init__(self, features_dir, labels_csv, feature_key='X2048', augment=False, augment_params=None, mode='classification', signer_filter=None, return_metadata=False):
         """
         Initialize the feature dataset.
         
@@ -155,15 +157,28 @@ class FSLFeatureFileDataset(Dataset):
         1. Storing configuration parameters
         2. Setting up augmentation if enabled
         3. Loading and parsing the labels CSV file
-        4. Building an index of (filename_stem, gloss_id, category_id) tuples
+        4. Building an index of (filename_stem, gloss_id, category_id, occluded, signer, duration) tuples
+        5. Optionally filtering by signer
+        
+        Args:
+            features_dir (str): Directory containing .npz feature files
+            labels_csv (str): CSV file with columns: file, gloss, cat, occluded, signer, duration
+            feature_key (str): Key to extract features from .npz files
+            augment (bool): Whether to apply temporal augmentation
+            augment_params (dict): Augmentation parameters
+            mode (str): Dataset mode - 'classification' or 'ctc'
+            signer_filter (str, optional): Filter dataset to only include samples from this signer
+            return_metadata (bool): Whether to return signer and duration in __getitem__
         """
         # Store dataset configuration
         self.features_dir = features_dir  # Directory containing .npz feature files
         self.feature_key = feature_key    # Key to extract features from .npz files
-        self.index = []                   # List of (stem, gloss, cat) tuples for indexing
+        self.index = []                   # List of (stem, gloss, cat, occluded, signer, duration) tuples for indexing
         self.augment = augment            # Whether to apply temporal augmentation
         self.training = True              # Training mode flag (set by DataLoader)
         self.mode = mode                  # Dataset mode: 'classification' or 'ctc'
+        self.signer_filter = signer_filter  # Optional signer filter
+        self.return_metadata = return_metadata  # Whether to return metadata in __getitem__
         
         # Validate mode parameter
         if mode not in ['classification', 'ctc']:
@@ -186,7 +201,7 @@ class FSLFeatureFileDataset(Dataset):
             reader = csv.DictReader(f)
             
             # Validate CSV structure - must have required columns
-            required = {'file', 'gloss', 'cat'}
+            required = {'file', 'gloss', 'cat', 'occluded', 'signer', 'duration'}
             if not required.issubset(set(reader.fieldnames or [])):
                 raise ValueError(f"labels_csv must have columns: {required}")
             
@@ -197,12 +212,19 @@ class FSLFeatureFileDataset(Dataset):
                     # This allows CSV to have filenames with or without .npz extension
                     stem = os.path.splitext(row['file'])[0]
                     
-                    # Convert labels to integers (class indices)
+                    # Convert labels to appropriate types
                     gloss = int(row['gloss'])  # Gloss class ID
                     cat = int(row['cat'])       # Category class ID
+                    occluded = int(row['occluded'])  # Occlusion flag
+                    signer = row['signer']      # Signer identifier
+                    duration = float(row['duration'])  # Duration in seconds
+                    
+                    # Apply signer filter if specified
+                    if signer_filter is not None and signer != signer_filter:
+                        continue
                     
                     # Add to index for later retrieval
-                    self.index.append((stem, gloss, cat))
+                    self.index.append((stem, gloss, cat, occluded, signer, duration))
                 except (ValueError, KeyError) as e:
                     raise ValueError(f"Invalid data in row {row}: {e}")
 
@@ -224,11 +246,11 @@ class FSLFeatureFileDataset(Dataset):
             idx (int): Index of the sample to retrieve
             
         Returns:
-            Classification mode: (features[T,2048] float32, gloss_label long, cat_label long, length long)
-            CTC mode: (features[T,2048] float32, gloss_seq[1] long, input_length long, target_length long, cat long)
+            Classification mode: (features[T,2048] float32, gloss_label long, cat_label long, length long) or with metadata
+            CTC mode: (features[T,2048] float32, gloss_seq[1] long, input_length long, target_length long, cat long) or with metadata
         """
         # Get filename stem and labels from the pre-built index
-        stem, gloss, cat = self.index[idx]
+        stem, gloss, cat, occluded, signer, duration = self.index[idx]
         
         # Construct full path to the .npz feature file
         path = os.path.join(self.features_dir, stem + '.npz')
@@ -249,21 +271,33 @@ class FSLFeatureFileDataset(Dataset):
             gloss_label_seq = torch.tensor([gloss], dtype=torch.long)
             target_length = torch.tensor([1], dtype=torch.long)
             
-            return (
+            base_return = (
                 data.float(),                                    # Features as float32 [T, 2048]
                 gloss_label_seq,                                 # Gloss sequence [1]
                 torch.tensor(input_length, dtype=torch.long),    # Input sequence length
                 target_length,                                   # Target sequence length [1]
                 torch.tensor(cat, dtype=torch.long)              # Category (kept for future use)
             )
+            
+            # Add metadata if requested
+            if self.return_metadata:
+                return base_return + (signer, duration)
+            else:
+                return base_return
         else:
             # Classification mode: original format
-            return (
+            base_return = (
                 data.float(),                                    # Features as float32
                 torch.tensor(gloss, dtype=torch.long),          # Gloss label as int64
                 torch.tensor(cat, dtype=torch.long),            # Category label as int64
                 torch.tensor(input_length, dtype=torch.long)    # Sequence length as int64
             )
+            
+            # Add metadata if requested
+            if self.return_metadata:
+                return base_return + (signer, duration)
+            else:
+                return base_return
 
     def _load_npz_features(self, path):
         """
@@ -316,7 +350,7 @@ class FSLKeypointFileDataset(Dataset):
     - Processed features [T, 2048]: Keypoints processed through feature extraction
     
     Data Flow:
-    1. Load CSV to build filename -> (gloss, category) mapping
+    1. Load CSV to build filename -> (gloss, category, occluded, signer, duration) mapping
     2. For each sample, load corresponding .npz file
     3. Extract keypoint array using specified key (default: 'X')
     4. Validate array dimensions based on key type
@@ -325,11 +359,13 @@ class FSLKeypointFileDataset(Dataset):
 
     Args:
         keypoints_dir (str): Directory containing .npz keypoint files
-        labels_csv (str): CSV file with columns: file, gloss, cat
+        labels_csv (str): CSV file with columns: file, gloss, cat, occluded, signer, duration
         kp_key (str): Key in .npz files containing keypoint data
         augment (bool): Enable temporal data augmentation
         augment_params (dict): Augmentation parameters (noise_std, mask_prob, etc.)
         mode (str): Dataset mode - 'classification' or 'ctc'
+        signer_filter (str, optional): Filter dataset to only include samples from this signer
+        return_metadata (bool): Whether to return signer and duration in __getitem__
 
     Returns:
         Classification mode: (keypoints[T,D] float32, gloss long, cat long, length long)
@@ -341,13 +377,15 @@ class FSLKeypointFileDataset(Dataset):
         FileNotFoundError: If keypoint file doesn't exist
         KeyError: If expected keypoint key not found in .npz file
     """
-    def __init__(self, keypoints_dir, labels_csv, kp_key='X', augment=False, augment_params=None, mode='classification'):
+    def __init__(self, keypoints_dir, labels_csv, kp_key='X', augment=False, augment_params=None, mode='classification', signer_filter=None, return_metadata=False):
         self.keypoints_dir = keypoints_dir
         self.kp_key = kp_key
-        self.index = []  # list of (stem, gloss, cat)
+        self.index = []  # list of (stem, gloss, cat, occluded, signer, duration)
         self.augment = augment
         self.training = True  # Will be set by DataLoader
         self.mode = mode
+        self.signer_filter = signer_filter  # Optional signer filter
+        self.return_metadata = return_metadata  # Whether to return metadata in __getitem__
         
         # Validate mode parameter
         if mode not in ['classification', 'ctc']:
@@ -363,7 +401,7 @@ class FSLKeypointFileDataset(Dataset):
 
         with open(labels_csv, newline='') as f:
             reader = csv.DictReader(f)
-            required = {'file', 'gloss', 'cat'}
+            required = {'file', 'gloss', 'cat', 'occluded', 'signer', 'duration'}
             if not required.issubset(set(reader.fieldnames or [])):
                 raise ValueError(f"labels_csv must have columns: {required}")
             for row in reader:
@@ -371,7 +409,15 @@ class FSLKeypointFileDataset(Dataset):
                     stem = os.path.splitext(row['file'])[0]
                     gloss = int(row['gloss'])
                     cat = int(row['cat'])
-                    self.index.append((stem, gloss, cat))
+                    occluded = int(row['occluded'])
+                    signer = row['signer']
+                    duration = float(row['duration'])
+                    
+                    # Apply signer filter if specified
+                    if signer_filter is not None and signer != signer_filter:
+                        continue
+                    
+                    self.index.append((stem, gloss, cat, occluded, signer, duration))
                 except (ValueError, KeyError) as e:
                     raise ValueError(f"Invalid data in row {row}: {e}")
 
@@ -379,7 +425,7 @@ class FSLKeypointFileDataset(Dataset):
         return len(self.index)
 
     def __getitem__(self, idx):
-        stem, gloss, cat = self.index[idx]
+        stem, gloss, cat, occluded, signer, duration = self.index[idx]
         path = os.path.join(self.keypoints_dir, stem + '.npz')
         if not os.path.exists(path):
             raise FileNotFoundError(f"Keypoint file not found: {path}")
@@ -395,21 +441,33 @@ class FSLKeypointFileDataset(Dataset):
             gloss_label_seq = torch.tensor([gloss], dtype=torch.long)
             target_length = torch.tensor([1], dtype=torch.long)
             
-            return (
+            base_return = (
                 data.float(),
                 gloss_label_seq,
                 torch.tensor(input_length, dtype=torch.long),
                 target_length,
                 torch.tensor(cat, dtype=torch.long)
             )
+            
+            # Add metadata if requested
+            if self.return_metadata:
+                return base_return + (signer, duration)
+            else:
+                return base_return
         else:
             # Classification mode: original format
-            return (
+            base_return = (
                 data.float(),
                 torch.tensor(gloss, dtype=torch.long),
                 torch.tensor(cat, dtype=torch.long),
                 torch.tensor(input_length, dtype=torch.long)
             )
+            
+            # Add metadata if requested
+            if self.return_metadata:
+                return base_return + (signer, duration)
+            else:
+                return base_return
 
     def _load_npz_keypoints(self, path):
         with np.load(path, allow_pickle=True) as npz:
@@ -439,7 +497,7 @@ class FSLCombinedFileDataset(Dataset):
     - Learned visual features (2048-dim): Rich InceptionV3 representations
     
     Data Flow:
-    1. Load CSV to build filename -> (gloss, category) mapping
+    1. Load CSV to build filename -> (gloss, category, occluded, signer, duration) mapping
     2. For each sample, load corresponding .npz file
     3. Extract both keypoint array (X) and feature array (X2048)
     4. Concatenate along feature dimension: [T, 156] + [T, 2048] = [T, 2204]
@@ -448,12 +506,14 @@ class FSLCombinedFileDataset(Dataset):
     
     Args:
         data_dir (str): Directory containing .npz files with both X and X2048 keys
-        labels_csv (str): CSV file with columns: file, gloss, cat
+        labels_csv (str): CSV file with columns: file, gloss, cat, occluded, signer, duration
         kp_key (str): Key for keypoints in .npz files (default: 'X')
         feature_key (str): Key for features in .npz files (default: 'X2048')
         augment (bool): Enable temporal data augmentation
         augment_params (dict): Augmentation parameters (noise_std, mask_prob, etc.)
         mode (str): Dataset mode - 'classification' or 'ctc'
+        signer_filter (str, optional): Filter dataset to only include samples from this signer
+        return_metadata (bool): Whether to return signer and duration in __getitem__
     
     Returns:
         Classification mode: (combined[T,2204] float32, gloss long, cat long, length long)
@@ -464,14 +524,16 @@ class FSLCombinedFileDataset(Dataset):
         FileNotFoundError: If data file doesn't exist
         KeyError: If expected keys not found in .npz file
     """
-    def __init__(self, data_dir, labels_csv, kp_key='X', feature_key='X2048', augment=False, augment_params=None, mode='classification'):
+    def __init__(self, data_dir, labels_csv, kp_key='X', feature_key='X2048', augment=False, augment_params=None, mode='classification', signer_filter=None, return_metadata=False):
         self.data_dir = data_dir
         self.kp_key = kp_key
         self.feature_key = feature_key
-        self.index = []  # list of (stem, gloss, cat)
+        self.index = []  # list of (stem, gloss, cat, occluded, signer, duration)
         self.augment = augment
         self.training = True  # Will be set by DataLoader
         self.mode = mode
+        self.signer_filter = signer_filter  # Optional signer filter
+        self.return_metadata = return_metadata  # Whether to return metadata in __getitem__
         
         # Validate mode parameter
         if mode not in ['classification', 'ctc']:
@@ -489,7 +551,7 @@ class FSLCombinedFileDataset(Dataset):
         # Load and parse the labels CSV file
         with open(labels_csv, newline='') as f:
             reader = csv.DictReader(f)
-            required = {'file', 'gloss', 'cat'}
+            required = {'file', 'gloss', 'cat', 'occluded', 'signer', 'duration'}
             if not required.issubset(set(reader.fieldnames or [])):
                 raise ValueError(f"labels_csv must have columns: {required}")
             for row in reader:
@@ -497,7 +559,15 @@ class FSLCombinedFileDataset(Dataset):
                     stem = os.path.splitext(row['file'])[0]
                     gloss = int(row['gloss'])
                     cat = int(row['cat'])
-                    self.index.append((stem, gloss, cat))
+                    occluded = int(row['occluded'])
+                    signer = row['signer']
+                    duration = float(row['duration'])
+                    
+                    # Apply signer filter if specified
+                    if signer_filter is not None and signer != signer_filter:
+                        continue
+                    
+                    self.index.append((stem, gloss, cat, occluded, signer, duration))
                 except (ValueError, KeyError) as e:
                     raise ValueError(f"Invalid data in row {row}: {e}")
     
@@ -505,7 +575,7 @@ class FSLCombinedFileDataset(Dataset):
         return len(self.index)
     
     def __getitem__(self, idx):
-        stem, gloss, cat = self.index[idx]
+        stem, gloss, cat, occluded, signer, duration = self.index[idx]
         path = os.path.join(self.data_dir, stem + '.npz')
         if not os.path.exists(path):
             raise FileNotFoundError(f"Data file not found: {path}")
@@ -527,21 +597,33 @@ class FSLCombinedFileDataset(Dataset):
             gloss_label_seq = torch.tensor([gloss], dtype=torch.long)
             target_length = torch.tensor([1], dtype=torch.long)
             
-            return (
+            base_return = (
                 combined.float(),
                 gloss_label_seq,
                 torch.tensor(input_length, dtype=torch.long),
                 target_length,
                 torch.tensor(cat, dtype=torch.long)
             )
+            
+            # Add metadata if requested
+            if self.return_metadata:
+                return base_return + (signer, duration)
+            else:
+                return base_return
         else:
             # Classification mode: original format
-            return (
+            base_return = (
                 combined.float(),
                 torch.tensor(gloss, dtype=torch.long),
                 torch.tensor(cat, dtype=torch.long),
                 torch.tensor(input_length, dtype=torch.long)
             )
+            
+            # Add metadata if requested
+            if self.return_metadata:
+                return base_return + (signer, duration)
+            else:
+                return base_return
     
     def _load_combined_data(self, path):
         """Load and validate both keypoints and features from .npz file."""
@@ -639,6 +721,88 @@ def collate_keypoints_with_padding(batch):
         X_pad[i, :t] = seq
     return X_pad, torch.stack(gloss, dim=0), torch.stack(cat, dim=0), lengths
 
+def collate_features_with_metadata(batch):
+    """
+    Collate function for feature sequences with optional metadata.
+    
+    This function handles both standard format and metadata-enhanced format:
+    - Standard: (features[T,2048], gloss, cat, length)
+    - With metadata: (features[T,2048], gloss, cat, length, signer, duration)
+    
+    Args:
+        batch: List of tuples from dataset with optional metadata
+        
+    Returns:
+        tuple: Standard format + optional metadata lists
+    """
+    # Check if metadata is present by looking at tuple length
+    if len(batch[0]) == 6:  # With metadata
+        sequences, gloss, cat, lengths, signers, durations = zip(*batch)
+        
+        # Convert lengths to tensor and find maximum sequence length in batch
+        lengths = torch.stack(lengths, dim=0)
+        B = len(sequences)
+        Tmax = int(max(l.item() for l in lengths))
+        D = sequences[0].shape[-1]
+        
+        # Create padded tensor
+        X_pad = torch.zeros((B, Tmax, D), dtype=sequences[0].dtype)
+        for i, seq in enumerate(sequences):
+            t = seq.shape[0]
+            X_pad[i, :t] = seq
+        
+        return (
+            X_pad,                           # Padded features [B, Tmax, D]
+            torch.stack(gloss, dim=0),       # Gloss labels [B]
+            torch.stack(cat, dim=0),         # Category labels [B]
+            lengths,                         # Original lengths [B]
+            list(signers),                   # Signer identifiers [B]
+            list(durations)                  # Duration values [B]
+        )
+    else:  # Standard format without metadata
+        return collate_features_with_padding(batch)
+
+def collate_keypoints_with_metadata(batch):
+    """
+    Collate function for keypoint sequences with optional metadata.
+    
+    This function handles both standard format and metadata-enhanced format:
+    - Standard: (keypoints[T,D], gloss, cat, length)
+    - With metadata: (keypoints[T,D], gloss, cat, length, signer, duration)
+    
+    Args:
+        batch: List of tuples from dataset with optional metadata
+        
+    Returns:
+        tuple: Standard format + optional metadata lists
+    """
+    # Check if metadata is present by looking at tuple length
+    if len(batch[0]) == 6:  # With metadata
+        sequences, gloss, cat, lengths, signers, durations = zip(*batch)
+        
+        # Convert lengths to tensor and find maximum sequence length in batch
+        lengths = torch.stack(lengths, dim=0)
+        B = len(sequences)
+        Tmax = int(max(l.item() for l in lengths))
+        D = sequences[0].shape[-1]
+        
+        # Create padded tensor
+        X_pad = torch.zeros((B, Tmax, D), dtype=sequences[0].dtype)
+        for i, seq in enumerate(sequences):
+            t = seq.shape[0]
+            X_pad[i, :t] = seq
+        
+        return (
+            X_pad,                           # Padded keypoints [B, Tmax, D]
+            torch.stack(gloss, dim=0),       # Gloss labels [B]
+            torch.stack(cat, dim=0),         # Category labels [B]
+            lengths,                         # Original lengths [B]
+            list(signers),                   # Signer identifiers [B]
+            list(durations)                  # Duration values [B]
+        )
+    else:  # Standard format without metadata
+        return collate_keypoints_with_padding(batch)
+
 def collate_for_ctc(batch):
     """
     Collate function for CTC training with variable-length sequences.
@@ -656,7 +820,7 @@ def collate_for_ctc(batch):
     
     Args:
         batch: List of tuples from CTC-mode dataset, each containing:
-               (data[T,D], gloss_seq[1], input_length, target_length[1], cat)
+               (data[T,D], gloss_seq[1], input_length, target_length[1], cat) or with metadata
                
     Returns:
         tuple: (X_pad, targets, input_lengths, target_lengths, cats) where:
