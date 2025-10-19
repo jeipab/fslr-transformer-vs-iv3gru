@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Simple runner script for Vast.ai deployment
+Comprehensive Vast.ai runner script with debugging
 """
 
 import subprocess
@@ -9,7 +9,7 @@ from pathlib import Path
 
 def main():
     print("=" * 60)
-    print("VIDEO COLOR CORRECTION - VAST.AI DEPLOYMENT")
+    print("VAST.AI VIDEO COLOR CORRECTION - COMPREHENSIVE PACKAGE")
     print("=" * 60)
     
     # Check if input folder exists
@@ -27,14 +27,26 @@ def main():
     print(f"Output folder: {output_folder}")
     print("=" * 60)
     
-    # Run color correction
+    # Step 1: Run debug script
+    print("Step 1: Running environment debug...")
+    try:
+        result = subprocess.run([sys.executable, "vast_ai_debug.py"], check=True)
+        print("✅ Debug completed successfully!")
+    except subprocess.CalledProcessError as e:
+        print(f"⚠ Debug script had issues: {e}")
+        print("Continuing anyway...")
+    
+    print("=" * 60)
+    
+    # Step 2: Run color correction with conservative settings
+    print("Step 2: Running color correction...")
     cmd = [
-        sys.executable, "color_correction.py",
+        sys.executable, "color_correction_vast_ai.py",
         "-i", str(input_folder),
         "-o", str(output_folder),
         "--strength", "0.5",
         "--no-cuda",
-        "--batch-size", "128"  # Very aggressive batch size - requires high RAM
+        "--batch-size", "128"  # High performance batch size
     ]
     
     print(f"Running: {' '.join(cmd)}")
@@ -53,9 +65,17 @@ def main():
             for file in output_files:
                 size_mb = file.stat().st_size / (1024 * 1024)
                 print(f"  - {file.name} ({size_mb:.1f} MB)")
+        else:
+            print("\n⚠ No output files found!")
+            print("This might indicate the videos are still black.")
+            print("Check the debug output above for clues.")
         
     except subprocess.CalledProcessError as e:
         print(f"❌ Error running color correction: {e}")
+        print("\nTroubleshooting steps:")
+        print("1. Check the debug output above")
+        print("2. Try reducing batch size: --batch-size 1")
+        print("3. Try different correction strength: --strength 0.3")
         sys.exit(1)
 
 if __name__ == "__main__":
