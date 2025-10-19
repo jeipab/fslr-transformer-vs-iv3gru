@@ -27,6 +27,7 @@ data/*
 !data/labels/
 !data/splitting/
 !data/splitting/**
+!data/color_correction.py
 
 # Exclude pycache in allowed data directories
 data/labels/__pycache__/
