@@ -152,6 +152,8 @@ def main():
     if args.signer != 'all' and 'signer' in df.columns:
         df = df[df['signer'] == args.signer]
         print(f"Filtered results for signer: {args.signer}")
+    elif args.signer != 'all' and 'signer' not in df.columns:
+        print(f"Warning: 'signer' column not found in data, ignoring signer filter")
 
     if df.empty:
         print("No data available after filtering. Exiting.")
