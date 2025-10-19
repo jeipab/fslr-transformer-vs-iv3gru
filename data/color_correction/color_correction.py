@@ -87,8 +87,8 @@ class VideoColorCorrector:
             self.device = torch.device('cpu')
             logger.info("Using CPU for processing")
             
-        # Initialize video codec parameters
-        self.fourcc = cv2.VideoWriter_fourcc(*'mp4v')
+        # Initialize video codec parameters - use H264 for better compatibility
+        self.fourcc = cv2.VideoWriter_fourcc(*'H264')
         
         logger.info(f"Initialized VideoColorCorrector: "
                    f"CUDA: {self.use_cuda}, Batch size: {batch_size}, "
@@ -327,16 +327,21 @@ class VideoColorCorrector:
         g_mean = frame_tensor[:, 1:2].mean()
         b_mean = frame_tensor[:, 2:3].mean()
         
-        # Calculate white balance gains
+        # Calculate white balance gains (more conservative)
         gray_value = (r_mean + g_mean + b_mean) / 3.0
         r_gain = gray_value / (r_mean + 1e-8)
         g_gain = gray_value / (g_mean + 1e-8)
         b_gain = gray_value / (b_mean + 1e-8)
         
-        # Apply gains with correction strength
-        r_corrected = frame_tensor[:, 0:1] * (1.0 + self.correction_strength * (r_gain - 1.0))
-        g_corrected = frame_tensor[:, 1:2] * (1.0 + self.correction_strength * (g_gain - 1.0))
-        b_corrected = frame_tensor[:, 2:3] * (1.0 + self.correction_strength * (b_gain - 1.0))
+        # Limit gains to prevent extreme values
+        r_gain = torch.clamp(r_gain, 0.5, 2.0)
+        g_gain = torch.clamp(g_gain, 0.5, 2.0)
+        b_gain = torch.clamp(b_gain, 0.5, 2.0)
+        
+        # Apply gains with correction strength (more conservative)
+        r_corrected = frame_tensor[:, 0:1] * (1.0 + self.correction_strength * 0.3 * (r_gain - 1.0))
+        g_corrected = frame_tensor[:, 1:2] * (1.0 + self.correction_strength * 0.3 * (g_gain - 1.0))
+        b_corrected = frame_tensor[:, 2:3] * (1.0 + self.correction_strength * 0.3 * (b_gain - 1.0))
         
         # Combine channels
         corrected_frame = torch.cat([r_corrected, g_corrected, b_corrected], dim=1)
@@ -370,16 +375,20 @@ class VideoColorCorrector:
                 logger.error(f"Cannot open input video: {video_path}")
                 return False
             
-            # Setup output video writer
-            out = cv2.VideoWriter(
-                str(output_path), 
-                self.fourcc, 
-                fps, 
-                (width, height)
-            )
+            # Setup output video writer with fallback codecs
+            codecs_to_try = [cv2.VideoWriter_fourcc(*'H264'), cv2.VideoWriter_fourcc(*'mp4v'), cv2.VideoWriter_fourcc(*'XVID')]
+            out = None
             
-            if not out.isOpened():
-                logger.error(f"Cannot create output video: {output_path}")
+            for codec in codecs_to_try:
+                out = cv2.VideoWriter(str(output_path), codec, fps, (width, height))
+                if out.isOpened():
+                    logger.info(f"Using codec: {codec}")
+                    break
+                else:
+                    out.release()
+            
+            if not out or not out.isOpened():
+                logger.error(f"Cannot create output video with any codec: {output_path}")
                 cap.release()
                 return False
             
@@ -422,17 +431,23 @@ class VideoColorCorrector:
                             lab = cv2.cvtColor(frame, cv2.COLOR_BGR2LAB)
                             l, a, b = cv2.split(lab)
                             
-                            # Apply color correction
+                            # Apply color correction (more conservative)
                             # Reduce yellow tint by adjusting a and b channels
-                            a = cv2.add(a, -10)  # Reduce green-magenta
-                            b = cv2.add(b, -15)  # Reduce yellow-blue
+                            a = cv2.add(a, -5)  # Reduce green-magenta (less aggressive)
+                            b = cv2.add(b, -8)  # Reduce yellow-blue (less aggressive)
                             
-                            # Enhance contrast
-                            l = cv2.convertScaleAbs(l, alpha=1.1, beta=5)
+                            # Enhance contrast (more conservative)
+                            l = cv2.convertScaleAbs(l, alpha=1.05, beta=2)
                             
                             # Merge channels and convert back to BGR
                             lab_corrected = cv2.merge([l, a, b])
                             corrected_frame_bgr = cv2.cvtColor(lab_corrected, cv2.COLOR_LAB2BGR)
+                            
+                            # Additional simple color temperature adjustment
+                            # Reduce yellow tint by adjusting blue channel
+                            corrected_frame_bgr[:, :, 0] = cv2.add(corrected_frame_bgr[:, :, 0], 5)  # Increase blue
+                            corrected_frame_bgr[:, :, 1] = cv2.add(corrected_frame_bgr[:, :, 1], -3)  # Slightly reduce green
+                            corrected_frame_bgr[:, :, 2] = cv2.add(corrected_frame_bgr[:, :, 2], -5)  # Slightly reduce red
                         
                         out.write(corrected_frame_bgr)
                         processed_frames += 1
