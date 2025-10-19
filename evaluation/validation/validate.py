@@ -46,26 +46,32 @@ class ValidationDataset:
     and providing data in the format expected by the models.
     """
     
-    def __init__(self, data_dir: str, labels_csv: str, model_type: str, model=None):
+    def __init__(self, data_dir: str, labels_csv: str, model_type: str, model=None, 
+                 signer_filter: List[str] = None, category_filter: List[int] = None):
         """
         Initialize validation dataset by loading labels and filtering valid NPZ files.
         
         Steps:
         1. Load labels CSV with multiple encoding fallbacks
         2. Clean file names (remove .npz extension)
-        3. Filter to only include files that actually exist
-        4. Store metadata for each valid sample
+        3. Apply signer and category filters if specified
+        4. Filter to only include files that actually exist
+        5. Store metadata for each valid sample
         
         Args:
             data_dir: Directory containing NPZ files
             labels_csv: Path to labels CSV file
             model_type: 'transformer' or 'iv3_gru' (determines data format)
             model: Model instance (needed to check expected input dimensions)
+            signer_filter: List of signer IDs to include (None for all)
+            category_filter: List of category IDs to include (None for all)
         """
         self.data_dir = Path(data_dir)
         self.labels_csv = labels_csv
         self.model_type = model_type
         self.model = model
+        self.signer_filter = signer_filter
+        self.category_filter = category_filter
         
         # Step 1: Load labels CSV with encoding fallbacks
         # Try UTF-8 first, then fallback encodings for compatibility
@@ -80,7 +86,16 @@ class ValidationDataset:
         # Step 2: Clean file names (remove .npz extension if present)
         self.labels_df['file'] = self.labels_df['file'].str.replace('.npz', '')
         
-        # Step 3: Filter to only include files that actually exist
+        # Step 3: Apply filters if specified
+        if signer_filter is not None:
+            self.labels_df = self.labels_df[self.labels_df['signer'].isin(signer_filter)]
+            print(f"Filtered to signers: {signer_filter}")
+        
+        if category_filter is not None:
+            self.labels_df = self.labels_df[self.labels_df['cat'].isin(category_filter)]
+            print(f"Filtered to categories: {category_filter}")
+        
+        # Step 4: Filter to only include files that actually exist
         self.valid_files = []
         for _, row in self.labels_df.iterrows():
             npz_path = self.data_dir / f"{row['file']}.npz"
@@ -91,6 +106,8 @@ class ValidationDataset:
                     'gloss': int(row['gloss']),    # Ground truth gloss label
                     'cat': int(row['cat']),        # Ground truth category label
                     'occluded': int(row['occluded']),  # Occlusion flag (0/1)
+                    'signer': str(row['signer']),  # Signer ID
+                    'duration': float(row['duration']),  # Duration in seconds
                     'npz_path': str(npz_path)      # Full path to NPZ file
                 })
         
@@ -160,14 +177,14 @@ class ValidationDataset:
             if X.shape[0] > 300:
                 X = X[:300, :]
             
-            return X, sample['gloss'], sample['cat'], sample['occluded'], sample['file']
+            return X, sample['gloss'], sample['cat'], sample['occluded'], sample['file'], sample['signer'], sample['duration']
         
         elif self.model_type == 'iv3_gru':
             # Step 2: Extract features for IV3-GRU model (requires InceptionV3 features)
             if 'X2048' not in data:
                 raise ValueError(f"NPZ file {sample['npz_path']} missing 'X2048' key for IV3-GRU")
             X = torch.from_numpy(data['X2048']).float()
-            return X, sample['gloss'], sample['cat'], sample['occluded'], sample['file']
+            return X, sample['gloss'], sample['cat'], sample['occluded'], sample['file'], sample['signer'], sample['duration']
         
         else:
             raise ValueError(f"Unknown model type: {self.model_type}")
@@ -430,6 +447,8 @@ class ModelValidator:
         all_ground_truth = []     # Ground truth labels
         all_occlusions = []       # Occlusion flags
         all_files = []            # File names
+        all_signers = []          # Signer IDs
+        all_durations = []        # Duration values
         all_gloss_probs = []      # All gloss probabilities for top-k accuracy
         all_cat_probs = []        # All category probabilities for top-k accuracy
         
@@ -447,14 +466,18 @@ class ModelValidator:
                 batch_cat = []       # Ground truth category labels
                 batch_occluded = []  # Occlusion flags
                 batch_files = []     # File names
+                batch_signers = []   # Signer IDs
+                batch_durations = [] # Duration values
                 
                 for i in range(start_idx, end_idx):
-                    X, gloss, cat, occluded, file = dataset[i]
+                    X, gloss, cat, occluded, file, signer, duration = dataset[i]
                     batch_data.append(X)
                     batch_gloss.append(gloss)
                     batch_cat.append(cat)
                     batch_occluded.append(occluded)
                     batch_files.append(file)
+                    batch_signers.append(signer)
+                    batch_durations.append(duration)
                 
                 # Step 4: Make predictions on batch
                 gloss_logits, cat_logits = self.predict_batch(batch_data)
@@ -476,6 +499,8 @@ class ModelValidator:
                         'gloss_gt': batch_gloss[i],                # Ground truth gloss class
                         'cat_gt': batch_cat[i],                    # Ground truth category class
                         'occluded': batch_occluded[i],             # Occlusion flag
+                        'signer': batch_signers[i],                # Signer ID
+                        'duration': batch_durations[i],            # Duration in seconds
                         'gloss_prob': float(gloss_probs[i][gloss_preds[i]]),  # Prediction confidence
                         'cat_prob': float(cat_probs[i][cat_preds[i]]),        # Prediction confidence
                         'gloss_top10': [(int(j), float(gloss_probs[i][j]))    # Top 10 gloss predictions
@@ -492,6 +517,8 @@ class ModelValidator:
                 all_ground_truth.extend(list(zip(batch_gloss, batch_cat)))
                 all_occlusions.extend(batch_occluded)
                 all_files.extend(batch_files)
+                all_signers.extend(batch_signers)
+                all_durations.extend(batch_durations)
                 
                 pbar.update(end_idx - start_idx)
         
@@ -508,7 +535,8 @@ class ModelValidator:
         results = self._compute_metrics(
             gloss_preds, cat_preds, gloss_gts, cat_gts, 
             occlusions, gloss_probs, cat_probs,
-            all_predictions, save_predictions, output_dir
+            all_predictions, all_signers, all_durations,
+            save_predictions, output_dir
         )
         
         return results
@@ -516,7 +544,7 @@ class ModelValidator:
     def _compute_metrics(self, gloss_preds: np.ndarray, cat_preds: np.ndarray,
                         gloss_gts: np.ndarray, cat_gts: np.ndarray,
                         occlusions: np.ndarray, gloss_probs: np.ndarray, cat_probs: np.ndarray,
-                        all_predictions: List[Dict],
+                        all_predictions: List[Dict], all_signers: List[str], all_durations: List[float],
                         save_predictions: bool, output_dir: str) -> Dict[str, Any]:
         """Compute comprehensive evaluation metrics."""
         
@@ -554,7 +582,16 @@ class ModelValidator:
         # Per-class metrics
         per_class_results = self._compute_per_class_metrics(gloss_preds, cat_preds, gloss_gts, cat_gts)
         
-        # Confusion matrices
+        # Per-signer metrics
+        per_signer_results = self._compute_per_signer_metrics(gloss_preds, cat_preds, gloss_gts, cat_gts, all_signers)
+        
+        # Per-category metrics
+        per_category_results = self._compute_per_category_metrics(gloss_preds, cat_preds, gloss_gts, cat_gts)
+        
+        # Duration analysis
+        duration_analysis = self._compute_duration_analysis(all_durations, gloss_preds, cat_preds, gloss_gts, cat_gts)
+        
+        # Confusion matrices with proper TP, FP, TN, FN calculations
         confusion_matrices = self._compute_confusion_matrices(gloss_preds, cat_preds, gloss_gts, cat_gts)
         
         # Save individual predictions if requested
@@ -572,12 +609,23 @@ class ModelValidator:
             'dataset_info': {
                 'total_samples': len(gloss_preds),
                 'occluded_samples': int(np.sum(occluded_mask)),
-                'non_occluded_samples': int(np.sum(non_occluded_mask))
+                'non_occluded_samples': int(np.sum(non_occluded_mask)),
+                'unique_signers': len(set(all_signers)),
+                'signers': list(set(all_signers)),
+                'duration_stats': {
+                    'mean': float(np.mean(all_durations)),
+                    'std': float(np.std(all_durations)),
+                    'min': float(np.min(all_durations)),
+                    'max': float(np.max(all_durations))
+                }
             },
             'overall_results': overall_results,
             'occluded_results': occluded_results,
             'non_occluded_results': non_occluded_results,
             'per_class_results': per_class_results,
+            'per_signer_results': per_signer_results,
+            'per_category_results': per_category_results,
+            'duration_analysis': duration_analysis,
             'confusion_matrices': confusion_matrices,
             'detailed_predictions': all_predictions
         }
@@ -705,14 +753,141 @@ class ModelValidator:
     
     def _compute_confusion_matrices(self, gloss_preds: np.ndarray, cat_preds: np.ndarray,
                                   gloss_gts: np.ndarray, cat_gts: np.ndarray) -> Dict[str, Any]:
-        """Compute confusion matrices."""
+        """Compute confusion matrices with proper TP, FP, TN, FN calculations."""
         gloss_cm = confusion_matrix(gloss_gts, gloss_preds)
         cat_cm = confusion_matrix(cat_gts, cat_preds)
         
+        # Calculate TP, FP, TN, FN for each class
+        def calculate_class_metrics(cm):
+            metrics = {}
+            for i in range(cm.shape[0]):
+                tp = cm[i, i]
+                fp = cm[:, i].sum() - tp
+                fn = cm[i, :].sum() - tp
+                tn = cm.sum() - (tp + fp + fn)
+                
+                precision = tp / (tp + fp) if (tp + fp) > 0 else 0
+                recall = tp / (tp + fn) if (tp + fn) > 0 else 0
+                f1 = 2 * (precision * recall) / (precision + recall) if (precision + recall) > 0 else 0
+                
+                metrics[i] = {
+                    'TP': int(tp), 'FP': int(fp), 'TN': int(tn), 'FN': int(fn),
+                    'Precision': float(precision), 'Recall': float(recall), 'F1': float(f1)
+                }
+            return metrics
+        
         return {
             'gloss_confusion_matrix': gloss_cm.tolist(),
-            'category_confusion_matrix': cat_cm.tolist()
+            'category_confusion_matrix': cat_cm.tolist(),
+            'gloss_class_metrics': calculate_class_metrics(gloss_cm),
+            'category_class_metrics': calculate_class_metrics(cat_cm)
         }
+    
+    def _compute_per_signer_metrics(self, gloss_preds: np.ndarray, cat_preds: np.ndarray,
+                                   gloss_gts: np.ndarray, cat_gts: np.ndarray, 
+                                   all_signers: List[str]) -> Dict[str, Any]:
+        """Compute per-signer accuracy metrics."""
+        unique_signers = list(set(all_signers))
+        per_signer_results = {}
+        
+        for signer in unique_signers:
+            signer_mask = np.array([s == signer for s in all_signers])
+            if np.sum(signer_mask) == 0:
+                continue
+                
+            signer_gloss_preds = gloss_preds[signer_mask]
+            signer_cat_preds = cat_preds[signer_mask]
+            signer_gloss_gts = gloss_gts[signer_mask]
+            signer_cat_gts = cat_gts[signer_mask]
+            
+            # Compute metrics for this signer
+            signer_metrics = self._compute_overall_metrics(
+                signer_gloss_preds, signer_cat_preds, signer_gloss_gts, signer_cat_gts
+            )
+            signer_metrics['num_samples'] = int(np.sum(signer_mask))
+            
+            per_signer_results[signer] = signer_metrics
+        
+        return per_signer_results
+    
+    def _compute_per_category_metrics(self, gloss_preds: np.ndarray, cat_preds: np.ndarray,
+                                    gloss_gts: np.ndarray, cat_gts: np.ndarray) -> Dict[str, Any]:
+        """Compute per-category accuracy metrics."""
+        unique_categories = list(set(cat_gts))
+        per_category_results = {}
+        
+        for category in unique_categories:
+            cat_mask = cat_gts == category
+            if np.sum(cat_mask) == 0:
+                continue
+                
+            cat_gloss_preds = gloss_preds[cat_mask]
+            cat_gloss_gts = gloss_gts[cat_mask]
+            
+            # Compute gloss accuracy for this category
+            cat_gloss_acc = accuracy_score(cat_gloss_gts, cat_gloss_preds)
+            
+            # Get category name from mapping
+            cat_name = self.category_mapping.get(category, f'Category_{category}')
+            
+            per_category_results[category] = {
+                'category_name': cat_name,
+                'gloss_accuracy': float(cat_gloss_acc),
+                'num_samples': int(np.sum(cat_mask))
+            }
+        
+        return per_category_results
+    
+    def _compute_duration_analysis(self, all_durations: List[float], gloss_preds: np.ndarray, 
+                                 cat_preds: np.ndarray, gloss_gts: np.ndarray, 
+                                 cat_gts: np.ndarray) -> Dict[str, Any]:
+        """Compute duration-based analysis."""
+        durations = np.array(all_durations)
+        
+        # Duration bins for analysis
+        duration_bins = [0, 1, 2, 3, 5, 10, float('inf')]
+        bin_labels = ['0-1s', '1-2s', '2-3s', '3-5s', '5-10s', '10s+']
+        
+        duration_analysis = {
+            'overall_stats': {
+                'mean': float(np.mean(durations)),
+                'std': float(np.std(durations)),
+                'min': float(np.min(durations)),
+                'max': float(np.max(durations)),
+                'median': float(np.median(durations))
+            },
+            'bin_analysis': {}
+        }
+        
+        # Analyze performance by duration bins
+        for i in range(len(duration_bins) - 1):
+            bin_min = duration_bins[i]
+            bin_max = duration_bins[i + 1]
+            
+            if bin_max == float('inf'):
+                bin_mask = durations >= bin_min
+            else:
+                bin_mask = (durations >= bin_min) & (durations < bin_max)
+            
+            if np.sum(bin_mask) == 0:
+                continue
+                
+            bin_gloss_preds = gloss_preds[bin_mask]
+            bin_cat_preds = cat_preds[bin_mask]
+            bin_gloss_gts = gloss_gts[bin_mask]
+            bin_cat_gts = cat_gts[bin_mask]
+            
+            bin_metrics = self._compute_overall_metrics(
+                bin_gloss_preds, bin_cat_preds, bin_gloss_gts, bin_cat_gts
+            )
+            
+            duration_analysis['bin_analysis'][bin_labels[i]] = {
+                'duration_range': f"{bin_min}-{bin_max}s" if bin_max != float('inf') else f"{bin_min}s+",
+                'num_samples': int(np.sum(bin_mask)),
+                'metrics': bin_metrics
+            }
+        
+        return duration_analysis
     
     def _save_individual_predictions(self, predictions: List[Dict], output_dir: str):
         """Save individual predictions to JSON files."""
@@ -723,6 +898,8 @@ class ModelValidator:
             # Format prediction results
             formatted_pred = {
                 'file': pred['file'],
+                'signer': pred['signer'],
+                'duration': pred['duration'],
                 'ground_truth': {
                     'gloss': f"{self.gloss_mapping.get(pred['gloss_gt'], 'Unknown')} ({pred['gloss_gt']})",
                     'category': f"{self.category_mapping.get(pred['cat_gt'], 'Unknown')} ({pred['cat_gt']})",
@@ -791,6 +968,26 @@ class ModelValidator:
         print(f"  Occluded Category Accuracy: {occluded['category_accuracy']:.4f}")
         print(f"  Non-Occluded Category Accuracy: {non_occluded['category_accuracy']:.4f}")
         print(f"  Category Accuracy Difference: {non_occluded['category_accuracy'] - occluded['category_accuracy']:+.4f}")
+        
+        # Per-signer results
+        per_signer = results['per_signer_results']
+        print(f"\nPER-SIGNER PERFORMANCE:")
+        for signer, metrics in per_signer.items():
+            print(f"  Signer {signer}: Gloss Acc={metrics['gloss_accuracy']:.4f}, "
+                  f"Cat Acc={metrics['category_accuracy']:.4f} ({metrics['num_samples']} samples)")
+        
+        # Duration analysis
+        duration_stats = results['dataset_info']['duration_stats']
+        print(f"\nDURATION ANALYSIS:")
+        print(f"  Mean Duration: {duration_stats['mean']:.2f}s")
+        print(f"  Duration Range: {duration_stats['min']:.2f}s - {duration_stats['max']:.2f}s")
+        
+        # Per-category results
+        per_category = results['per_category_results']
+        print(f"\nPER-CATEGORY PERFORMANCE:")
+        for cat_id, metrics in per_category.items():
+            print(f"  {metrics['category_name']}: Gloss Acc={metrics['gloss_accuracy']:.4f} "
+                  f"({metrics['num_samples']} samples)")
 
 
 def save_results(results: Dict[str, Any], output_dir: str):
@@ -804,6 +1001,9 @@ def save_results(results: Dict[str, Any], output_dir: str):
         ('occluded_results.json', results['occluded_results']),
         ('non_occluded_results.json', results['non_occluded_results']),
         ('per_class_results.json', results['per_class_results']),
+        ('per_signer_results.json', results['per_signer_results']),
+        ('per_category_results.json', results['per_category_results']),
+        ('duration_analysis.json', results['duration_analysis']),
         ('confusion_matrices.json', results['confusion_matrices'])
     ]
     
@@ -853,6 +1053,10 @@ def main():
                        help='Save individual predictions to JSON files')
     parser.add_argument('--verbose', action='store_true',
                        help='Enable detailed output')
+    parser.add_argument('--signer-filter', type=str, nargs='+', default=None,
+                       help='Filter by specific signer(s) (e.g., --signer-filter S1 S2)')
+    parser.add_argument('--category-filter', type=int, nargs='+', default=None,
+                       help='Filter by specific category(ies) (e.g., --category-filter 0 1 2)')
     
     args = parser.parse_args()
     
@@ -861,7 +1065,8 @@ def main():
         validator = ModelValidator(args.model, args.checkpoint, args.device)
         
         # Load dataset
-        dataset = ValidationDataset(args.data_dir, args.labels_csv, args.model, validator.model)
+        dataset = ValidationDataset(args.data_dir, args.labels_csv, args.model, validator.model,
+                                  signer_filter=args.signer_filter, category_filter=args.category_filter)
         
         # Perform validation
         results = validator.validate(
