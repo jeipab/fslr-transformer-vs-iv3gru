@@ -41,7 +41,7 @@ from ..extractors.keypoints_features import (
     smooth_keypoints_ema, # Apply EMA smoothing for temporal consistency (v2.0)
     validate_and_clean_keypoints,  # Remove outlier keypoints (v2.0)
     POSE_UPPER_25,        # Upper body pose keypoint indices (25 points)
-    FACEMESH_11,          # Face mesh keypoint indices (11 key facial points)
+    FACE_MINIMAL_22,      # Face mesh keypoint indices (22 key facial points)
     create_models,        # Initialize MediaPipe models
     close_models,         # Clean up MediaPipe models
 )
@@ -237,9 +237,9 @@ def to_npz(out_path, X, X2048, mask, timestamps_ms, meta, also_parquet=True):
     
     Args:
         out_path: Base path for output files (without extension)
-        X: Keypoint coordinates [T, 156] as float32 - flattened x,y coords for 78 keypoints
+        X: Keypoint coordinates [T, 178] as float32 - flattened x,y coords for 89 keypoints
         X2048: InceptionV3 features [T, 2048] as float32 - CNN feature vectors
-        mask: Keypoint visibility mask [T, 78] as bool - True if keypoint is visible/confident
+        mask: Keypoint visibility mask [T, 89] as bool - True if keypoint is visible/confident
         timestamps_ms: Frame timestamps [T] as int64 - milliseconds from video start
         meta: Metadata dictionary (converted to JSON string) - processing parameters
         also_parquet: If True, also create .parquet file for inspection in spreadsheet tools
@@ -326,7 +326,7 @@ def process_video(video_path, out_dir, label_file=None, target_fps=30, out_size=
         out_size: Image resize dimension for keypoint extraction (256x256)
         conf_thresh: Confidence threshold for keypoint detection (0.0-1.0)
         max_gap: Maximum gap size for keypoint interpolation (frames)
-        write_keypoints: Extract MediaPipe keypoints (156D vectors per frame)
+        write_keypoints: Extract MediaPipe keypoints (178D vectors per frame)
         write_iv3_features: Extract InceptionV3 features (2048D vectors per frame)
         feature_key: Unused parameter (kept for compatibility)
         gloss: Sign language gloss class ID for labeling
@@ -366,8 +366,8 @@ def process_video(video_path, out_dir, label_file=None, target_fps=30, out_size=
         models = create_models(seg_model=1, detection_conf=conf_thresh, tracking_conf=conf_thresh)
 
     # STEP 3: Initialize data containers for collected features
-    X_frames = []      # Keypoint coordinates [frame_idx] -> [156] (78 keypoints * 2 coords)
-    M_frames = []      # Keypoint visibility masks [frame_idx] -> [78] (boolean visibility)
+    X_frames = []      # Keypoint coordinates [frame_idx] -> [178] (89 keypoints * 2 coords)
+    M_frames = []      # Keypoint visibility masks [frame_idx] -> [89] (boolean visibility)
     X2048_frames = []  # InceptionV3 CNN features [frame_idx] -> [2048] (deep features)
     T_ms = []          # Frame timestamps [frame_idx] -> timestamp_ms
 
@@ -396,10 +396,10 @@ def process_video(video_path, out_dir, label_file=None, target_fps=30, out_size=
 
             # STEP 4c: Extract MediaPipe keypoints (if requested)
             if write_keypoints:
-                # Returns 156D vector (78 keypoints * 2 coords) and 78D visibility mask
-                vec156, mask78 = extract_keypoints_from_frame(frame_rgb, models, conf_thresh=conf_thresh)
-                X_frames.append(vec156)    # Store keypoint coordinates
-                M_frames.append(mask78)    # Store visibility flags
+                # Returns 178D vector (89 keypoints * 2 coords) and 89D visibility mask
+                vec178, mask89 = extract_keypoints_from_frame(frame_rgb, models, conf_thresh=conf_thresh)
+                X_frames.append(vec178)    # Store keypoint coordinates
+                M_frames.append(mask89)    # Store visibility flags
 
             # STEP 4d: Extract InceptionV3 CNN features (if requested)
             if write_iv3_features:
@@ -423,8 +423,8 @@ def process_video(video_path, out_dir, label_file=None, target_fps=30, out_size=
         return
 
     # Convert lists to numpy arrays for efficient processing
-    X = np.stack(X_frames, axis=0)  # Shape: [T, 156] - keypoint coordinates over time
-    M = np.stack(M_frames, axis=0)  # Shape: [T, 78] - visibility masks over time
+    X = np.stack(X_frames, axis=0)  # Shape: [T, 178] - keypoint coordinates over time
+    M = np.stack(M_frames, axis=0)  # Shape: [T, 89] - visibility masks over time
     X2048 = np.stack(X2048_frames, axis=0) if X2048_frames else np.array([])  # Shape: [T, 2048] - CNN features
     T_ms = np.array(T_ms, dtype=np.int64)  # Convert timestamps to numpy array
 
@@ -452,11 +452,11 @@ def process_video(video_path, out_dir, label_file=None, target_fps=30, out_size=
         video=os.path.basename(video_path),      # Original video filename
         target_fps=target_fps,                   # Frame sampling rate used
         out_size=out_size,                       # Image resize dimension
-        dims_per_frame=156,                      # Keypoint vector dimension (78 points * 2 coords)
-        keypoints_total=78,                      # Total number of keypoints tracked
-        order="pose25,left_hand21,right_hand21,face11",  # Keypoint ordering in the 156D vector
+        dims_per_frame=178,                      # Keypoint vector dimension (89 points * 2 coords)
+        keypoints_total=89,                      # Total number of keypoints tracked
+        order="pose25,left_hand21,right_hand21,face22",  # Keypoint ordering in the 178D vector
         pose_indices=POSE_UPPER_25,              # Which pose keypoints are used
-        face_indices=FACEMESH_11,                # Which face keypoints are used
+        face_indices=FACE_MINIMAL_22,                # Which face keypoints are used
         conf_thresh=conf_thresh,                 # Confidence threshold used for detection
         interpolation_max_gap=max_gap,           # Maximum gap size for interpolation
         gloss=gloss,                             # Sign language gloss class ID
@@ -486,7 +486,7 @@ if __name__ == "__main__":
     parser.add_argument('out_dir', type=str, help='Directory to save the processed output')
     
     # Feature extraction controls
-    parser.add_argument('--write-keypoints', action='store_true', help='Extract and save MediaPipe keypoints (156D vectors)')
+    parser.add_argument('--write-keypoints', action='store_true', help='Extract and save MediaPipe keypoints (178D vectors)')
     parser.add_argument('--write-iv3-features', action='store_true', help='Extract and save InceptionV3 CNN features (2048D vectors)')
     
     # Processing parameters

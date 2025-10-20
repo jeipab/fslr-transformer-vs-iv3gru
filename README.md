@@ -157,9 +157,9 @@ python -m preprocessing.core.preprocess ^
 
 **Output**: `.npz` files with:
 
-- Keypoints `X [T,156]` - 78 MediaPipe keypoints (pose, hands, face)
+- Keypoints `X [T,178]` - 89 MediaPipe keypoints (pose, hands, face)
 - Features `X2048 [T,2048]` - InceptionV3 features
-- Visibility mask `mask [T,78]`
+- Visibility mask `mask [T,89]`
 - Timestamps `timestamps_ms [T]`
 - Metadata with occlusion detection
 
@@ -302,7 +302,7 @@ See [Prediction Guide](evaluation/prediction/PREDICTION_GUIDE.md#ctc-prediction-
 
 #### Transformer (SignTransformer)
 
-- **Input**: MediaPipe keypoints [T, 156]
+- **Input**: MediaPipe keypoints [T, 178]
 - **Architecture**: Multi-head attention with positional encoding
 - **Advantages**: Lighter, interpretable attention weights
 - **Best for**: Keypoint-based sign recognition
@@ -316,7 +316,7 @@ See [Prediction Guide](evaluation/prediction/PREDICTION_GUIDE.md#ctc-prediction-
 
 #### MediaPipe-GRU
 
-- **Input**: MediaPipe keypoints [T, 156]
+- **Input**: MediaPipe keypoints [T, 178]
 - **Architecture**: Bidirectional GRU
 - **Advantages**: Lightweight, mobile-friendly
 - **Best for**: Baseline comparison
@@ -330,7 +330,7 @@ Classification models predict:
 
 #### SignTransformerCtc
 
-- **Input**: MediaPipe keypoints [T, 156]
+- **Input**: MediaPipe keypoints [T, 178]
 - **Output**: Gloss sequences (variable length)
 - **Architecture**: Transformer encoder + CTC head
 - **Advantages**: No frame-level alignment required, attention-based
@@ -338,7 +338,7 @@ Classification models predict:
 
 #### MediaPipeGRUCtc
 
-- **Input**: MediaPipe keypoints [T, 156]
+- **Input**: MediaPipe keypoints [T, 178]
 - **Output**: Gloss sequences (variable length)
 - **Architecture**: Bidirectional GRU + CTC head
 - **Advantages**: Lightweight, fast inference
@@ -383,7 +383,7 @@ For architecture details, see [Model Guide](models/MODEL_GUIDE.md).
 
 **Wrong shapes:**
 
-- Transformer needs `X [T,156]` keypoints
+- Transformer needs `X [T,178]` keypoints
 - IV3-GRU needs `X2048 [T,2048]` InceptionV3 features
 
 **Label ranges:**

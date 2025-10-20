@@ -136,8 +136,8 @@ data/processed/
 **Transformer (Keypoints)**:
 
 - Key: `X`
-- Shape: `[T, 156]`
-- Content: 78 keypoints × 2 coordinates (x, y)
+- Shape: `[T, 178]`
+- Content: 89 keypoints × 2 coordinates (x, y)
 
 **InceptionV3-GRU (Features)**:
 

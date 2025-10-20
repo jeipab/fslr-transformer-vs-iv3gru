@@ -34,8 +34,8 @@ def _hand_centers_and_tips(frame_xy: np.ndarray, frame_mask: np.ndarray, hand_st
     - Fingertips: All five fingertip positions with validation
     
     Args:
-        frame_xy: Keypoint coordinates array [156] - flattened x,y coordinates
-        frame_mask: Visibility mask array [78] - boolean visibility flags
+        frame_xy: Keypoint coordinates array [178] - flattened x,y coordinates
+        frame_mask: Visibility mask array [89] - boolean visibility flags
         hand_start: Starting index for hand keypoints (25 for left, 46 for right)
         hand_len: Number of hand keypoints (21)
         
@@ -139,14 +139,14 @@ def _is_valid_landmark_position(coord: Tuple[float, float], landmark_idx: int) -
     
     Args:
         coord: Landmark coordinate (x, y) in normalized space [0, 1]
-        landmark_idx: Landmark index from FACEMESH_11 mapping
+        landmark_idx: Landmark index from FACE_MINIMAL_22 mapping
         
     Returns:
         True if position is within reasonable anatomical bounds
     """
     x, y = coord
     
-    # Anatomical validation based on landmark type (from FACEMESH_11 mapping)
+    # Anatomical validation based on landmark type (from FACE_MINIMAL_22 mapping)
     if landmark_idx == 0:  # nose_tip (center of face)
         return 0.3 <= x <= 0.7 and 0.3 <= y <= 0.7
     elif landmark_idx in [1, 2]:  # eye_outer (left/right eye corners)
@@ -426,18 +426,22 @@ class HandHeadOcclusionDetector:
         landmarks = results.face_landmarks
         
         # Use the same face landmark indices as preprocessing pipeline
-        # FACEMESH_11 = [1, 33, 263, 133, 362, 61, 291, 105, 334, 199, 4]
-        face_indices = [1, 33, 263, 133, 362, 61, 291, 105, 334, 199, 4]
+        # FACE_MINIMAL_22 = [81, 13, 311, 61, 178, 14, 402, 291, 33, 133, 159, 362, 263, 386, 70, 107, 46, 300, 336, 276, 1, 4]
+        # Lips (8): 81, 13, 311, 61, 178, 14, 402, 291
+        # Eyes (6): 33, 133, 159, 362, 263, 386  
+        # Eyebrows (6): 70, 107, 46, 300, 336, 276
+        # Nose (2): 1, 4
+        face_indices = [81, 13, 311, 61, 178, 14, 402, 291, 33, 133, 159, 362, 263, 386, 70, 107, 46, 300, 336, 276, 1, 4]
         
         # Extract key facial points using preprocessing-compatible indices
         key_points = {
-            'left_eye_inner': landmarks.landmark[133],    # Index 3 in FACEMESH_11
-            'left_eye_outer': landmarks.landmark[33],     # Index 1 in FACEMESH_11  
-            'right_eye_inner': landmarks.landmark[362],  # Index 4 in FACEMESH_11
-            'right_eye_outer': landmarks.landmark[263],  # Index 2 in FACEMESH_11
-            'nose_tip': landmarks.landmark[1],           # Index 0 in FACEMESH_11
-            'mouth_left': landmarks.landmark[61],         # Index 5 in FACEMESH_11
-            'mouth_right': landmarks.landmark[291],       # Index 6 in FACEMESH_11
+            'left_eye_inner': landmarks.landmark[133],    # Index 9 in FACE_MINIMAL_22
+            'left_eye_outer': landmarks.landmark[33],     # Index 8 in FACE_MINIMAL_22  
+            'right_eye_inner': landmarks.landmark[362],  # Index 11 in FACE_MINIMAL_22
+            'right_eye_outer': landmarks.landmark[263],  # Index 12 in FACE_MINIMAL_22
+            'nose_tip': landmarks.landmark[1],           # Index 20 in FACE_MINIMAL_22
+            'mouth_left': landmarks.landmark[61],         # Index 3 in FACE_MINIMAL_22
+            'mouth_right': landmarks.landmark[291],       # Index 7 in FACE_MINIMAL_22
             'chin': landmarks.landmark[18],               # Approximate chin
             'forehead': landmarks.landmark[9]             # Approximate forehead
         }
@@ -677,8 +681,8 @@ def compute_occlusion_detection_from_keypoints(
     - Confidence scoring for detection reliability
     
     Args:
-        X: Keypoint coordinates [T, 156] - normalized coordinates for all keypoints
-        mask: Visibility mask [T, 78] - boolean flags for keypoint visibility
+        X: Keypoint coordinates [T, 178] - normalized coordinates for all keypoints
+        mask: Visibility mask [T, 89] - boolean flags for keypoint visibility
         output_format: Output format ('compatible' for binary, 'detailed' for full results)
         **kwargs: Additional configuration parameters
     
@@ -689,10 +693,10 @@ def compute_occlusion_detection_from_keypoints(
         T = X.shape[0]  # Number of time steps (frames)
         
         # STEP 1: Parse keypoint layout from preprocessing pipeline
-        # Layout: pose25, left_hand21, right_hand21, face11 = 78 total keypoints
+        # Layout: pose25, left_hand21, right_hand21, face22 = 89 total keypoints
         pose_len = 25      # Upper body pose keypoints
         hand_len = 21      # Hand keypoints per hand
-        face_len = 11      # Key facial landmarks
+        face_len = 22      # Key facial landmarks
         face_start = pose_len + hand_len + hand_len  # Starting index for face keypoints (67)
         
         # STEP 2: Configure adaptive detection parameters for optimal sensitivity
@@ -708,8 +712,8 @@ def compute_occlusion_detection_from_keypoints(
         
         # STEP 4: Process each frame for occlusion detection
         for t in range(T):
-            frame_xy = X[t]      # Keypoint coordinates for current frame [156]
-            frame_mask = mask[t] # Visibility mask for current frame [78]
+            frame_xy = X[t]      # Keypoint coordinates for current frame [178]
+            frame_mask = mask[t] # Visibility mask for current frame [89]
             
             # STEP 4a: Validate face keypoint availability
             face_mask = frame_mask[face_start:face_start + face_len]  # Extract face visibility flags
@@ -838,7 +842,7 @@ def _create_enhanced_face_regions(face_coords: List[Tuple[float, float]],
     if len(face_coords) < 2:
         return {}
     
-    # Map face indices to landmark names (from FACEMESH_11)
+    # Map face indices to landmark names (from FACE_MINIMAL_22)
     landmark_map = {
         0: 'nose_tip',      # 1
         1: 'left_eye_outer', # 33
@@ -1226,8 +1230,8 @@ def compute_occlusion_detection(
     
     Args:
         video_path: Path to input video file (for raw video processing)
-        X: [T, 156] normalized keypoint coordinates (for keypoint-based processing)
-        mask_bool_array: [T, 78] visibility mask (for keypoint-based processing)
+        X: [T, 178] normalized keypoint coordinates (for keypoint-based processing)
+        mask_bool_array: [T, 89] visibility mask (for keypoint-based processing)
         output_format: Output format ('compatible', 'detailed')
         **kwargs: Additional parameters for detection
     

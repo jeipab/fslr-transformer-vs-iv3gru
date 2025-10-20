@@ -1,15 +1,15 @@
 """
-Transformer model for sign language recognition from 156-d keypoint sequences.
+Transformer model for sign language recognition from 178-d keypoint sequences.
 
 This module implements a complete Transformer architecture specifically designed for
 sign language recognition using body keypoint sequences. The model processes temporal
-sequences of 156-dimensional keypoint features (78 keypoints × 2 coordinates) and
+sequences of 178-dimensional keypoint features (89 keypoints × 2 coordinates) and
 outputs predictions for both gloss classification and semantic category classification.
 
 Architecture Overview:
-Input: [B, T, 156] keypoint sequences
+Input: [B, T, 178] keypoint sequences
   ↓
-Linear Embedding: [B, T, 156] → [B, T, E]
+Linear Embedding: [B, T, 178] → [B, T, E]
   ↓
 Positional Encoding: Adds temporal order information
   ↓
@@ -40,7 +40,7 @@ Usage:
     model = SignTransformer()
     
     # Forward pass
-    gloss_logits, cat_logits = model(x)  # x: [B, T, 156]
+    gloss_logits, cat_logits = model(x)  # x: [B, T, 178]
     
     # Get attention weights for visualization
     attention_maps = model.get_attention_weights(x)
@@ -548,7 +548,7 @@ class SignTransformer(nn.Module):
     - Attention weight extraction for visualization
     
     Args:
-        input_dim (int): Input feature dimension per frame (default: 156).
+        input_dim (int): Input feature dimension per frame (default: 178).
                         Should match the number of keypoint features.
         emb_dim (int): Embedding dimension E (default: 256).
         n_heads (int): Number of attention heads H (default: 8).
@@ -561,12 +561,12 @@ class SignTransformer(nn.Module):
         pooling_method (str): Pooling strategy - 'mean', 'max', or 'cls' (default: 'mean').
         
     Note:
-        Input sequences are expected to have shape [B, T, 156] where 156 represents
-        the number of keypoint features (78 keypoints × 2 coordinates: x, y).
+        Input sequences are expected to have shape [B, T, 178] where 178 represents
+        the number of keypoint features (89 keypoints × 2 coordinates: x, y).
     """
     
     def __init__(self,
-                    input_dim=156,     # 78 keypoints × 2 coordinates
+                    input_dim=178,     # 89 keypoints × 2 coordinates
                     emb_dim=256,       # embedding dimension
                     n_heads=8,         # number of attention heads
                     n_layers=4,        # number of encoder layers
@@ -638,7 +638,7 @@ class SignTransformer(nn.Module):
         Forward pass through the complete Transformer model.
 
         Args:
-            x (Tensor): Input keypoint sequence of shape [B, T, 156].
+            x (Tensor): Input keypoint sequence of shape [B, T, 178].
             mask (Tensor or None): Binary mask of shape [B, T] or [B, T+1] if using CLS token.
                                   1 = valid frame, 0 = padding.
                                   Internally broadcast to [B, 1, 1, T(+1)] for attention.
@@ -665,7 +665,7 @@ class SignTransformer(nn.Module):
 
         # ===== EMBEDDING LAYER =====
         # Project raw keypoints to embedding space
-        # [B, T, 156] → [B, T, E]
+        # [B, T, 178] → [B, T, E]
         x = self.embedding(x)
 
         # ===== CLS TOKEN HANDLING =====
@@ -775,7 +775,7 @@ class SignTransformer(nn.Module):
         be used to visualize what the model is attending to at each layer.
 
         Args:
-            x (Tensor): Input keypoint sequence of shape [B, T, 156].
+            x (Tensor): Input keypoint sequence of shape [B, T, 178].
             mask (Tensor or None): Binary mask of shape [B, T] or [B, T+1] if using CLS token.
                                   1 = valid frame, 0 = padding.
 
@@ -832,9 +832,9 @@ class SignTransformerCtc(nn.Module):
     - Supports variable-length output sequences
     
     Architecture:
-    Input: [B, T, 156] keypoint sequences
+    Input: [B, T, 178] keypoint sequences
       ↓
-    Linear Embedding: [B, T, 156] → [B, T, E]
+    Linear Embedding: [B, T, 178] → [B, T, E]
       ↓
     Positional Encoding: Adds temporal order information
       ↓
@@ -849,7 +849,7 @@ class SignTransformerCtc(nn.Module):
     Output: [B, T, num_ctc_classes] log probabilities for CTC loss
     
     Args:
-        input_dim (int): Input feature dimension per frame (default: 156).
+        input_dim (int): Input feature dimension per frame (default: 178).
         emb_dim (int): Embedding dimension E (default: 256).
         n_heads (int): Number of attention heads H (default: 8).
         n_layers (int): Number of encoder layers (default: 4).
@@ -859,8 +859,8 @@ class SignTransformerCtc(nn.Module):
         ff_dim (int): Feed-forward hidden dimension (default: 4× emb_dim).
     
     Usage:
-        model = SignTransformerCtc(input_dim=156, num_ctc_classes=106)
-        log_probs = model(x)  # x: [B, T, 156] → log_probs: [B, T, 106]
+        model = SignTransformerCtc(input_dim=178, num_ctc_classes=106)
+        log_probs = model(x)  # x: [B, T, 178] → log_probs: [B, T, 106]
         
         # For CTC loss, permute to [T, B, C]
         log_probs = log_probs.permute(1, 0, 2)
@@ -868,7 +868,7 @@ class SignTransformerCtc(nn.Module):
     """
     
     def __init__(self,
-                 input_dim=156,
+                 input_dim=178,
                  emb_dim=256,
                  n_heads=8,
                  n_layers=4,
@@ -912,7 +912,7 @@ class SignTransformerCtc(nn.Module):
         Forward pass through the CTC Transformer model.
         
         Args:
-            x (Tensor): Input keypoint sequence of shape [B, T, 156].
+            x (Tensor): Input keypoint sequence of shape [B, T, 178].
             mask (Tensor or None): Binary mask of shape [B, T].
                                   1 = valid frame, 0 = padding.
                                   Internally broadcast to [B, 1, 1, T] for attention.
@@ -938,7 +938,7 @@ class SignTransformerCtc(nn.Module):
         
         # ===== EMBEDDING LAYER =====
         # Project raw keypoints to embedding space
-        # [B, T, 156] → [B, T, E]
+        # [B, T, 178] → [B, T, E]
         x = self.embedding(x)
         
         # ===== POSITIONAL ENCODING =====
@@ -989,7 +989,7 @@ class SignTransformerCtc(nn.Module):
         Extract attention weights from all encoder layers for visualization.
         
         Args:
-            x (Tensor): Input keypoint sequence of shape [B, T, 156].
+            x (Tensor): Input keypoint sequence of shape [B, T, 178].
             mask (Tensor or None): Binary mask of shape [B, T].
         
         Returns:

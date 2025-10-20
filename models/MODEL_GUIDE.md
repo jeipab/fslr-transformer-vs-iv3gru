@@ -20,7 +20,7 @@ Multi-head attention Transformer encoder that processes temporal sequences of bo
 ### Architecture Flow
 
 ```
-Input: [B, T, 156]
+Input: [B, T, 178]
   ↓
 Linear Embedding → [B, T, E]
   ↓
@@ -45,7 +45,7 @@ Dual Heads → [B, 105], [B, 10]
 
 ```python
 SignTransformer.__init__(
-    input_dim=156,        # Keypoint features per frame
+    input_dim=178,        # Keypoint features per frame
     emb_dim=256,          # Embedding dimension
     n_heads=8,            # Attention heads
     n_layers=4,           # Encoder layers
@@ -64,7 +64,7 @@ SignTransformer.__init__(
 def forward(x, mask=None):
     """
     Args:
-        x: [B, T, 156] keypoint sequences
+        x: [B, T, 178] keypoint sequences
         mask: [B, T] binary mask (1=valid, 0=padding)
 
     Returns:
@@ -88,7 +88,7 @@ def get_attention_weights(x, mask=None):
 
 **Implementation**: `nn.Linear(input_dim, emb_dim)`
 
-Projects 156-D keypoint vectors to embedding space. Trainable linear transformation applied per frame independently.
+Projects 178-D keypoint vectors to embedding space. Trainable linear transformation applied per frame independently.
 
 #### 2. Positional Encoding
 
@@ -499,7 +499,7 @@ self.category_head = nn.Linear(hidden2, num_cat)     # 12 → 10
 
 | Aspect            | SignTransformer     | InceptionV3GRU           |
 | ----------------- | ------------------- | ------------------------ |
-| **Input**         | Keypoints [T, 156]  | Features [T, 2048]       |
+| **Input**         | Keypoints [T, 178]  | Features [T, 2048]       |
 | **Architecture**  | Attention encoder   | CNN + RNN                |
 | **Context**       | Global (parallel)   | Local (sequential)       |
 | **Pretrained**    | No                  | Yes (ImageNet)           |
@@ -531,10 +531,10 @@ self.category_head = nn.Linear(hidden2, num_cat)     # 12 → 10
 
 **Input**:
 
-- Shape: `[batch, time, 156]`
+- Shape: `[batch, time, 178]`
 - Type: `torch.FloatTensor`
 - Range: Normalized [0, 1]
-- Content: 78 keypoints × 2 coordinates
+- Content: 89 keypoints × 2 coordinates
 
 **Optional Mask**:
 
@@ -600,7 +600,7 @@ Two CTC models for sequence-to-sequence sign language recognition without frame-
 
 **Input/Output**:
 
-- Input: `[B, T, 156]` keypoints
+- Input: `[B, T, 178]` keypoints
 - Output: `[B, T, 106]` log probabilities (105 glosses + 1 blank)
 
 **Usage**:
@@ -608,7 +608,7 @@ Two CTC models for sequence-to-sequence sign language recognition without frame-
 ```python
 from models import SignTransformerCtc
 
-model = SignTransformerCtc(input_dim=156, num_ctc_classes=106)
+model = SignTransformerCtc(input_dim=178, num_ctc_classes=106)
 log_probs = model(x)  # [B, T, 106]
 
 # For CTCLoss
@@ -628,7 +628,7 @@ log_probs = log_probs.permute(1, 0, 2)  # [T, B, C]
 
 **Input/Output**:
 
-- Input: `[B, T, 156]` keypoints
+- Input: `[B, T, 178]` keypoints
 - Output: `[B, T, 106]` log probabilities
 
 **Usage**:

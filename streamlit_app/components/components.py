@@ -1349,8 +1349,8 @@ def render_inline_video_preview(npz_data: Dict, metadata: Dict, filename: str, k
                 X = npz_data['X']
                 time_steps = X.shape[0]
                 
-                # Reshape to [T, 78, 2]
-                keypoints_2d = X.reshape(time_steps, 78, 2)
+                # Reshape to [T, 89, 2]
+                keypoints_2d = X.reshape(time_steps, 89, 2)
                 mask = npz_data.get('mask', None)
                 
                 # Video settings - use fixed size and scale original video to fit

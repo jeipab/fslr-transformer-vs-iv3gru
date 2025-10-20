@@ -20,7 +20,7 @@ python -m evaluation.prediction.predict --model transformer --checkpoint trained
 python -m evaluation.prediction.predict --model iv3_gru --checkpoint trained_models\iv3_gru\cmb_optimal\InceptionV3GRU_best.pt --input video.mp4
 ```
 
-**Note**: Model input dimensions (156 for keypoints, 2048 for features) are auto-detected from checkpoints.
+**Note**: Model input dimensions (178 for keypoints, 2048 for features) are auto-detected from checkpoints.
 
 ## Arguments
 
@@ -90,7 +90,7 @@ python -m evaluation.prediction.predict --model iv3_gru --checkpoint trained_mod
 
 ### Transformer
 
-- **Input**: Keypoints (156-dim) or InceptionV3 features (2048-dim)
+- **Input**: Keypoints (178-dim) or InceptionV3 features (2048-dim)
 - **NPZ keys**: `X` for keypoints, `X2048` for features
 - **Video**: Automatically extracts appropriate features
 
@@ -106,7 +106,7 @@ python -m evaluation.prediction.predict --model iv3_gru --checkpoint trained_mod
 
 **Transformer:**
 
-- `X`: Keypoints `[T, 156]` (78 keypoints × 2 coordinates)
+- `X`: Keypoints `[T, 178]` (89 keypoints × 2 coordinates)
 - `X2048`: InceptionV3 features `[T, 2048]` (alternative)
 
 **IV3-GRU:**

@@ -7,9 +7,9 @@ model which requires heavy CNN preprocessing, this model directly processes keyp
 features making it ideal for real-time mobile deployment.
 
 Architecture Overview:
-Input: [B, T, 156] keypoint sequences (78 keypoints × 2 coordinates)
+Input: [B, T, 178] keypoint sequences (89 keypoints × 2 coordinates)
   ↓
-Input Projection (optional): [B, T, 156] → [B, T, proj_dim]
+Input Projection (optional): [B, T, 178] → [B, T, proj_dim]
   ↓
 First GRU Layer: [B, T, proj_dim] → [B, T, hidden1] + Dropout
   ↓
@@ -37,7 +37,7 @@ Usage:
     model = MediaPipeGRU(num_gloss=105, num_cat=10)
     
     # Forward pass with keypoints
-    gloss_logits, cat_logits = model(keypoints)  # keypoints: [B, T, 156]
+    gloss_logits, cat_logits = model(keypoints)  # keypoints: [B, T, 178]
     
     # Get probabilities instead of logits
     gloss_probs, cat_probs = model.predict_proba(keypoints)
@@ -113,7 +113,7 @@ class MediaPipeGRU(nn.Module):
     Args:
         num_gloss (int): Number of gloss classes (specific sign words).
         num_cat (int): Number of category classes (semantic groups).
-        input_dim (int): Input keypoint dimension (default: 156 for 78 keypoints × 2).
+        input_dim (int): Input keypoint dimension (default: 178 for 89 keypoints × 2).
         projection_dim (int, optional): If specified, project input to this dimension first.
                                        If None, use input_dim directly. Useful for controlling
                                        model capacity.
@@ -123,10 +123,10 @@ class MediaPipeGRU(nn.Module):
         bidirectional (bool): Use bidirectional GRU (default: False).
 
     Forward inputs:
-        x (Tensor): Keypoint sequences (B, T, 156) where:
+        x (Tensor): Keypoint sequences (B, T, 178) where:
                    - B = batch size
                    - T = sequence length (variable)
-                   - 156 = 78 keypoints × 2 coordinates
+                   - 178 = 89 keypoints × 2 coordinates
         lengths (Tensor, optional): True sequence lengths (B,) for packed sequences.
         return_probs (bool): If True, return probabilities; otherwise logits.
 
@@ -138,7 +138,7 @@ class MediaPipeGRU(nn.Module):
         self,
         num_gloss: int,
         num_cat: int,
-        input_dim: int = 156,
+        input_dim: int = 178,
         projection_dim: Optional[int] = None,
         hidden1: int = 256,
         hidden2: int = 128,
@@ -151,7 +151,7 @@ class MediaPipeGRU(nn.Module):
         Args:
             num_gloss (int): Number of gloss classes.
             num_cat (int): Number of category classes.
-            input_dim (int): Input keypoint dimension (78 keypoints × 2 = 156).
+            input_dim (int): Input keypoint dimension (89 keypoints × 2 = 178).
             projection_dim (int, optional): If specified, project input to this dimension.
             hidden1 (int): Hidden units for first GRU layer.
             hidden2 (int): Hidden units for second GRU layer.
@@ -255,7 +255,7 @@ class MediaPipeGRU(nn.Module):
         Forward pass through the MediaPipe-GRU model.
 
         Args:
-            x (Tensor): Input keypoint sequence of shape (B, T, 156).
+            x (Tensor): Input keypoint sequence of shape (B, T, 178).
             lengths (Tensor, optional): True sequence lengths (B,) for packed-sequence processing.
             return_probs (bool): If True, return softmax probabilities instead of logits.
 
@@ -281,7 +281,7 @@ class MediaPipeGRU(nn.Module):
         # ===== INPUT PROJECTION =====
         # Apply optional input projection
         if self.input_projection is not None:
-            x = self.input_projection(x)  # (B, T, 156) → (B, T, projection_dim)
+            x = self.input_projection(x)  # (B, T, 178) → (B, T, projection_dim)
 
         # ===== TEMPORAL MODELING =====
         # Process sequence through GRU layers
@@ -362,7 +362,7 @@ class MediaPipeGRU(nn.Module):
         applies softmax to the logits to return probability distributions.
 
         Args:
-            x (Tensor): Input keypoint sequence of shape (B, T, 156).
+            x (Tensor): Input keypoint sequence of shape (B, T, 178).
             lengths (Tensor, optional): True sequence lengths (B,).
 
         Returns:
@@ -401,13 +401,13 @@ class MediaPipeGRUCtc(nn.Module):
     
     This is a lightweight sequence-to-sequence model designed for CTC-based
     continuous sign language recognition. It provides a fair comparison baseline
-    for the SignTransformerCtc model since both use the same 156-dimensional
+    for the SignTransformerCtc model since both use the same 178-dimensional
     keypoint inputs.
     
     Architecture:
-    Input: [B, T, 156] keypoint sequences
+    Input: [B, T, 178] keypoint sequences
       ↓
-    Optional Input Projection: [B, T, 156] → [B, T, proj_dim]
+    Optional Input Projection: [B, T, 178] → [B, T, proj_dim]
       ↓
     Bidirectional GRU Layer 1: [B, T, proj_dim] → [B, T, hidden1*2]
       ↓
@@ -436,14 +436,14 @@ class MediaPipeGRUCtc(nn.Module):
     
     Args:
         num_ctc_classes (int): Number of CTC classes including blank token (default: 106).
-        input_dim (int): Input keypoint dimension (default: 156 for 78 keypoints × 2).
+        input_dim (int): Input keypoint dimension (default: 178 for 89 keypoints × 2).
         projection_dim (int, optional): If specified, project input to this dimension first.
         hidden1 (int): Hidden units for first GRU layer (default: 256).
         hidden2 (int): Hidden units for second GRU layer (default: 128).
         dropout (float): Dropout rate applied after GRU layers (default: 0.3).
     
     Forward inputs:
-        x (Tensor): Keypoint sequences (B, T, 156)
+        x (Tensor): Keypoint sequences (B, T, 178)
         lengths (Tensor, optional): True sequence lengths (B,) for packed sequences
     
     Returns:
@@ -452,7 +452,7 @@ class MediaPipeGRUCtc(nn.Module):
     
     Usage:
         model = MediaPipeGRUCtc(num_ctc_classes=106)
-        log_probs = model(x)  # x: [B, T, 156] → log_probs: [B, T, 106]
+        log_probs = model(x)  # x: [B, T, 178] → log_probs: [B, T, 106]
         
         # For CTC loss, permute to [T, B, C]
         log_probs = log_probs.permute(1, 0, 2)
@@ -462,7 +462,7 @@ class MediaPipeGRUCtc(nn.Module):
     def __init__(
         self,
         num_ctc_classes: int = 106,
-        input_dim: int = 156,
+        input_dim: int = 178,
         projection_dim: Optional[int] = None,
         hidden1: int = 256,
         hidden2: int = 128,
@@ -473,7 +473,7 @@ class MediaPipeGRUCtc(nn.Module):
         
         Args:
             num_ctc_classes (int): Number of CTC classes including blank.
-            input_dim (int): Input keypoint dimension (78 keypoints × 2 = 156).
+            input_dim (int): Input keypoint dimension (89 keypoints × 2 = 178).
             projection_dim (int, optional): If specified, project input to this dimension.
             hidden1 (int): Hidden units for first GRU layer.
             hidden2 (int): Hidden units for second GRU layer.
@@ -571,7 +571,7 @@ class MediaPipeGRUCtc(nn.Module):
         Forward pass through the MediaPipe-GRU-CTC model.
         
         Args:
-            x (Tensor): Input keypoint sequence of shape (B, T, 156).
+            x (Tensor): Input keypoint sequence of shape (B, T, 178).
             lengths (Tensor, optional): True sequence lengths (B,) for packed-sequence processing.
         
         Returns:
@@ -596,7 +596,7 @@ class MediaPipeGRUCtc(nn.Module):
         # ===== INPUT PROJECTION =====
         # Apply optional input projection
         if self.input_projection is not None:
-            x = self.input_projection(x)  # (B, T, 156) → (B, T, projection_dim)
+            x = self.input_projection(x)  # (B, T, 178) → (B, T, projection_dim)
         
         # ===== TEMPORAL MODELING =====
         # Process sequence through bidirectional GRU layers

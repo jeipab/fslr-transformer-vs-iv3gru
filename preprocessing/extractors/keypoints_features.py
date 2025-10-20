@@ -7,15 +7,15 @@ This module provides:
 - Gap interpolation for missing keypoints
 - Normalized coordinate output in [0,1] range
 
-Keypoint structure (156 dimensions):
+Keypoint structure (178 dimensions):
 - Pose landmarks: 25 points × 2 coordinates = 50 dims
 - Left hand: 21 points × 2 coordinates = 42 dims  
 - Right hand: 21 points × 2 coordinates = 42 dims
-- Face mesh: 11 points × 2 coordinates = 22 dims
-Total: 156 dimensions
+- Face mesh: 22 points × 2 coordinates = 44 dims
+Total: 178 dimensions
 
 Input: RGB frame (H, W, 3)
-Output: vec156 [156] float32, mask78 [78] bool
+Output: vec178 [178] float32, mask89 [89] bool
 """
 
 # Standard library imports
@@ -40,9 +40,18 @@ POSE_UPPER_25 = list(range(0, 11)) + list(range(11, 17)) + list(range(17, 23)) +
 # Includes: wrist (0), thumb (1-4), index (5-8), middle (9-12), ring (13-16), pinky (17-20)
 N_HAND = 21
 
-# Key facial landmarks (11 points from MediaPipe's 468-point face mesh)
-# Selected for sign language: key facial features and expressions
-FACEMESH_11 = [1, 33, 263, 133, 362, 61, 291, 105, 334, 199, 4]
+# Key facial landmarks (22 points from MediaPipe's 468-point face mesh)
+# Minimal but expressive face landmark set with improved lip arcs and clean mouth corners
+FACE_MINIMAL_22 = [
+    # Lips (8 points)
+    81, 13, 311, 61, 178, 14, 402, 291,
+    # Eyes (6 points)
+    33, 133, 159, 362, 263, 386,
+    # Eyebrows (6 points)
+    70, 107, 46, 300, 336, 276,
+    # Nose (2 points)
+    1, 4
+]
 
 
 # ----------------------------
@@ -50,7 +59,7 @@ FACEMESH_11 = [1, 33, 263, 133, 362, 61, 291, 105, 334, 199, 4]
 # ----------------------------
 # Store references to MediaPipe solutions for keypoint detection
 mp_hands = mp.solutions.hands          # Hand landmark detection (21 points per hand)
-mp_face_mesh = mp.solutions.face_mesh  # Face mesh detection (468 points, we use 11)
+mp_face_mesh = mp.solutions.face_mesh  # Face mesh detection (468 points, we use 22)
 mp_drawing = mp.solutions.drawing_utils # Visualization utilities (unused in processing)
 mp_pose = mp.solutions.pose            # Body pose detection (33 points, we use upper 25)
 
@@ -171,19 +180,19 @@ def smooth_keypoints_ema(X, mask, alpha=0.3):
     EMA Formula: smoothed[t] = alpha * raw[t] + (1 - alpha) * smoothed[t-1]
     
     Args:
-        X: Keypoint coordinates [T, 156] as float32 - flattened x,y coords for 78 keypoints
-        mask: Keypoint visibility mask [T, 78] as bool - True if keypoint is visible
+        X: Keypoint coordinates [T, 178] as float32 - flattened x,y coords for 89 keypoints
+        mask: Keypoint visibility mask [T, 89] as bool - True if keypoint is visible
         alpha: Smoothing factor (0.0-1.0). Higher = more responsive, lower = smoother
                Default 0.3 = 30% current frame, 70% history (optimal for sign language)
         
     Returns:
-        X_smooth: Smoothed keypoint coordinates [T, 156] as float32
+        X_smooth: Smoothed keypoint coordinates [T, 178] as float32
     """
     T = X.shape[0]
     X_smooth = X.copy()
     
     # Process each keypoint independently
-    for k in range(mask.shape[1]):  # 78 keypoints
+    for k in range(mask.shape[1]):  # 89 keypoints
         xi = 2 * k      # X coordinate index
         yi = 2 * k + 1  # Y coordinate index
         
@@ -222,8 +231,8 @@ def validate_and_clean_keypoints(X, mask, max_jump=0.3):
     between consecutive frames at 30fps (equivalent to ~10 meters/second in real space).
     
     Args:
-        X: Keypoint coordinates [T, 156] as float32 - flattened x,y coords for 78 keypoints
-        mask: Keypoint visibility mask [T, 78] as bool - True if keypoint is visible
+        X: Keypoint coordinates [T, 178] as float32 - flattened x,y coords for 89 keypoints
+        mask: Keypoint visibility mask [T, 89] as bool - True if keypoint is visible
         max_jump: Maximum allowed distance between consecutive frames (default 0.3)
         
     Returns:
@@ -335,15 +344,15 @@ def interpolate_gaps(X, mask, max_gap=8):
     for longer gaps where interpolation becomes increasingly speculative.
     
     Args:
-        X: Keypoint coordinates [T, 156] as float32 - flattened x,y coords for 78 keypoints
-        mask: Keypoint visibility mask [T, 78] as bool - True if keypoint is visible/confident
+        X: Keypoint coordinates [T, 178] as float32 - flattened x,y coords for 89 keypoints
+        mask: Keypoint visibility mask [T, 89] as bool - True if keypoint is visible/confident
         max_gap: Maximum gap length to interpolate (frames, default=8)
         
     Returns:
         Tuple of (X_filled, mask_filled) with interpolated values
     """
     T = X.shape[0]  # Number of time steps (frames)
-    K = mask.shape[1]  # Number of keypoints (78)
+    K = mask.shape[1]  # Number of keypoints (89)
     X_out = X.copy()  # Copy input coordinates
     mask_out = mask.copy()  # Copy input visibility mask
 
@@ -421,13 +430,13 @@ def extract_keypoints_from_frame(img_rgb, models: MPModels, conf_thresh=0.5):
     
     This is the main keypoint extraction function that processes an RGB frame through
     MediaPipe Holistic to extract pose, hand, and face landmarks. It returns a
-    structured 156-dimensional vector with normalized coordinates and visibility flags.
+    structured 178-dimensional vector with normalized coordinates and visibility flags.
     
-    Keypoint structure (156 dimensions total):
+    Keypoint structure (178 dimensions total):
     - Pose landmarks: 25 points × 2 coordinates = 50 dims (upper body)
     - Left hand: 21 points × 2 coordinates = 42 dims
     - Right hand: 21 points × 2 coordinates = 42 dims  
-    - Face mesh: 11 points × 2 coordinates = 22 dims (key facial features)
+    - Face mesh: 22 points × 2 coordinates = 44 dims (key facial features)
     
     Args:
         img_rgb: RGB frame (H, W, 3) in [0, 255] pixel range
@@ -435,8 +444,8 @@ def extract_keypoints_from_frame(img_rgb, models: MPModels, conf_thresh=0.5):
         conf_thresh: Confidence threshold for keypoint detection (0.0-1.0)
         
     Returns:
-        vec156: Keypoint coordinates [156] as float32 in [0,1] normalized range
-        mask78: Visibility mask [78] as bool - True if keypoint is visible/confident
+        vec178: Keypoint coordinates [178] as float32 in [0,1] normalized range
+        mask89: Visibility mask [89] as bool - True if keypoint is visible/confident
     """
     H, W, _ = img_rgb.shape  # Get image dimensions
     res = models.hol.process(img_rgb)  # Process frame through MediaPipe Holistic
@@ -478,14 +487,14 @@ def extract_keypoints_from_frame(img_rgb, models: MPModels, conf_thresh=0.5):
     left_pts, left_mask = hand_block(res.left_hand_landmarks)   # Left hand (21 points)
     right_pts, right_mask = hand_block(res.right_hand_landmarks) # Right hand (21 points)
 
-    # ---- FACE LANDMARKS (11 key points) ----
-    # Extract key facial landmarks from the 468-point face mesh
-    face_points = [(0.0, 0.0)] * len(FACEMESH_11)  # Initialize with default coordinates
-    face_mask = [False] * len(FACEMESH_11)          # Initialize visibility as False
+    # ---- FACE LANDMARKS (22 key points) ----
+    # Extract minimal but expressive facial landmarks from the 468-point face mesh
+    face_points = [(0.0, 0.0)] * len(FACE_MINIMAL_22)  # Initialize with default coordinates
+    face_mask = [False] * len(FACE_MINIMAL_22)          # Initialize visibility as False
     
     if res.face_landmarks is not None:  # Face detected
         fl = res.face_landmarks.landmark  # Get all face mesh landmarks
-        for i, idx in enumerate(FACEMESH_11):  # Process only key facial points
+        for i, idx in enumerate(FACE_MINIMAL_22):  # Process only key facial points
             lm = fl[idx]  # Get specific facial landmark
             x, y = xy_from_landmark(lm, W, H)  # Convert to normalized coordinates
             face_points[i] = (x, y)
@@ -493,13 +502,13 @@ def extract_keypoints_from_frame(img_rgb, models: MPModels, conf_thresh=0.5):
             face_mask[i] = (0.0 <= x <= 1.0) and (0.0 <= y <= 1.0)
 
     # ---- CONCATENATE ALL KEYPOINTS ----
-    # Combine all keypoint blocks in the specified order to create 156D vector
-    # Order: pose (50D) + left_hand (42D) + right_hand (42D) + face (22D) = 156D
+    # Combine all keypoint blocks in the specified order to create 178D vector
+    # Order: pose (50D) + left_hand (42D) + right_hand (42D) + face (44D) = 178D
     for block_pts, block_mask in [
         (pose_points, pose_mask),    # 25 points × 2 coords = 50 dimensions
         (left_pts, left_mask),       # 21 points × 2 coords = 42 dimensions
         (right_pts, right_mask),     # 21 points × 2 coords = 42 dimensions
-        (face_points, face_mask),    # 11 points × 2 coords = 22 dimensions
+        (face_points, face_mask),    # 22 points × 2 coords = 44 dimensions
     ]:
         # Flatten (x, y) coordinates into the coordinate vector
         for (x, y) in block_pts:
