@@ -270,83 +270,21 @@ def validate_and_clean_keypoints(X, mask, max_jump=0.3):
     return mask_cleaned
 
 
-def interpolate_cubic_spline(X, mask, k, gap_start, gap_end):
-    """Interpolate missing keypoints using cubic spline for smooth trajectories.
-    
-    Cubic splines provide C2 continuity (continuous second derivatives), resulting
-    in smoother and more natural-looking trajectories than linear interpolation.
-    This is particularly important for hand movements in sign language.
-    
-    Args:
-        X: Keypoint coordinates [T, 156] as float32
-        mask: Keypoint visibility mask [T, 78] as bool
-        k: Keypoint index (0-77)
-        gap_start: First frame in the gap (inclusive)
-        gap_end: Last frame in the gap (inclusive)
-        
-    Returns:
-        x_interp: Interpolated x coordinates for gap frames [gap_len]
-        y_interp: Interpolated y coordinates for gap frames [gap_len]
-    """
-    from scipy.interpolate import CubicSpline
-    
-    xi = 2 * k
-    yi = 2 * k + 1
-    
-    # Find valid points around the gap for spline fitting
-    valid_frames = np.where(mask[:, k])[0]
-    
-    # Get context points: 2 before and 2 after gap if available
-    context_before = valid_frames[valid_frames < gap_start][-2:] if len(valid_frames[valid_frames < gap_start]) >= 2 else valid_frames[valid_frames < gap_start]
-    context_after = valid_frames[valid_frames > gap_end][:2] if len(valid_frames[valid_frames > gap_end]) >= 2 else valid_frames[valid_frames > gap_end]
-    
-    # Combine boundary points
-    if len(context_before) > 0 and len(context_after) > 0:
-        boundary_frames = np.concatenate([context_before, context_after])
-        boundary_x = X[boundary_frames, xi]
-        boundary_y = X[boundary_frames, yi]
-        
-        # Create cubic splines for x and y coordinates
-        try:
-            cs_x = CubicSpline(boundary_frames, boundary_x, bc_type='natural')
-            cs_y = CubicSpline(boundary_frames, boundary_y, bc_type='natural')
-            
-            # Interpolate gap frames
-            gap_frames = np.arange(gap_start, gap_end + 1)
-            x_interp = cs_x(gap_frames)
-            y_interp = cs_y(gap_frames)
-            
-            # Clamp to valid bounds
-            x_interp = np.clip(x_interp, 0.0, 1.0)
-            y_interp = np.clip(y_interp, 0.0, 1.0)
-            
-            return x_interp, y_interp
-        except:
-            # Fall back to linear if spline fails
-            return None, None
-    
-    return None, None
-
-
 # ----------------------------
 # Gap Interpolation for Temporal Consistency
 # ----------------------------
 
-def interpolate_gaps(X, mask, max_gap=8):
-    """Interpolate missing keypoints using multi-strategy approach for optimal quality.
+def interpolate_gaps(X, mask, max_gap=5):
+    """Interpolate missing keypoints using linear interpolation (Android-compatible).
     
-    This function uses different interpolation strategies based on gap length:
-    - Short gaps (1-3 frames): Linear interpolation with high confidence
-    - Medium gaps (4-8 frames): Cubic spline interpolation with medium confidence
-    - Long gaps (>8 frames): Not interpolated (unreliable)
-    
-    The multi-strategy approach balances smoothness for short gaps with caution
-    for longer gaps where interpolation becomes increasingly speculative.
+    This function fills gaps in keypoint sequences using simple linear interpolation,
+    matching the Android app's preprocessing pipeline exactly. Only gaps up to max_gap
+    frames are filled; longer gaps remain as zeros.
     
     Args:
         X: Keypoint coordinates [T, 178] as float32 - flattened x,y coords for 89 keypoints
         mask: Keypoint visibility mask [T, 89] as bool - True if keypoint is visible/confident
-        max_gap: Maximum gap length to interpolate (frames, default=8)
+        max_gap: Maximum gap length to interpolate (frames, default=5 to match Android)
         
     Returns:
         Tuple of (X_filled, mask_filled) with interpolated values
@@ -381,40 +319,16 @@ def interpolate_gaps(X, mask, max_gap=8):
             
             # Only interpolate if gap is within acceptable length
             if 1 <= gap_len <= max_gap:
-                # STRATEGY 1: Short gaps (1-3 frames) - Linear interpolation
-                if gap_len <= 3:
-                    # Get start and end coordinates for interpolation
-                    x0, y0 = X_out[prev, xi], X_out[prev, yi]  # Start point
-                    x1, y1 = X_out[vi, xi], X_out[vi, yi]      # End point
-                    
-                    # Linearly interpolate coordinates for each frame in the gap
-                    for t_idx, t_rel in enumerate(range(gap_start, gap_end + 1), start=1):
-                        t = t_idx / (gap_len + 1)  # Interpolation factor [0, 1]
-                        X_out[t_rel, xi] = _lerp(x0, x1, t)  # Interpolate x coordinate
-                        X_out[t_rel, yi] = _lerp(y0, y1, t)  # Interpolate y coordinate
-                        mask_out[t_rel, k] = True  # Mark as valid (interpolated)
+                # Get start and end coordinates for interpolation
+                x0, y0 = X_out[prev, xi], X_out[prev, yi]  # Start point
+                x1, y1 = X_out[vi, xi], X_out[vi, yi]      # End point
                 
-                # STRATEGY 2: Medium gaps (4-8 frames) - Cubic spline interpolation
-                elif gap_len <= 8:
-                    # Try cubic spline for smoother interpolation
-                    x_interp, y_interp = interpolate_cubic_spline(X_out, mask, k, gap_start, gap_end)
-                    
-                    if x_interp is not None and y_interp is not None:
-                        # Use cubic spline results
-                        for t_idx, t_rel in enumerate(range(gap_start, gap_end + 1)):
-                            X_out[t_rel, xi] = x_interp[t_idx]
-                            X_out[t_rel, yi] = y_interp[t_idx]
-                            mask_out[t_rel, k] = True
-                    else:
-                        # Fall back to linear interpolation if spline fails
-                        x0, y0 = X_out[prev, xi], X_out[prev, yi]
-                        x1, y1 = X_out[vi, xi], X_out[vi, yi]
-                        
-                        for t_idx, t_rel in enumerate(range(gap_start, gap_end + 1), start=1):
-                            t = t_idx / (gap_len + 1)
-                            X_out[t_rel, xi] = _lerp(x0, x1, t)
-                            X_out[t_rel, yi] = _lerp(y0, y1, t)
-                            mask_out[t_rel, k] = True
+                # Linearly interpolate coordinates for each frame in the gap
+                for t_idx, t_rel in enumerate(range(gap_start, gap_end + 1), start=1):
+                    t = t_idx / (gap_len + 1)  # Interpolation factor [0, 1]
+                    X_out[t_rel, xi] = _lerp(x0, x1, t)  # Interpolate x coordinate
+                    X_out[t_rel, yi] = _lerp(y0, y1, t)  # Interpolate y coordinate
+                    mask_out[t_rel, k] = True  # Mark as valid (interpolated)
             
             prev = vi  # Move to next valid detection
 

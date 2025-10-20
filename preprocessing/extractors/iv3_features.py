@@ -307,16 +307,17 @@ def update_labels_csv(label_file, video_file, gloss, cat):
 # Main Video Processing Function
 # ----------------------------
 
-def process_video(video_path, out_dir, label_file=None, target_fps=30, out_size=256, conf_thresh=0.5, max_gap=5, write_keypoints=True, write_iv3_features=True, feature_key='X2048', gloss=None, cat=None):
+def process_video(video_path, out_dir, label_file=None, target_fps=30, out_size=256, conf_thresh=0.5, max_gap=5, write_keypoints=True, write_iv3_features=True, feature_key='X2048', gloss=None, cat=None, flip_horizontal=False):
     """Process a single video file and extract multi-modal features.
     
     This function performs the complete processing pipeline for a single video:
     1. Video loading and frame sampling at target FPS
-    2. MediaPipe keypoint extraction (pose, hands, face)
-    3. InceptionV3 CNN feature extraction
-    4. Gap interpolation for missing keypoints
-    5. Data saving in compressed .npz format
-    6. Labels CSV updates for training data
+    2. Optional horizontal flip for front camera videos
+    3. MediaPipe keypoint extraction (pose, hands, face)
+    4. InceptionV3 CNN feature extraction
+    5. Linear gap interpolation (max 5 frames, Android-compatible)
+    6. Data saving in compressed .npz format
+    7. Labels CSV updates for training data
     
     Args:
         video_path: Path to input video file (.mp4, .mov, .avi, .mkv)
@@ -325,12 +326,13 @@ def process_video(video_path, out_dir, label_file=None, target_fps=30, out_size=
         target_fps: Target frame sampling rate (downsamples high FPS videos)
         out_size: Image resize dimension for keypoint extraction (256x256)
         conf_thresh: Confidence threshold for keypoint detection (0.0-1.0)
-        max_gap: Maximum gap size for keypoint interpolation (frames)
+        max_gap: Maximum gap size for keypoint interpolation (frames, default=5)
         write_keypoints: Extract MediaPipe keypoints (178D vectors per frame)
         write_iv3_features: Extract InceptionV3 features (2048D vectors per frame)
         feature_key: Unused parameter (kept for compatibility)
         gloss: Sign language gloss class ID for labeling
         cat: Category class ID for labeling
+        flip_horizontal: Apply horizontal flip for front camera videos (Android-compatible)
     """
     # STEP 1: Setup output paths and directories
     basename = os.path.splitext(os.path.basename(video_path))[0]  # Extract filename without extension
@@ -391,8 +393,10 @@ def process_video(video_path, out_dir, label_file=None, target_fps=30, out_size=
             # STEP 4a: Resize frame for consistent processing
             frame_bgr_resized = cv2.resize(frame_bgr, (out_size, out_size), interpolation=cv2.INTER_AREA)
 
-            # STEP 4b: Prepare RGB frame for MediaPipe keypoint extraction
+            # STEP 4b: Prepare RGB frame and apply front camera flip if needed
             frame_rgb = cv2.cvtColor(frame_bgr_resized, cv2.COLOR_BGR2RGB)
+            if flip_horizontal:
+                frame_rgb = cv2.flip(frame_rgb, 1)  # Horizontal flip for front camera (mirror x-axis)
 
             # STEP 4c: Extract MediaPipe keypoints (if requested)
             if write_keypoints:
@@ -436,13 +440,9 @@ def process_video(video_path, out_dir, label_file=None, target_fps=30, out_size=
     if write_iv3_features and len(X2048_frames) == 0:
         print("[WARN] No IV3 features extracted.")
 
-    # Step 1: Remove outlier keypoints (physically impossible jumps)
-    M_cleaned = validate_and_clean_keypoints(X, M, max_jump=0.3)
-    # Step 2: Apply EMA smoothing to reduce jitter (alpha=0.3)
-    X_smooth = smooth_keypoints_ema(X, M_cleaned, alpha=0.3)
-    # Step 3: Fill gaps in keypoint sequences using multi-strategy interpolation
-    X_filled, M_filled = interpolate_gaps(X_smooth, M_cleaned, max_gap=max_gap)
-    # Step 4: Ensure keypoint coordinates stay within valid bounds [0, 1]
+    # Apply gap interpolation (linear only, max 5 frames - Android-compatible)
+    X_filled, M_filled = interpolate_gaps(X, M, max_gap=max_gap)
+    # Ensure keypoint coordinates stay within valid bounds [0, 1]
     X_filled = np.clip(X_filled, 0.0, 1.0).astype(np.float32)
     # Note: Do not interpolate CNN features - keep raw temporal values
     X2048_filled = X2048
@@ -459,6 +459,7 @@ def process_video(video_path, out_dir, label_file=None, target_fps=30, out_size=
         face_indices=FACE_MINIMAL_22,                # Which face keypoints are used
         conf_thresh=conf_thresh,                 # Confidence threshold used for detection
         interpolation_max_gap=max_gap,           # Maximum gap size for interpolation
+        flip_horizontal=flip_horizontal,         # Whether horizontal flip was applied (front camera)
         gloss=gloss,                             # Sign language gloss class ID
         cat=cat                                  # Category class ID
     )
