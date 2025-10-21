@@ -153,23 +153,31 @@ def validate_ctc_config(num_gloss, num_ctc_classes, blank_id):
     """Validate CTC configuration for consistency.
     
     Args:
-        num_gloss: Number of gloss classes
+        num_gloss: Number of gloss classes (can be subset of full vocabulary)
         num_ctc_classes: Total CTC classes (should be num_gloss + 1)
         blank_id: Blank token ID (should be num_gloss)
         
     Raises:
-        ValueError: If configuration is inconsistent
+        ValueError: If configuration is internally inconsistent
+    
+    Note:
+        Allows training on subsets of the full vocabulary. Only validates
+        internal consistency, not against the full labels_reference.csv.
     """
-    expected = get_num_gloss_classes()
+    expected_full = get_num_gloss_classes()
     
-    if num_gloss != expected:
-        raise ValueError(f"num_gloss={num_gloss} doesn't match labels ({expected})")
-    
+    # Check internal consistency (these must match)
     if num_ctc_classes != num_gloss + 1:
         raise ValueError(f"num_ctc_classes should be {num_gloss + 1}, got {num_ctc_classes}")
     
     if blank_id != num_gloss:
         raise ValueError(f"blank_id should be {num_gloss}, got {blank_id}")
+    
+    # Warn if training on subset (but allow it)
+    if num_gloss < expected_full:
+        print(f"⚠️  Training on subset: {num_gloss}/{expected_full} glosses (subset training enabled)")
+    elif num_gloss > expected_full:
+        raise ValueError(f"num_gloss={num_gloss} exceeds available labels ({expected_full})")
     
     return True
 
