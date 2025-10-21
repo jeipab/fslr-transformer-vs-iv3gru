@@ -41,7 +41,7 @@ MODEL_CONFIG = {
         'training_mode': 'classification'  # 'classification' or 'ctc'
     },
     'transformer_ctc': {
-        'enabled': False,  # Will be enabled once CTC training is complete
+        'enabled': True,  # Enabled for continuous sign recognition
         'checkpoint_path': 'trained_models/transformer_ctc/optimal/SignTransformerCtc_best.pt',
         'model_type': 'transformer_ctc',
         'num_gloss_classes': CTC_CONFIG['num_gloss_classes'],
@@ -65,7 +65,7 @@ MODEL_CONFIG = {
         'training_mode': 'classification'
     },
     'mediapipe_gru_ctc': {
-        'enabled': False,  # Will be enabled once CTC training is complete
+        'enabled': True,  # Enabled for continuous sign recognition
         'checkpoint_path': 'trained_models/mediapipe_gru_ctc/optimal/MediaPipeGRUCtc_best.pt',
         'model_type': 'mediapipe_gru_ctc',
         'num_gloss_classes': CTC_CONFIG['num_gloss_classes'],
@@ -141,8 +141,27 @@ DUMMY_DATA = {
     }
 }
 
+# Recognition modes
+RECOGNITION_MODES = {
+    'isolated': 'Isolated Sign Recognition',
+    'continuous': 'Continuous Sign Recognition'
+}
+
 # Workflow stages
 WORKFLOW_STAGES = ['upload', 'preprocessing', 'predictions', 'validation']
+
+# Continuous generation configuration
+CONTINUOUS_GENERATION_CONFIG = {
+    'default_strategy': 1,
+    'default_sequences_per_signer': 10,
+    'default_min_glosses': 3,
+    'default_max_glosses': 6,
+    'default_seed': 42,
+    'strategies': {
+        1: 'Same Category',
+        2: 'Different Categories'
+    }
+}
 
 # Supported file types
 SUPPORTED_FILE_TYPES = {
@@ -234,3 +253,38 @@ def is_ctc_model(model_name: str) -> bool:
     """
     model_config = MODEL_CONFIG.get(model_name, {})
     return model_config.get('training_mode') == 'ctc'
+
+def get_models_by_mode(mode: str) -> list:
+    """Get list of models compatible with recognition mode.
+    
+    Args:
+        mode: Recognition mode ('isolated' or 'continuous')
+        
+    Returns:
+        List of model names compatible with the mode
+    """
+    models = []
+    for model_name, config in MODEL_CONFIG.items():
+        if not config.get('enabled', False):
+            continue
+        
+        training_mode = config.get('training_mode', 'classification')
+        if mode == 'isolated' and training_mode == 'classification':
+            models.append(model_name)
+        elif mode == 'continuous' and training_mode == 'ctc':
+            models.append(model_name)
+    
+    return models
+
+def get_continuous_config(key: str = None):
+    """Get continuous generation configuration.
+    
+    Args:
+        key: Optional specific config key to retrieve
+        
+    Returns:
+        Full config dict if key is None, otherwise the specific value
+    """
+    if key is None:
+        return CONTINUOUS_GENERATION_CONFIG
+    return CONTINUOUS_GENERATION_CONFIG.get(key, None)

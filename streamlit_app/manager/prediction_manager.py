@@ -13,17 +13,25 @@ import sys
 project_root = Path(__file__).parent.parent
 sys.path.insert(0, str(project_root))
 
-from ..components.utils import detect_file_type, check_npz_compatibility, create_npz_bytes, extract_occlusion_flag, interpret_occlusion_flag
+from ..components.utils import (
+    detect_file_type, check_npz_compatibility, create_npz_bytes, 
+    extract_occlusion_flag, interpret_occlusion_flag,
+    is_continuous_sequence, extract_continuous_metadata
+)
 from ..components.visualization import (
     render_consolidated_file_info, render_animated_keypoints, 
     render_feature_charts, render_topk_table, render_file_details_horizontal,
     render_summary_stats_horizontal
 )
 from ..components.components import render_predictions_section
+from ..components.ctc_visualization import (
+    render_sequence_comparison, render_wer_metrics, render_temporal_alignment,
+    render_ctc_prediction_card
+)
 from .upload_manager import remove_file_from_stage
 
 # Import configuration from core module
-from ..core.config import MODEL_CONFIG, DUMMY_DATA
+from ..core.config import MODEL_CONFIG, DUMMY_DATA, is_ctc_model
 
 
 class ModelManager:
@@ -183,6 +191,83 @@ def make_real_prediction(npz_data: Dict[str, np.ndarray], model_name: str) -> Di
     except Exception as e:
         # Show error as toast instead of st.error
         st.toast(f"Prediction failed: {str(e)}", icon="⚠️", duration=5000)
+        return None
+
+
+def make_ctc_prediction(npz_data: Dict[str, np.ndarray], model_name: str, 
+                       ground_truth: Optional[Dict] = None,
+                       decode_method: str = 'greedy',
+                       beam_width: int = 10) -> Dict:
+    """
+    Make CTC prediction for continuous sign sequence.
+    
+    Args:
+        npz_data: NPZ data dictionary
+        model_name: Name of CTC model ('transformer_ctc' or 'mediapipe_gru_ctc')
+        ground_truth: Optional ground truth dictionary
+        decode_method: Decoding method ('greedy' or 'beam_search')
+        beam_width: Beam width for beam search
+        
+    Returns:
+        Dictionary with CTC prediction results
+    """
+    # Check if model is CTC model
+    if not is_ctc_model(model_name):
+        st.error(f"{model_name} is not a CTC model. Use make_real_prediction for classification models.")
+        return None
+    
+    # Check if model is available
+    if not MODEL_CONFIG[model_name]['enabled']:
+        st.error(f"CTC model {model_name} is not available.")
+        return None
+    
+    try:
+        # Import CTC predictor
+        from evaluation.prediction.predict_ctc import CTCPredictor
+        import tempfile
+        import os
+        
+        # Get model config
+        config = MODEL_CONFIG[model_name]
+        
+        # Initialize CTC predictor
+        device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+        predictor = CTCPredictor(
+            model_type=config['model_type'],
+            checkpoint_path=config['checkpoint_path'],
+            blank_id=config['num_gloss_classes'],  # Blank ID is num_gloss_classes
+            device=device
+        )
+        
+        # Create temporary NPZ file
+        with tempfile.NamedTemporaryFile(suffix='.npz', delete=False) as tmp_file:
+            tmp_path = tmp_file.name
+            np.savez_compressed(tmp_path, **npz_data)
+        
+        try:
+            # Make prediction
+            results = predictor.predict_sequence(
+                npz_path=Path(tmp_path),
+                ground_truth=ground_truth,
+                decode_method=decode_method,
+                beam_width=beam_width,
+                fps=30,
+                temporal_tolerance=500
+            )
+            return results
+        finally:
+            # Clean up
+            if os.path.exists(tmp_path):
+                try:
+                    os.unlink(tmp_path)
+                except:
+                    pass
+    
+    except Exception as e:
+        st.toast(f"CTC Prediction failed: {str(e)}", icon="⚠️", duration=5000)
+        import traceback
+        with st.expander("Error details"):
+            st.code(traceback.format_exc())
         return None
 
 
@@ -414,6 +499,10 @@ def process_single_npz_file(uploaded_file, filename: str):
         file_bytes = io.BytesIO(file_content)
         npz_data = dict(np.load(file_bytes, allow_pickle=True))
         
+        # Detect if continuous sequence
+        is_continuous = is_continuous_sequence(npz_data)
+        continuous_meta = extract_continuous_metadata(npz_data) if is_continuous else None
+        
         # Check compatibility
         compatibility = check_npz_compatibility(npz_data)
         
@@ -431,9 +520,16 @@ def process_single_npz_file(uploaded_file, filename: str):
             **existing_metadata,
             'compatibility': compatibility,
             'file_type': 'npz',
-            'frame_count': npz_data['X'].shape[0] if 'X' in npz_data else npz_data['X2048'].shape[0] if 'X2048' in npz_data else 0
+            'frame_count': npz_data['X'].shape[0] if 'X' in npz_data else npz_data['X2048'].shape[0] if 'X2048' in npz_data else 0,
+            'is_continuous': is_continuous,
+            'continuous_metadata': continuous_meta
         }
         st.session_state.file_status[filename] = 'completed'
+        
+        # Show appropriate message based on sequence type
+        if is_continuous:
+            num_segments = continuous_meta.get('num_segments', '?') if continuous_meta else '?'
+            st.toast(f"✅ Continuous sequence loaded ({num_segments} segments)", icon="🎬", duration=3000)
         
     except Exception as e:
         st.session_state.file_status[filename] = 'error'
@@ -488,9 +584,26 @@ def render_visualization_tabs(cfg: Dict):
     if not completed_files:
         return
     
+    # Check if we have continuous sequences
+    continuous_files = []
+    isolated_files = []
+    for f in completed_files:
+        metadata = st.session_state.file_metadata.get(f.name, {})
+        if metadata.get('is_continuous', False):
+            continuous_files.append(f)
+        else:
+            isolated_files.append(f)
+    
     # Create file selection interface
     st.markdown("<div style='height: 20px;'></div>", unsafe_allow_html=True)
-    st.markdown("<div class='main-section-header'>RESULTS</div>", unsafe_allow_html=True)
+    
+    # Show file type indicator if we have mixed types
+    if continuous_files and isolated_files:
+        st.markdown(f"<div class='main-section-header'>RESULTS ({len(isolated_files)} Isolated, {len(continuous_files)} Continuous)</div>", unsafe_allow_html=True)
+    elif continuous_files:
+        st.markdown("<div class='main-section-header'>RESULTS (Continuous Sequences)</div>", unsafe_allow_html=True)
+    else:
+        st.markdown("<div class='main-section-header'>RESULTS</div>", unsafe_allow_html=True)
     
     # File selection dropdown
     file_options = []
@@ -591,29 +704,36 @@ def render_visualization_tabs(cfg: Dict):
             # Create unique key suffix using file object id to handle duplicate filenames
             unique_key_suffix = f"{filename}_{id(selected_uploaded_file)}"
             
-            # Render consolidated file info (includes sequence overview data)
+            # Check if continuous sequence
+            is_continuous = metadata.get('is_continuous', False)
+            
             try:
-                X_pad, mask, meta = render_consolidated_file_info(filename, npz_data, metadata, cfg["sequence_length"])
+                if is_continuous:
+                    # Render CTC prediction interface for continuous sequences
+                    render_continuous_sequence_predictions(filename, npz_data, metadata, cfg, unique_key_suffix)
+                else:
+                    # Render standard classification interface for isolated signs
+                    # Render consolidated file info (includes sequence overview data)
+                    X_pad, mask, meta = render_consolidated_file_info(filename, npz_data, metadata, cfg["sequence_length"])
+                    
+                    # Generate and render predictions (with metadata and key_suffix for video preview)
+                    render_predictions_section(cfg, npz_data, filename, metadata, unique_key_suffix)
+                    
+                    # Side-by-side layout for Keypoint Visualization and Feature Analysis
+                    st.markdown('<div class="viz-side-by-side">', unsafe_allow_html=True)
+                    viz_col1, viz_col2 = st.columns([1, 1])
+                    
+                    with viz_col1:
+                        render_animated_keypoints(X_pad, mask if mask.size > 0 else None, key_suffix=unique_key_suffix, meta_dict=meta)
+                    
+                    with viz_col2:
+                        render_feature_charts(X_pad, mask if mask.size > 0 else None, key_suffix=unique_key_suffix)
+                    
+                    st.markdown('</div>', unsafe_allow_html=True)
                 
-                # Generate and render predictions (with metadata and key_suffix for video preview)
-                render_predictions_section(cfg, npz_data, filename, metadata, unique_key_suffix)
-                
-                # Side-by-side layout for Keypoint Visualization and Feature Analysis
-                st.markdown('<div class="viz-side-by-side">', unsafe_allow_html=True)
-                viz_col1, viz_col2 = st.columns([1, 1])
-                
-                with viz_col1:
-                    render_animated_keypoints(X_pad, mask if mask.size > 0 else None, key_suffix=unique_key_suffix, meta_dict=meta)
-                
-                with viz_col2:
-                    render_feature_charts(X_pad, mask if mask.size > 0 else None, key_suffix=unique_key_suffix)
-                
-                st.markdown('</div>', unsafe_allow_html=True)
-                
-                # Download button
+                # Download button (for both types)
                 st.markdown("### Download")
                 npz_bytes = create_npz_bytes(npz_data)
-                # Ensure filename has .npz extension
                 npz_filename = filename if filename.endswith('.npz') else f"{Path(filename).stem}.npz"
                 st.download_button(
                     label=f"Download {npz_filename}",
@@ -625,6 +745,156 @@ def render_visualization_tabs(cfg: Dict):
                 
             except Exception as e:
                 st.toast(f"Visualization error: {str(e)}", icon="⚠️", duration=5000)
+
+
+def render_continuous_sequence_predictions(filename: str, npz_data: Dict, metadata: Dict, cfg: Dict, unique_key_suffix: str):
+    """
+    Render CTC prediction interface for continuous sequences.
+    
+    Args:
+        filename: Name of the file
+        npz_data: NPZ data dictionary
+        metadata: File metadata
+        cfg: Configuration dictionary
+        unique_key_suffix: Unique key suffix for widgets
+    """
+    st.markdown("### Continuous Sequence Recognition")
+    
+    # Show continuous sequence info
+    continuous_meta = metadata.get('continuous_metadata', {})
+    if continuous_meta:
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            st.metric("Segments", continuous_meta.get('num_segments', 'N/A'))
+        with col2:
+            st.metric("Duration", f"{continuous_meta.get('total_duration_sec', 0):.1f}s")
+        with col3:
+            strategy_name = continuous_meta.get('strategy', 'N/A')
+            st.metric("Strategy", strategy_name)
+    
+    # CTC Configuration
+    st.markdown("---")
+    st.markdown("#### CTC Configuration")
+    
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        # Get available CTC models
+        from ..core.config import get_models_by_mode, MODEL_CONFIG
+        ctc_models = get_models_by_mode('continuous')
+        
+        if not ctc_models:
+            st.error("No CTC models available. Please ensure CTC model checkpoints exist.")
+            return
+        
+        # Model selector
+        ctc_model = st.selectbox(
+            "CTC Model",
+            options=ctc_models,
+            format_func=lambda x: MODEL_CONFIG[x]['display_name'],
+            key=f"ctc_model_select_{unique_key_suffix}"
+        )
+    
+    with col2:
+        # Decode method
+        decode_method = st.radio(
+            "Decode Method",
+            options=['greedy', 'beam_search'],
+            format_func=lambda x: 'Greedy' if x == 'greedy' else 'Beam Search',
+            key=f"decode_method_{unique_key_suffix}"
+        )
+        
+        if decode_method == 'beam_search':
+            beam_width = st.slider(
+                "Beam Width",
+                min_value=1,
+                max_value=20,
+                value=10,
+                key=f"beam_width_{unique_key_suffix}"
+            )
+        else:
+            beam_width = 1
+    
+    # Ground truth upload (optional)
+    st.markdown("---")
+    ground_truth_file = st.file_uploader(
+        "Ground Truth JSON (optional)",
+        type=['json'],
+        help="Upload ground truth JSON file for WER calculation",
+        key=f"gt_upload_{unique_key_suffix}"
+    )
+    
+    ground_truth = None
+    if ground_truth_file:
+        try:
+            ground_truth = json.load(ground_truth_file)
+            st.success(f"✅ Ground truth loaded: {len(ground_truth.get('ground_truth_sequence', []))} glosses")
+        except Exception as e:
+            st.error(f"Failed to load ground truth: {str(e)}")
+    
+    # Predict button
+    st.markdown("---")
+    if st.button("🔮 Predict Sequence", type="primary", key=f"predict_ctc_{unique_key_suffix}"):
+        with st.spinner("Predicting sequence..."):
+            results = make_ctc_prediction(
+                npz_data, 
+                ctc_model,
+                ground_truth=ground_truth,
+                decode_method=decode_method,
+                beam_width=beam_width
+            )
+            
+            if results:
+                st.session_state[f'ctc_results_{unique_key_suffix}'] = results
+                st.rerun()
+    
+    # Display results if available
+    if f'ctc_results_{unique_key_suffix}' in st.session_state:
+        results = st.session_state[f'ctc_results_{unique_key_suffix}']
+        
+        st.markdown("---")
+        st.markdown("### Prediction Results")
+        
+        # Render CTC prediction card
+        render_ctc_prediction_card(
+            file_name=filename,
+            predicted_sequence=results['predicted_sequence'],
+            predicted_labels=results['predicted_labels'],
+            confidence_scores=results.get('confidence_scores'),
+            wer=results.get('wer'),
+            ground_truth_available=ground_truth is not None
+        )
+        
+        # Sequence comparison
+        if ground_truth:
+            st.markdown("---")
+            render_sequence_comparison(
+                predicted_sequence=results['predicted_sequence'],
+                predicted_labels=results['predicted_labels'],
+                ground_truth_sequence=ground_truth.get('ground_truth_sequence'),
+                ground_truth_labels=ground_truth.get('ground_truth_labels'),
+                confidence_scores=results.get('confidence_scores')
+            )
+            
+            # WER metrics
+            if 'wer' in results:
+                st.markdown("---")
+                render_wer_metrics(
+                    wer=results['wer'],
+                    insertions=results.get('num_insertions', 0),
+                    deletions=results.get('num_deletions', 0),
+                    substitutions=results.get('num_substitutions', 0),
+                    sequence_correct=results.get('correct', False)
+                )
+            
+            # Temporal alignment
+            if 'predicted_timestamps' in results and 'ground_truth_timestamps' in ground_truth:
+                st.markdown("---")
+                render_temporal_alignment(
+                    predicted_timestamps=results['predicted_timestamps'],
+                    ground_truth_timestamps=ground_truth['ground_truth_timestamps'],
+                    temporal_alignment_accuracy=results.get('temporal_alignment_accuracy')
+                )
 
 
 def render_batch_summary_tab(cfg: Dict):

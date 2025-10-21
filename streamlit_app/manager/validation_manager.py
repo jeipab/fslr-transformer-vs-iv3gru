@@ -17,7 +17,7 @@ from tqdm import tqdm
 project_root = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(project_root))
 
-from ..core.config import MODEL_CONFIG
+from ..core.config import MODEL_CONFIG, is_ctc_model
 from ..components.utils import detect_file_type
 
 
@@ -700,6 +700,76 @@ def run_validation(model_type: str, npz_files: List, labels_csv_file,
     results = validator.validate(dataset, batch_size, progress_callback)
     
     return results
+
+
+def run_ctc_validation(
+    model_type: str,
+    npz_folder_path: str,
+    ground_truth_folder: str,
+    decode_method: str = 'greedy',
+    beam_width: int = 10,
+    progress_callback=None
+) -> Dict[str, Any]:
+    """
+    Run CTC validation on continuous sequences.
+    
+    Args:
+        model_type: CTC model type ('transformer_ctc' or 'mediapipe_gru_ctc')
+        npz_folder_path: Path to folder containing continuous sequence NPZ files
+        ground_truth_folder: Path to folder containing ground truth JSON files
+        decode_method: Decoding method ('greedy' or 'beam_search')
+        beam_width: Beam width for beam search
+        progress_callback: Optional callback for progress updates
+        
+    Returns:
+        Dictionary containing CTC validation results
+    """
+    # Verify model is CTC model
+    if not is_ctc_model(model_type):
+        raise ValueError(f"{model_type} is not a CTC model")
+    
+    # Get model configuration
+    config = MODEL_CONFIG.get(model_type)
+    if not config or not config['enabled']:
+        raise ValueError(f"Model {model_type} is not available")
+    
+    try:
+        # Import CTC predictor
+        from evaluation.prediction.predict_ctc import CTCPredictor
+        
+        # Initialize predictor
+        device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+        predictor = CTCPredictor(
+            model_type=config['model_type'],
+            checkpoint_path=config['checkpoint_path'],
+            blank_id=config['num_gloss_classes'],
+            device=device
+        )
+        
+        # Run batch prediction with ground truth
+        results = predictor.predict_batch(
+            input_dir=Path(npz_folder_path),
+            ground_truth_dir=Path(ground_truth_folder) if ground_truth_folder else None,
+            output_dir=None,  # Don't save files
+            decode_method=decode_method,
+            beam_width=beam_width,
+            fps=30,
+            temporal_tolerance=500
+        )
+        
+        # Add model info
+        results['model_info'] = {
+            'model_type': model_type,
+            'checkpoint_path': config['checkpoint_path'],
+            'device': str(device),
+            'decode_method': decode_method,
+            'beam_width': beam_width
+        }
+        
+        return results
+    
+    except Exception as e:
+        raise RuntimeError(f"CTC validation failed: {str(e)}")
 
 
 def cleanup_temp_files():

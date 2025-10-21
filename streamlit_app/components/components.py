@@ -723,6 +723,26 @@ def render_sidebar() -> Dict:
     </div>
     """, unsafe_allow_html=True)
     
+    # Recognition Mode Section
+    st.sidebar.markdown("""
+    <div style='margin: 0.75rem 0 0;'>
+        <h3 style='color: #e2e8f0; margin: 0; font-size: 1.1rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px;'>Recognition Mode</h3>
+    </div>
+    """, unsafe_allow_html=True)
+    
+    from ..core.config import RECOGNITION_MODES
+    recognition_mode = st.sidebar.radio(
+        "Select mode",
+        options=['isolated', 'continuous'],
+        format_func=lambda x: RECOGNITION_MODES[x],
+        index=0 if st.session_state.get('recognition_mode', 'isolated') == 'isolated' else 1,
+        help="📍 Isolated Mode: Classify single signs from video clips\n\n🎬 Continuous Mode: Recognize sequences of signs using CTC models",
+        key="recognition_mode_radio"
+    )
+    
+    # Update session state
+    st.session_state.recognition_mode = recognition_mode
+    
     # About Section
     st.sidebar.markdown("""
     <div style='margin-bottom: 0;'>
@@ -801,27 +821,34 @@ def render_sidebar() -> Dict:
     </div>
     """, unsafe_allow_html=True)
     
-    # Model Architecture Selection
+    # Model Architecture Selection (mode-aware)
     st.sidebar.markdown("**Model Architecture**")
     
-    available_models = get_available_models()
-    if len(available_models) == 2:
+    available_models = get_available_models_for_mode(recognition_mode)
+    
+    if not available_models:
+        st.sidebar.warning(f"⚠️ No models available for {RECOGNITION_MODES[recognition_mode]}")
+        model_choice = None
+    elif len(available_models) == 1:
+        # Only one model available
+        model_choice = available_models[0]
+        st.sidebar.info(f"Using: **{MODEL_CONFIG[model_choice]['display_name']}**")
+    elif len(available_models) == 2:
         # Create help text with model file paths
         from ..manager.prediction_manager import MODEL_CONFIG
-        help_text = "Select the model architecture for predictions\n\n"
+        help_text = f"Select model for {RECOGNITION_MODES[recognition_mode]}\n\n"
         
-        if MODEL_CONFIG['transformer']['enabled']:
-            transformer_path = MODEL_CONFIG['transformer']['checkpoint_path']
-            help_text += f"SignTransformer:\n{transformer_path}\n\n"
-        
-        if MODEL_CONFIG['iv3_gru']['enabled']:
-            iv3_path = MODEL_CONFIG['iv3_gru']['checkpoint_path']
-            help_text += f"IV3-GRU:\n{iv3_path}"
+        for model_name in available_models:
+            if MODEL_CONFIG[model_name]['enabled']:
+                model_path = MODEL_CONFIG[model_name]['checkpoint_path']
+                display_name = MODEL_CONFIG[model_name]['display_name']
+                help_text += f"{display_name}:\n{model_path}\n\n"
         
         # Use radio button for binary choice
         model_choice = st.sidebar.radio(
             "Choose Model",
             available_models,
+            format_func=lambda x: MODEL_CONFIG[x]['display_name'],
             index=0,
             help=help_text,
             key="model_architecture_radio"
@@ -831,18 +858,17 @@ def render_sidebar() -> Dict:
         from ..manager.prediction_manager import MODEL_CONFIG
         help_text = "Choose between available model architectures\n\n"
         
-        if MODEL_CONFIG['transformer']['enabled']:
-            transformer_path = MODEL_CONFIG['transformer']['checkpoint_path']
-            help_text += f"SignTransformer:\n{transformer_path}\n\n"
-        
-        if MODEL_CONFIG['iv3_gru']['enabled']:
-            iv3_path = MODEL_CONFIG['iv3_gru']['checkpoint_path']
-            help_text += f"IV3-GRU:\n{iv3_path}"
+        for model_name in available_models:
+            if MODEL_CONFIG[model_name]['enabled']:
+                model_path = MODEL_CONFIG[model_name]['checkpoint_path']
+                display_name = MODEL_CONFIG[model_name]['display_name']
+                help_text += f"{display_name}:\n{model_path}\n\n"
         
         # Fallback to selectbox for multiple options
         model_choice = st.sidebar.selectbox(
             "Model Architecture", 
-            available_models, 
+            available_models,
+            format_func=lambda x: MODEL_CONFIG[x]['display_name'],
             index=0,
             help=help_text,
             key="model_architecture_select"
@@ -951,27 +977,33 @@ def render_model_status():
 
 
 def get_available_models():
-    """Get list of available models for selection."""
+    """Get list of available models for selection (legacy function)."""
+    return get_available_models_for_mode('isolated')
+
+
+def get_available_models_for_mode(mode: str):
+    """Get list of models compatible with recognition mode.
+    
+    Args:
+        mode: Recognition mode ('isolated' or 'continuous')
+        
+    Returns:
+        List of model names compatible with the mode
+    """
     import os
-    from ..manager.prediction_manager import MODEL_CONFIG
+    from ..core.config import get_models_by_mode, MODEL_CONFIG
     
+    # Get models compatible with mode
+    compatible_models = get_models_by_mode(mode)
+    
+    # Filter by checkpoint existence
     available_models = []
-    
-    # Check if transformer model exists
-    if MODEL_CONFIG['transformer']['enabled']:
-        transformer_path = MODEL_CONFIG['transformer']['checkpoint_path']
-        if os.path.exists(transformer_path):
-            available_models.append("SignTransformer")
-    
-    # Check if iv3_gru model exists
-    if MODEL_CONFIG['iv3_gru']['enabled']:
-        iv3_gru_path = MODEL_CONFIG['iv3_gru']['checkpoint_path']
-        if os.path.exists(iv3_gru_path):
-            available_models.append("IV3_GRU")
-    
-    # Fallback to at least one model if none are available
-    if not available_models:
-        available_models = ["SignTransformer"]
+    for model_name in compatible_models:
+        config = MODEL_CONFIG.get(model_name)
+        if config and config['enabled']:
+            checkpoint_path = config['checkpoint_path']
+            if os.path.exists(checkpoint_path):
+                available_models.append(model_name)
     
     return available_models
 

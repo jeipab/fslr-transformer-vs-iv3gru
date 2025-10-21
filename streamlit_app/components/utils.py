@@ -74,6 +74,64 @@ def detect_file_type(uploaded_file) -> str:
         return 'unknown'
 
 
+def is_continuous_sequence(npz_data: Dict[str, np.ndarray]) -> bool:
+    """
+    Detect if NPZ file contains a continuous sequence vs isolated sign.
+    
+    Continuous sequences have metadata with 'num_segments' or 'strategy' fields.
+    
+    Args:
+        npz_data: Dictionary containing NPZ file contents
+        
+    Returns:
+        True if continuous sequence, False if isolated sign
+    """
+    if 'meta' in npz_data:
+        try:
+            meta = npz_data['meta']
+            # Parse metadata
+            if isinstance(meta, str):
+                meta_dict = json.loads(meta)
+            elif isinstance(meta, np.ndarray):
+                meta_dict = json.loads(str(meta.item()))
+            else:
+                meta_dict = json.loads(str(meta))
+            
+            # Check for continuous-specific fields
+            return 'num_segments' in meta_dict or 'strategy' in meta_dict
+        except (json.JSONDecodeError, KeyError, TypeError, ValueError, AttributeError):
+            pass
+    
+    return False
+
+
+def extract_continuous_metadata(npz_data: Dict[str, np.ndarray]) -> Optional[Dict]:
+    """
+    Extract continuous sequence metadata from NPZ file.
+    
+    Args:
+        npz_data: Dictionary containing NPZ file contents
+        
+    Returns:
+        Metadata dictionary if continuous, None if isolated
+    """
+    if not is_continuous_sequence(npz_data):
+        return None
+    
+    try:
+        meta = npz_data['meta']
+        if isinstance(meta, str):
+            meta_dict = json.loads(meta)
+        elif isinstance(meta, np.ndarray):
+            meta_dict = json.loads(str(meta.item()))
+        else:
+            meta_dict = json.loads(str(meta))
+        
+        return meta_dict
+    except:
+        return None
+
+
 def check_npz_compatibility(npz_data: Dict[str, np.ndarray], model_configs: Dict = None) -> Dict[str, bool]:
     """
     Check if NPZ data is compatible with different model architectures.

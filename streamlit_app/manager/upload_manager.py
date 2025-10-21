@@ -57,6 +57,10 @@ def initialize_upload_session_state():
         st.session_state.workflow_stage = 'upload'
     if 'pending_upload_files' not in st.session_state:
         st.session_state.pending_upload_files = []
+    if 'recognition_mode' not in st.session_state:
+        st.session_state.recognition_mode = 'isolated'  # Default to isolated mode
+    if 'continuous_sequences' not in st.session_state:
+        st.session_state.continuous_sequences = []  # Store generated continuous sequences
 
 
 def render_upload_stage():
