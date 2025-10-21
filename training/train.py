@@ -1174,10 +1174,10 @@ def log_comprehensive_config(args, device, model=None):
             print(f"  - Training folder: {args.features_train}")
             print(f"  - Validation folder: {args.features_val}")
             print(f"  - Feature key: {args.feature_key}")
-        elif args.model == "transformer":
+        elif args.model in ["transformer", "transformer_ctc", "mediapipe_gru", "mediapipe_gru_ctc"]:
             print(f"  - Training folder: {args.keypoints_train}")
             print(f"  - Validation folder: {args.keypoints_val}")
-            if args.combine_features:
+            if args.combine_features and args.model == "transformer":
                 print(f"  - Mode: Combined (Keypoints + Features)")
                 print(f"  - Keypoint key: {args.kp_key} (178-dim)")
                 print(f"  - Feature key: {args.feature_key} (2048-dim)")
@@ -3129,10 +3129,15 @@ if __name__ == "__main__":
             args.model == "iv3_gru" and args.features_train is not None and args.features_val is not None
         )
         use_keypoint_files = (
-            args.model == "transformer" and args.keypoints_train is not None and args.keypoints_val is not None
+            args.model in ["transformer", "transformer_ctc", "mediapipe_gru", "mediapipe_gru_ctc"] and 
+            args.keypoints_train is not None and args.keypoints_val is not None
         )
         if not (use_feature_files or use_keypoint_files):
-            raise ValueError("No data files provided. Please specify either --features-train/--features-val for IV3-GRU model or --keypoints-train/--keypoints-val for Transformer model.")
+            raise ValueError(
+                "No data files provided. Please specify either:\n"
+                "  - --features-train/--features-val for IV3-GRU model, OR\n"
+                "  - --keypoints-train/--keypoints-val for Transformer/MediaPipeGRU models"
+            )
         print(f"✓ Loaded data successfully")
         
         # Check for combined features mode (Transformer only)
@@ -3155,7 +3160,8 @@ if __name__ == "__main__":
             print(f"  - Validation folder: {args.features_val}")
             print(f"  - Feature key: {args.feature_key}")
         elif use_keypoint_files:
-            print(f"  - Dataset type: Transformer Keypoints")
+            model_name = args.model.replace("_", "-").upper()
+            print(f"  - Dataset type: {model_name} Keypoints")
             print(f"  - Training folder: {args.keypoints_train}")
             print(f"  - Validation folder: {args.keypoints_val}")
             print(f"  - Keypoint key: {args.kp_key}")
@@ -3329,6 +3335,7 @@ if __name__ == "__main__":
     print("CTC models (continuous recognition):")
     print("  - transformer_ctc: Transformer with CTC (keypoints)")
     print("  - mediapipe_gru_ctc: Lightweight GRU with CTC (keypoints)")
+    print("  - iv3_gru_ctc: InceptionV3 + GRU with CTC (features, offline baseline)")
     
     if args.model == "transformer":
         # Determine input dimension based on the data mode being used
@@ -3414,6 +3421,24 @@ if __name__ == "__main__":
             freeze_backbone=args.freeze_backbone,
         ).to(device)
         print("✓ Using InceptionV3GRU model")
+    
+    elif args.model == "iv3_gru_ctc":
+        # InceptionV3GRUCtc uses 2048-D features (precomputed or extracted)
+        if use_keypoint_files and not use_feature_files:
+            raise ValueError(
+                "InceptionV3GRUCtc requires feature data (2048D), not keypoints (178D). "
+                "Use --features-train/--features-val with --kp-key='X2048'"
+            )
+        
+        model = InceptionV3GRUCtc(
+            num_ctc_classes=args.num_ctc_classes,
+            hidden1=args.hidden1,
+            hidden2=args.hidden2,
+            dropout=args.dropout,
+            pretrained_backbone=args.pretrained_backbone,
+            freeze_backbone=args.freeze_backbone,
+        ).to(device)
+        print(f"✓ Using InceptionV3GRUCtc model (num_ctc_classes={args.num_ctc_classes})")
     
     else:
         raise ValueError(f"Invalid --model {args.model}")

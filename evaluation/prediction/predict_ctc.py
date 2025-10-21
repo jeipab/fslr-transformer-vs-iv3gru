@@ -20,7 +20,7 @@ from tqdm import tqdm
 project_root = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(project_root))
 
-from models import SignTransformerCtc, MediaPipeGRUCtc
+from models import SignTransformerCtc, MediaPipeGRUCtc, InceptionV3GRUCtc
 from evaluation.ctc_utils import greedy_ctc_decoder, beam_search_ctc_decoder, calculate_wer
 from streamlit_app.core.config import CTC_CONFIG
 from data.labels.label_mapping import load_label_mappings
@@ -194,6 +194,31 @@ class CTCPredictor:
             
             model = MediaPipeGRUCtc(input_dim=input_dim, num_ctc_classes=CTC_CONFIG['num_ctc_classes'],
                                    hidden1=gru1_hidden, hidden2=gru2_hidden)
+        
+        elif self.model_type == 'iv3_gru_ctc':
+            # InceptionV3GRUCtc uses 2048-D features
+            input_dim = 2048
+            try:
+                checkpoint = torch.load(self.checkpoint_path, map_location='cpu')
+                state_dict = checkpoint.get('model_state_dict', checkpoint.get('state_dict', checkpoint.get('model', checkpoint)))
+                # Try to extract hidden dimensions from checkpoint
+                if 'gru1.weight_hh_l0' in state_dict and 'gru2.weight_hh_l0' in state_dict:
+                    # For bidirectional GRU: weight_hh_l0 has shape [3*hidden_size*2, hidden_size]
+                    gru1_hidden = state_dict['gru1.weight_hh_l0'].shape[0] // 3 // 2
+                    gru2_hidden = state_dict['gru2.weight_hh_l0'].shape[0] // 3 // 2
+                else:
+                    gru1_hidden = 256
+                    gru2_hidden = 128
+            except:
+                gru1_hidden = 256
+                gru2_hidden = 128
+            
+            model = InceptionV3GRUCtc(
+                num_ctc_classes=CTC_CONFIG['num_ctc_classes'],
+                hidden1=gru1_hidden,
+                hidden2=gru2_hidden
+            )
+        
         else:
             raise ValueError(f"Unknown model type: {self.model_type}")
         
@@ -241,7 +266,11 @@ class CTCPredictor:
         input_length = torch.tensor([X.shape[1]], dtype=torch.long).to(self.device)
         
         with torch.no_grad():
-            log_probs = self.model(X)
+            # InceptionV3GRUCtc requires features_already parameter
+            if self.model_type == 'iv3_gru_ctc':
+                log_probs = self.model(X, features_already=True)
+            else:
+                log_probs = self.model(X)
         
         if decode_method == 'greedy':
             predicted_sequence = greedy_ctc_decoder(log_probs, self.blank_id, input_length)[0]
