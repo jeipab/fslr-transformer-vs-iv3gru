@@ -15,7 +15,7 @@ This comprehensive training module supports:
 
 3. DATA HANDLING:
    - File-based datasets from preprocessed .npz files
-   - Support for keypoints [T, 156], features [T, 2048], or combined [T, 2204]
+   - Support for keypoints [T, 178], features [T, 2048], or combined [T, 2226]
    - Combined mode: concatenates keypoints + features for richer representations
    - Temporal data augmentation (noise, masking)
    - Variable-length sequence padding and batching
@@ -341,12 +341,12 @@ class FSLKeypointFileDataset(Dataset):
     """
     PyTorch Dataset for precomputed keypoint sequences from pose estimation.
     
-    This dataset loads keypoint sequences with shape [T, 156] from .npz files,
-    where T is the temporal dimension (variable length sequences) and 156 represents
-    the flattened keypoint coordinates (typically 52 keypoints × 3 coordinates = 156).
+    This dataset loads keypoint sequences with shape [T, 178] from .npz files,
+    where T is the temporal dimension (variable length sequences) and 178 represents
+    the flattened keypoint coordinates (89 keypoints × 2 coordinates = 178).
     
     The dataset supports both raw keypoints and processed features:
-    - Raw keypoints [T, 156]: Direct pose estimation output
+    - Raw keypoints [T, 178]: Direct pose estimation output (89 keypoints: 25 pose + 21 left hand + 21 right hand + 22 face)
     - Processed features [T, 2048]: Keypoints processed through feature extraction
     
     Data Flow:
@@ -370,7 +370,7 @@ class FSLKeypointFileDataset(Dataset):
     Returns:
         Classification mode: (keypoints[T,D] float32, gloss long, cat long, length long)
         CTC mode: (keypoints[T,D] float32, gloss_seq[1] long, input_length long, target_length long, cat long)
-        where D is 156 for raw keypoints or 2048 for processed features
+        where D is 178 for raw keypoints or 2048 for processed features
         
     Raises:
         ValueError: If CSV format is invalid or array dimensions don't match key type
@@ -429,7 +429,7 @@ class FSLKeypointFileDataset(Dataset):
         path = os.path.join(self.keypoints_dir, stem + '.npz')
         if not os.path.exists(path):
             raise FileNotFoundError(f"Keypoint file not found: {path}")
-        data = torch.from_numpy(self._load_npz_keypoints(path))  # [T, 156] or [T, 2048]
+        data = torch.from_numpy(self._load_npz_keypoints(path))  # [T, 178] or [T, 2048]
         input_length = data.shape[0]
         
         # Apply augmentation if enabled and in training mode
@@ -481,26 +481,26 @@ class FSLKeypointFileDataset(Dataset):
         # Validate dimension based on the key being used
         if self.kp_key == "X2048" and X.shape[-1] != 2048:
             raise ValueError(f"Expected [T,2048] features in {path}, got shape {X.shape}")
-        elif self.kp_key == "X" and X.shape[-1] != 156:
-            raise ValueError(f"Expected [T,156] keypoints in {path}, got shape {X.shape}")
+        elif self.kp_key == "X" and X.shape[-1] != 178:
+            raise ValueError(f"Expected [T,178] keypoints in {path}, got shape {X.shape}")
         return X
 
 class FSLCombinedFileDataset(Dataset):
     """
     PyTorch Dataset that combines keypoints and features into single input.
     
-    This dataset loads both keypoints [T, 156] and features [T, 2048] from the same
-    .npz files and concatenates them to create combined input [T, 2204].
+    This dataset loads both keypoints [T, 178] and features [T, 2048] from the same
+    .npz files and concatenates them to create combined input [T, 2226].
     
     The combined approach leverages both:
-    - Raw keypoint information (156-dim): Direct pose landmarks for interpretability
+    - Raw keypoint information (178-dim): Direct pose landmarks for interpretability (89 keypoints × 2)
     - Learned visual features (2048-dim): Rich InceptionV3 representations
     
     Data Flow:
     1. Load CSV to build filename -> (gloss, category, occluded, signer, duration) mapping
     2. For each sample, load corresponding .npz file
     3. Extract both keypoint array (X) and feature array (X2048)
-    4. Concatenate along feature dimension: [T, 156] + [T, 2048] = [T, 2204]
+    4. Concatenate along feature dimension: [T, 178] + [T, 2048] = [T, 2226]
     5. Apply temporal augmentation if enabled and in training mode
     6. Return data based on mode (classification or CTC)
     
@@ -516,8 +516,8 @@ class FSLCombinedFileDataset(Dataset):
         return_metadata (bool): Whether to return signer and duration in __getitem__
     
     Returns:
-        Classification mode: (combined[T,2204] float32, gloss long, cat long, length long)
-        CTC mode: (combined[T,2204] float32, gloss_seq[1] long, input_length long, target_length long, cat long)
+        Classification mode: (combined[T,2226] float32, gloss long, cat long, length long)
+        CTC mode: (combined[T,2226] float32, gloss_seq[1] long, input_length long, target_length long, cat long)
         
     Raises:
         ValueError: If CSV format is invalid or array dimensions don't match
@@ -583,7 +583,7 @@ class FSLCombinedFileDataset(Dataset):
         # Load both keypoints and features
         keypoints, features = self._load_combined_data(path)
         
-        # Concatenate along feature dimension: [T, 156] + [T, 2048] = [T, 2204]
+        # Concatenate along feature dimension: [T, 178] + [T, 2048] = [T, 2226]
         combined = torch.cat([keypoints, features], dim=1)
         input_length = combined.shape[0]
         
@@ -639,8 +639,8 @@ class FSLCombinedFileDataset(Dataset):
             features = np.array(npz[self.feature_key])
         
         # Validate shapes
-        if keypoints.ndim != 2 or keypoints.shape[-1] != 156:
-            raise ValueError(f"Expected [T,156] keypoints in {path}, got shape {keypoints.shape}")
+        if keypoints.ndim != 2 or keypoints.shape[-1] != 178:
+            raise ValueError(f"Expected [T,178] keypoints in {path}, got shape {keypoints.shape}")
         if features.ndim != 2 or features.shape[-1] != 2048:
             raise ValueError(f"Expected [T,2048] features in {path}, got shape {features.shape}")
         
@@ -702,13 +702,13 @@ def collate_features_with_padding(batch):
 
 def collate_keypoints_with_padding(batch):
     """
-    Pad variable-length keypoint sequences [T, 156] to the max length in batch.
+    Pad variable-length keypoint sequences [T, 178] to the max length in batch.
 
     Args:
-        batch: Iterable of (X[T,156], gloss, cat, length) items.
+        batch: Iterable of (X[T,178], gloss, cat, length) items.
 
     Returns:
-        tuple: (X_pad [B,Tmax,156], gloss [B], cat [B], lengths [B])
+        tuple: (X_pad [B,Tmax,178], gloss [B], cat [B], lengths [B])
     """
     sequences, gloss, cat, lengths = zip(*batch)
     lengths = torch.stack(lengths, dim=0)
@@ -892,13 +892,16 @@ def _make_dataloader(dataset, batch_size, shuffle, args, collate_fn=None):
     # Auto-detect optimal number of workers for data loading
     # More workers = faster data loading, but also more memory usage
     num_workers = args.num_workers
-    if args.auto_workers or num_workers == 0:
+    if args.auto_workers:
         # Calculate optimal worker count based on CPU cores
         cpu_count = psutil.cpu_count(logical=False)  # Physical cores only
         # Use 1/2 of CPU cores, but cap between 2 and 8 for stability
         num_workers = min(8, max(2, cpu_count // 2))
-        if args.auto_workers:
-            print(f"Auto-detected {num_workers} DataLoader workers (from {cpu_count} CPU cores)")
+        print(f"Auto-detected {num_workers} DataLoader workers (from {cpu_count} CPU cores)")
+    else:
+        # Respect the user's num_workers setting (default: 0 for single-process loading)
+        if num_workers > 0:
+            print(f"Using {num_workers} DataLoader workers (user-specified)")
     
     # ============================================================================
     # MEMORY PINNING CONFIGURATION
@@ -939,7 +942,27 @@ def _make_dataloader(dataset, batch_size, shuffle, args, collate_fn=None):
         elif isinstance(prefetch_factor, int) and prefetch_factor > 0:
             kwargs['prefetch_factor'] = prefetch_factor
     
-    return DataLoader(dataset, **kwargs)
+    # Create DataLoader with error handling for resource constraints
+    try:
+        return DataLoader(dataset, **kwargs)
+    except (BlockingIOError, OSError, RuntimeError) as e:
+        # Handle resource exhaustion errors (common in containerized environments)
+        if num_workers > 0:
+            print(f"\n⚠️  WARNING: Failed to create DataLoader with {num_workers} workers")
+            print(f"   Error: {type(e).__name__}: {e}")
+            print(f"   Falling back to single-process loading (num_workers=0)")
+            print(f"   This is common in resource-constrained environments (containers, cloud VMs)")
+            
+            # Retry with 0 workers
+            kwargs['num_workers'] = 0
+            kwargs['persistent_workers'] = False
+            if 'prefetch_factor' in kwargs:
+                del kwargs['prefetch_factor']
+            
+            return DataLoader(dataset, **kwargs)
+        else:
+            # If already using 0 workers, re-raise the error
+            raise
 
 def save_checkpoint(state: dict, is_best: bool, output_dir: str, model_name: str) -> None:
     """Save training state to disk, keeping both last and best checkpoints.
@@ -1156,9 +1179,9 @@ def log_comprehensive_config(args, device, model=None):
             print(f"  - Validation folder: {args.keypoints_val}")
             if args.combine_features:
                 print(f"  - Mode: Combined (Keypoints + Features)")
-                print(f"  - Keypoint key: {args.kp_key} (156-dim)")
+                print(f"  - Keypoint key: {args.kp_key} (178-dim)")
                 print(f"  - Feature key: {args.feature_key} (2048-dim)")
-                print(f"  - Combined input: 2204-dim")
+                print(f"  - Combined input: 2226-dim")
             else:
                 print(f"  - Keypoint key: {args.kp_key}")
     else:
@@ -2812,7 +2835,7 @@ def evaluate_ctc(model, dataloader, criterion, device):
     avg_loss = total_loss / num_batches if num_batches > 0 else 0.0
     return avg_loss
 
-def load_data(n_train_samples=100, n_val_samples=20, seq_length=50, input_dim=156, num_gloss=105, num_cat=10, seed=42):
+def load_data(n_train_samples=100, n_val_samples=20, seq_length=50, input_dim=178, num_gloss=105, num_cat=10, seed=42):
     """
     Load training and validation data for sign language recognition.
     
@@ -2821,10 +2844,10 @@ def load_data(n_train_samples=100, n_val_samples=20, seq_length=50, input_dim=15
     
     Returns:
         tuple: (train_X, train_gloss, train_cat, val_X, val_gloss, val_cat)
-            - train_X: Training sequences [N_train, T, 156]
+            - train_X: Training sequences [N_train, T, 178]
             - train_gloss: Training gloss labels [N_train]
             - train_cat: Training category labels [N_train]
-            - val_X: Validation sequences [N_val, T, 156]
+            - val_X: Validation sequences [N_val, T, 178]
             - val_gloss: Validation gloss labels [N_val]
             - val_cat: Validation category labels [N_val]
     """
@@ -2919,13 +2942,13 @@ Examples:
     # DATA CONFIGURATION - TRANSFORMER KEYPOINTS
     # ============================================================================
     parser.add_argument("--keypoints-train", type=str, default=None, 
-                       help="Directory containing training .npz files with keypoint sequences [T,156]")
+                       help="Directory containing training .npz files with keypoint sequences [T,178]")
     parser.add_argument("--keypoints-val", type=str, default=None, 
-                       help="Directory containing validation .npz files with keypoint sequences [T,156]")
+                       help="Directory containing validation .npz files with keypoint sequences [T,178]")
     parser.add_argument("--kp-key", type=str, default="X", 
-                       help="Key name in .npz files containing [T,156] keypoint arrays")
+                       help="Key name in .npz files containing [T,178] keypoint arrays")
     parser.add_argument("--combine-features", action="store_true",
-                       help="Combine keypoints [T,156] and features [T,2048] into single input [T,2204] (Transformer only)")
+                       help="Combine keypoints [T,178] and features [T,2048] into single input [T,2226] (Transformer only)")
     # IV3-GRU hyperparameters
     parser.add_argument("--hidden1", type=int, default=16, help="IV3-GRU first GRU hidden size")
     parser.add_argument("--hidden2", type=int, default=12, help="IV3-GRU second GRU hidden size")
@@ -3076,10 +3099,10 @@ if __name__ == "__main__":
             print(f"✓ IV3-GRU smoke test passed. Saved and loaded: {ckpt}")
             exit(0)
         else:
-            # Transformer smoke (uses existing forward contract on [B, T, 156])
+            # Transformer smoke (uses existing forward contract on [B, T, 178])
             B = args.smoke_batch_size
             T = args.smoke_T
-            X = torch.randn(B, T, 156, dtype=torch.float32, device=device)
+            X = torch.randn(B, T, 178, dtype=torch.float32, device=device)
             model = SignTransformer(num_gloss=args.num_gloss, num_cat=args.num_cat).to(device)
             model.train()
             gloss_logits, cat_logits = model(X)
@@ -3123,9 +3146,9 @@ if __name__ == "__main__":
             print(f"  - Dataset type: Transformer Combined (Keypoints + Features)")
             print(f"  - Training folder: {args.keypoints_train}")
             print(f"  - Validation folder: {args.keypoints_val}")
-            print(f"  - Keypoint key: {args.kp_key} (156-dim)")
+            print(f"  - Keypoint key: {args.kp_key} (178-dim)")
             print(f"  - Feature key: {args.feature_key} (2048-dim)")
-            print(f"  - Combined dimension: 2204 (156 + 2048)")
+            print(f"  - Combined dimension: 2226 (178 + 2048)")
         elif use_feature_files:
             print(f"  - Dataset type: IV3-GRU Features")
             print(f"  - Training folder: {args.features_train}")
@@ -3283,7 +3306,7 @@ if __name__ == "__main__":
     if use_combined_features:
         print(f"  - Training dataset size: {len(train_dataset)} samples")
         print(f"  - Validation dataset size: {len(val_dataset)} samples")
-        print(f"  - Data format: [T, 2204] combined (156 keypoints + 2048 features)")
+        print(f"  - Data format: [T, 2226] combined (178 keypoints + 2048 features)")
     elif use_feature_files:
         print(f"  - Training dataset size: {len(train_dataset)} samples")
         print(f"  - Validation dataset size: {len(val_dataset)} samples")
@@ -3291,7 +3314,7 @@ if __name__ == "__main__":
     elif use_keypoint_files:
         print(f"  - Training dataset size: {len(train_dataset)} samples")
         print(f"  - Validation dataset size: {len(val_dataset)} samples")
-        print(f"  - Data format: [T, 156] keypoints")
+        print(f"  - Data format: [T, 178] keypoints")
 
     # Model selection
     print("\n" + "="*60)
@@ -3310,11 +3333,11 @@ if __name__ == "__main__":
     if args.model == "transformer":
         # Determine input dimension based on the data mode being used
         if use_combined_features:
-            input_dim = 2204  # 156 keypoints + 2048 features
+            input_dim = 2226  # 178 keypoints + 2048 features
         elif args.kp_key == "X2048":
             input_dim = 2048
         else:
-            input_dim = 156  # Default for keypoints
+            input_dim = 178  # Default for keypoints
         
         model = SignTransformer(
             input_dim=input_dim,
@@ -3326,11 +3349,11 @@ if __name__ == "__main__":
     elif args.model == "transformer_ctc":
         # Determine input dimension
         if use_combined_features:
-            input_dim = 2204
+            input_dim = 2226
         elif args.kp_key == "X2048":
             input_dim = 2048
         else:
-            input_dim = 156
+            input_dim = 178
         
         model = SignTransformerCtc(
             input_dim=input_dim,
@@ -3339,14 +3362,14 @@ if __name__ == "__main__":
         print(f"✓ Using SignTransformerCtc model (input_dim={input_dim}, num_ctc_classes={args.num_ctc_classes})")
     
     elif args.model == "mediapipe_gru":
-        # MediaPipeGRU always uses keypoints (156D)
+        # MediaPipeGRU always uses keypoints (178D)
         if use_feature_files or args.kp_key == "X2048":
             raise ValueError(
-                "MediaPipeGRU requires keypoint data (156D), not features (2048D). "
+                "MediaPipeGRU requires keypoint data (178D), not features (2048D). "
                 "Use --kp-files or ensure --kp-key='X' (default)"
             )
         
-        input_dim = 156  # Keypoints only
+        input_dim = 178  # Keypoints only
         
         model = MediaPipeGRU(
             input_dim=input_dim,
@@ -3361,14 +3384,14 @@ if __name__ == "__main__":
         print(f"✓ Using MediaPipeGRU model (input_dim={input_dim}, hidden1={args.hidden1}, hidden2={args.hidden2})")
     
     elif args.model == "mediapipe_gru_ctc":
-        # MediaPipeGRUCtc always uses keypoints (156D)
+        # MediaPipeGRUCtc always uses keypoints (178D)
         if use_feature_files or args.kp_key == "X2048":
             raise ValueError(
-                "MediaPipeGRUCtc requires keypoint data (156D), not features (2048D). "
+                "MediaPipeGRUCtc requires keypoint data (178D), not features (2048D). "
                 "Use --keypoints-train/--keypoints-val with --kp-key='X'"
             )
         
-        input_dim = 156
+        input_dim = 178
         
         model = MediaPipeGRUCtc(
             input_dim=input_dim,

@@ -7,8 +7,8 @@ including Transformer-based and RNN approaches for processing sign language sequ
 Available Models:
 
 Classification Models (Isolated Sign Recognition):
-- SignTransformer: Transformer encoder for keypoint sequences [B, T, 156]
-- MediaPipeGRU: Lightweight GRU model for keypoint sequences [B, T, 156] (mobile-friendly)
+- SignTransformer: Transformer encoder for keypoint sequences [B, T, 178]
+- MediaPipeGRU: Lightweight GRU model for keypoint sequences [B, T, 178] (mobile-friendly)
 - InceptionV3GRU: CNN+GRU model for visual features [B, T, 2048] or raw frames (offline baseline)
 
 CTC Models (Continuous Sign Language Recognition):
@@ -19,10 +19,10 @@ Model Comparison:
 ┌─────────────────────┬─────────────────┬──────────────────┬─────────────────────┐
 │ Model               │ Input           │ Mobile-Ready     │ Use Case            │
 ├─────────────────────┼─────────────────┼──────────────────┼─────────────────────┤
-│ SignTransformer     │ Keypoints (156) │ ✅ YES (~1-2 MB)  │ Isolated signs      │
-│ SignTransformerCtc  │ Keypoints (156) │ ✅ YES (~1-2 MB)  │ Continuous signs    │
-│ MediaPipeGRU        │ Keypoints (156) │ ✅ YES (~500 KB)  │ Isolated baseline   │
-│ MediaPipeGRUCtc     │ Keypoints (156) │ ✅ YES (~500 KB)  │ Continuous baseline │
+│ SignTransformer     │ Keypoints (178) │ ✅ YES (~1-2 MB)  │ Isolated signs      │
+│ SignTransformerCtc  │ Keypoints (178) │ ✅ YES (~1-2 MB)  │ Continuous signs    │
+│ MediaPipeGRU        │ Keypoints (178) │ ✅ YES (~500 KB)  │ Isolated baseline   │
+│ MediaPipeGRUCtc     │ Keypoints (178) │ ✅ YES (~500 KB)  │ Continuous baseline │
 │ InceptionV3GRU      │ Features (2048) │ ❌ NO (~25 MB)    │ Offline baseline    │
 └─────────────────────┴─────────────────┴──────────────────┴─────────────────────┘
 
