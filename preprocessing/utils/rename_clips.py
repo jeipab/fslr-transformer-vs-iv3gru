@@ -274,20 +274,23 @@ def main():
         counter = args.start_index
         
         for filepath in files:
-            # Extract label and signer from current filename if possible
-            match = re.match(r'.*_(.+?)_(S\d+)\.[^.]+$', filepath.name)
+            # Extract current number, label and signer from filename
+            match = re.match(r'^clip_(\d+)_(.+?)_(S\d+)\.[^.]+$', filepath.name)
             if match:
-                label = match.group(1)
-                signer = match.group(2)
+                current_num = int(match.group(1))
+                label = match.group(2)
+                signer = match.group(3)
             else:
                 # Fallback: use generic naming
+                current_num = -1
                 label = "clip"
                 signer = "S0"
             
             new_name = f"clip_{counter:0{args.digits}d}_{label}_{signer}{filepath.suffix}"
             dest = filepath.parent / new_name
             
-            if filepath != dest:
+            # Only add to operations if number needs to change
+            if current_num != counter:
                 operations.append((filepath, dest))
             
             counter += 1
