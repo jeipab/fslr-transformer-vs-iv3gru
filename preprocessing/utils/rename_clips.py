@@ -37,6 +37,10 @@ Optional:
     python rename_clips.py --root . --dry-run
     python rename_clips.py --root . --validate
     python rename_clips.py --root . --summary
+Renumber (fix gaps in numbering):
+    python rename_clips.py --renumber --clips data/raw/Greetings-Only --dry-run
+    python rename_clips.py --renumber --clips data/raw/Greetings-Only --recursive --dry-run
+    python rename_clips.py --renumber --clips data/raw/Greetings-Only --recursive
 """
 
 import argparse
@@ -122,6 +126,19 @@ def collect_clips_hierarchical(clips_dir: Path, video_extensions=None) -> List[D
                         "signer": signer
                     })
     return items
+
+def collect_all_video_files(target_dir: Path, recursive: bool = False) -> List[Path]:
+    """Simply collect all video files and npz files in directory"""
+    extensions = ['*.MOV', '*.mov', '*.mp4', '*.MP4', '*.avi', '*.AVI', '*.npz']
+    
+    files = set()
+    for ext in extensions:
+        if recursive:
+            files.update(target_dir.rglob(ext))
+        else:
+            files.update(target_dir.glob(ext))
+    
+    return sorted(files)
 
 def validate_structure(clips_dir: Path, labels_map: Dict[int, Tuple[str, int]]):
     """Validates the hierarchical folder structure."""
@@ -223,6 +240,8 @@ def main():
     ap.add_argument("--summary", action="store_true", help="Generate statistics without renaming")
     ap.add_argument("--keep-structure", action="store_true", help="Rename files in-place, keeping the original folder structure (C/G/S)")
     ap.add_argument("--input-structure", type=str, default="hierarchical", choices=["hierarchical"], help="Input folder structure type")
+    ap.add_argument("--renumber", action="store_true", help="Renumber existing clip_XXXX_label_SX files to fix gaps in numbering")
+    ap.add_argument("--recursive", action="store_true", help="When renumbering, search subdirectories recursively")
     args = ap.parse_args()
 
     root = args.root.resolve()
@@ -236,6 +255,71 @@ def main():
     print(f"📂 labels_csv: {labels_csv}")
     print(f"📂 out_dir: {out_dir}")
     out_dir.mkdir(parents=True, exist_ok=True)
+
+    # Handle renumbering mode
+    if args.renumber:
+        print("Renumbering all video files...")
+        target = args.clips if args.clips else out_dir
+        
+        files = collect_all_video_files(target, recursive=args.recursive)
+        
+        if not files:
+            print("No video files found")
+            return
+        
+        print(f"Found {len(files)} video files")
+        
+        # Build rename operations
+        operations = []
+        counter = args.start_index
+        
+        for filepath in files:
+            # Extract label and signer from current filename if possible
+            match = re.match(r'.*_(.+?)_(S\d+)\.[^.]+$', filepath.name)
+            if match:
+                label = match.group(1)
+                signer = match.group(2)
+            else:
+                # Fallback: use generic naming
+                label = "clip"
+                signer = "S0"
+            
+            new_name = f"clip_{counter:0{args.digits}d}_{label}_{signer}{filepath.suffix}"
+            dest = filepath.parent / new_name
+            
+            if filepath != dest:
+                operations.append((filepath, dest))
+            
+            counter += 1
+        
+        if not operations:
+            print("All files already numbered correctly")
+            return
+        
+        print(f"Will renumber {len(operations)} files")
+        
+        if args.dry_run:
+            for src, dest in operations[:10]:
+                print(f"  {src.name} -> {dest.name}")
+            if len(operations) > 10:
+                print(f"  ... and {len(operations) - 10} more")
+            print("Run without --dry-run to apply changes")
+            return
+        
+        # Execute with temp names to avoid conflicts
+        print("Renaming...")
+        temp_renames = []
+        
+        for i, (src, dest) in enumerate(operations):
+            temp_name = src.parent / f"__temp_{i}{src.suffix}"
+            src.rename(temp_name)
+            temp_renames.append((temp_name, dest))
+        
+        for temp, dest in temp_renames:
+            temp.rename(dest)
+        
+        print(f"Done! Renumbered {len(operations)} files")
+        return
 
     id_to_label_cat = read_labels(labels_csv)
 

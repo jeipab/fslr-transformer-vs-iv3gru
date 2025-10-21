@@ -53,16 +53,16 @@ def extract_metadata_from_npz(npz_path):
             
             occluded = meta.get('occluded_flag', 0)
             signer = meta.get('signer', 'N/A')
-            duration = meta.get('duration', 0.0)
+            duration = meta.get('duration_sec', meta.get('duration', 0.0))
 
         # If signer is not in metadata, extract from filename
-        if signer == 'N/A':
+        if signer == 'N/A' or signer is None:
             match = re.search(r'_(S[0-7])\.npz$', npz_path.name)
             if match:
                 signer = match.group(1)
 
         # Validate signer format
-        if not re.match(r'^S[0-7]$', signer):
+        if signer is None or not re.match(r'^S[0-7]$', str(signer)):
             print(f"[WARN] Invalid signer format for {npz_path.name}: {signer}")
             signer = 'N/A'
 
@@ -212,9 +212,17 @@ Examples:
     
     print(f"\n🏷️  Assigning gloss and category IDs...")
 
-    # Create mapping dictionaries
-    gloss_map = dict(zip(gloss_cat["label"].str.lower(), gloss_cat["gloss_id"]))
-    cat_map = dict(zip(gloss_cat["label"].str.lower(), gloss_cat["cat_id"]))
+    # Create mapping dictionaries (normalize labels to match filename format)
+    # Inline slugify to avoid scope issues with pandas.apply()
+    normalized_labels = (gloss_cat["label"]
+                        .str.lower()
+                        .str.replace(' ', '_', regex=False)
+                        .str.replace('-', '_', regex=False)
+                        .str.replace(r'[^a-z0-9_]', '', regex=True)
+                        .str.replace(r'_+', '_', regex=True)
+                        .str.strip('_'))
+    gloss_map = dict(zip(normalized_labels, gloss_cat["gloss_id"]))
+    cat_map = dict(zip(normalized_labels, gloss_cat["cat_id"]))
     
     def get_gloss_from_filename(filename):
         """Extract gloss text from filename.
