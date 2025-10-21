@@ -873,6 +873,7 @@ class SignTransformerCtc(nn.Module):
                  n_heads=8,
                  n_layers=4,
                  num_ctc_classes=106,
+                 num_cat=None,
                  dropout=0.1,
                  max_len=300,
                  ff_dim=None):
@@ -899,8 +900,16 @@ class SignTransformerCtc(nn.Module):
             for _ in range(n_layers)
         ])
         
-        # ===== CTC OUTPUT HEAD =====
+        # ===== DUAL OUTPUT HEADS =====
+        # CTC head for gloss sequence prediction (per-frame)
         self.ctc_head = nn.Linear(emb_dim, num_ctc_classes)
+        
+        # Optional category head for auxiliary category classification (per-sequence)
+        self.num_cat = num_cat
+        if num_cat is not None:
+            self.category_head = nn.Linear(emb_dim, num_cat)
+        else:
+            self.category_head = None
         
         # Store configuration
         self.num_ctc_classes = num_ctc_classes
@@ -909,7 +918,7 @@ class SignTransformerCtc(nn.Module):
     
     def forward(self, x, mask=None):
         """
-        Forward pass through the CTC Transformer model.
+        Forward pass through the CTC Transformer model with optional category prediction.
         
         Args:
             x (Tensor): Input keypoint sequence of shape [B, T, 178].
@@ -918,8 +927,13 @@ class SignTransformerCtc(nn.Module):
                                   Internally broadcast to [B, 1, 1, T] for attention.
         
         Returns:
-            Tensor: Log probabilities of shape [B, T, num_ctc_classes].
-                   Use .permute(1, 0, 2) for CTCLoss which expects [T, B, C].
+            If num_cat is None (CTC-only mode):
+                Tensor: CTC log probabilities of shape [B, T, num_ctc_classes].
+            
+            If num_cat is provided (dual-task mode):
+                Tuple[Tensor, Tensor]: (ctc_log_probs, cat_logits)
+                    - ctc_log_probs: [B, T, num_ctc_classes] for CTC loss
+                    - cat_logits: [B, num_cat] for category classification
         
         Raises:
             ValueError: If input dimensions are invalid or mask dimensions don't match.
@@ -972,17 +986,34 @@ class SignTransformerCtc(nn.Module):
         for encoder_layer in self.encoder_layers:
             x = encoder_layer(x, attention_mask)
         
-        # ===== CTC HEAD =====
+        # ===== CTC HEAD (PER-FRAME PREDICTION) =====
         # Project to CTC vocabulary size
         # [B, T, E] → [B, T, num_ctc_classes]
-        logits = self.ctc_head(x)
+        ctc_logits = self.ctc_head(x)
         
-        # ===== LOG SOFTMAX =====
         # Apply log softmax for CTC loss
         # CTCLoss expects log probabilities, not raw logits
-        log_probs = F.log_softmax(logits, dim=2)
+        ctc_log_probs = F.log_softmax(ctc_logits, dim=2)
         
-        return log_probs
+        # ===== CATEGORY HEAD (PER-SEQUENCE PREDICTION) =====
+        if self.category_head is not None:
+            # Temporal pooling: average over valid frames
+            # [B, T, E] → [B, E]
+            if mask is not None:
+                # Masked average pooling (ignore padding frames)
+                mask_expanded = mask.unsqueeze(-1)  # [B, T, 1]
+                pooled = (x * mask_expanded).sum(dim=1) / mask_expanded.sum(dim=1).clamp(min=1)
+            else:
+                # Simple mean pooling
+                pooled = x.mean(dim=1)
+            
+            # Category prediction: [B, E] → [B, num_cat]
+            cat_logits = self.category_head(pooled)
+            
+            return ctc_log_probs, cat_logits
+        else:
+            # CTC-only mode (backward compatibility)
+            return ctc_log_probs
     
     def get_attention_weights(self, x, mask=None):
         """

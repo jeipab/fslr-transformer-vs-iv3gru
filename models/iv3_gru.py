@@ -507,9 +507,10 @@ class InceptionV3GRUCtc(nn.Module):
         dropout: float = 0.3,
         pretrained_backbone: bool = True,
         freeze_backbone: bool = True,
+        num_cat: Optional[int] = None,
     ):
         """
-        Initialize the InceptionV3-GRU-CTC model.
+        Initialize the InceptionV3-GRU-CTC model with optional category head.
         
         Args:
             num_ctc_classes (int): Number of CTC classes including blank.
@@ -518,6 +519,7 @@ class InceptionV3GRUCtc(nn.Module):
             dropout (float): Dropout rate applied after GRU layers.
             pretrained_backbone (bool): Load ImageNet weights for InceptionV3.
             freeze_backbone (bool): Freeze CNN weights.
+            num_cat (int, optional): Number of category classes. If None, CTC-only mode.
         """
         super().__init__()
         
@@ -525,6 +527,7 @@ class InceptionV3GRUCtc(nn.Module):
         self.hidden1 = hidden1
         self.hidden2 = hidden2
         self.dropout_p = dropout
+        self.num_cat = num_cat
         
         # ===== FEATURE EXTRACTION =====
         # Initialize InceptionV3 feature extractor
@@ -562,9 +565,15 @@ class InceptionV3GRUCtc(nn.Module):
         self.do1 = nn.Dropout(dropout)  # After first GRU
         self.do2 = nn.Dropout(dropout)  # After second GRU
         
-        # ===== CTC OUTPUT HEAD =====
-        # Single linear layer for CTC predictions
+        # ===== DUAL OUTPUT HEADS =====
+        # CTC head for gloss sequence prediction (per-frame)
         self.ctc_head = nn.Linear(effective_hidden2, num_ctc_classes)
+        
+        # Optional category head for auxiliary category classification (per-sequence)
+        if num_cat is not None:
+            self.category_head = nn.Linear(effective_hidden2, num_cat)
+        else:
+            self.category_head = None
         
         # ===== WEIGHT INITIALIZATION =====
         # Xavier/orthogonal initialization for GRU stability
@@ -640,7 +649,7 @@ class InceptionV3GRUCtc(nn.Module):
         features_already: bool = False,
     ) -> torch.Tensor:
         """
-        Forward pass through the InceptionV3-GRU-CTC model.
+        Forward pass through the InceptionV3-GRU-CTC model with optional category prediction.
         
         Args:
             frames_or_feats (Tensor): Input data of shape (B, T, 3, H, W) if features_already=False,
@@ -649,8 +658,13 @@ class InceptionV3GRUCtc(nn.Module):
             features_already (bool): Whether frames_or_feats contains precomputed 2048-D features.
         
         Returns:
-            Tensor: Log probabilities of shape (B, T, num_ctc_classes).
-                   Use .permute(1, 0, 2) for CTCLoss which expects [T, B, C].
+            If num_cat is None (CTC-only mode):
+                Tensor: CTC log probabilities of shape (B, T, num_ctc_classes).
+            
+            If num_cat is provided (dual-task mode):
+                Tuple[Tensor, Tensor]: (ctc_log_probs, cat_logits)
+                    - ctc_log_probs: (B, T, num_ctc_classes) for CTC loss
+                    - cat_logits: (B, num_cat) for category classification
         
         Raises:
             ValueError: If input dimensions are invalid.
@@ -715,17 +729,38 @@ class InceptionV3GRUCtc(nn.Module):
         # Apply dropout to the GRU output sequence
         y2 = self.do2(y2)  # (B, T, hidden2*2)
         
-        # ===== CTC HEAD =====
+        # Get batch size and sequence length
+        B, T = y2.shape[0], y2.shape[1]
+        
+        # ===== CTC HEAD (PER-FRAME PREDICTION) =====
         # Project to CTC vocabulary size
         # [B, T, hidden2*2] → [B, T, num_ctc_classes]
-        logits = self.ctc_head(y2)
+        ctc_logits = self.ctc_head(y2)
         
-        # ===== LOG SOFTMAX =====
         # Apply log softmax for CTC loss
         # CTCLoss expects log probabilities, not raw logits
-        log_probs = F.log_softmax(logits, dim=2)
+        ctc_log_probs = F.log_softmax(ctc_logits, dim=2)
         
-        return log_probs
+        # ===== CATEGORY HEAD (PER-SEQUENCE PREDICTION) =====
+        if self.category_head is not None:
+            # Temporal pooling: average over valid frames
+            # [B, T, hidden2*2] → [B, hidden2*2]
+            if lengths is not None:
+                # Masked average pooling (ignore padding frames)
+                mask = torch.arange(T, device=y2.device).unsqueeze(0) < lengths.unsqueeze(1)
+                mask_expanded = mask.unsqueeze(-1)  # [B, T, 1]
+                pooled = (y2 * mask_expanded).sum(dim=1) / mask_expanded.sum(dim=1).clamp(min=1)
+            else:
+                # Simple mean pooling
+                pooled = y2.mean(dim=1)
+            
+            # Category prediction: [B, hidden2*2] → [B, num_cat]
+            cat_logits = self.category_head(pooled)
+            
+            return ctc_log_probs, cat_logits
+        else:
+            # CTC-only mode (backward compatibility)
+            return ctc_log_probs
     
     def get_model_info(self) -> dict:
         """
