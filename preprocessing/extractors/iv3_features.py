@@ -228,6 +228,64 @@ def ensure_dir(p):
     """
     os.makedirs(p, exist_ok=True)
 
+
+def resize_with_aspect_ratio_and_pad(frame, target_size=256, pad_color=(0, 0, 0)):
+    """
+    Resize frame preserving aspect ratio, then pad to square.
+    
+    This prevents geometric distortion of keypoint spatial relationships while
+    ensuring consistent input dimensions for MediaPipe.
+    
+    For 640×360 input with target_size=256:
+    - Resizes to 256×144 (preserves 16:9 aspect ratio)
+    - Adds 56px black padding on top and bottom
+    - Output: 256×256 with content centered
+    
+    Args:
+        frame: Input BGR frame (H, W, 3)
+        target_size: Target square dimension (default 256)
+        pad_color: RGB color for padding (default black)
+    
+    Returns:
+        tuple: (padded_frame, metadata_dict)
+            padded_frame: (target_size, target_size, 3) numpy array
+            metadata_dict: {
+                'scale': scaling factor applied,
+                'x_offset': horizontal padding offset,
+                'y_offset': vertical padding offset,
+                'original_size': (orig_h, orig_w),
+                'resized_size': (new_h, new_w)
+            }
+    """
+    h, w = frame.shape[:2]
+    
+    # Calculate scaling to fit within target_size while preserving aspect ratio
+    scale = target_size / max(h, w)
+    new_w = int(w * scale)
+    new_h = int(h * scale)
+    
+    # Resize preserving aspect ratio
+    resized = cv2.resize(frame, (new_w, new_h), interpolation=cv2.INTER_AREA)
+    
+    # Create padded canvas
+    canvas = np.full((target_size, target_size, 3), pad_color, dtype=np.uint8)
+    
+    # Center the resized frame on canvas
+    y_offset = (target_size - new_h) // 2
+    x_offset = (target_size - new_w) // 2
+    canvas[y_offset:y_offset+new_h, x_offset:x_offset+new_w] = resized
+    
+    # Store metadata for debugging and validation
+    metadata = {
+        'scale': scale,
+        'x_offset': x_offset,
+        'y_offset': y_offset,
+        'original_size': (h, w),
+        'resized_size': (new_h, new_w)
+    }
+    
+    return canvas, metadata
+
 def to_npz(out_path, X, X2048, mask, timestamps_ms, meta, also_parquet=True):
     """Save processed video data (keypoints + CNN features) to compressed .npz file.
     
@@ -390,8 +448,8 @@ def process_video(video_path, out_dir, label_file=None, target_fps=30, out_size=
             if ms < next_t * 1000.0:  # Skip frame if not at target sampling time
                 continue
 
-            # STEP 4a: Resize frame for consistent processing
-            frame_bgr_resized = cv2.resize(frame_bgr, (out_size, out_size), interpolation=cv2.INTER_AREA)
+            # STEP 4a: Resize frame for consistent processing (preserving aspect ratio)
+            frame_bgr_resized, resize_meta = resize_with_aspect_ratio_and_pad(frame_bgr, out_size)
 
             # STEP 4b: Prepare RGB frame and apply front camera flip if needed
             frame_rgb = cv2.cvtColor(frame_bgr_resized, cv2.COLOR_BGR2RGB)
@@ -460,6 +518,7 @@ def process_video(video_path, out_dir, label_file=None, target_fps=30, out_size=
         conf_thresh=conf_thresh,                 # Confidence threshold used for detection
         interpolation_max_gap=max_gap,           # Maximum gap size for interpolation
         flip_horizontal=flip_horizontal,         # Whether horizontal flip was applied (front camera)
+        aspect_ratio_preserved=True,             # Aspect ratio preserved during preprocessing
         gloss=gloss,                             # Sign language gloss class ID
         cat=cat                                  # Category class ID
     )
