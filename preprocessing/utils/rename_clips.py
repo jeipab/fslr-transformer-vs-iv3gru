@@ -32,6 +32,7 @@ videos/
 
 Usage:
     python rename_clips.py --root .
+    python rename_clips.py --root . --keep-structure  # Rename in-place
 Optional:
     python rename_clips.py --root . --dry-run
     python rename_clips.py --root . --validate
@@ -90,8 +91,11 @@ def get_video_duration(video_path: Path) -> float:
         print(f"[WARN] ❗ Could not get duration for {video_path}: {e}", file=sys.stderr)
         return 0.0
 
-def collect_clips_hierarchical(clips_dir: Path) -> List[Dict]:
+def collect_clips_hierarchical(clips_dir: Path, video_extensions=None) -> List[Dict]:
     """Collects clips from a 3-level hierarchical structure (C/G/S)."""
+    if video_extensions is None:
+        video_extensions = {'.MOV', '.mov', '.mp4', '.MP4', '.avi', '.AVI'}
+    
     items = []
     if not clips_dir.exists():
         raise FileNotFoundError(f"clips directory not found at {clips_dir}")
@@ -105,7 +109,12 @@ def collect_clips_hierarchical(clips_dir: Path) -> List[Dict]:
             signer_dirs = sorted([p for p in gloss_dir.iterdir() if p.is_dir() and re.match(r'^S\d+$', p.name)])
             for signer_dir in signer_dirs:
                 signer = signer_dir.name
-                for video_file in sorted(signer_dir.glob("*.MOV")):
+                # Find all video files (use set to avoid duplicates)
+                video_files = set()
+                for ext in video_extensions:
+                    video_files.update(signer_dir.glob(f"*{ext}"))
+                
+                for video_file in sorted(video_files):
                     items.append({
                         "path": video_file,
                         "cat_id": cat_id,
@@ -212,6 +221,7 @@ def main():
     ap.add_argument("--dry-run", action="store_true", help="Only print what would happen")
     ap.add_argument("--validate", action="store_true", help="Validate folder structure completeness before renaming")
     ap.add_argument("--summary", action="store_true", help="Generate statistics without renaming")
+    ap.add_argument("--keep-structure", action="store_true", help="Rename files in-place, keeping the original folder structure (C/G/S)")
     ap.add_argument("--input-structure", type=str, default="hierarchical", choices=["hierarchical"], help="Input folder structure type")
     args = ap.parse_args()
 
@@ -246,7 +256,7 @@ def main():
     width = max(args.digits, len(str(args.start_index + len(items) - 1)))
     
     csv_data = []
-    moves = []
+    operations = []  # Changed from 'moves' to 'operations' for clarity
 
     for item in items:
         src = item['path']
@@ -259,35 +269,63 @@ def main():
         
         label, cat_id = id_to_label_cat[gloss_id]
         
-        new_name = f"clip_{counter:0{width}d}_{label}_{signer}.MOV"
-        dest = out_dir / new_name
+        # Preserve original file extension
+        file_ext = src.suffix
         
-        while dest.exists():
-            counter += 1
-            new_name = f"clip_{counter:0{width}d}_{label}_{signer}.MOV"
+        if args.keep_structure:
+            # Rename in-place: keep file in same directory
+            new_name = f"clip_{counter:0{width}d}_{label}_{signer}{file_ext}"
+            dest = src.parent / new_name
+            
+            # Skip if already properly named
+            if re.match(r'^clip_\d{4}_.*', src.name):
+                match = re.match(r'^clip_(\d+)_(.+?)_S\d+\.', src.name)
+                if match and match.group(2) == label:
+                    print(f"[SKIP] Already properly named: {src}")
+                    counter += 1
+                    continue
+        else:
+            # Flatten: move to output directory
+            new_name = f"clip_{counter:0{width}d}_{label}_{signer}{file_ext}"
             dest = out_dir / new_name
+        
+        # Check if destination already exists
+        while dest.exists() and dest != src:
+            counter += 1
+            new_name = f"clip_{counter:0{width}d}_{label}_{signer}{file_ext}"
+            if args.keep_structure:
+                dest = src.parent / new_name
+            else:
+                dest = out_dir / new_name
 
         duration = get_video_duration(src)
         csv_data.append({
-            "file": new_name,
+            "file": new_name if args.keep_structure else new_name,
             "gloss": label,
             "cat": cat_id,
             "occluded": 0,
             "signer": signer,
             "duration": f"{duration:.2f}"
         })
-        moves.append((src, dest))
+        operations.append((src, dest, args.keep_structure))
         counter += 1
 
-    for src, dest in moves:
+    # Perform the rename/move operations
+    for src, dest, is_rename in operations:
         if args.dry_run:
-            print(f"[DRY] 🏃‍♀️ {src} -> {dest}")
+            action = "RENAME" if is_rename else "MOVE"
+            print(f"[DRY] {action}: {src} -> {dest}")
         else:
             try:
-                dest.write_bytes(src.read_bytes())
-                # src.unlink() # Uncomment to delete original files
+                if is_rename:
+                    # Rename in-place
+                    src.rename(dest)
+                else:
+                    # Copy to new location
+                    dest.write_bytes(src.read_bytes())
+                    # src.unlink() # Uncomment to delete original files
             except Exception as e:
-                print(f"[ERROR] ❗ Could not move {src} to {dest}: {e}", file=sys.stderr)
+                print(f"[ERROR] ❗ Could not process {src} to {dest}: {e}", file=sys.stderr)
 
     # Write CSV output
     csv_output_path = out_dir / "metadata.csv"
@@ -298,7 +336,9 @@ def main():
             writer.writerows(csv_data)
         print(f"📄 Metadata saved to {csv_output_path}")
 
-    print(f"[DONE] ✅🎉 {'Planned' if args.dry_run else 'Moved'} {len(moves)} files to {out_dir}")
+    action_verb = "Renamed" if args.keep_structure else "Moved"
+    location = "in original structure" if args.keep_structure else str(out_dir)
+    print(f"[DONE] ✅🎉 {'Planned' if args.dry_run else action_verb} {len(operations)} files {location}")
     if args.dry_run:
         print("💡 Run again without --dry-run to apply changes.")
 
