@@ -127,7 +127,13 @@ class CTCEvaluator:
                 X = X.to(self.device)
                 input_lengths = input_lengths.to(self.device)
 
-                log_probs = self.model(X)
+                output = self.model(X)
+                
+                # Handle dual-task models (CTC + Category)
+                if isinstance(output, tuple):
+                    log_probs, _ = output  # Extract CTC predictions, ignore category
+                else:
+                    log_probs = output
 
                 if decode_method == 'greedy':
                     predicted_sequences = greedy_ctc_decoder(log_probs, self.blank_id, input_lengths)

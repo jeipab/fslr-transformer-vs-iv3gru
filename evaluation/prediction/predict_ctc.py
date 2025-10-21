@@ -268,9 +268,15 @@ class CTCPredictor:
         with torch.no_grad():
             # InceptionV3GRUCtc requires features_already parameter
             if self.model_type == 'iv3_gru_ctc':
-                log_probs = self.model(X, features_already=True)
+                output = self.model(X, features_already=True)
             else:
-                log_probs = self.model(X)
+                output = self.model(X)
+            
+            # Handle dual-task models (CTC + Category)
+            if isinstance(output, tuple):
+                log_probs, _ = output  # Extract CTC predictions, ignore category
+            else:
+                log_probs = output
         
         if decode_method == 'greedy':
             predicted_sequence = greedy_ctc_decoder(log_probs, self.blank_id, input_length)[0]

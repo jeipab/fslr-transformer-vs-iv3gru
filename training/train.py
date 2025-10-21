@@ -2462,19 +2462,16 @@ def train_ctc(
     compile_model=False,
     use_ema=False,
     ema_decay=0.999,
+    alpha=1.0,
+    beta=0.0,
 ):
     """
-    Train a CTC model for continuous sign language recognition.
+    Train a CTC model for continuous sign language recognition with optional category learning.
     
     This function implements CTC-based training for sequence-to-sequence learning
-    without requiring frame-level alignment. It focuses solely on gloss transcription,
-    removing the multi-task category prediction to meet continuous recognition requirements.
-    
-    Key Differences from Multi-task Training:
-    - Uses CTCLoss instead of CrossEntropyLoss
-    - No category prediction (single-task learning)
-    - Operates on sequence-level labels instead of single class labels
-    - Model outputs full sequences instead of pooled representations
+    without requiring frame-level alignment. Supports both CTC-only and dual-task modes:
+    - CTC-only: gloss transcription only (beta=0)
+    - Dual-task: gloss transcription + category classification (beta>0)
     
     Args:
         model: CTC model to train (SignTransformerCtc or MediaPipeGRUCtc)
@@ -2644,25 +2641,32 @@ def train_ctc(
         optimizer.zero_grad(set_to_none=True)
         
         for batch_idx, batch in enumerate(train_loader):
-            # Unpack CTC batch: (X, targets, input_lengths, target_lengths, _)
-            X, targets, input_lengths, target_lengths, _ = batch
+            # Unpack CTC batch: (X, targets, input_lengths, target_lengths, cats)
+            X, targets, input_lengths, target_lengths, cats = batch
             
             # Move to device
             X = X.to(device, non_blocking=True)
             targets = targets.to(device, non_blocking=True)
             input_lengths = input_lengths.to(device, non_blocking=True)
             target_lengths = target_lengths.to(device, non_blocking=True)
+            cats = cats.to(device, non_blocking=True)
             
             # Forward pass with AMP
             with torch.amp.autocast(device_type=device.type, enabled=amp_enabled):
-                # Model returns log_probs: [B, T, C]
-                log_probs = model(X)
+                # Model returns log_probs [B,T,C] or (log_probs, cat_logits) for dual-task
+                output = model(X)
                 
-                # CTCLoss expects input: [T, B, C]
-                log_probs = log_probs.permute(1, 0, 2)
-                
-                # Compute CTC loss
-                loss = criterion(log_probs, targets, input_lengths, target_lengths)
+                if isinstance(output, tuple):
+                    # Dual-task mode: CTC + Category
+                    log_probs, cat_logits = output
+                    log_probs = log_probs.permute(1, 0, 2)  # [T, B, C]
+                    loss_ctc = criterion(log_probs, targets, input_lengths, target_lengths)
+                    loss_cat = nn.functional.cross_entropy(cat_logits, cats)
+                    loss = alpha * loss_ctc + beta * loss_cat
+                else:
+                    # CTC-only mode
+                    log_probs = output.permute(1, 0, 2)  # [T, B, C]
+                    loss = criterion(log_probs, targets, input_lengths, target_lengths)
                 
                 # Scale loss for gradient accumulation
                 loss = loss / gradient_accumulation_steps
@@ -2709,7 +2713,7 @@ def train_ctc(
         if ema is not None:
             ema.apply_shadow()
         
-        val_loss = evaluate_ctc(model, val_loader, criterion, device)
+        val_loss, val_cat_acc = evaluate_ctc(model, val_loader, criterion, device, alpha, beta)
         
         # Restore original parameters
         if ema is not None:
@@ -2722,9 +2726,11 @@ def train_ctc(
         # ========================================================================
         
         # Print epoch results
+        avg_train_loss = total_loss / num_batches if num_batches > 0 else 0.0
+        cat_str = f" | Val Cat Acc: {val_cat_acc:.3f}" if beta > 0 else ""
         print(f"Epoch {epoch+1:3d}/{epochs} | "
               f"Train Loss: {avg_train_loss:.4f} | "
-              f"Val Loss: {val_loss:.4f} | "
+              f"Val Loss: {val_loss:.4f}{cat_str} | "
               f"Time: {epoch_time:.1f}s")
         
         # Print GPU memory if available
@@ -2794,7 +2800,7 @@ def train_ctc(
     if csv_fh is not None:
         csv_fh.close()
 
-def evaluate_ctc(model, dataloader, criterion, device):
+def evaluate_ctc(model, dataloader, criterion, device, alpha=1.0, beta=0.0):
     """
     Evaluate a CTC model on a validation dataset.
     
@@ -2803,37 +2809,58 @@ def evaluate_ctc(model, dataloader, criterion, device):
         dataloader: DataLoader with CTC-formatted batches
         criterion: CTCLoss criterion
         device: Torch device
+        alpha: Weight for CTC loss (dual-task mode)
+        beta: Weight for category loss (dual-task mode)
     
     Returns:
-        float: Average CTC loss across the dataset
+        tuple: (avg_loss, cat_accuracy) - loss and category accuracy (1.0 if CTC-only)
     """
     model.eval()
     total_loss = 0.0
     num_batches = 0
+    correct_cat = 0
+    total_samples = 0
+    has_cat_head = beta > 0
     
     with torch.no_grad():
         for batch in dataloader:
             # Unpack CTC batch
-            X, targets, input_lengths, target_lengths, _ = batch
+            X, targets, input_lengths, target_lengths, cats = batch
             
             # Move to device
             X = X.to(device)
             targets = targets.to(device)
             input_lengths = input_lengths.to(device)
             target_lengths = target_lengths.to(device)
+            cats = cats.to(device)
             
             # Forward pass
-            log_probs = model(X)  # [B, T, C]
-            log_probs = log_probs.permute(1, 0, 2)  # [T, B, C]
+            output = model(X)
             
-            # Compute loss
-            loss = criterion(log_probs, targets, input_lengths, target_lengths)
+            if isinstance(output, tuple):
+                # Dual-task mode
+                log_probs, cat_logits = output
+                log_probs = log_probs.permute(1, 0, 2)  # [T, B, C]
+                loss_ctc = criterion(log_probs, targets, input_lengths, target_lengths)
+                loss_cat = nn.functional.cross_entropy(cat_logits, cats)
+                loss = alpha * loss_ctc + beta * loss_cat
+                
+                # Track category accuracy
+                if has_cat_head:
+                    cat_preds = cat_logits.argmax(dim=1)
+                    correct_cat += (cat_preds == cats).sum().item()
+                    total_samples += cats.size(0)
+            else:
+                # CTC-only mode
+                log_probs = output.permute(1, 0, 2)  # [T, B, C]
+                loss = criterion(log_probs, targets, input_lengths, target_lengths)
             
             total_loss += loss.item()
             num_batches += 1
     
     avg_loss = total_loss / num_batches if num_batches > 0 else 0.0
-    return avg_loss
+    cat_accuracy = correct_cat / total_samples if total_samples > 0 else 1.0
+    return avg_loss, cat_accuracy
 
 def load_data(n_train_samples=100, n_val_samples=20, seq_length=50, input_dim=178, num_gloss=105, num_cat=10, seed=42):
     """
@@ -3365,8 +3392,10 @@ if __name__ == "__main__":
         model = SignTransformerCtc(
             input_dim=input_dim,
             num_ctc_classes=args.num_ctc_classes,
+            num_cat=args.num_cat if hasattr(args, 'num_cat') else None,
         ).to(device)
-        print(f"✓ Using SignTransformerCtc model (input_dim={input_dim}, num_ctc_classes={args.num_ctc_classes})")
+        cat_info = f", num_cat={args.num_cat}" if hasattr(args, 'num_cat') and args.num_cat else ""
+        print(f"✓ Using SignTransformerCtc model (input_dim={input_dim}, num_ctc_classes={args.num_ctc_classes}{cat_info})")
     
     elif args.model == "mediapipe_gru":
         # MediaPipeGRU always uses keypoints (178D)
@@ -3403,6 +3432,7 @@ if __name__ == "__main__":
         model = MediaPipeGRUCtc(
             input_dim=input_dim,
             num_ctc_classes=args.num_ctc_classes,
+            num_cat=args.num_cat if hasattr(args, 'num_cat') else None,
             projection_dim=None,
             hidden1=args.hidden1,
             hidden2=args.hidden2,
@@ -3432,6 +3462,7 @@ if __name__ == "__main__":
         
         model = InceptionV3GRUCtc(
             num_ctc_classes=args.num_ctc_classes,
+            num_cat=args.num_cat if hasattr(args, 'num_cat') else None,
             hidden1=args.hidden1,
             hidden2=args.hidden2,
             dropout=args.dropout,
@@ -3485,6 +3516,8 @@ if __name__ == "__main__":
                 compile_model=args.compile_model,
                 use_ema=args.use_ema,
                 ema_decay=args.ema_decay,
+                alpha=args.alpha if hasattr(args, 'alpha') else 1.0,
+                beta=args.beta if hasattr(args, 'beta') else 0.0,
             )
         else:
             # ============================================================
