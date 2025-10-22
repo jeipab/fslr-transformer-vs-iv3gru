@@ -2,7 +2,22 @@
 FSLR PREPROCESSING PIPELINE - GREETINGS-ONLY DATASET
 ===============================================================================
 
-Step 1: Preprocessing (Extract Keypoints + IV3 Features)
+Step 1: Setup Repository and Download Dataset
+-------------------------------------------------------------------------------
+git clone -b continuous https://github.com/jeipab/fslr-transformer-vs-iv3gru.git
+cd fslr-transformer-vs-iv3gru
+
+cd data
+mkdir processed
+cd processed
+pip install gdown
+gdown 1KrDnSeCx7gouA3EnwVOHUGHWjQiUSskz
+
+Output:
+  - Repository cloned to local directory
+  - Dataset downloaded and extracted to data/raw/Greetings-Only/
+
+Step 2: Preprocessing (Extract Keypoints + IV3 Features)
 -------------------------------------------------------------------------------
 python -m preprocessing.core.preprocess \
     data/raw/Greetings-Only \
@@ -18,7 +33,7 @@ Output:
   - data/processed/Greetings-Only/*.npz (1216 files)
 
 
-Step 2: Labels Generation (Create labels.csv from NPZ metadata)
+Step 3: Labels Generation (Create labels.csv from NPZ metadata)
 -------------------------------------------------------------------------------
 python data/splitting/assign.py \
     --directory data/processed/Greetings-Only \
@@ -28,7 +43,7 @@ Output:
   - data/processed/Greetings-Only/labels.csv
 
 
-Step 3: Data Splitting (80/20 Train/Val Split per Signer)
+Step 4: Data Splitting (80/20 Train/Val Split per Signer)
 -------------------------------------------------------------------------------
 python data/splitting/data_split.py \
     --processed-root data/processed/Greetings-Only \
@@ -49,7 +64,7 @@ Output:
 
 ===============================================================================
 
-Step 4: Train Transformer CTC (Continuous Recognition - Keypoints Only)
+Step 5: Train Transformer CTC (Continuous Recognition + Required Category Learning - Keypoints Only)
 -------------------------------------------------------------------------------
 python -m training.train \
     --model transformer_ctc \
@@ -57,6 +72,10 @@ python -m training.train \
     --epochs 300 \
     --batch-size 16 \
     --lr 0.0001 \
+    --num-gloss 10 \
+    --num-cat 1 \
+    --alpha 0.8 \
+    --beta 0.2 \
     --num-ctc-classes 11 \
     --ctc-blank-id 10 \
     --keypoints-train data/processed/greetings_train \
@@ -75,11 +94,336 @@ python -m training.train \
     --weight-decay 2.5e-4 \
     --dropout 0.20 \
     --label-smoothing 0.1 \
-    --output-dir trained_models/transformer/greetings_ctc_keypoints
+    --output-dir trained_models/transformer/greetings_ctc
 
-Output: trained_models/transformer/greetings_ctc_keypoints/
+Output: trained_models/transformer/greetings_ctc/
   - best_model.pth
   - training_*.log
   - training_*_metrics.csv
+
+===============================================================================
+
+Step 6: Train Transformer Classification (Isolated Recognition - Keypoints Only)
+-------------------------------------------------------------------------------
+python -m training.train \
+    --model transformer \
+    --training-mode classification \
+    --epochs 300 \
+    --batch-size 16 \
+    --lr 0.0001 \
+    --num-gloss 10 \
+    --num-cat 1 \
+    --alpha 0.8 \
+    --beta 0.2 \
+    --keypoints-train data/processed/greetings_train \
+    --keypoints-val data/processed/greetings_val \
+    --labels-train-csv data/processed/greetings_train.csv \
+    --labels-val-csv data/processed/greetings_val.csv \
+    --kp-key X \
+    --amp \
+    --augment \
+    --augment-noise-std 0.004 \
+    --augment-mask-prob 0.07 \
+    --augment-mask-ratio 0.07 \
+    --scheduler warmup_cosine \
+    --warmup-epochs 25 \
+    --early-stop 35 \
+    --weight-decay 2.5e-4 \
+    --dropout 0.20 \
+    --label-smoothing 0.1 \
+    --output-dir trained_models/transformer/greetings_classification
+
+Output: trained_models/transformer/greetings_classification/
+  - best_model.pth
+  - training_*.log
+  - training_*_metrics.csv
+
+===============================================================================
+
+Step 7: Train MediaPipe-GRU Classification (Lightweight Isolated Recognition - Keypoints Only)
+-------------------------------------------------------------------------------
+python -m training.train \
+    --model mediapipe_gru \
+    --training-mode classification \
+    --epochs 300 \
+    --batch-size 16 \
+    --lr 0.0001 \
+    --num-gloss 10 \
+    --num-cat 1 \
+    --alpha 0.8 \
+    --beta 0.2 \
+    --keypoints-train data/processed/greetings_train \
+    --keypoints-val data/processed/greetings_val \
+    --labels-train-csv data/processed/greetings_train.csv \
+    --labels-val-csv data/processed/greetings_val.csv \
+    --kp-key X \
+    --hidden1 30 \
+    --hidden2 22 \
+    --amp \
+    --augment \
+    --augment-noise-std 0.004 \
+    --augment-mask-prob 0.07 \
+    --augment-mask-ratio 0.07 \
+    --scheduler warmup_cosine \
+    --warmup-epochs 25 \
+    --early-stop 35 \
+    --weight-decay 2.5e-4 \
+    --dropout 0.20 \
+    --label-smoothing 0.1 \
+    --output-dir trained_models/mediapipe_gru/greetings_classification
+
+Output: trained_models/mediapipe_gru/greetings_classification/
+  - best_model.pth
+  - training_*.log
+  - training_*_metrics.csv
+
+===============================================================================
+
+Step 8: Train MediaPipe-GRU CTC (Lightweight Continuous Recognition + Required Category Learning - Keypoints Only)
+-------------------------------------------------------------------------------
+python -m training.train \
+    --model mediapipe_gru_ctc \
+    --training-mode ctc \
+    --epochs 300 \
+    --batch-size 16 \
+    --lr 0.0001 \
+    --num-gloss 10 \
+    --num-cat 1 \
+    --alpha 0.8 \
+    --beta 0.2 \
+    --num-ctc-classes 11 \
+    --ctc-blank-id 10 \
+    --keypoints-train data/processed/greetings_train \
+    --keypoints-val data/processed/greetings_val \
+    --labels-train-csv data/processed/greetings_train.csv \
+    --labels-val-csv data/processed/greetings_val.csv \
+    --kp-key X \
+    --hidden1 30 \
+    --hidden2 22 \
+    --amp \
+    --augment \
+    --augment-noise-std 0.004 \
+    --augment-mask-prob 0.07 \
+    --augment-mask-ratio 0.07 \
+    --scheduler warmup_cosine \
+    --warmup-epochs 25 \
+    --early-stop 35 \
+    --weight-decay 2.5e-4 \
+    --dropout 0.20 \
+    --label-smoothing 0.1 \
+    --output-dir trained_models/mediapipe_gru/greetings_ctc
+
+Output: trained_models/mediapipe_gru/greetings_ctc/
+  - best_model.pth
+  - training_*.log
+  - training_*_metrics.csv
+
+===============================================================================
+
+Step 9: Train IV3-GRU Classification (Offline Baseline - Features Only)
+-------------------------------------------------------------------------------
+python -m training.train \
+    --model iv3_gru \
+    --training-mode classification \
+    --epochs 300 \
+    --batch-size 32 \
+    --lr 0.0005 \
+    --num-gloss 10 \
+    --num-cat 1 \
+    --alpha 0.8 \
+    --beta 0.2 \
+    --features-train data/processed/greetings_train \
+    --features-val data/processed/greetings_val \
+    --labels-train-csv data/processed/greetings_train.csv \
+    --labels-val-csv data/processed/greetings_val.csv \
+    --feature-key X2048 \
+    --hidden1 30 \
+    --hidden2 22 \
+    --dropout 0.22 \
+    --no-freeze-backbone \
+    --amp \
+    --augment \
+    --augment-noise-std 0.0015 \
+    --augment-mask-prob 0.04 \
+    --augment-mask-ratio 0.04 \
+    --scheduler plateau \
+    --scheduler-patience 15 \
+    --early-stop 120 \
+    --weight-decay 3e-5 \
+    --label-smoothing 0.1 \
+    --output-dir trained_models/iv3_gru/greetings_classification
+
+Output: trained_models/iv3_gru/greetings_classification/
+  - best_model.pth
+  - training_*.log
+  - training_*_metrics.csv
+
+===============================================================================
+
+Step 10: Train IV3-GRU CTC (Offline Baseline Continuous Recognition + Required Category Learning - Features Only)
+-------------------------------------------------------------------------------
+python -m training.train \
+    --model iv3_gru_ctc \
+    --training-mode ctc \
+    --epochs 300 \
+    --batch-size 32 \
+    --lr 0.0005 \
+    --num-gloss 10 \
+    --num-cat 1 \
+    --alpha 0.8 \
+    --beta 0.2 \
+    --num-ctc-classes 11 \
+    --ctc-blank-id 10 \
+    --features-train data/processed/greetings_train \
+    --features-val data/processed/greetings_val \
+    --labels-train-csv data/processed/greetings_train.csv \
+    --labels-val-csv data/processed/greetings_val.csv \
+    --feature-key X2048 \
+    --hidden1 30 \
+    --hidden2 22 \
+    --dropout 0.22 \
+    --no-freeze-backbone \
+    --amp \
+    --augment \
+    --augment-noise-std 0.0015 \
+    --augment-mask-prob 0.04 \
+    --augment-mask-ratio 0.04 \
+    --scheduler plateau \
+    --scheduler-patience 15 \
+    --early-stop 120 \
+    --weight-decay 3e-5 \
+    --label-smoothing 0.1 \
+    --output-dir trained_models/iv3_gru/greetings_ctc
+
+Output: trained_models/iv3_gru/greetings_ctc/
+  - best_model.pth
+  - training_*.log
+  - training_*_metrics.csv
+
+===============================================================================
+
+NOTES ON MODEL TRAINING
+===============================================================================
+
+Dataset Configuration (Greetings-Only):
+  - Gloss classes: 10
+  - Category classes: 1
+  - Multi-task learning: alpha=0.8 (gloss), beta=0.2 (category)
+
+Model Types and Data Pipelines:
+  
+  1. KEYPOINT-BASED MODELS (use --kp-key X):
+     - transformer (classification & CTC)
+     - mediapipe_gru (classification & CTC)
+     - Input: [T, 178] keypoint sequences
+     - Augmentation: noise_std=0.004, mask_prob=0.07
+  
+  2. FEATURE-BASED MODELS (use --feature-key X2048):
+     - iv3_gru (classification only)
+     - Input: [T, 2048] InceptionV3 features
+     - Augmentation: noise_std=0.0015, mask_prob=0.04
+
+Training Modes:
+  - Classification: Isolated sign recognition (multi-task: gloss + category)
+  - CTC: Continuous sign recognition (dual-head: CTC for gloss sequences + per-frame categories)
+    * CTC head (alpha=0.8): Per-frame gloss predictions [B, T, num_ctc_classes]
+    * Category head (beta=0.2): Per-frame category predictions [B, T, num_cat]
+    * Example: Sequence "GOOD MORNING EGG" → glosses [good morning, egg] + categories [greetings, food]
+    * Both heads are REQUIRED for multi-task learning in this project
+
+Optimal Hyperparameters (from optimal training logs):
+  - Transformer models: lr=0.0001, dropout=0.20, warmup_cosine scheduler
+  - IV3-GRU models: lr=0.0003, dropout=0.22, plateau scheduler
+  - All models: batch_size=16, AMP enabled, label smoothing=0.1
+
+Model Training Summary:
+  Step 5: Transformer CTC (continuous, keypoints, dual-head)
+  Step 6: Transformer Classification (isolated, keypoints, dual-head)
+  Step 7: MediaPipe-GRU Classification (isolated, keypoints, lightweight, dual-head)
+  Step 8: MediaPipe-GRU CTC (continuous, keypoints, lightweight, dual-head)
+  Step 9: IV3-GRU Classification (isolated, features, offline baseline, dual-head)
+  Step 10: IV3-GRU CTC (continuous, features, offline baseline, dual-head)
+
+Architecture Notes:
+  - "dual-head" = Multi-task learning with both gloss and category outputs
+  - CTC models: Per-frame predictions for both glosses and categories
+    * CTC head outputs [B, T, num_ctc_classes] for continuous gloss sequences
+    * Category head outputs [B, T, num_cat] for per-frame category classification
+    * Each frame in sequence gets both gloss and category predictions
+  - Classification models: Whole-sequence predictions
+    * Gloss head outputs [B, num_gloss]
+    * Category head outputs [B, num_cat]
+  - All models require --num-cat and --beta > 0 for category learning
+
+Future Expansion:
+  - When adding more categories, update --num-cat parameter
+  - For larger datasets, adjust --batch-size and --early-stop
+  - CTC models are designed for continuous sign language recognition
+
+===============================================================================
+
+Step 11: Export Trained Models for Android Deployment
+===============================================================================
+
+After training completes, export each model for Android deployment:
+
+# Export Transformer Classification Model
+python models/model_export_and_setup.py \
+    --model transformer \
+    --checkpoint trained_models/transformer/greetings_classification/best_model.pth \
+    --output-dir trained_models/transformer/greetings_classification/android
+
+# Export Transformer CTC Model
+python models/model_export_and_setup.py \
+    --model transformer_ctc \
+    --checkpoint trained_models/transformer/greetings_ctc/best_model.pth \
+    --output-dir trained_models/transformer/greetings_ctc/android
+
+# Export MediaPipe-GRU Classification Model
+python models/model_export_and_setup.py \
+    --model mediapipe_gru \
+    --checkpoint trained_models/mediapipe_gru/greetings_classification/best_model.pth \
+    --output-dir trained_models/mediapipe_gru/greetings_classification/android
+
+# Export MediaPipe-GRU CTC Model
+python models/model_export_and_setup.py \
+    --model mediapipe_gru_ctc \
+    --checkpoint trained_models/mediapipe_gru/greetings_ctc/best_model.pth \
+    --output-dir trained_models/mediapipe_gru/greetings_ctc/android
+
+# Export IV3-GRU Classification Model (if needed for offline processing)
+python models/model_export_and_setup.py \
+    --model iv3_gru \
+    --checkpoint trained_models/iv3_gru/greetings_classification/best_model.pth \
+    --output-dir trained_models/iv3_gru/greetings_classification/android
+
+# Export IV3-GRU CTC Model (if needed for offline processing)
+python models/model_export_and_setup.py \
+    --model iv3_gru_ctc \
+    --checkpoint trained_models/iv3_gru/greetings_ctc/best_model.pth \
+    --output-dir trained_models/iv3_gru/greetings_ctc/android
+
+Output for each model (stored in android/ subdirectory):
+  - *.onnx: ONNX format (can use with ONNX Runtime)
+  - *_tf/: TensorFlow SavedModel (intermediate)
+  - *.tflite: Standard TFLite model
+  - *_quant.tflite: Quantized TFLite model (recommended for mobile)
+  - label_mapping.json: Gloss/category labels for Android
+  - MODEL_SPECS.txt: Model specifications
+
+Example directory structure after export:
+trained_models/transformer/greetings_classification/
+├── best_model.pth                    # Original PyTorch model
+├── training_*.log                    # Training logs
+├── training_*_metrics.csv           # Training metrics
+└── android/                         # Android export files
+    ├── sign_transformer.onnx
+    ├── sign_transformer.tflite
+    ├── sign_transformer_quant.tflite
+    ├── label_mapping.json
+    └── MODEL_SPECS.txt
+
+Note: IV3-GRU models are large (~25M parameters) and not recommended for mobile deployment.
+Use MediaPipe-GRU for lightweight mobile apps and Transformer for higher accuracy.
 
 ===============================================================================
