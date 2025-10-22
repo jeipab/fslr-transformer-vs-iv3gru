@@ -61,7 +61,7 @@ import torch.optim as optim
 from torch.utils.data import DataLoader, Dataset
 
 # Local imports
-from models import InceptionV3GRU, SignTransformer, MediaPipeGRU, SignTransformerCtc, MediaPipeGRUCtc
+from models import InceptionV3GRU, SignTransformer, MediaPipeGRU, SignTransformerCtc, MediaPipeGRUCtc, InceptionV3GRUCtc
 from streamlit_app.core.config import CTC_CONFIG
 
 # ============================================================================
