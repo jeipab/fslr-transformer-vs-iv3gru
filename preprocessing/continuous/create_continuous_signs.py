@@ -461,9 +461,9 @@ def concatenate_npz_files(
         data = load_npz_data(npz_path)
         
         # Extract arrays
-        X = data['X']  # [T, 156]
+        X = data['X']  # [T, 178]
         X2048 = data['X2048']  # [T, 2048] or None
-        mask = data['mask']  # [T, 78]
+        mask = data['mask']  # [T, 89]
         timestamps = data['timestamps_ms']  # [T]
         
         # Check if X2048 exists
@@ -528,9 +528,9 @@ def save_continuous_npz(
     
     Args:
         output_path: Output file path
-        X: Keypoint coordinates [T, 156]
+        X: Keypoint coordinates [T, 178]
         X2048: CNN features [T, 2048] or None
-        mask: Visibility mask [T, 78]
+        mask: Visibility mask [T, 89]
         timestamps: Timestamps [T]
         meta: Metadata dictionary
     """

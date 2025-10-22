@@ -126,9 +126,9 @@ clip_0234_thank you_S0.npz,7,0,0,S0,4.0
 
 Each file must contain:
 
-- `X`: Keypoints `[T, 156]`
+- `X`: Keypoints `[T, 178]`
 - `X2048`: Features `[T, 2048]` (optional)
-- `mask`: Visibility `[T, 78]`
+- `mask`: Visibility `[T, 89]`
 - `timestamps_ms`: Timestamps `[T]`
 
 ---
@@ -151,9 +151,9 @@ continuous_sequences/
 
 Concatenated arrays with cumulative timestamps:
 
-- `X`: `[T_total, 156]` - All keypoints concatenated
+- `X`: `[T_total, 178]` - All keypoints concatenated
 - `X2048`: `[T_total, 2048]` - All features concatenated
-- `mask`: `[T_total, 78]` - All masks concatenated
+- `mask`: `[T_total, 89]` - All masks concatenated
 - `timestamps_ms`: `[T_total]` - Cumulative timestamps
 
 ### JSON Metadata

@@ -71,7 +71,7 @@ MODEL_CONFIG = {
         'num_gloss_classes': CTC_CONFIG['num_gloss_classes'],
         'num_ctc_classes': CTC_CONFIG['num_ctc_classes'],
         'display_name': 'MediaPipe-GRU-CTC',
-        'input_dim': 156,
+        'input_dim': 178,
         'supports_keypoints': True,
         'supports_features': False,
         'training_mode': 'ctc'
@@ -91,7 +91,7 @@ PROCESSING_CONFIG = {
     },
     'npz': {
         'sequence_length': 150,
-        'keypoint_dim': 156,
+        'keypoint_dim': 178,
         'feature_dim': 2048
     },
     'file_limits': {

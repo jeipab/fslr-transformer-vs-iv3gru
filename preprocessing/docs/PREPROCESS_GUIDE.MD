@@ -6,7 +6,7 @@ Convert raw videos to `.npz` files for model training and inference.
 
 Extracts features from sign language videos:
 
-- **Keypoints** (`X`): MediaPipe keypoints `[T, 156]` - pose, hands, face
+- **Keypoints** (`X`): MediaPipe keypoints `[T, 178]` - pose, hands, face
 - **CNN Features** (`X2048`): InceptionV3 features `[T, 2048]`
 - **Metadata**: Visibility masks, timestamps, occlusion flags
 
@@ -79,10 +79,10 @@ Function: `create_models(seg_model=1, detection_conf=0.5, tracking_conf=0.5)`
 
 Function: `extract_keypoints_from_frame(img_rgb, models, conf_thresh=0.5)`
 
-- Pose: 25 upper body landmarks
-- Hands: 21 landmarks per hand (42 total)
-- Face: 11 key facial points
-- Output: `[T, 156]` normalized coordinates `[0, 1]`
+- Pose: 25 upper body landmarks (50 dims)
+- Hands: 21 landmarks per hand × 2 hands = 42 total (84 dims)
+- Face: 22 key facial points (44 dims)
+- Output: `[T, 178]` normalized coordinates `[0, 1]` (89 keypoints × 2)
 
 **InceptionV3 Features** (`X2048`):
 

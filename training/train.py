@@ -2862,7 +2862,7 @@ def evaluate_ctc(model, dataloader, criterion, device, alpha=1.0, beta=0.0):
     cat_accuracy = correct_cat / total_samples if total_samples > 0 else 1.0
     return avg_loss, cat_accuracy
 
-def load_data(n_train_samples=100, n_val_samples=20, seq_length=50, input_dim=178, num_gloss=105, num_cat=10, seed=42):
+def load_data(n_train_samples=100, n_val_samples=20, seq_length=150, input_dim=178, num_gloss=105, num_cat=10, seed=42):
     """
     Load training and validation data for sign language recognition.
     
@@ -3003,7 +3003,7 @@ Examples:
     parser.add_argument("--pin-memory", action="store_true", help="DataLoader pin_memory")
     parser.add_argument("--prefetch-factor", type=int, default=None, help="DataLoader prefetch_factor (worker>0)")
     # Sequence length for synthetic data (kept for compatibility)
-    parser.add_argument("--seq-length", type=int, default=50, help="Sequence length (T) - for synthetic data only")
+    parser.add_argument("--seq-length", type=int, default=150, help="Sequence length (T) - for synthetic data only")
     parser.add_argument("--seed", type=int, default=42, help="Global RNG seed")
     parser.add_argument("--deterministic", action="store_true", help="Enable deterministic CUDA ops (slower)")
     # Smoke test
