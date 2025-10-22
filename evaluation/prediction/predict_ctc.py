@@ -273,11 +273,13 @@ class CTCPredictor:
                 output = self.model(X)
             
             # Handle dual-task models (CTC + Category)
+            cat_logits = None
             if isinstance(output, tuple):
-                log_probs, _ = output  # Extract CTC predictions, ignore category
+                log_probs, cat_logits = output  # [B,T,num_ctc], [B,T,num_cat]
             else:
                 log_probs = output
         
+        # Decode gloss sequence
         if decode_method == 'greedy':
             predicted_sequence = greedy_ctc_decoder(log_probs, self.blank_id, input_length)[0]
             probs = torch.exp(log_probs[0])
@@ -287,6 +289,26 @@ class CTCPredictor:
             avg_conf = np.exp(log_prob / max(len(predicted_sequence), 1))
             confidence_scores = [float(avg_conf)] * len(predicted_sequence)
         
+        # Decode category sequence (per-frame predictions -> per-sign categories)
+        predicted_categories = []
+        category_confidences = []
+        if cat_logits is not None:
+            # Get per-frame category predictions [T, num_cat]
+            cat_probs = torch.softmax(cat_logits[0, :input_length[0]], dim=1)
+            
+            if len(predicted_sequence) > 0:
+                # Assign categories to each predicted sign based on frame distribution
+                frames_per_sign = X.shape[1] / len(predicted_sequence)
+                for idx in range(len(predicted_sequence)):
+                    start_frame = int(idx * frames_per_sign)
+                    end_frame = int((idx + 1) * frames_per_sign)
+                    # Majority vote for this sign's frames
+                    sign_cat_probs = cat_probs[start_frame:end_frame].mean(dim=0)
+                    pred_cat = sign_cat_probs.argmax().item()
+                    cat_conf = sign_cat_probs[pred_cat].item()
+                    predicted_categories.append(pred_cat)
+                    category_confidences.append(float(cat_conf))
+        
         predicted_labels = [self.gloss_mapping.get(g, f"GLOSS_{g}") for g in predicted_sequence]
         predicted_timestamps = estimate_timestamps(predicted_sequence, X.shape[1], fps)
         
@@ -294,7 +316,9 @@ class CTCPredictor:
             'file_name': npz_path.name,
             'predicted_sequence': predicted_sequence,
             'predicted_labels': predicted_labels,
+            'predicted_categories': predicted_categories,
             'confidence_scores': confidence_scores,
+            'category_confidences': category_confidences,
             'predicted_timestamps': predicted_timestamps,
             'num_predicted': len(predicted_sequence)
         }
@@ -304,6 +328,10 @@ class CTCPredictor:
             result['strategy'] = ground_truth['strategy']
             result['ground_truth_sequence'] = ground_truth['ground_truth_sequence']
             result['ground_truth_labels'] = ground_truth['ground_truth_labels']
+            
+            # Ground truth categories if available
+            if 'ground_truth_categories' in ground_truth:
+                result['ground_truth_categories'] = ground_truth['ground_truth_categories']
             
             wer, insertions, deletions, substitutions = calculate_wer_with_details(
                 ground_truth['ground_truth_sequence'],
@@ -316,6 +344,15 @@ class CTCPredictor:
             result['num_insertions'] = insertions
             result['num_deletions'] = deletions
             result['num_substitutions'] = substitutions
+            
+            # Category accuracy (if both predicted and ground truth available)
+            if predicted_categories and 'ground_truth_categories' in ground_truth:
+                gt_cats = ground_truth['ground_truth_categories']
+                if len(predicted_categories) == len(gt_cats):
+                    correct_cats = sum(1 for p, g in zip(predicted_categories, gt_cats) if p == g)
+                    result['category_accuracy'] = correct_cats / len(gt_cats)
+                else:
+                    result['category_accuracy'] = 0.0
             
             if wer == 0.0:
                 result['temporal_alignment_accuracy'] = calculate_temporal_alignment_accuracy(
@@ -394,11 +431,13 @@ class CTCPredictor:
             return {'total_sequences': 0}
         
         has_gt = 'wer' in predictions[0]
+        has_categories = 'predicted_categories' in predictions[0] and len(predictions[0]['predicted_categories']) > 0
         
         summary = {
             'total_sequences': len(predictions),
             'model_type': self.model_type,
-            'decode_method': predictions[0].get('wer') is not None
+            'decode_method': predictions[0].get('wer') is not None,
+            'has_category_predictions': has_categories
         }
         
         if has_gt:
@@ -409,6 +448,13 @@ class CTCPredictor:
             summary['mean_cer'] = summary['mean_wer']
             summary['sequence_accuracy'] = correct / len(predictions)
             summary['mean_temporal_alignment'] = float(np.mean([p.get('temporal_alignment_accuracy', 0.0) for p in predictions]))
+            
+            # Category accuracy statistics
+            if has_categories:
+                cat_accs = [p['category_accuracy'] for p in predictions if 'category_accuracy' in p]
+                if cat_accs:
+                    summary['mean_category_accuracy'] = float(np.mean(cat_accs))
+                    summary['median_category_accuracy'] = float(np.median(cat_accs))
             
             per_signer = defaultdict(list)
             per_strategy = defaultdict(list)
