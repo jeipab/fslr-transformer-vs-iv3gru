@@ -904,7 +904,7 @@ class SignTransformerCtc(nn.Module):
         # CTC head for gloss sequence prediction (per-frame)
         self.ctc_head = nn.Linear(emb_dim, num_ctc_classes)
         
-        # Optional category head for auxiliary category classification (per-sequence)
+        # Optional category head for per-frame category classification
         self.num_cat = num_cat
         if num_cat is not None:
             self.category_head = nn.Linear(emb_dim, num_cat)
@@ -933,7 +933,7 @@ class SignTransformerCtc(nn.Module):
             If num_cat is provided (dual-task mode):
                 Tuple[Tensor, Tensor]: (ctc_log_probs, cat_logits)
                     - ctc_log_probs: [B, T, num_ctc_classes] for CTC loss
-                    - cat_logits: [B, num_cat] for category classification
+                    - cat_logits: [B, T, num_cat] for per-frame category classification
         
         Raises:
             ValueError: If input dimensions are invalid or mask dimensions don't match.
@@ -995,20 +995,10 @@ class SignTransformerCtc(nn.Module):
         # CTCLoss expects log probabilities, not raw logits
         ctc_log_probs = F.log_softmax(ctc_logits, dim=2)
         
-        # ===== CATEGORY HEAD (PER-SEQUENCE PREDICTION) =====
+        # ===== CATEGORY HEAD (PER-FRAME PREDICTION) =====
         if self.category_head is not None:
-            # Temporal pooling: average over valid frames
-            # [B, T, E] → [B, E]
-            if mask is not None:
-                # Masked average pooling (ignore padding frames)
-                mask_expanded = mask.unsqueeze(-1)  # [B, T, 1]
-                pooled = (x * mask_expanded).sum(dim=1) / mask_expanded.sum(dim=1).clamp(min=1)
-            else:
-                # Simple mean pooling
-                pooled = x.mean(dim=1)
-            
-            # Category prediction: [B, E] → [B, num_cat]
-            cat_logits = self.category_head(pooled)
+            # Category prediction per frame: [B, T, E] → [B, T, num_cat]
+            cat_logits = self.category_head(x)
             
             return ctc_log_probs, cat_logits
         else:

@@ -664,7 +664,7 @@ class InceptionV3GRUCtc(nn.Module):
             If num_cat is provided (dual-task mode):
                 Tuple[Tensor, Tensor]: (ctc_log_probs, cat_logits)
                     - ctc_log_probs: (B, T, num_ctc_classes) for CTC loss
-                    - cat_logits: (B, num_cat) for category classification
+                    - cat_logits: (B, T, num_cat) for per-frame category classification
         
         Raises:
             ValueError: If input dimensions are invalid.
@@ -741,21 +741,10 @@ class InceptionV3GRUCtc(nn.Module):
         # CTCLoss expects log probabilities, not raw logits
         ctc_log_probs = F.log_softmax(ctc_logits, dim=2)
         
-        # ===== CATEGORY HEAD (PER-SEQUENCE PREDICTION) =====
+        # ===== CATEGORY HEAD (PER-FRAME PREDICTION) =====
         if self.category_head is not None:
-            # Temporal pooling: average over valid frames
-            # [B, T, hidden2*2] → [B, hidden2*2]
-            if lengths is not None:
-                # Masked average pooling (ignore padding frames)
-                mask = torch.arange(T, device=y2.device).unsqueeze(0) < lengths.unsqueeze(1)
-                mask_expanded = mask.unsqueeze(-1)  # [B, T, 1]
-                pooled = (y2 * mask_expanded).sum(dim=1) / mask_expanded.sum(dim=1).clamp(min=1)
-            else:
-                # Simple mean pooling
-                pooled = y2.mean(dim=1)
-            
-            # Category prediction: [B, hidden2*2] → [B, num_cat]
-            cat_logits = self.category_head(pooled)
+            # Category prediction per frame: [B, T, hidden2*2] → [B, T, num_cat]
+            cat_logits = self.category_head(y2)
             
             return ctc_log_probs, cat_logits
         else:

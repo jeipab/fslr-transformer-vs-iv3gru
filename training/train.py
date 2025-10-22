@@ -269,6 +269,7 @@ class FSLFeatureFileDataset(Dataset):
         # Return tensors based on mode
         if self.mode == 'ctc':
             gloss_label_seq = torch.tensor([gloss], dtype=torch.long)
+            cat_label_seq = torch.tensor([cat], dtype=torch.long)
             target_length = torch.tensor([1], dtype=torch.long)
             
             base_return = (
@@ -276,7 +277,7 @@ class FSLFeatureFileDataset(Dataset):
                 gloss_label_seq,                                 # Gloss sequence [1]
                 torch.tensor(input_length, dtype=torch.long),    # Input sequence length
                 target_length,                                   # Target sequence length [1]
-                torch.tensor(cat, dtype=torch.long)              # Category (kept for future use)
+                cat_label_seq                                    # Category sequence [1]
             )
             
             # Add metadata if requested
@@ -439,6 +440,7 @@ class FSLKeypointFileDataset(Dataset):
         # Return tensors based on mode
         if self.mode == 'ctc':
             gloss_label_seq = torch.tensor([gloss], dtype=torch.long)
+            cat_label_seq = torch.tensor([cat], dtype=torch.long)
             target_length = torch.tensor([1], dtype=torch.long)
             
             base_return = (
@@ -446,7 +448,7 @@ class FSLKeypointFileDataset(Dataset):
                 gloss_label_seq,
                 torch.tensor(input_length, dtype=torch.long),
                 target_length,
-                torch.tensor(cat, dtype=torch.long)
+                cat_label_seq
             )
             
             # Add metadata if requested
@@ -595,6 +597,7 @@ class FSLCombinedFileDataset(Dataset):
         if self.mode == 'ctc':
             # CTC mode: return sequence format for CTCLoss
             gloss_label_seq = torch.tensor([gloss], dtype=torch.long)
+            cat_label_seq = torch.tensor([cat], dtype=torch.long)
             target_length = torch.tensor([1], dtype=torch.long)
             
             base_return = (
@@ -602,7 +605,7 @@ class FSLCombinedFileDataset(Dataset):
                 gloss_label_seq,
                 torch.tensor(input_length, dtype=torch.long),
                 target_length,
-                torch.tensor(cat, dtype=torch.long)
+                cat_label_seq
             )
             
             # Add metadata if requested
@@ -820,15 +823,15 @@ def collate_for_ctc(batch):
     
     Args:
         batch: List of tuples from CTC-mode dataset, each containing:
-               (data[T,D], gloss_seq[1], input_length, target_length[1], cat) or with metadata
+               (data[T,D], gloss_seq[N], input_length, target_length[N], cat_seq[N]) or with metadata
                
     Returns:
-        tuple: (X_pad, targets, input_lengths, target_lengths, cats) where:
+        tuple: (X_pad, targets, input_lengths, target_lengths, cat_targets) where:
             - X_pad: [B, Tmax, D] - padded input sequences
-            - targets: [sum(target_lengths)] - concatenated target sequences
+            - targets: [sum(target_lengths)] - concatenated gloss sequences
             - input_lengths: [B] - input sequence lengths
             - target_lengths: [B] - target sequence lengths
-            - cats: [B] - category labels (kept for potential future use)
+            - cat_targets: [sum(target_lengths)] - concatenated category sequences
     
     Example:
         For a batch of 2 samples with sequences:
@@ -842,7 +845,7 @@ def collate_for_ctc(batch):
         - target_lengths: [1, 1]
     """
     # Unzip the batch to separate components
-    sequences, gloss_label_seqs, input_lengths, target_lengths, cats = zip(*batch)
+    sequences, gloss_label_seqs, input_lengths, target_lengths, cat_label_seqs = zip(*batch)
     
     # Get batch dimensions
     B = len(sequences)                                      # Batch size
@@ -864,10 +867,10 @@ def collate_for_ctc(batch):
     input_lengths = torch.stack(input_lengths, dim=0)       # Shape: [B]
     target_lengths = torch.cat(target_lengths, dim=0)       # Shape: [B]
     
-    # Stack category labels (kept for potential future use)
-    cats = torch.stack(cats, dim=0)  # Shape: [B]
+    # Concatenate all category label sequences (parallel to gloss targets)
+    cat_targets = torch.cat(cat_label_seqs, dim=0)  # Shape: [sum(target_lengths)]
     
-    return X_pad, targets, input_lengths, target_lengths, cats
+    return X_pad, targets, input_lengths, target_lengths, cat_targets
 
 def _make_dataloader(dataset, batch_size, shuffle, args, collate_fn=None):
     """
@@ -2641,15 +2644,15 @@ def train_ctc(
         optimizer.zero_grad(set_to_none=True)
         
         for batch_idx, batch in enumerate(train_loader):
-            # Unpack CTC batch: (X, targets, input_lengths, target_lengths, cats)
-            X, targets, input_lengths, target_lengths, cats = batch
+            # Unpack CTC batch: (X, targets, input_lengths, target_lengths, cat_targets)
+            X, targets, input_lengths, target_lengths, cat_targets = batch
             
             # Move to device
             X = X.to(device, non_blocking=True)
             targets = targets.to(device, non_blocking=True)
             input_lengths = input_lengths.to(device, non_blocking=True)
             target_lengths = target_lengths.to(device, non_blocking=True)
-            cats = cats.to(device, non_blocking=True)
+            cat_targets = cat_targets.to(device, non_blocking=True)
             
             # Forward pass with AMP
             with torch.amp.autocast(device_type=device.type, enabled=amp_enabled):
@@ -2658,10 +2661,16 @@ def train_ctc(
                 
                 if isinstance(output, tuple):
                     # Dual-task mode: CTC + Category
-                    log_probs, cat_logits = output
-                    log_probs = log_probs.permute(1, 0, 2)  # [T, B, C]
+                    log_probs, cat_logits = output  # [B,T,num_ctc], [B,T,num_cat]
+                    log_probs = log_probs.permute(1, 0, 2)  # [T, B, C] for CTC loss
                     loss_ctc = criterion(log_probs, targets, input_lengths, target_lengths)
-                    loss_cat = nn.functional.cross_entropy(cat_logits, cats)
+                    
+                    # Per-frame category loss: flatten and align with cat_targets
+                    B, T, num_cat = cat_logits.shape
+                    cat_logits_flat = cat_logits.reshape(B * T, num_cat)  # [B*T, num_cat]
+                    cat_targets_expanded = cat_targets.repeat_interleave(input_lengths)  # Expand to match frames
+                    loss_cat = nn.functional.cross_entropy(cat_logits_flat, cat_targets_expanded, reduction='mean')
+                    
                     loss = alpha * loss_ctc + beta * loss_cat
                 else:
                     # CTC-only mode
@@ -2825,31 +2834,42 @@ def evaluate_ctc(model, dataloader, criterion, device, alpha=1.0, beta=0.0):
     with torch.no_grad():
         for batch in dataloader:
             # Unpack CTC batch
-            X, targets, input_lengths, target_lengths, cats = batch
+            X, targets, input_lengths, target_lengths, cat_targets = batch
             
             # Move to device
             X = X.to(device)
             targets = targets.to(device)
             input_lengths = input_lengths.to(device)
             target_lengths = target_lengths.to(device)
-            cats = cats.to(device)
+            cat_targets = cat_targets.to(device)
             
             # Forward pass
             output = model(X)
             
             if isinstance(output, tuple):
                 # Dual-task mode
-                log_probs, cat_logits = output
-                log_probs = log_probs.permute(1, 0, 2)  # [T, B, C]
+                log_probs, cat_logits = output  # [B,T,num_ctc], [B,T,num_cat]
+                log_probs = log_probs.permute(1, 0, 2)  # [T, B, C] for CTC loss
                 loss_ctc = criterion(log_probs, targets, input_lengths, target_lengths)
-                loss_cat = nn.functional.cross_entropy(cat_logits, cats)
+                
+                # Per-frame category loss
+                B, T, num_cat = cat_logits.shape
+                cat_logits_flat = cat_logits.reshape(B * T, num_cat)
+                cat_targets_expanded = cat_targets.repeat_interleave(input_lengths)
+                loss_cat = nn.functional.cross_entropy(cat_logits_flat, cat_targets_expanded, reduction='mean')
+                
                 loss = alpha * loss_ctc + beta * loss_cat
                 
-                # Track category accuracy
+                # Track category accuracy (per-sequence: majority vote)
                 if has_cat_head:
-                    cat_preds = cat_logits.argmax(dim=1)
-                    correct_cat += (cat_preds == cats).sum().item()
-                    total_samples += cats.size(0)
+                    for i in range(B):
+                        seq_len = input_lengths[i]
+                        cat_pred_seq = cat_logits[i, :seq_len].argmax(dim=1)  # [seq_len]
+                        # Majority vote for sequence-level category
+                        pred_cat = cat_pred_seq.mode().values.item()
+                        true_cat = cat_targets[i].item()
+                        correct_cat += (pred_cat == true_cat)
+                    total_samples += B
             else:
                 # CTC-only mode
                 log_probs = output.permute(1, 0, 2)  # [T, B, C]
