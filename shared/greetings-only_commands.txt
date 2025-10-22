@@ -5,12 +5,7 @@ FSLR PREPROCESSING PIPELINE - GREETINGS-ONLY DATASET
 Step 1: Setup Repository and Download Dataset
 -------------------------------------------------------------------------------
 git clone -b continuous https://github.com/jeipab/fslr-transformer-vs-iv3gru.git
-cd fslr-transformer-vs-iv3gru
 
-cd data
-mkdir processed
-cd processed
-pip install gdown
 gdown 1KrDnSeCx7gouA3EnwVOHUGHWjQiUSskz
 
 Output:
