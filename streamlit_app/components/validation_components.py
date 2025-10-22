@@ -817,23 +817,29 @@ def render_ctc_validation_results(results: Dict[str, Any]):
     
     # Summary metrics
     st.markdown("#### Overall Metrics")
-    col1, col2, col3, col4 = st.columns(4)
+    has_categories = summary.get('has_category_predictions', False)
+    cols = st.columns(5 if has_categories else 4)
     
-    with col1:
+    with cols[0]:
         mean_wer = summary.get('mean_wer', 0)
         st.metric("Mean WER", f"{mean_wer*100:.2f}%")
     
-    with col2:
+    with cols[1]:
         seq_accuracy = summary.get('sequence_accuracy', 0)
         st.metric("Sequence Accuracy", f"{seq_accuracy*100:.1f}%")
     
-    with col3:
+    with cols[2]:
         temporal_align = summary.get('mean_temporal_alignment', 0)
         st.metric("Temporal Alignment", f"{temporal_align*100:.1f}%")
     
-    with col4:
+    with cols[3]:
         total_sequences = summary.get('total_sequences', 0)
         st.metric("Total Sequences", total_sequences)
+    
+    if has_categories and len(cols) > 4:
+        with cols[4]:
+            cat_acc = summary.get('mean_category_accuracy', 0)
+            st.metric("Mean Category Acc", f"{cat_acc*100:.1f}%")
     
     # Error breakdown
     st.markdown("---")
@@ -872,8 +878,10 @@ def render_ctc_validation_results(results: Dict[str, Any]):
     
     if predictions:
         pred_data = []
+        has_cat_acc = any('category_accuracy' in p for p in predictions)
+        
         for pred in predictions:
-            pred_data.append({
+            row = {
                 'File': pred['file_name'],
                 'GT Length': len(pred.get('ground_truth_sequence', [])),
                 'Pred Length': pred['num_predicted'],
@@ -882,7 +890,14 @@ def render_ctc_validation_results(results: Dict[str, Any]):
                 'Insertions': pred.get('num_insertions', 0),
                 'Deletions': pred.get('num_deletions', 0),
                 'Substitutions': pred.get('num_substitutions', 0)
-            })
+            }
+            
+            # Add category accuracy if available
+            if has_cat_acc:
+                cat_acc = pred.get('category_accuracy')
+                row['Cat Acc'] = f"{cat_acc*100:.1f}%" if cat_acc is not None else 'N/A'
+            
+            pred_data.append(row)
         
         pred_df = pd.DataFrame(pred_data)
         st.dataframe(pred_df, use_container_width=True, height=400)

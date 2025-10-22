@@ -862,7 +862,10 @@ def render_continuous_sequence_predictions(filename: str, npz_data: Dict, metada
             predicted_labels=results['predicted_labels'],
             confidence_scores=results.get('confidence_scores'),
             wer=results.get('wer'),
-            ground_truth_available=ground_truth is not None
+            ground_truth_available=ground_truth is not None,
+            predicted_categories=results.get('predicted_categories'),
+            category_confidences=results.get('category_confidences'),
+            category_accuracy=results.get('category_accuracy')
         )
         
         # Sequence comparison
@@ -873,7 +876,10 @@ def render_continuous_sequence_predictions(filename: str, npz_data: Dict, metada
                 predicted_labels=results['predicted_labels'],
                 ground_truth_sequence=ground_truth.get('ground_truth_sequence'),
                 ground_truth_labels=ground_truth.get('ground_truth_labels'),
-                confidence_scores=results.get('confidence_scores')
+                confidence_scores=results.get('confidence_scores'),
+                predicted_categories=results.get('predicted_categories'),
+                category_confidences=results.get('category_confidences'),
+                ground_truth_categories=ground_truth.get('ground_truth_categories')
             )
             
             # WER metrics

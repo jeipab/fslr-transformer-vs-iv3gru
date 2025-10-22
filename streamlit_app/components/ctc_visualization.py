@@ -13,7 +13,10 @@ def render_sequence_comparison(
     predicted_labels: List[str],
     ground_truth_sequence: Optional[List[int]] = None,
     ground_truth_labels: Optional[List[str]] = None,
-    confidence_scores: Optional[List[float]] = None
+    confidence_scores: Optional[List[float]] = None,
+    predicted_categories: Optional[List[int]] = None,
+    category_confidences: Optional[List[float]] = None,
+    ground_truth_categories: Optional[List[int]] = None
 ):
     """
     Render side-by-side comparison of predicted vs ground truth sequences.
@@ -24,8 +27,13 @@ def render_sequence_comparison(
         ground_truth_sequence: Optional list of ground truth gloss IDs
         ground_truth_labels: Optional list of ground truth gloss labels
         confidence_scores: Optional list of confidence scores per gloss
+        predicted_categories: Optional list of predicted category IDs
+        category_confidences: Optional category confidence scores
+        ground_truth_categories: Optional list of ground truth category IDs
     """
     st.markdown("#### Sequence Comparison")
+    
+    has_categories = predicted_categories is not None and len(predicted_categories) > 0
     
     if ground_truth_sequence:
         # Side-by-side comparison
@@ -33,18 +41,27 @@ def render_sequence_comparison(
         
         with col1:
             st.markdown("**Ground Truth**")
-            render_sequence_chips(ground_truth_labels, None, color='#10b981')
+            if has_categories and ground_truth_categories:
+                render_sequence_with_categories(ground_truth_labels, ground_truth_categories, None, None)
+            else:
+                render_sequence_chips(ground_truth_labels, None, color='#10b981')
         
         with col2:
             st.markdown("**Predicted**")
-            render_sequence_chips(predicted_labels, confidence_scores, color='#3b82f6')
+            if has_categories:
+                render_sequence_with_categories(predicted_labels, predicted_categories, confidence_scores, category_confidences)
+            else:
+                render_sequence_chips(predicted_labels, confidence_scores, color='#3b82f6')
         
         # Alignment visualization
         render_alignment_chart(predicted_labels, ground_truth_labels)
     else:
         # Only prediction
         st.markdown("**Predicted Sequence**")
-        render_sequence_chips(predicted_labels, confidence_scores, color='#3b82f6')
+        if has_categories:
+            render_sequence_with_categories(predicted_labels, predicted_categories, confidence_scores, category_confidences)
+        else:
+            render_sequence_chips(predicted_labels, confidence_scores, color='#3b82f6')
 
 
 def render_sequence_chips(
@@ -88,6 +105,87 @@ def render_sequence_chips(
         """
         
         chips_html += f'<div style="{chip_style}">{i+1}. {label}{confidence_text}</div>'
+    
+    chips_html += '</div>'
+    st.markdown(chips_html, unsafe_allow_html=True)
+
+
+def render_sequence_with_categories(
+    gloss_labels: List[str],
+    category_ids: List[int],
+    gloss_confidences: Optional[List[float]] = None,
+    category_confidences: Optional[List[float]] = None
+):
+    """
+    Render sequence with both glosses and categories.
+    
+    Args:
+        gloss_labels: List of gloss labels
+        category_ids: List of category IDs
+        gloss_confidences: Optional gloss confidence scores
+        category_confidences: Optional category confidence scores
+    """
+    if not gloss_labels:
+        st.info("Empty sequence")
+        return
+    
+    # Load category mappings
+    try:
+        from data.labels.label_mapping import load_label_mappings
+        _, category_mapping = load_label_mappings()
+    except:
+        category_mapping = {}
+    
+    # Create HTML for dual chips (gloss + category)
+    chips_html = '<div style="display: flex; flex-wrap: wrap; gap: 0.8rem; margin: 1rem 0;">'
+    
+    for i, gloss_label in enumerate(gloss_labels):
+        # Gloss chip
+        gloss_conf_text = ""
+        if gloss_confidences and i < len(gloss_confidences):
+            gloss_conf = gloss_confidences[i]
+            gloss_conf_text = f' ({gloss_conf*100:.1f}%)'
+            gloss_opacity = 0.5 + (gloss_conf * 0.5)
+        else:
+            gloss_opacity = 1.0
+        
+        # Category chip
+        cat_label = "N/A"
+        cat_conf_text = ""
+        cat_opacity = 1.0
+        if i < len(category_ids):
+            cat_id = category_ids[i]
+            cat_label = category_mapping.get(cat_id, f"Cat_{cat_id}")
+            
+            if category_confidences and i < len(category_confidences):
+                cat_conf = category_confidences[i]
+                cat_conf_text = f' ({cat_conf*100:.1f}%)'
+                cat_opacity = 0.5 + (cat_conf * 0.5)
+        
+        # Container for this sign (vertical stack)
+        chips_html += f'''
+        <div style="display: flex; flex-direction: column; gap: 0.25rem;">
+            <div style="
+                background-color: #3b82f6;
+                color: white;
+                padding: 0.4rem 0.8rem;
+                border-radius: 1rem;
+                font-size: 0.9rem;
+                font-weight: 500;
+                opacity: {gloss_opacity};
+            ">{i+1}. {gloss_label}{gloss_conf_text}</div>
+            <div style="
+                background-color: #10b981;
+                color: white;
+                padding: 0.3rem 0.6rem;
+                border-radius: 0.8rem;
+                font-size: 0.75rem;
+                font-weight: 500;
+                opacity: {cat_opacity};
+                text-align: center;
+            ">{cat_label}{cat_conf_text}</div>
+        </div>
+        '''
     
     chips_html += '</div>'
     st.markdown(chips_html, unsafe_allow_html=True)
@@ -354,7 +452,10 @@ def render_ctc_prediction_card(
     predicted_labels: List[str],
     confidence_scores: Optional[List[float]] = None,
     wer: Optional[float] = None,
-    ground_truth_available: bool = False
+    ground_truth_available: bool = False,
+    predicted_categories: Optional[List[int]] = None,
+    category_confidences: Optional[List[float]] = None,
+    category_accuracy: Optional[float] = None
 ):
     """
     Render comprehensive CTC prediction card.
@@ -366,32 +467,50 @@ def render_ctc_prediction_card(
         confidence_scores: Optional confidence scores
         wer: Optional WER if ground truth available
         ground_truth_available: Whether ground truth is available
+        predicted_categories: Optional list of predicted category IDs
+        category_confidences: Optional category confidence scores
+        category_accuracy: Optional category accuracy if ground truth available
     """
     st.markdown(f"### Prediction Results: `{file_name}`")
     
     # Summary metrics
-    col1, col2, col3 = st.columns(3)
+    has_categories = predicted_categories is not None and len(predicted_categories) > 0
+    cols = st.columns(4 if has_categories else 3)
     
-    with col1:
+    with cols[0]:
         st.metric("Sequence Length", len(predicted_sequence))
     
-    with col2:
+    with cols[1]:
         if confidence_scores:
             avg_conf = np.mean(confidence_scores)
-            st.metric("Avg Confidence", f"{avg_conf*100:.1f}%")
+            st.metric("Avg Gloss Conf", f"{avg_conf*100:.1f}%")
         else:
-            st.metric("Confidence", "N/A")
+            st.metric("Gloss Conf", "N/A")
     
-    with col3:
+    with cols[2]:
         if wer is not None:
             wer_color = "normal" if wer <= 0.2 else "off"
             st.metric("WER", f"{wer*100:.1f}%", delta=None, delta_color=wer_color)
         else:
             st.metric("WER", "N/A" if not ground_truth_available else "Computing...")
     
-    # Predicted sequence
+    if has_categories and len(cols) > 3:
+        with cols[3]:
+            if category_accuracy is not None:
+                cat_color = "normal" if category_accuracy >= 0.8 else "off"
+                st.metric("Category Acc", f"{category_accuracy*100:.1f}%", delta_color=cat_color)
+            elif category_confidences:
+                avg_cat_conf = np.mean(category_confidences)
+                st.metric("Avg Cat Conf", f"{avg_cat_conf*100:.1f}%")
+            else:
+                st.metric("Category", "N/A")
+    
+    # Predicted sequence with categories
     st.markdown("**Predicted Sequence:**")
-    render_sequence_chips(predicted_labels, confidence_scores, color='#3b82f6')
+    if has_categories:
+        render_sequence_with_categories(predicted_labels, predicted_categories, confidence_scores, category_confidences)
+    else:
+        render_sequence_chips(predicted_labels, confidence_scores, color='#3b82f6')
 
 
 def render_ctc_batch_summary(predictions: List[Dict]):
@@ -403,16 +522,25 @@ def render_ctc_batch_summary(predictions: List[Dict]):
     """
     st.markdown("### Batch Prediction Summary")
     
+    # Check if predictions have category data
+    has_categories = any('predicted_categories' in p and len(p['predicted_categories']) > 0 for p in predictions)
+    
     # Create summary dataframe
     summary_data = []
     for pred in predictions:
-        summary_data.append({
+        row = {
             'File': pred['file_name'],
             'Length': pred['num_predicted'],
             'WER': f"{pred.get('wer', 0)*100:.1f}%" if 'wer' in pred else 'N/A',
             'Correct': '✓' if pred.get('correct', False) else '✗' if 'correct' in pred else '—',
             'Avg Confidence': f"{np.mean(pred.get('confidence_scores', [0]))*100:.1f}%" if pred.get('confidence_scores') else 'N/A'
-        })
+        }
+        
+        # Add category accuracy if available
+        if has_categories and 'category_accuracy' in pred:
+            row['Cat Acc'] = f"{pred['category_accuracy']*100:.1f}%"
+        
+        summary_data.append(row)
     
     df = pd.DataFrame(summary_data)
     
@@ -427,15 +555,21 @@ def render_ctc_batch_summary(predictions: List[Dict]):
         wers = [pred['wer'] for pred in predictions if 'wer' in pred]
         correct_count = sum(1 for pred in predictions if pred.get('correct', False))
         
-        col1, col2, col3 = st.columns(3)
+        cols = st.columns(4 if has_categories else 3)
         
-        with col1:
+        with cols[0]:
             st.metric("Mean WER", f"{np.mean(wers)*100:.1f}%")
         
-        with col2:
+        with cols[1]:
             st.metric("Median WER", f"{np.median(wers)*100:.1f}%")
         
-        with col3:
+        with cols[2]:
             seq_accuracy = correct_count / len(predictions) * 100 if predictions else 0
             st.metric("Sequence Accuracy", f"{seq_accuracy:.1f}%")
+        
+        if has_categories and len(cols) > 3:
+            cat_accs = [pred['category_accuracy'] for pred in predictions if 'category_accuracy' in pred]
+            if cat_accs:
+                with cols[3]:
+                    st.metric("Mean Category Acc", f"{np.mean(cat_accs)*100:.1f}%")
 
