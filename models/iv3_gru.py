@@ -744,7 +744,16 @@ class InceptionV3GRUCtc(nn.Module):
         # ===== CATEGORY HEAD (PER-FRAME PREDICTION) =====
         if self.category_head is not None:
             # Category prediction per frame: [B, T, hidden2*2] → [B, T, num_cat]
-            cat_logits = self.category_head(y2)
+            # Ensure y2 maintains time dimension for per-frame prediction
+            if len(y2.shape) == 2:
+                # If y2 is [B, hidden2*2], we need to expand it to [B, T, hidden2*2]
+                # This shouldn't happen with proper GRU processing, but handle it gracefully
+                B = y2.shape[0]
+                T = ctc_log_probs.shape[1]  # Use CTC output time dimension
+                hidden_dim = y2.shape[1]
+                y2 = y2.unsqueeze(1).expand(B, T, hidden_dim)  # [B, T, hidden2*2]
+            
+            cat_logits = self.category_head(y2)  # [B, T, num_cat]
             
             return ctc_log_probs, cat_logits
         else:

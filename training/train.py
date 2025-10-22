@@ -2657,7 +2657,11 @@ def train_ctc(
             # Forward pass with AMP
             with torch.amp.autocast(device_type=device.type, enabled=amp_enabled):
                 # Model returns log_probs [B,T,C] or (log_probs, cat_logits) for dual-task
-                output = model(X)
+                # Handle iv3_gru_ctc model which needs features_already=True
+                if hasattr(model, '__class__') and 'InceptionV3GRUCtc' in model.__class__.__name__:
+                    output = model(X, features_already=True)
+                else:
+                    output = model(X)
                 
                 if isinstance(output, tuple):
                     # Dual-task mode: CTC + Category
@@ -2668,7 +2672,7 @@ def train_ctc(
                     # Per-frame category loss: flatten and align with cat_targets
                     B, T, num_cat = cat_logits.shape
                     cat_logits_flat = cat_logits.reshape(B * T, num_cat)  # [B*T, num_cat]
-                    cat_targets_expanded = cat_targets.repeat_interleave(input_lengths)  # Expand to match frames
+                    cat_targets_expanded = cat_targets.unsqueeze(1).expand(B, T).reshape(B * T)  # [B*T]
                     loss_cat = nn.functional.cross_entropy(cat_logits_flat, cat_targets_expanded, reduction='mean')
                     
                     loss = alpha * loss_ctc + beta * loss_cat
@@ -2844,7 +2848,11 @@ def evaluate_ctc(model, dataloader, criterion, device, alpha=1.0, beta=0.0):
             cat_targets = cat_targets.to(device)
             
             # Forward pass
-            output = model(X)
+            # Handle iv3_gru_ctc model which needs features_already=True
+            if hasattr(model, '__class__') and 'InceptionV3GRUCtc' in model.__class__.__name__:
+                output = model(X, features_already=True)
+            else:
+                output = model(X)
             
             if isinstance(output, tuple):
                 # Dual-task mode
@@ -2855,7 +2863,7 @@ def evaluate_ctc(model, dataloader, criterion, device, alpha=1.0, beta=0.0):
                 # Per-frame category loss
                 B, T, num_cat = cat_logits.shape
                 cat_logits_flat = cat_logits.reshape(B * T, num_cat)
-                cat_targets_expanded = cat_targets.repeat_interleave(input_lengths)
+                cat_targets_expanded = cat_targets.unsqueeze(1).expand(B, T).reshape(B * T)
                 loss_cat = nn.functional.cross_entropy(cat_logits_flat, cat_targets_expanded, reduction='mean')
                 
                 loss = alpha * loss_ctc + beta * loss_cat
@@ -2950,8 +2958,8 @@ Examples:
     # ============================================================================
     # BASIC TRAINING CONFIGURATION
     # ============================================================================
-    parser.add_argument("--model", choices=["transformer", "mediapipe_gru", "iv3_gru", "transformer_ctc", "mediapipe_gru_ctc"], default="transformer", 
-                       help="Model architecture: 'transformer' (keypoints), 'mediapipe_gru' (keypoints, lightweight), 'iv3_gru' (features, offline baseline), 'transformer_ctc' (CTC), 'mediapipe_gru_ctc' (CTC)")
+    parser.add_argument("--model", choices=["transformer", "mediapipe_gru", "iv3_gru", "transformer_ctc", "mediapipe_gru_ctc", "iv3_gru_ctc"], default="transformer", 
+                       help="Model architecture: 'transformer' (keypoints), 'mediapipe_gru' (keypoints, lightweight), 'iv3_gru' (features, offline baseline), 'transformer_ctc' (CTC), 'mediapipe_gru_ctc' (CTC), 'iv3_gru_ctc' (CTC)")
     parser.add_argument("--training-mode", type=str, choices=["classification", "ctc"], default="classification",
                        help="Training mode: 'classification' (isolated signs) or 'ctc' (continuous recognition)")
     parser.add_argument("--epochs", type=int, default=20, 
@@ -3173,7 +3181,7 @@ if __name__ == "__main__":
     try:
         # If dataset directories are provided, use file-based datasets; otherwise synthetic
         use_feature_files = (
-            args.model == "iv3_gru" and args.features_train is not None and args.features_val is not None
+            args.model in ["iv3_gru", "iv3_gru_ctc"] and args.features_train is not None and args.features_val is not None
         )
         use_keypoint_files = (
             args.model in ["transformer", "transformer_ctc", "mediapipe_gru", "mediapipe_gru_ctc"] and 
