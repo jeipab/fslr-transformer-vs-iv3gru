@@ -194,7 +194,7 @@ class ModelValidator:
         elif self.model_type == 'iv3_gru':
             from models.iv3_gru import InceptionV3GRU
             
-            # Try to determine hidden sizes from checkpoint
+            # Try to determine hidden sizes and class counts from checkpoint
             try:
                 checkpoint = torch.load(self.checkpoint_path, map_location='cpu')
                 state_dict = checkpoint.get('model_state_dict', checkpoint.get('state_dict', checkpoint.get('model', checkpoint)))
@@ -206,17 +206,30 @@ class ModelValidator:
                     gru2_hidden = state_dict['gru2.weight_hh_l0'].shape[0] // 3
                     print(f"Detected GRU hidden sizes from checkpoint: hidden1={gru1_hidden}, hidden2={gru2_hidden}")
                 else:
-                    gru1_hidden = 16  # Default fallback
-                    gru2_hidden = 12  # Default fallback
-                    print(f"Warning: Could not detect GRU hidden sizes from checkpoint, using defaults: hidden1={gru1_hidden}, hidden2={gru2_hidden}")
+                    gru1_hidden = 30  # Fallback to trained model defaults
+                    gru2_hidden = 22  # Fallback to trained model defaults
+                    print(f"Warning: Could not detect GRU hidden sizes from checkpoint, using trained model defaults: hidden1={gru1_hidden}, hidden2={gru2_hidden}")
+                
+                # Detect class counts from classification head weights
+                if 'gloss_head.weight' in state_dict and 'category_head.weight' in state_dict:
+                    num_gloss = state_dict['gloss_head.weight'].shape[0]
+                    num_cat = state_dict['category_head.weight'].shape[0]
+                    print(f"Detected class counts from checkpoint: num_gloss={num_gloss}, num_cat={num_cat}")
+                else:
+                    num_gloss = 10  # Fallback to trained model defaults
+                    num_cat = 1  # Fallback to trained model defaults
+                    print(f"Warning: Could not detect class counts from checkpoint, using trained model defaults: num_gloss={num_gloss}, num_cat={num_cat}")
+                    
             except Exception as e:
-                gru1_hidden = 16  # Default fallback
-                gru2_hidden = 12  # Default fallback
-                print(f"Warning: Could not load checkpoint to detect GRU hidden sizes, using defaults: hidden1={gru1_hidden}, hidden2={gru2_hidden}: {e}")
+                gru1_hidden = 30  # Fallback to trained model defaults
+                gru2_hidden = 22  # Fallback to trained model defaults
+                num_gloss = 10  # Fallback to trained model defaults
+                num_cat = 1  # Fallback to trained model defaults
+                print(f"Warning: Could not load checkpoint to detect model parameters, using trained model defaults: hidden1={gru1_hidden}, hidden2={gru2_hidden}, num_gloss={num_gloss}, num_cat={num_cat}: {e}")
             
             model = InceptionV3GRU(
-                num_gloss=105,
-                num_cat=10,
+                num_gloss=num_gloss,
+                num_cat=num_cat,
                 hidden1=gru1_hidden,
                 hidden2=gru2_hidden,
                 dropout=0.3,
@@ -714,7 +727,7 @@ def run_ctc_validation(
     Run CTC validation on continuous sequences.
     
     Args:
-        model_type: CTC model type ('transformer_ctc' or 'mediapipe_gru_ctc')
+        model_type: CTC model type ('transformer_ctc' or 'iv3_gru_ctc')
         npz_folder_path: Path to folder containing continuous sequence NPZ files
         ground_truth_folder: Path to folder containing ground truth JSON files
         decode_method: Decoding method ('greedy' or 'beam_search')

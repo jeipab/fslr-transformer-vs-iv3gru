@@ -30,10 +30,10 @@ CTC_CONFIG = {
 MODEL_CONFIG = {
     'transformer': {
         'enabled': True,
-        'checkpoint_path': 'trained_models/transformer/optimal/SignTransformer_best.pt',
+        'checkpoint_path': 'trained_models/transformer/greetings_classification/SignTransformer_best.pt',
         'model_type': 'transformer',
-        'num_gloss_classes': CTC_CONFIG['num_gloss_classes'],
-        'num_category_classes': 10,
+        'num_gloss_classes': 10,  # greetings_classification model has 10 gloss classes
+        'num_category_classes': 1,  # greetings_classification model has 1 category class
         'display_name': 'SignTransformer',
         'input_dim': None, 
         'supports_keypoints': True,  
@@ -42,7 +42,7 @@ MODEL_CONFIG = {
     },
     'transformer_ctc': {
         'enabled': True,  # Enabled for continuous sign recognition
-        'checkpoint_path': 'trained_models/transformer_ctc/optimal/SignTransformerCtc_best.pt',
+        'checkpoint_path': 'trained_models/transformer/greetings_ctc/SignTransformerCtc_best.pt',
         'model_type': 'transformer_ctc',
         'num_gloss_classes': CTC_CONFIG['num_gloss_classes'],
         'num_ctc_classes': CTC_CONFIG['num_ctc_classes'],
@@ -54,7 +54,7 @@ MODEL_CONFIG = {
     },
     'iv3_gru': {
         'enabled': True,
-        'checkpoint_path': 'trained_models/iv3_gru/optimal/InceptionV3GRU_best.pt',
+        'checkpoint_path': 'trained_models/iv3_gru/greetings_classification/InceptionV3GRU_best.pt',
         'model_type': 'iv3_gru',
         'num_gloss_classes': CTC_CONFIG['num_gloss_classes'],
         'num_category_classes': 10,
@@ -64,16 +64,16 @@ MODEL_CONFIG = {
         'supports_features': True,
         'training_mode': 'classification'
     },
-    'mediapipe_gru_ctc': {
+    'iv3_gru_ctc': {
         'enabled': True,  # Enabled for continuous sign recognition
-        'checkpoint_path': 'trained_models/mediapipe_gru_ctc/optimal/MediaPipeGRUCtc_best.pt',
-        'model_type': 'mediapipe_gru_ctc',
+        'checkpoint_path': 'trained_models/iv3_gru/greetings_ctc/InceptionV3GRUCtc_best.pt',
+        'model_type': 'iv3_gru_ctc',
         'num_gloss_classes': CTC_CONFIG['num_gloss_classes'],
         'num_ctc_classes': CTC_CONFIG['num_ctc_classes'],
-        'display_name': 'MediaPipe-GRU-CTC',
-        'input_dim': 178,
-        'supports_keypoints': True,
-        'supports_features': False,
+        'display_name': 'InceptionV3+GRU-CTC',
+        'input_dim': 2048,
+        'supports_keypoints': False,
+        'supports_features': True,
         'training_mode': 'ctc'
     }
 }

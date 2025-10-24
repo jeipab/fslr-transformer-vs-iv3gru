@@ -309,7 +309,7 @@ def render_overall_performance(results: Dict[str, Any]):
         height=400
     )
     
-    st.plotly_chart(fig, width='stretch')
+    st.plotly_chart(fig, use_container_width=True)
     
     # Top-k Accuracy metrics
     if 'gloss_top1_accuracy' in overall:
@@ -572,7 +572,7 @@ def render_occlusion_analysis(results: Dict[str, Any]):
         height=400
     )
     
-    st.plotly_chart(fig, width='stretch')
+    st.plotly_chart(fig, use_container_width=True)
     
 
 

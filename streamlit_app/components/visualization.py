@@ -370,7 +370,17 @@ def render_sequence_overview(npz_dict: Dict, sequence_length: int) -> Tuple[np.n
 def render_keypoint_video(sequence: np.ndarray, mask: Optional[np.ndarray] = None, key_suffix: str = "", show_skeleton: bool = True, fps: int = 15) -> None:
     """Generate and display a video with keypoint animation."""
     time_steps, feature_dim = sequence.shape
-    keypoints_2d = sequence.reshape(time_steps, 78, 2)
+    
+    # Calculate number of keypoints based on feature dimension
+    # Each keypoint has 2 coordinates (x, y)
+    num_keypoints = feature_dim // 2
+    
+    # Validate that feature_dim is divisible by 2
+    if feature_dim % 2 != 0:
+        st.error(f"Invalid keypoint feature dimension: {feature_dim}. Expected even number for (x,y) coordinates.")
+        return
+    
+    keypoints_2d = sequence.reshape(time_steps, num_keypoints, 2)
     
     # Video settings - FPS is now controlled from main controls
     
@@ -524,8 +534,16 @@ def render_animated_keypoints(sequence: np.ndarray, mask: Optional[np.ndarray] =
     
     time_steps, feature_dim = sequence.shape
     
-    # Reshape keypoints to [T, 78, 2] for easier handling
-    keypoints_2d = sequence.reshape(time_steps, 78, 2)
+    # Calculate number of keypoints based on feature dimension
+    num_keypoints = feature_dim // 2
+    
+    # Validate that feature_dim is divisible by 2
+    if feature_dim % 2 != 0:
+        st.error(f"Invalid keypoint feature dimension: {feature_dim}. Expected even number for (x,y) coordinates.")
+        return
+    
+    # Reshape keypoints to [T, num_keypoints, 2] for easier handling
+    keypoints_2d = sequence.reshape(time_steps, num_keypoints, 2)
     
     # Extract frame-by-frame occlusion information from metadata
     frame_occlusion_data = None
@@ -584,39 +602,31 @@ def render_animated_keypoints(sequence: np.ndarray, mask: Optional[np.ndarray] =
             (0, 17), (17, 18), (18, 19), (19, 20)
         ],
         "face": [
-            # Face connections (indices 67-88, relative to 0-21)
-            # FACE_MINIMAL_22 landmarks: [lips(8), eyes(6), eyebrows(6), nose(2)]
-            # Lips: 81, 13, 311, 61, 178, 14, 402, 291 (indices 0-7)
-            # Eyes: 33, 133, 159, 362, 263, 386 (indices 8-13)  
-            # Eyebrows: 70, 107, 46, 300, 336, 276 (indices 14-19)
-            # Nose: 1, 4 (indices 20-21)
+            # Face connections based on exact MediaPipe landmark paths
+            # Mouth: 70→67→68→69→74→73→72→71→70 (circular)
+            # Left Eyebrow: 81→82→83→81 (triangular)
+            # Right Eyebrow: 84→85→86→84 (triangular)
+            # Left Eye: 75→76→77→75 (triangular)
+            # Right Eye: 78→79→80→78 (triangular)
+            # Nose: 87→88 (vertical)
             
-            # New mouth connection pattern (arc-based) - from migration guide
-            (0, 1), (1, 2),  # Upper lip arc: 81 → 13 → 311
-            (4, 5), (5, 6),  # Lower lip arc: 178 → 14 → 402
-            (0, 3), (3, 4),  # Left side: 81 → 61 → 178
-            (2, 7), (7, 6),  # Right side: 311 → 291 → 402
+            # Mouth connections - circular path: 70→67→68→69→74→73→72→71→70
+            (0, 3), (1, 2), (2, 4), (3, 4), (4, 5), (5, 6), (6, 7), (7, 0),
             
-            # Eye connections
-            (8, 9),   # left_eye_outer to left_eye_inner
-            (10, 11), # right_eye_inner to right_eye_outer
-            (9, 12),  # left_eye_inner to right_eye_inner
+            # Left Eyebrow connections - triangular: 81→82→83→81
+            (8, 9), (9, 10), (10, 8),
             
-            # Eyebrow connections
-            (14, 15), # left_eyebrow_inner to left_eyebrow_outer
-            (16, 17), # right_eyebrow_inner to right_eyebrow_outer
-            (15, 18), # left_eyebrow_outer to right_eyebrow_outer
+            # Right Eyebrow connections - triangular: 84→85→86→84
+            (11, 12), (12, 13), (13, 11),
             
-            # Nose connections
-            (20, 21), # nose_tip to nose_bridge
+            # Left Eye connections - triangular: 75→76→77→75
+            (14, 15), (15, 16), (16, 14),
             
-            # Face structure connections
-            (8, 14),  # left_eye_outer to left_eyebrow_inner
-            (10, 16), # right_eye_inner to right_eyebrow_inner
-            (20, 8),  # nose_tip to left_eye_outer
-            (20, 10), # nose_tip to right_eye_inner
-            (20, 0),  # nose_tip to upper_lip_left
-            (20, 2)   # nose_tip to upper_lip_right
+            # Right Eye connections - triangular: 78→79→80→78
+            (17, 18), (18, 19), (19, 17),
+            
+            # Nose connections - vertical: 87→88
+            (20, 21)
         ]
     }
     
@@ -769,7 +779,7 @@ def render_animated_keypoints(sequence: np.ndarray, mask: Optional[np.ndarray] =
         )
     )
     
-    st.plotly_chart(fig, width='stretch', key=f"keypoint_plot_{key_suffix}")
+    st.plotly_chart(fig, use_container_width=True, key=f"keypoint_plot_{key_suffix}")
     
     # Add frame information
     col1, col2, col3 = st.columns(3)
@@ -871,7 +881,7 @@ def render_feature_charts(sequence: np.ndarray, mask: Optional[np.ndarray] = Non
             margin=dict(l=0, r=10, t=70, b=110)  # Match Keypoint Visualization margins
         )
         
-        st.plotly_chart(fig, width='stretch', key=f"feature_line_plot_{key_suffix}")
+        st.plotly_chart(fig, use_container_width=True, key=f"feature_line_plot_{key_suffix}")
         
     else:  # Heatmap
         # Create heatmap of features over time
@@ -886,7 +896,7 @@ def render_feature_charts(sequence: np.ndarray, mask: Optional[np.ndarray] = Non
             height=600,
             margin=dict(l=0, r=10, t=70, b=110)  # Match Keypoint Visualization margins
         )
-        st.plotly_chart(fig, width='stretch', key=f"feature_heatmap_{key_suffix}")
+        st.plotly_chart(fig, use_container_width=True, key=f"feature_heatmap_{key_suffix}")
 
 
 def create_keypoint_animation_video(keypoints_2d: np.ndarray, mask: Optional[np.ndarray], 
@@ -919,38 +929,31 @@ def create_keypoint_animation_video(keypoints_2d: np.ndarray, mask: Optional[np.
             (0, 17), (17, 18), (18, 19), (19, 20)
         ],
         "face": [
-            # FACE_MINIMAL_22 landmarks: [lips(8), eyes(6), eyebrows(6), nose(2)]
-            # Lips: 81, 13, 311, 61, 178, 14, 402, 291 (indices 0-7)
-            # Eyes: 33, 133, 159, 362, 263, 386 (indices 8-13)  
-            # Eyebrows: 70, 107, 46, 300, 336, 276 (indices 14-19)
-            # Nose: 1, 4 (indices 20-21)
+            # Face connections based on exact MediaPipe landmark paths
+            # Mouth: 70→67→68→69→74→73→72→71→70 (circular)
+            # Left Eyebrow: 81→82→83→81 (triangular)
+            # Right Eyebrow: 84→85→86→84 (triangular)
+            # Left Eye: 75→76→77→75 (triangular)
+            # Right Eye: 78→79→80→78 (triangular)
+            # Nose: 87→88 (vertical)
             
-            # New mouth connection pattern (arc-based) - from migration guide
-            (0, 1), (1, 2),  # Upper lip arc: 81 → 13 → 311
-            (4, 5), (5, 6),  # Lower lip arc: 178 → 14 → 402
-            (0, 3), (3, 4),  # Left side: 81 → 61 → 178
-            (2, 7), (7, 6),  # Right side: 311 → 291 → 402
+            # Mouth connections - circular path: 70→67→68→69→74→73→72→71→70
+            (0, 1), (1, 2), (2, 3), (3, 4), (4, 5), (5, 6), (6, 7), (7, 0),
             
-            # Eye connections
-            (8, 9),   # left_eye_outer to left_eye_inner
-            (10, 11), # right_eye_inner to right_eye_outer
-            (9, 12),  # left_eye_inner to right_eye_inner
+            # Left Eyebrow connections - triangular: 81→82→83→81
+            (8, 9), (9, 10), (10, 8),
             
-            # Eyebrow connections
-            (14, 15), # left_eyebrow_inner to left_eyebrow_outer
-            (16, 17), # right_eyebrow_inner to right_eyebrow_outer
-            (15, 18), # left_eyebrow_outer to right_eyebrow_outer
+            # Right Eyebrow connections - triangular: 84→85→86→84
+            (11, 12), (12, 13), (13, 11),
             
-            # Nose connections
-            (20, 21), # nose_tip to nose_bridge
+            # Left Eye connections - triangular: 75→76→77→75
+            (14, 15), (15, 16), (16, 14),
             
-            # Face structure connections
-            (8, 14),  # left_eye_outer to left_eyebrow_inner
-            (10, 16), # right_eye_inner to right_eyebrow_inner
-            (20, 8),  # nose_tip to left_eye_outer
-            (20, 10), # nose_tip to right_eye_inner
-            (20, 0),  # nose_tip to upper_lip_left
-            (20, 2)   # nose_tip to upper_lip_right
+            # Right Eye connections - triangular: 78→79→80→78
+            (17, 18), (18, 19), (19, 17),
+            
+            # Nose connections - vertical: 87→88
+            (20, 21)
         ]
     }
     
@@ -1218,7 +1221,15 @@ def create_video_with_keypoints(uploaded_video_file, keypoints: np.ndarray,
         out = cv2.VideoWriter(output_path, fourcc, fps, (width, height))
         
         # Process frames
-        keypoint_frames = keypoints.reshape(keypoints.shape[0], 78, 2)
+        # Calculate number of keypoints based on feature dimension
+        num_keypoints = keypoints.shape[1] // 2
+        
+        # Validate that feature_dim is divisible by 2
+        if keypoints.shape[1] % 2 != 0:
+            st.error(f"Invalid keypoint feature dimension: {keypoints.shape[1]}. Expected even number for (x,y) coordinates.")
+            return
+        
+        keypoint_frames = keypoints.reshape(keypoints.shape[0], num_keypoints, 2)
         frame_idx = 0
         
         while True:

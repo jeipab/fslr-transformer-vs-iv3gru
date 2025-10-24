@@ -585,39 +585,31 @@ def render_animated_keypoints(sequence: np.ndarray, mask: Optional[np.ndarray] =
             (0, 17), (17, 18), (18, 19), (19, 20)
         ],
         "face": [
-            # Face connections (indices 67-88, relative to 0-21)
-            # FACE_MINIMAL_22 landmarks: [lips(8), eyes(6), eyebrows(6), nose(2)]
-            # Lips: 81, 13, 311, 61, 178, 14, 402, 291 (indices 0-7)
-            # Eyes: 33, 133, 159, 362, 263, 386 (indices 8-13)  
-            # Eyebrows: 70, 107, 46, 300, 336, 276 (indices 14-19)
-            # Nose: 1, 4 (indices 20-21)
+            # Face connections based on exact MediaPipe landmark paths
+            # Mouth: 70→67→68→69→74→73→72→71→70 (circular)
+            # Left Eyebrow: 81→82→83→81 (triangular)
+            # Right Eyebrow: 84→85→86→84 (triangular)
+            # Left Eye: 75→76→77→75 (triangular)
+            # Right Eye: 78→79→80→78 (triangular)
+            # Nose: 87→88 (vertical)
             
-            # New mouth connection pattern (arc-based) - from migration guide
-            (0, 1), (1, 2),  # Upper lip arc: 81 → 13 → 311
-            (4, 5), (5, 6),  # Lower lip arc: 178 → 14 → 402
-            (0, 3), (3, 4),  # Left side: 81 → 61 → 178
-            (2, 7), (7, 6),  # Right side: 311 → 291 → 402
+            # Mouth connections - circular path: 70→67→68→69→74→73→72→71→70
+            (0, 1), (1, 2), (2, 3), (3, 4), (4, 5), (5, 6), (6, 7), (7, 0),
             
-            # Eye connections
-            (8, 9),   # left_eye_outer to left_eye_inner
-            (10, 11), # right_eye_inner to right_eye_outer
-            (9, 12),  # left_eye_inner to right_eye_inner
+            # Left Eyebrow connections - triangular: 81→82→83→81
+            (8, 9), (9, 10), (10, 8),
             
-            # Eyebrow connections
-            (14, 15), # left_eyebrow_inner to left_eyebrow_outer
-            (16, 17), # right_eyebrow_inner to right_eyebrow_outer
-            (15, 18), # left_eyebrow_outer to right_eyebrow_outer
+            # Right Eyebrow connections - triangular: 84→85→86→84
+            (11, 12), (12, 13), (13, 11),
             
-            # Nose connections
-            (20, 21), # nose_tip to nose_bridge
+            # Left Eye connections - triangular: 75→76→77→75
+            (14, 15), (15, 16), (16, 14),
             
-            # Face structure connections
-            (8, 14),  # left_eye_outer to left_eyebrow_inner
-            (10, 16), # right_eye_inner to right_eyebrow_inner
-            (20, 8),  # nose_tip to left_eye_outer
-            (20, 10), # nose_tip to right_eye_inner
-            (20, 0),  # nose_tip to upper_lip_left
-            (20, 2)   # nose_tip to upper_lip_right
+            # Right Eye connections - triangular: 78→79→80→78
+            (17, 18), (18, 19), (19, 17),
+            
+            # Nose connections - vertical: 87→88
+            (20, 21)
         ]
     }
     

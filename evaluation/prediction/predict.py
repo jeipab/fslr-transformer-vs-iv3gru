@@ -51,18 +51,61 @@ class ModelPredictor:
         self._load_checkpoint()
 
     def _load_model(self):
-        # (Omitted for brevity - this function is the same as in the original script)
         if self.model_type == 'transformer':
             try:
                 checkpoint = torch.load(self.checkpoint_path, map_location='cpu')
                 state_dict = checkpoint.get('model_state_dict', checkpoint.get('state_dict', checkpoint.get('model', checkpoint)))
-                input_dim = state_dict['embedding.weight'].shape[1] if 'embedding.weight' in state_dict else 156
+                input_dim = state_dict['embedding.weight'].shape[1] if 'embedding.weight' in state_dict else 178
+                
+                # Extract class counts from classification head weights
+                if 'gloss_head.3.weight' in state_dict and 'category_head.3.weight' in state_dict:
+                    num_gloss = state_dict['gloss_head.3.weight'].shape[0]
+                    num_cat = state_dict['category_head.3.weight'].shape[0]
+                else:
+                    # Fallback to default values if detection fails
+                    num_gloss = 105
+                    num_cat = 10
             except Exception:
-                input_dim = 156
-            model = SignTransformer(input_dim=input_dim, num_gloss=105, num_cat=10)
+                # Fallback to default values if checkpoint loading fails
+                input_dim = 178
+                num_gloss = 105
+                num_cat = 10
+            
+            model = SignTransformer(input_dim=input_dim, num_gloss=num_gloss, num_cat=num_cat)
         elif self.model_type == 'iv3_gru':
             input_dim = 2048
-            model = InceptionV3GRU(num_gloss=105, num_cat=10)
+            # Try to detect hidden dimensions and class counts from checkpoint
+            try:
+                checkpoint = torch.load(self.checkpoint_path, map_location='cpu')
+                state_dict = checkpoint.get('model_state_dict', checkpoint.get('state_dict', checkpoint.get('model', checkpoint)))
+                
+                # Extract hidden dimensions from GRU weights
+                if 'gru1.weight_hh_l0' in state_dict and 'gru2.weight_hh_l0' in state_dict:
+                    # For GRU: weight_hh_l0 has shape [3*hidden_size, hidden_size]
+                    gru1_hidden = state_dict['gru1.weight_hh_l0'].shape[0] // 3
+                    gru2_hidden = state_dict['gru2.weight_hh_l0'].shape[0] // 3
+                else:
+                    # Fallback to trained model defaults
+                    gru1_hidden = 30
+                    gru2_hidden = 22
+                
+                # Extract class counts from classification head weights
+                if 'gloss_head.weight' in state_dict and 'category_head.weight' in state_dict:
+                    num_gloss = state_dict['gloss_head.weight'].shape[0]
+                    num_cat = state_dict['category_head.weight'].shape[0]
+                else:
+                    # Fallback to trained model defaults
+                    num_gloss = 10
+                    num_cat = 1
+                    
+            except Exception:
+                # Fallback to trained model defaults if checkpoint loading fails
+                gru1_hidden = 30
+                gru2_hidden = 22
+                num_gloss = 10
+                num_cat = 1
+            
+            model = InceptionV3GRU(num_gloss=num_gloss, num_cat=num_cat, hidden1=gru1_hidden, hidden2=gru2_hidden)
         else:
             raise ValueError(f"Unknown model type: {self.model_type}")
         return model.to(self.device), input_dim
@@ -84,13 +127,26 @@ class ModelPredictor:
         
         # Determine which key to use based on model type and input dimension
         if self.model_type == 'transformer':
-            feature_key = 'X' if self.input_dim == 156 else 'X2048'
-            if self.input_dim == 2204: # Combined features
-                 X_keypoints = torch.from_numpy(data['X']).float()
-                 X_features = torch.from_numpy(data['X2048']).float()
-                 X = torch.cat([X_keypoints, X_features], dim=1).unsqueeze(0)
+            # Transformer models use keypoint features (X) not InceptionV3 features (X2048)
+            if self.input_dim == 178:  # Keypoint features
+                feature_key = 'X'
+            elif self.input_dim == 2048:  # InceptionV3 features
+                feature_key = 'X2048'
+            elif self.input_dim == 2204:  # Combined features
+                X_keypoints = torch.from_numpy(data['X']).float()
+                X_features = torch.from_numpy(data['X2048']).float()
+                X = torch.cat([X_keypoints, X_features], dim=1).unsqueeze(0)
             else:
-                 X = torch.from_numpy(data[feature_key]).float().unsqueeze(0)
+                # Fallback: try to detect from available data
+                if 'X' in data and data['X'].shape[1] == self.input_dim:
+                    feature_key = 'X'
+                elif 'X2048' in data and data['X2048'].shape[1] == self.input_dim:
+                    feature_key = 'X2048'
+                else:
+                    raise ValueError(f"No compatible input data found for input_dim={self.input_dim}")
+            
+            if self.input_dim != 2204:  # Not combined features
+                X = torch.from_numpy(data[feature_key]).float().unsqueeze(0)
             
             X = X.to(self.device)
             with torch.no_grad():
@@ -120,6 +176,66 @@ class ModelPredictor:
             "confidence_gloss": gloss_probs[gloss_pred].item(),
             "confidence_cat": cat_probs[cat_pred].item(),
             "correct": bool(gloss_pred == metadata['gloss'])
+        }
+
+    def predict_from_npz_simple(self, npz_path):
+        """
+        Make prediction from a single preprocessed NPZ file without metadata.
+        Returns a simplified result format suitable for Streamlit app.
+        """
+        data = np.load(npz_path)
+        
+        # Determine which key to use based on model type and input dimension
+        if self.model_type == 'transformer':
+            # Transformer models use keypoint features (X) not InceptionV3 features (X2048)
+            if self.input_dim == 178:  # Keypoint features
+                feature_key = 'X'
+            elif self.input_dim == 2048:  # InceptionV3 features
+                feature_key = 'X2048'
+            elif self.input_dim == 2204:  # Combined features
+                X_keypoints = torch.from_numpy(data['X']).float()
+                X_features = torch.from_numpy(data['X2048']).float()
+                X = torch.cat([X_keypoints, X_features], dim=1).unsqueeze(0)
+            else:
+                # Fallback: try to detect from available data
+                if 'X' in data and data['X'].shape[1] == self.input_dim:
+                    feature_key = 'X'
+                elif 'X2048' in data and data['X2048'].shape[1] == self.input_dim:
+                    feature_key = 'X2048'
+                else:
+                    raise ValueError(f"No compatible input data found for input_dim={self.input_dim}")
+            
+            if self.input_dim != 2204:  # Not combined features
+                X = torch.from_numpy(data[feature_key]).float().unsqueeze(0)
+            
+            X = X.to(self.device)
+            with torch.no_grad():
+                gloss_logits, cat_logits = self.model(X)
+
+        elif self.model_type == 'iv3_gru':
+            X2048 = torch.from_numpy(data['X2048']).float().unsqueeze(0).to(self.device)
+            lengths = torch.tensor([X2048.shape[1]], dtype=torch.long).to(self.device)
+            with torch.no_grad():
+                gloss_logits, cat_logits = self.model(X2048, lengths, features_already=True)
+
+        # Process results
+        gloss_probs = torch.softmax(gloss_logits, dim=-1).squeeze(0)
+        cat_probs = torch.softmax(cat_logits, dim=-1).squeeze(0)
+        
+        gloss_pred = torch.argmax(gloss_probs).item()
+        cat_pred = torch.argmax(cat_probs).item()
+
+        # Get top-k predictions
+        gloss_top5 = [(i, gloss_probs[i].item()) for i in torch.topk(gloss_probs, min(5, len(gloss_probs))).indices]
+        cat_top3 = [(i, cat_probs[i].item()) for i in torch.topk(cat_probs, min(3, len(cat_probs))).indices]
+
+        return {
+            "gloss_prediction": gloss_pred,
+            "gloss_probability": gloss_probs[gloss_pred].item(),
+            "category_prediction": cat_pred,
+            "category_probability": cat_probs[cat_pred].item(),
+            "gloss_top5": gloss_top5,
+            "category_top3": cat_top3
         }
 
 def analyze_predictions(predictions, output_path):

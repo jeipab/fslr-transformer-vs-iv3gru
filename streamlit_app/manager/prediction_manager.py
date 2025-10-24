@@ -106,7 +106,7 @@ class ModelManager:
                 if str(project_root) not in sys.path:
                     sys.path.insert(0, str(project_root))
                 
-                from data import load_label_mappings
+                from data.labels.label_mapping import load_label_mappings
                 self._label_mappings = load_label_mappings()
             except Exception as e:
                 st.toast(f"Could not load label mappings: {str(e)}", icon="⚠️", duration=3000)
@@ -125,9 +125,15 @@ class ModelManager:
         self._models.clear()
 
 
+# Global singleton instance
+_model_manager_instance = None
+
 def get_model_manager():
     """Get the singleton model manager instance."""
-    return ModelManager()
+    global _model_manager_instance
+    if _model_manager_instance is None:
+        _model_manager_instance = ModelManager()
+    return _model_manager_instance
 
 
 def make_real_prediction(npz_data: Dict[str, np.ndarray], model_name: str) -> Dict:
@@ -171,7 +177,7 @@ def make_real_prediction(npz_data: Dict[str, np.ndarray], model_name: str) -> Di
         
         try:
             # Make prediction
-            results = predictor.predict_from_npz(tmp_path)
+            results = predictor.predict_from_npz_simple(tmp_path)
             return results
         finally:
             # Clean up temporary file with retry mechanism
@@ -203,7 +209,7 @@ def make_ctc_prediction(npz_data: Dict[str, np.ndarray], model_name: str,
     
     Args:
         npz_data: NPZ data dictionary
-        model_name: Name of CTC model ('transformer_ctc' or 'mediapipe_gru_ctc')
+        model_name: Name of CTC model ('transformer_ctc' or 'iv3_gru_ctc')
         ground_truth: Optional ground truth dictionary
         decode_method: Decoding method ('greedy' or 'beam_search')
         beam_width: Beam width for beam search
@@ -925,7 +931,7 @@ def render_batch_summary_tab(cfg: Dict):
         source_type = metadata.get('source_type', 'original')
         
         # Generate real predictions for this file
-        model_name = 'transformer' if cfg['model_choice'] == 'SignTransformer' else 'iv3_gru'
+        model_name = 'transformer' if cfg['model_choice'] == 'transformer' else 'iv3_gru'
         npz_data = st.session_state.processed_data[filename]
         prediction_results = make_real_prediction(npz_data, model_name)
         
@@ -942,8 +948,12 @@ def render_batch_summary_tab(cfg: Dict):
             gloss_prob = prediction_results['gloss_probability']
             cat_prob = prediction_results['category_probability']
             
-            gloss_label = gloss_mapping.get(gloss_id, f'Unknown ({gloss_id})')
-            cat_label = category_mapping.get(cat_id, f'Unknown ({cat_id})')
+            # Convert tensors to ints if needed
+            gloss_id_int = gloss_id.item() if hasattr(gloss_id, 'item') else int(gloss_id)
+            cat_id_int = cat_id.item() if hasattr(cat_id, 'item') else int(cat_id)
+            
+            gloss_label = gloss_mapping.get(gloss_id_int, f'Unknown ({gloss_id_int})')
+            cat_label = category_mapping.get(cat_id_int, f'Unknown ({cat_id_int})')
             
             top_gloss = f"{gloss_label} ({gloss_prob*100:.1f}%)"
             top_category = f"{cat_label} ({cat_prob*100:.1f}%)"

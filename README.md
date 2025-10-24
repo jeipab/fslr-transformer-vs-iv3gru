@@ -44,11 +44,11 @@ pip install pyarrow  # optional, for parquet inspection
 ### Interactive Demo with PANSINAYAN
 
 ```powershell
-# Run the PANSINAYAN application
-streamlit run run_app.py
-
 # Check network connection info (local IP and access URLs)
 python show_network_info.py
+
+# Run the PANSINAYAN application
+streamlit run run_app.py
 ```
 
 **PANSINAYAN Features**:

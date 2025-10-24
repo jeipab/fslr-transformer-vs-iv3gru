@@ -1279,7 +1279,7 @@ def render_predictions_section(cfg: Dict, npz_data: Dict = None, filename: str =
     if npz_data is not None:
         from ..manager.prediction_manager import make_real_prediction, get_model_manager
         
-        model_name = 'transformer' if cfg['model_choice'] == 'SignTransformer' else 'iv3_gru'
+        model_name = 'transformer' if cfg['model_choice'] == 'transformer' else 'iv3_gru'
         
         with st.spinner("Making prediction..."):
             prediction_results = make_real_prediction(npz_data, model_name)
@@ -1295,12 +1295,16 @@ def render_predictions_section(cfg: Dict, npz_data: Dict = None, filename: str =
         # Format predictions with human-readable labels
         gloss_top5 = []
         for gloss_id, prob in prediction_results['gloss_top5']:
-            gloss_label = gloss_mapping.get(gloss_id, f'Unknown ({gloss_id})')
+            # Convert tensor to int if needed
+            gloss_id_int = gloss_id.item() if hasattr(gloss_id, 'item') else int(gloss_id)
+            gloss_label = gloss_mapping.get(gloss_id_int, f'Unknown ({gloss_id_int})')
             gloss_top5.append((gloss_label, prob))
         
         category_top3 = []
         for cat_id, prob in prediction_results['category_top3']:
-            cat_label = category_mapping.get(cat_id, f'Unknown ({cat_id})')
+            # Convert tensor to int if needed
+            cat_id_int = cat_id.item() if hasattr(cat_id, 'item') else int(cat_id)
+            cat_label = category_mapping.get(cat_id_int, f'Unknown ({cat_id_int})')
             category_top3.append((cat_label, prob))
         
         # Enhanced predictions display - 2 columns: predictions on left, video on right
@@ -1381,8 +1385,16 @@ def render_inline_video_preview(npz_data: Dict, metadata: Dict, filename: str, k
                 X = npz_data['X']
                 time_steps = X.shape[0]
                 
-                # Reshape to [T, 89, 2]
-                keypoints_2d = X.reshape(time_steps, 89, 2)
+                # Calculate number of keypoints based on feature dimension
+                num_keypoints = X.shape[1] // 2
+                
+                # Validate that feature_dim is divisible by 2
+                if X.shape[1] % 2 != 0:
+                    st.error(f"Invalid keypoint feature dimension: {X.shape[1]}. Expected even number for (x,y) coordinates.")
+                    return
+                
+                # Reshape to [T, num_keypoints, 2]
+                keypoints_2d = X.reshape(time_steps, num_keypoints, 2)
                 mask = npz_data.get('mask', None)
                 
                 # Video settings - use fixed size and scale original video to fit
