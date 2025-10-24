@@ -44,8 +44,10 @@ MODEL_CONFIG = {
         'enabled': True,  # Enabled for continuous sign recognition
         'checkpoint_path': 'trained_models/transformer/greetings_ctc/SignTransformerCtc_best.pt',
         'model_type': 'transformer_ctc',
-        'num_gloss_classes': CTC_CONFIG['num_gloss_classes'],
-        'num_ctc_classes': CTC_CONFIG['num_ctc_classes'],
+        'num_gloss_classes': 10,  # greetings_ctc model has 10 gloss classes
+        'num_ctc_classes': 11,  # greetings_ctc model has 11 CTC classes (10 gloss + 1 blank)
+        'num_category_classes': 1,  # greetings_ctc model has 1 category class (dual-task)
+        'max_len': 1000,  # Support longer continuous sequences
         'display_name': 'SignTransformer-CTC',
         'input_dim': None,
         'supports_keypoints': True,

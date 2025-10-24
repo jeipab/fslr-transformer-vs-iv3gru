@@ -171,28 +171,57 @@ class CTCPredictor:
             try:
                 checkpoint = torch.load(self.checkpoint_path, map_location='cpu')
                 state_dict = checkpoint.get('model_state_dict', checkpoint.get('state_dict', checkpoint.get('model', checkpoint)))
-                input_dim = state_dict['embedding.weight'].shape[1] if 'embedding.weight' in state_dict else 156
+                input_dim = state_dict['embedding.weight'].shape[1] if 'embedding.weight' in state_dict else 178
+                
+                # Extract CTC class count from CTC head weights
+                if 'ctc_head.weight' in state_dict:
+                    num_ctc_classes = state_dict['ctc_head.weight'].shape[0]
+                else:
+                    # Fallback to trained model defaults
+                    num_ctc_classes = 11
+                
+                # Extract category class count from category head weights (if present)
+                num_cat = None
+                if 'category_head.weight' in state_dict:
+                    num_cat = state_dict['category_head.weight'].shape[0]
+                    
             except:
-                input_dim = 156
+                # Fallback to trained model defaults if checkpoint loading fails
+                input_dim = 178
+                num_ctc_classes = 11
+                num_cat = None
             
-            model = SignTransformerCtc(input_dim=input_dim, num_ctc_classes=CTC_CONFIG['num_ctc_classes'])
+            model = SignTransformerCtc(input_dim=input_dim, num_ctc_classes=num_ctc_classes, num_cat=num_cat, max_len=1000)
         
         elif self.model_type == 'mediapipe_gru_ctc':
             input_dim = 156
             try:
                 checkpoint = torch.load(self.checkpoint_path, map_location='cpu')
                 state_dict = checkpoint.get('model_state_dict', checkpoint.get('state_dict', checkpoint.get('model', checkpoint)))
+                
+                # Extract CTC class count from checkpoint
+                if 'ctc_head.weight' in state_dict:
+                    num_ctc_classes = state_dict['ctc_head.weight'].shape[0]
+                    print(f"✓ Detected MediaPipe CTC classes: {num_ctc_classes}")
+                else:
+                    num_ctc_classes = CTC_CONFIG['num_ctc_classes']
+                    print(f"⚠️ Using default MediaPipe CTC classes: {num_ctc_classes}")
+                
                 if 'gru1.weight_hh_l0' in state_dict and 'gru2.weight_hh_l0' in state_dict:
-                    gru1_hidden = state_dict['gru1.weight_hh_l0'].shape[0] // 3 // 2
-                    gru2_hidden = state_dict['gru2.weight_hh_l0'].shape[0] // 3 // 2
+                    # For bidirectional GRU: [3*hidden*2, hidden] -> hidden = shape[1]
+                    gru1_hidden = state_dict['gru1.weight_hh_l0'].shape[1]
+                    gru2_hidden = state_dict['gru2.weight_hh_l0'].shape[1]
+                    print(f"✓ Detected MediaPipe GRU hidden dimensions: gru1={gru1_hidden}, gru2={gru2_hidden}")
                 else:
                     gru1_hidden = 256
                     gru2_hidden = 128
+                    print(f"⚠️ Using default MediaPipe GRU hidden dimensions: gru1={gru1_hidden}, gru2={gru2_hidden}")
             except:
+                num_ctc_classes = CTC_CONFIG['num_ctc_classes']
                 gru1_hidden = 256
                 gru2_hidden = 128
             
-            model = MediaPipeGRUCtc(input_dim=input_dim, num_ctc_classes=CTC_CONFIG['num_ctc_classes'],
+            model = MediaPipeGRUCtc(input_dim=input_dim, num_ctc_classes=num_ctc_classes,
                                    hidden1=gru1_hidden, hidden2=gru2_hidden)
         
         elif self.model_type == 'iv3_gru_ctc':
@@ -201,20 +230,39 @@ class CTCPredictor:
             try:
                 checkpoint = torch.load(self.checkpoint_path, map_location='cpu')
                 state_dict = checkpoint.get('model_state_dict', checkpoint.get('state_dict', checkpoint.get('model', checkpoint)))
+                
+                # Extract CTC class count from checkpoint
+                if 'ctc_head.weight' in state_dict:
+                    num_ctc_classes = state_dict['ctc_head.weight'].shape[0]
+                    print(f"✓ Detected CTC classes: {num_ctc_classes}")
+                else:
+                    num_ctc_classes = CTC_CONFIG['num_ctc_classes']
+                    print(f"⚠️ Using default CTC classes: {num_ctc_classes}")
+                
                 # Try to extract hidden dimensions from checkpoint
                 if 'gru1.weight_hh_l0' in state_dict and 'gru2.weight_hh_l0' in state_dict:
                     # For bidirectional GRU: weight_hh_l0 has shape [3*hidden_size*2, hidden_size]
-                    gru1_hidden = state_dict['gru1.weight_hh_l0'].shape[0] // 3 // 2
-                    gru2_hidden = state_dict['gru2.weight_hh_l0'].shape[0] // 3 // 2
+                    # From error: checkpoint has [90, 30] -> gru1_hidden = 90 // 3 // 2 = 15
+                    # But this is wrong! Let's check the actual shape
+                    gru1_shape = state_dict['gru1.weight_hh_l0'].shape
+                    gru2_shape = state_dict['gru2.weight_hh_l0'].shape
+                    print(f"✓ GRU weight shapes: gru1={gru1_shape}, gru2={gru2_shape}")
+                    
+                    # For bidirectional GRU: [3*hidden*2, hidden] -> hidden = shape[1]
+                    gru1_hidden = state_dict['gru1.weight_hh_l0'].shape[1]
+                    gru2_hidden = state_dict['gru2.weight_hh_l0'].shape[1]
+                    print(f"✓ Detected GRU hidden dimensions: gru1={gru1_hidden}, gru2={gru2_hidden}")
                 else:
                     gru1_hidden = 256
                     gru2_hidden = 128
+                    print(f"⚠️ Using default GRU hidden dimensions: gru1={gru1_hidden}, gru2={gru2_hidden}")
             except:
+                num_ctc_classes = CTC_CONFIG['num_ctc_classes']
                 gru1_hidden = 256
                 gru2_hidden = 128
             
             model = InceptionV3GRUCtc(
-                num_ctc_classes=CTC_CONFIG['num_ctc_classes'],
+                num_ctc_classes=num_ctc_classes,
                 hidden1=gru1_hidden,
                 hidden2=gru2_hidden
             )
@@ -225,12 +273,41 @@ class CTCPredictor:
         return model.to(self.device), input_dim
     
     def _load_checkpoint(self):
+        """Load model checkpoint with robust error handling."""
         if not os.path.exists(self.checkpoint_path):
             raise FileNotFoundError(f"Checkpoint not found: {self.checkpoint_path}")
         
         checkpoint = torch.load(self.checkpoint_path, map_location=self.device)
         state_dict = checkpoint.get('model_state_dict', checkpoint.get('state_dict', checkpoint.get('model', checkpoint)))
-        self.model.load_state_dict(state_dict)
+        
+        # Get current model state dict
+        model_state_dict = self.model.state_dict()
+        
+        # Filter state dict to only include keys that exist in current model
+        filtered_state_dict = {}
+        for key, value in state_dict.items():
+            if key in model_state_dict:
+                # Handle positional encoding size mismatch
+                if key == 'pos_encoder.pe':
+                    current_shape = model_state_dict[key].shape
+                    checkpoint_shape = value.shape
+                    
+                    if current_shape != checkpoint_shape:
+                        # Always expand to the current model's max_len (1000)
+                        if current_shape[1] > checkpoint_shape[1]:
+                            # Need to expand - pad with zeros
+                            padding = torch.zeros(current_shape[0], current_shape[1] - checkpoint_shape[1], current_shape[2])
+                            value = torch.cat([value, padding], dim=1)
+                        else:
+                            # Need to truncate
+                            value = value[:, :current_shape[1], :]
+                
+                filtered_state_dict[key] = value
+            else:
+                print(f"⚠️ Skipping unexpected key: {key}")
+        
+        # Load the filtered state dict
+        self.model.load_state_dict(filtered_state_dict, strict=False)
         self.model.eval()
     
     def predict_sequence(
@@ -249,6 +326,10 @@ class CTCPredictor:
             if 'X2048' not in data:
                 raise ValueError(f"NPZ file missing 'X2048' key")
             X = torch.from_numpy(data['X2048']).float().unsqueeze(0)
+        elif self.input_dim == 178:
+            if 'X' not in data:
+                raise ValueError(f"NPZ file missing 'X' key")
+            X = torch.from_numpy(data['X']).float().unsqueeze(0)
         elif self.input_dim == 156:
             if 'X' not in data:
                 raise ValueError(f"NPZ file missing 'X' key")
@@ -284,10 +365,71 @@ class CTCPredictor:
             predicted_sequence = greedy_ctc_decoder(log_probs, self.blank_id, input_length)[0]
             probs = torch.exp(log_probs[0])
             confidence_scores = [float(probs[:, g].max()) for g in predicted_sequence] if len(predicted_sequence) > 0 else []
+            
+            # CTC Debug: Focus on decoding issue
+            print(f"🔍 CTC Decoding Debug:")
+            print(f"  Input: {X.shape[1]} frames, Blank ID: {self.blank_id}, CTC Classes: {log_probs.shape[2]}")
+            print(f"  Predicted: {predicted_sequence} ({len(predicted_sequence)} signs)")
+            
+            # Robust debug output with proper tensor handling
+            print(f"  Tensor shapes:")
+            print(f"    log_probs: {log_probs.shape}")
+            
+            # Get top predictions with proper tensor handling
+            seq_len = log_probs.shape[1]
+            batch_size = log_probs.shape[0]
+            
+            # Use argmax for simplicity and reliability
+            best_predictions = torch.argmax(log_probs[0], dim=1)  # [seq_len]
+            best_probs = torch.exp(log_probs[0]).max(dim=1)[0]     # [seq_len]
+            
+            print(f"  Per-frame predictions (first 20 frames):")
+            for i in range(min(20, seq_len)):
+                pred_token = best_predictions[i].item()
+                pred_prob = best_probs[i].item()
+                print(f"    Frame {i:2d}: {pred_token}({pred_prob:.3f})")
+            
+            # Show middle frames
+            if seq_len > 40:
+                print(f"  Per-frame predictions (middle 20 frames around {seq_len//2}):")
+                start = max(0, seq_len//2 - 10)
+                for i in range(start, min(start + 20, seq_len)):
+                    pred_token = best_predictions[i].item()
+                    pred_prob = best_probs[i].item()
+                    print(f"    Frame {i:2d}: {pred_token}({pred_prob:.3f})")
+                
+                print(f"  Per-frame predictions (last 20 frames):")
+                for i in range(max(0, seq_len - 20), seq_len):
+                    pred_token = best_predictions[i].item()
+                    pred_prob = best_probs[i].item()
+                    print(f"    Frame {i:2d}: {pred_token}({pred_prob:.3f})")
+            
+            # Summary: Count frames by prediction
+            blank_frames = (best_predictions == 10).sum().item()
+            non_blank_frames = seq_len - blank_frames
+            
+            print(f"  Sequence summary:")
+            print(f"    Total frames: {seq_len}")
+            print(f"    Blank frames: {blank_frames} ({blank_frames/seq_len*100:.1f}%)")
+            print(f"    Non-blank frames: {non_blank_frames} ({non_blank_frames/seq_len*100:.1f}%)")
+            
+            # Check for any frames with high non-blank probability
+            non_blank_probs = torch.exp(log_probs[0, :, :10]).max(dim=1)[0]  # Max prob among non-blank tokens
+            high_conf_frames = torch.where(non_blank_probs > 0.1)[0]
+            if len(high_conf_frames) > 0:
+                print(f"  Frames with high non-blank confidence (>0.1): {high_conf_frames.tolist()}")
+            else:
+                print(f"  ⚠️ No frames with non-blank confidence > 0.1")
         else:
             predicted_sequence, log_prob = beam_search_ctc_decoder(log_probs, self.blank_id, beam_width, input_length)[0]
             avg_conf = np.exp(log_prob / max(len(predicted_sequence), 1))
             confidence_scores = [float(avg_conf)] * len(predicted_sequence)
+            
+            # CTC Debug: Focus on beam search results
+            print(f"🔍 CTC Decoding Debug (Beam Search):")
+            print(f"  Input: {X.shape[1]} frames, Blank ID: {self.blank_id}, Beam Width: {beam_width}")
+            print(f"  Predicted: {predicted_sequence} ({len(predicted_sequence)} signs)")
+            print(f"  Log Probability: {log_prob:.3f}")
         
         # Decode category sequence (per-frame predictions -> per-sign categories)
         predicted_categories = []
@@ -362,6 +504,162 @@ class CTCPredictor:
                 )
             else:
                 result['temporal_alignment_accuracy'] = 0.0
+        
+        return result
+    
+    def predict_sequence_sliding_window(self, npz_path: Path, ground_truth: Optional[Dict] = None,
+                                      window_size: int = 150, stride: int = 50, 
+                                      decode_method: str = 'greedy', beam_width: int = 10, 
+                                      fps: int = 30, temporal_tolerance: int = 500) -> Dict:
+        """
+        Predict continuous sequence using sliding window approach.
+        
+        This method applies the CTC model to overlapping windows of the input sequence,
+        then aggregates the predictions to get the final continuous sequence.
+        
+        Args:
+            npz_path: Path to NPZ file
+            ground_truth: Optional ground truth dictionary
+            window_size: Size of each window in frames
+            stride: Step size between windows
+            decode_method: Decoding method ('greedy' or 'beam_search')
+            beam_width: Beam width for beam search
+            fps: Frames per second for timestamp estimation
+            temporal_tolerance: Temporal tolerance for alignment (ms)
+            
+        Returns:
+            Dictionary with sliding window prediction results
+        """
+        data = np.load(npz_path)
+        
+        # Load input data
+        if self.input_dim == 2048:
+            if 'X2048' not in data:
+                raise ValueError(f"NPZ file missing 'X2048' key")
+            X = torch.from_numpy(data['X2048']).float()
+        elif self.input_dim == 178:
+            if 'X' not in data:
+                raise ValueError(f"NPZ file missing 'X' key")
+            X = torch.from_numpy(data['X']).float()
+        elif self.input_dim == 156:
+            if 'X' not in data:
+                raise ValueError(f"NPZ file missing 'X' key")
+            X = torch.from_numpy(data['X']).float()
+        elif self.input_dim == 2204:
+            if 'X' not in data or 'X2048' not in data:
+                raise ValueError(f"NPZ file missing 'X' or 'X2048' key")
+            X_kp = torch.from_numpy(data['X']).float()
+            X_feat = torch.from_numpy(data['X2048']).float()
+            X = torch.cat([X_kp, X_feat], dim=1)
+        else:
+            raise ValueError(f"Unsupported input dimension {self.input_dim}")
+        
+        seq_len = X.shape[0]
+        print(f"🔍 Sliding Window CTC Debug:")
+        print(f"  Input: {seq_len} frames, Window size: {window_size}, Stride: {stride}")
+        
+        # Generate sliding windows
+        windows = []
+        window_predictions = []
+        window_confidences = []
+        
+        for start_idx in range(0, seq_len - window_size + 1, stride):
+            end_idx = start_idx + window_size
+            window_data = X[start_idx:end_idx].unsqueeze(0).to(self.device)  # [1, window_size, features]
+            input_length = torch.tensor([window_size], dtype=torch.long).to(self.device)
+            
+            windows.append((start_idx, end_idx))
+            
+            # Get model prediction for this window
+            with torch.no_grad():
+                if self.model_type == 'iv3_gru_ctc':
+                    output = self.model(window_data, features_already=True)
+                else:
+                    output = self.model(window_data)
+                
+                # Handle dual-task models
+                cat_logits = None
+                if isinstance(output, tuple):
+                    log_probs, cat_logits = output
+                else:
+                    log_probs = output
+            
+            # Decode window prediction
+            if decode_method == 'greedy':
+                window_pred = greedy_ctc_decoder(log_probs, self.blank_id, input_length)[0]
+                probs = torch.exp(log_probs[0])
+                window_conf = [float(probs[:, g].max()) for g in window_pred] if len(window_pred) > 0 else []
+            else:
+                window_pred, log_prob = beam_search_ctc_decoder(log_probs, self.blank_id, beam_width, input_length)[0]
+                avg_conf = np.exp(log_prob / max(len(window_pred), 1))
+                window_conf = [float(avg_conf)] * len(window_pred)
+            
+            window_predictions.append(window_pred)
+            window_confidences.append(window_conf)
+            
+            print(f"  Window {start_idx:3d}-{end_idx:3d}: {window_pred} (conf: {[f'{c:.3f}' for c in window_conf]})")
+        
+        # Aggregate predictions across windows
+        # Simple approach: collect all non-blank predictions with their frame positions
+        all_predictions = []
+        frame_positions = []
+        
+        for i, (window_pred, window_conf, (start_idx, end_idx)) in enumerate(zip(window_predictions, window_confidences, windows)):
+            for j, (pred_token, conf) in enumerate(zip(window_pred, window_conf)):
+                # Estimate frame position within the window
+                if len(window_pred) > 1:
+                    frame_pos = start_idx + int((j / len(window_pred)) * window_size)
+                else:
+                    frame_pos = start_idx + window_size // 2
+                
+                all_predictions.append(pred_token)
+                frame_positions.append(frame_pos)
+        
+        # Remove duplicates and sort by frame position
+        if all_predictions:
+            # Group predictions by frame position and take the most confident
+            position_groups = {}
+            for pred, pos, conf in zip(all_predictions, frame_positions, [max(c) for c in window_confidences]):
+                if pos not in position_groups or conf > position_groups[pos][1]:
+                    position_groups[pos] = (pred, conf)
+            
+            # Sort by frame position and extract final sequence
+            sorted_positions = sorted(position_groups.keys())
+            final_sequence = [position_groups[pos][0] for pos in sorted_positions]
+            final_confidences = [position_groups[pos][1] for pos in sorted_positions]
+        else:
+            final_sequence = []
+            final_confidences = []
+        
+        print(f"  Final aggregated sequence: {final_sequence} ({len(final_sequence)} signs)")
+        
+        # Convert to labels
+        predicted_labels = [self.gloss_mapping.get(g, f"GLOSS_{g}") for g in final_sequence]
+        predicted_timestamps = estimate_timestamps(final_sequence, seq_len, fps)
+        
+        result = {
+            'file_name': npz_path.name,
+            'predicted_sequence': final_sequence,
+            'predicted_labels': predicted_labels,
+            'confidence_scores': final_confidences,
+            'predicted_timestamps': predicted_timestamps,
+            'num_windows': len(windows),
+            'window_size': window_size,
+            'stride': stride,
+            'method': 'sliding_window'
+        }
+        
+        # Add ground truth comparison if available
+        if ground_truth:
+            gt_sequence = ground_truth.get('segments', [])
+            gt_labels = [seg.get('gloss_label', f"GLOSS_{seg.get('gloss', '?')}") for seg in gt_sequence]
+            
+            result.update({
+                'ground_truth_sequence': gt_labels,
+                'ground_truth_timestamps': [seg.get('timestamp_start_ms', 0) for seg in gt_sequence],
+                'sequence_accuracy': 0.0,  # TODO: Implement sequence accuracy calculation
+                'temporal_alignment': 0.0   # TODO: Implement temporal alignment calculation
+            })
         
         return result
     

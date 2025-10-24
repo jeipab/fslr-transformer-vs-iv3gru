@@ -261,7 +261,7 @@ def load_model(model_type, checkpoint_path, device, num_classes):
             input_dim = state_dict.get('embedding.weight', state_dict.get('input_projection.weight')).shape[1]
         except Exception:
             input_dim = 156 # Default if detection fails
-        model = SignTransformerCtc(input_dim=input_dim, num_ctc_classes=num_classes)
+        model = SignTransformerCtc(input_dim=input_dim, num_ctc_classes=num_classes, max_len=1000)
     elif model_type == 'mediapipe_gru_ctc':
         model = MediaPipeGRUCtc(num_ctc_classes=num_classes)
     else:

@@ -251,10 +251,12 @@ def make_ctc_prediction(npz_data: Dict[str, np.ndarray], model_name: str,
             np.savez_compressed(tmp_path, **npz_data)
         
         try:
-            # Make prediction
-            results = predictor.predict_sequence(
+            # Make prediction using sliding window approach
+            results = predictor.predict_sequence_sliding_window(
                 npz_path=Path(tmp_path),
                 ground_truth=ground_truth,
+                window_size=120,  # Window size for isolated signs (4 seconds at 30fps)
+                stride=40,       # Overlap between windows (1.3 seconds)
                 decode_method=decode_method,
                 beam_width=beam_width,
                 fps=30,
