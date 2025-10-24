@@ -8,8 +8,8 @@ Generate continuous signing sequences from isolated sign videos for CTC-based mo
 
 ```bash
 python preprocessing/continuous/create_continuous_signs.py \
-    --val-csv data/processed/fsl_val.csv \
-    --val-dir data/processed/fsl_val \
+    --val-csv data/processed/greetings_val.csv \
+    --val-dir data/processed/greetings_val \
     --strategy 1 \
     --sequences-per-signer 10
 ```
@@ -36,8 +36,8 @@ This module concatenates isolated sign videos from the validation set to create 
 
 ```bash
 python preprocessing/continuous/create_continuous_signs.py \
-    --val-csv data/processed/fsl_val.csv \
-    --val-dir data/processed/fsl_val \
+    --val-csv data/processed/greetings_val.csv \
+    --val-dir data/processed/greetings_val \
     --output-dir data/processed/continuous_sequences \
     --strategy 1 \
     --sequences-per-signer 10 \
@@ -49,8 +49,8 @@ python preprocessing/continuous/create_continuous_signs.py \
 
 ```bash
 python preprocessing/continuous/create_continuous_signs.py \
-    --val-csv data/processed/fsl_val.csv \
-    --val-dir data/processed/fsl_val \
+    --val-csv data/processed/greetings_val.csv \
+    --val-dir data/processed/greetings_val \
     --output-dir data/processed/continuous_sequences \
     --strategy 2 \
     --sequences-per-signer 10 \
@@ -62,11 +62,31 @@ python preprocessing/continuous/create_continuous_signs.py \
 
 ```bash
 python preprocessing/continuous/create_continuous_signs.py \
-    --val-csv data/processed/fsl_val.csv \
-    --val-dir data/processed/fsl_val \
+    --val-csv data/processed/greetings_val.csv \
+    --val-dir data/processed/greetings_val \
     --strategy 1 \
     --dry-run
 ```
+
+---
+
+## PowerShell Usage (Windows)
+
+On Windows PowerShell, use single-line commands or backticks for line continuation:
+
+```powershell
+# Single line (recommended)
+python preprocessing/continuous/create_continuous_signs.py --val-csv data/processed/greetings_val.csv --val-dir data/processed/greetings_val --strategy 1 --dry-run
+
+# Multi-line with backticks
+python preprocessing/continuous/create_continuous_signs.py `
+    --val-csv data/processed/greetings_val.csv `
+    --val-dir data/processed/greetings_val `
+    --strategy 1 `
+    --dry-run
+```
+
+**Note**: Backslash (`\`) line continuation doesn't work in PowerShell. Use backticks (`` ` ``) instead.
 
 ---
 
@@ -117,9 +137,9 @@ Optional columns: `occluded`, `signer`, `duration`
 
 ```csv
 file,gloss,cat,occluded,signer,duration
-clip_0001_good morning_S0.npz,0,0,0,S0,4.2
-clip_0082_hello_S0.npz,3,0,0,S0,4.1
-clip_0234_thank you_S0.npz,7,0,0,S0,4.0
+clip_0559_how_are_you_S5,4,0,0,S5,5.265789035160807
+clip_0412_hello_S4,3,0,1,S4,4.232627895350775
+clip_1005_youre_welcome_S4,8,0,1,S4,4.232627895350775
 ```
 
 ### NPZ Files
@@ -160,22 +180,23 @@ Concatenated arrays with cumulative timestamps:
 
 ```json
 {
-  "file_name": "continuous_0001_S0_strategy2.npz",
+  "file_name": "continuous_0001_S0_strategy1.npz",
   "signer": "S0",
-  "strategy": 2,
-  "total_duration_sec": 16.8,
-  "num_segments": 4,
+  "strategy": 1,
+  "strategy_name": "same_category",
+  "total_duration_sec": 12.13,
+  "num_segments": 3,
   "segments": [
     {
       "index": 0,
       "timestamp_start_ms": 0,
-      "timestamp_end_ms": 4200,
+      "timestamp_end_ms": 4066,
       "gloss": 0,
       "gloss_label": "GOOD MORNING",
       "category": 0,
       "category_label": "GREETING",
       "signer": "S0",
-      "original_file": "clip_0001_good morning_S0.npz"
+      "original_file": "clip_0001_good_morning_S0.npz"
     }
   ]
 }
@@ -189,7 +210,7 @@ Concatenated arrays with cumulative timestamps:
 Check `--val-csv` path exists.
 
 **"X NPZ files missing"**  
-Ensure all files in CSV exist in `--val-dir`.
+Ensure all files in CSV exist in `--val-dir`. The script automatically adds `.npz` extension if missing from CSV filenames.
 
 **"Not enough videos for signer"**  
 Reduce `--sequences-per-signer` or `--max-glosses`, or increase validation set size.
@@ -229,25 +250,17 @@ No gaps between segments (immediate concatenation).
 ## Example Workflow
 
 ```bash
-# 1. Split dataset into train/val
-python data/splitting/data_split.py \
-    --processed-root data/processed/fsl-105_full \
-    --labels data/processed/fsl-105_full/labels.csv \
-    --out-root data/processed \
-    --train-ratio 0.8
-
-# 2. Train model on 80%
-python training/train.py --model transformer ...
-
-# 3. Generate continuous sequences from 20% validation
+# 1. Generate continuous sequences from validation data
 python preprocessing/continuous/create_continuous_signs.py \
-    --val-csv data/processed/fsl_val.csv \
-    --val-dir data/processed/fsl_val \
+    --val-csv data/processed/greetings_val.csv \
+    --val-dir data/processed/greetings_val \
+    --output-dir data/processed/continuous_sequences \
     --strategy 1 \
-    --sequences-per-signer 10
+    --sequences-per-signer 10 \
+    --min-glosses 3 \
+    --max-glosses 6
 
-# 4. Evaluate with CTC
-python evaluation/prediction/predict_ctc.py \
-    --model-path trained_models/transformer/best.pt \
-    --input-dir data/processed/continuous_sequences
+# 2. Use continuous sequences in Streamlit app
+# Upload the generated NPZ files to test CTC models
+# Or use for offline evaluation with predict_ctc.py
 ```

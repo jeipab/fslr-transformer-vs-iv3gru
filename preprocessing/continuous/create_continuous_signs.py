@@ -142,7 +142,11 @@ def load_validation_data(csv_path: Path, npz_dir: Path) -> pd.DataFrame:
     # Validate NPZ files exist
     missing_files = []
     for idx, row in df.iterrows():
-        npz_path = npz_dir / row['file']
+        # Add .npz extension if not present
+        filename = row['file']
+        if not filename.endswith('.npz'):
+            filename = f"{filename}.npz"
+        npz_path = npz_dir / filename
         if not npz_path.exists():
             missing_files.append(row['file'])
     
@@ -456,8 +460,11 @@ def concatenate_npz_files(
     has_x2048 = False
     
     for idx, sample in enumerate(sample_list):
-        # Load NPZ
-        npz_path = npz_dir / sample['file']
+        # Load NPZ - add .npz extension if not present
+        filename = sample['file']
+        if not filename.endswith('.npz'):
+            filename = f"{filename}.npz"
+        npz_path = npz_dir / filename
         data = load_npz_data(npz_path)
         
         # Extract arrays
