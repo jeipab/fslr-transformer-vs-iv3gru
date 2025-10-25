@@ -1137,7 +1137,8 @@ def render_continuous_sequence_predictions(filename: str, npz_data: Dict, metada
             ground_truth_available=ground_truth is not None,
             predicted_categories=results.get('predicted_categories'),
             category_confidences=results.get('category_confidences'),
-            category_accuracy=results.get('category_accuracy')
+            category_accuracy=results.get('category_accuracy'),
+            gloss_accuracy=results.get('gloss_accuracy')
         )
         
         # Sequence comparison

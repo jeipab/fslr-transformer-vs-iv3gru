@@ -720,16 +720,18 @@ def run_validation(model_type: str, npz_files: List, labels_csv_file,
     return results
 
 
-def run_ctc_validation(
+def run_ctc_validation_with_sliding_window(
     model_type: str,
     npz_folder_path: str,
     ground_truth_folder: str,
     decode_method: str = 'greedy',
     beam_width: int = 10,
+    window_size: int = 150,
+    stride: int = 50,
     progress_callback=None
 ) -> Dict[str, Any]:
     """
-    Run CTC validation on continuous sequences.
+    Run CTC validation on continuous sequences using sliding window approach.
     
     Args:
         model_type: CTC model type ('transformer_ctc' or 'iv3_gru_ctc')
@@ -737,6 +739,8 @@ def run_ctc_validation(
         ground_truth_folder: Path to folder containing ground truth JSON files
         decode_method: Decoding method ('greedy' or 'beam_search')
         beam_width: Beam width for beam search
+        window_size: Size of sliding window in frames
+        stride: Stride between windows in frames
         progress_callback: Optional callback for progress updates
         
     Returns:
@@ -754,26 +758,62 @@ def run_ctc_validation(
     try:
         # Import CTC predictor
         from evaluation.prediction.predict_ctc import CTCPredictor
+        from ..core.config import CTC_CONFIG, CTC_CONFIG_SUBSET
+        
+        # Get blank_id from config
+        # For CTC models, blank_id should be num_gloss_classes (e.g., 10 for subset, 105 for full)
+        blank_id = config.get('blank_token_id', config['num_gloss_classes'])
         
         # Initialize predictor
         device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         predictor = CTCPredictor(
             model_type=config['model_type'],
             checkpoint_path=config['checkpoint_path'],
-            blank_id=config['num_gloss_classes'],
+            blank_id=blank_id,
             device=device
         )
         
-        # Run batch prediction with ground truth
-        results = predictor.predict_batch(
-            input_dir=Path(npz_folder_path),
-            ground_truth_dir=Path(ground_truth_folder) if ground_truth_folder else None,
-            output_dir=None,  # Don't save files
-            decode_method=decode_method,
-            beam_width=beam_width,
-            fps=30,
-            temporal_tolerance=500
-        )
+        # Run batch prediction with sliding window by calling sliding window method directly
+        npz_files = sorted(Path(npz_folder_path).glob('*.npz'))
+        predictions = []
+        
+        for npz_path in npz_files:
+            # Load ground truth if available
+            ground_truth = None
+            if ground_truth_folder:
+                import json
+                
+                # Try both naming conventions
+                gt_path_1 = Path(ground_truth_folder) / (npz_path.stem + '_gt.json')
+                gt_path_2 = Path(ground_truth_folder) / (npz_path.stem + '.json')
+                
+                if gt_path_1.exists():
+                    with open(gt_path_1, 'r', encoding='utf-8') as f:
+                        ground_truth = json.load(f)
+                elif gt_path_2.exists():
+                    with open(gt_path_2, 'r', encoding='utf-8') as f:
+                        ground_truth = json.load(f)
+            
+            # Use sliding window prediction
+            result = predictor.predict_sequence_sliding_window(
+                npz_path=npz_path,
+                ground_truth=ground_truth,
+                window_size=window_size,
+                stride=stride,
+                decode_method=decode_method,
+                beam_width=beam_width,
+                fps=30,
+                temporal_tolerance=500
+            )
+            predictions.append(result)
+        
+        # Generate summary
+        summary = predictor._generate_summary(predictions)
+        
+        results = {
+            'predictions': predictions,
+            'summary': summary
+        }
         
         # Add model info
         results['model_info'] = {

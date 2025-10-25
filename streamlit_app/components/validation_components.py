@@ -85,7 +85,7 @@ def render_ctc_dataset_upload():
     # NPZ folder selection
     st.markdown("**Continuous Sequences Folder**")
     npz_folder_path = st.text_input(
-        "Enter path to folder containing continuous sequence NPZ files",
+        "Enter path to folder containing continuous sequence NPZ files (default: data\\processed\\continuous_sequences)",
         placeholder="e.g., data\\processed\\continuous_sequences",
         help="Path to directory containing continuous sequence NPZ files"
     )
@@ -93,7 +93,7 @@ def render_ctc_dataset_upload():
     # Ground truth folder
     st.markdown("**Ground Truth Folder**")
     gt_folder_path = st.text_input(
-        "Enter path to folder containing ground truth JSON files",
+        "Enter path to folder containing ground truth JSON files (default: data\\processed\\continuous_sequences)",
         placeholder="e.g., data\\processed\\continuous_sequences (same as NPZ folder if JSON files are there)",
         help="Path to directory containing *_gt.json files"
     )
@@ -818,28 +818,36 @@ def render_ctc_validation_results(results: Dict[str, Any]):
     # Summary metrics
     st.markdown("#### Overall Metrics")
     has_categories = summary.get('has_category_predictions', False)
-    cols = st.columns(5 if has_categories else 4)
+    has_gloss_acc = 'mean_gloss_accuracy' in summary
+    num_cols = 4 + (1 if has_categories else 0) + (1 if has_gloss_acc else 0)
+    cols = st.columns(num_cols)
     
-    with cols[0]:
+    col_idx = 0
+    with cols[col_idx]:
         mean_wer = summary.get('mean_wer', 0)
         st.metric("Mean WER", f"{mean_wer*100:.2f}%")
+    col_idx += 1
     
-    with cols[1]:
+    with cols[col_idx]:
         seq_accuracy = summary.get('sequence_accuracy', 0)
         st.metric("Sequence Accuracy", f"{seq_accuracy*100:.1f}%")
+    col_idx += 1
     
-    with cols[2]:
-        temporal_align = summary.get('mean_temporal_alignment', 0)
-        st.metric("Temporal Alignment", f"{temporal_align*100:.1f}%")
+    if has_gloss_acc:
+        with cols[col_idx]:
+            gloss_acc = summary.get('mean_gloss_accuracy', 0)
+            st.metric("Gloss Accuracy", f"{gloss_acc*100:.1f}%")
+        col_idx += 1
     
-    with cols[3]:
+    with cols[col_idx]:
         total_sequences = summary.get('total_sequences', 0)
         st.metric("Total Sequences", total_sequences)
+    col_idx += 1
     
-    if has_categories and len(cols) > 4:
-        with cols[4]:
+    if has_categories:
+        with cols[col_idx]:
             cat_acc = summary.get('mean_category_accuracy', 0)
-            st.metric("Mean Category Acc", f"{cat_acc*100:.1f}%")
+            st.metric("Category Accuracy", f"{cat_acc*100:.1f}%")
     
     # Error breakdown
     st.markdown("---")

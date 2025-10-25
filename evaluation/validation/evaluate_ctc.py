@@ -264,6 +264,9 @@ def load_model(model_type, checkpoint_path, device, num_classes):
         model = SignTransformerCtc(input_dim=input_dim, num_ctc_classes=num_classes, max_len=1000)
     elif model_type == 'mediapipe_gru_ctc':
         model = MediaPipeGRUCtc(num_ctc_classes=num_classes)
+    elif model_type == 'iv3_gru_ctc':
+        from models.iv3_gru import InceptionV3GRUCtc
+        model = InceptionV3GRUCtc(num_ctc_classes=num_classes)
     else:
         raise ValueError(f"Unknown model type: {model_type}")
     

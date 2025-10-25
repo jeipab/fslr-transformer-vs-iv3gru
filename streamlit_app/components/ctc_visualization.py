@@ -463,7 +463,8 @@ def render_ctc_prediction_card(
     ground_truth_available: bool = False,
     predicted_categories: Optional[List[int]] = None,
     category_confidences: Optional[List[float]] = None,
-    category_accuracy: Optional[float] = None
+    category_accuracy: Optional[float] = None,
+    gloss_accuracy: Optional[float] = None
 ):
     """
     Render comprehensive CTC prediction card with improved UI/UX.
@@ -477,6 +478,7 @@ def render_ctc_prediction_card(
         predicted_categories: Optional list of predicted category IDs
         category_confidences: Optional category confidence scores
         category_accuracy: Optional category accuracy if ground truth available
+        gloss_accuracy: Optional gloss accuracy if ground truth available
     """
     # Enhanced header with file info
     st.markdown(f"### Prediction Results: `{file_name}`")
@@ -489,16 +491,20 @@ def render_ctc_prediction_card(
     
     # Summary metrics with better visual design
     has_categories = predicted_categories is not None and len(predicted_categories) > 0
-    cols = st.columns(4 if has_categories else 3)
+    has_gloss_acc = gloss_accuracy is not None
+    num_cols = 3 + (1 if has_categories else 0) + (1 if has_gloss_acc else 0)
+    cols = st.columns(num_cols)
     
-    with cols[0]:
+    col_idx = 0
+    with cols[col_idx]:
         st.metric(
             "Sequence Length", 
             len(predicted_sequence),
             help="Number of predicted glosses in the sequence"
         )
+    col_idx += 1
     
-    with cols[1]:
+    with cols[col_idx]:
         if confidence_scores:
             avg_conf = np.mean(confidence_scores)
             conf_color = "normal" if avg_conf >= 0.7 else "off"
@@ -511,9 +517,21 @@ def render_ctc_prediction_card(
             )
         else:
             st.metric("Average Gloss Confidence", "N/A", help="No confidence scores available")
+    col_idx += 1
     
-    if has_categories and len(cols) > 2:
-        with cols[2]:
+    if has_gloss_acc:
+        with cols[col_idx]:
+            gloss_acc_color = "normal" if gloss_accuracy >= 0.8 else "off"
+            st.metric(
+                "Gloss Accuracy", 
+                f"{gloss_accuracy*100:.1f}%", 
+                delta_color=gloss_acc_color,
+                help="Gloss prediction accuracy"
+            )
+        col_idx += 1
+    
+    if has_categories:
+        with cols[col_idx]:
             if category_accuracy is not None:
                 cat_color = "normal" if category_accuracy >= 0.8 else "off"
                 st.metric(

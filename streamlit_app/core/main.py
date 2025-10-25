@@ -7,7 +7,7 @@ from ..components import set_page, render_sidebar, render_main_header
 from ..manager.upload_manager import initialize_upload_session_state, render_upload_stage
 from ..manager.preprocessing_manager import render_preprocessing_stage
 from ..manager.prediction_manager import render_predictions_stage, cleanup_on_app_exit
-from ..manager.validation_manager import run_validation_from_folder, run_ctc_validation, cleanup_temp_files
+from ..manager.validation_manager import run_validation_from_folder, run_ctc_validation_with_sliding_window, cleanup_temp_files
 from ..components.validation_components import (
     render_model_selection, render_dataset_upload, render_ctc_dataset_upload,
     render_validation_configuration, render_ctc_validation_configuration,
@@ -128,13 +128,15 @@ def render_validation_stage(cfg: Dict):
             
             with st.spinner("Running validation..."):
                 if is_ctc:
-                    # CTC validation
-                    results = run_ctc_validation(
+                    # CTC validation with sliding window
+                    results = run_ctc_validation_with_sliding_window(
                         model_type=selected_model,
                         npz_folder_path=npz_folder_path,
                         ground_truth_folder=labels_csv,  # For CTC, this is GT folder
                         decode_method=decode_method,
                         beam_width=beam_width,
+                        window_size=150,  # 5 seconds at 30fps
+                        stride=50,  # 75% overlap
                         progress_callback=progress_callback
                     )
                 else:

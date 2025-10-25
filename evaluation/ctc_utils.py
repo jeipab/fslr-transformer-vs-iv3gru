@@ -10,7 +10,7 @@ Usage:
 """
 
 # Standard library imports
-from typing import List, Tuple, Optional
+from typing import List, Tuple, Optional, Dict
 import heapq
 
 # Third-party imports
@@ -428,4 +428,75 @@ def calculate_cer(reference: List[int], hypothesis: List[int]) -> float:
         Character Error Rate as a float
     """
     return calculate_wer(reference, hypothesis)
+
+
+def calculate_wer_and_errors(reference: List[int], hypothesis: List[int]) -> Tuple[float, Dict[str, int]]:
+    """
+    Calculate WER with detailed error breakdown.
+    
+    Returns:
+        Tuple of (wer, errors_dict) where errors_dict contains
+        'S' (substitutions), 'D' (deletions), 'I' (insertions)
+    """
+    if len(reference) == 0:
+        wer = 0.0 if len(hypothesis) == 0 else float('inf')
+        return wer, {'S': 0, 'D': 0, 'I': len(hypothesis)}
+    
+    ref_len = len(reference)
+    hyp_len = len(hypothesis)
+    
+    dp = [[0] * (hyp_len + 1) for _ in range(ref_len + 1)]
+    ops = [[None] * (hyp_len + 1) for _ in range(ref_len + 1)]
+    
+    for i in range(ref_len + 1):
+        dp[i][0] = i
+        ops[i][0] = 'D'
+    for j in range(hyp_len + 1):
+        dp[0][j] = j
+        ops[0][j] = 'I'
+    ops[0][0] = None
+    
+    for i in range(1, ref_len + 1):
+        for j in range(1, hyp_len + 1):
+            if reference[i-1] == hypothesis[j-1]:
+                dp[i][j] = dp[i-1][j-1]
+                ops[i][j] = 'M'
+            else:
+                sub_cost = dp[i-1][j-1] + 1
+                del_cost = dp[i-1][j] + 1
+                ins_cost = dp[i][j-1] + 1
+                
+                min_cost = min(sub_cost, del_cost, ins_cost)
+                dp[i][j] = min_cost
+                
+                if min_cost == sub_cost:
+                    ops[i][j] = 'S'
+                elif min_cost == del_cost:
+                    ops[i][j] = 'D'
+                else:
+                    ops[i][j] = 'I'
+    
+    i, j = ref_len, hyp_len
+    insertions = deletions = substitutions = 0
+    
+    while i > 0 or j > 0:
+        op = ops[i][j]
+        if op == 'M':
+            i -= 1
+            j -= 1
+        elif op == 'S':
+            substitutions += 1
+            i -= 1
+            j -= 1
+        elif op == 'D':
+            deletions += 1
+            i -= 1
+        elif op == 'I':
+            insertions += 1
+            j -= 1
+        else:
+            break
+    
+    wer = dp[ref_len][hyp_len] / ref_len
+    return wer, {'S': substitutions, 'D': deletions, 'I': insertions}
 
