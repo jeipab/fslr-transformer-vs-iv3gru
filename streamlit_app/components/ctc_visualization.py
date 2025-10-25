@@ -481,7 +481,8 @@ def render_ctc_prediction_card(
         gloss_accuracy: Optional gloss accuracy if ground truth available
     """
     # Enhanced header with file info
-    st.markdown(f"### Prediction Results: `{file_name}`")
+    st.markdown(f"### Prediction Results")
+    st.markdown(f'<div style="font-size: 1.5rem; font-weight: 600; color: #1f77b4; padding: 0.5rem 0;">{file_name}</div>', unsafe_allow_html=True)
     
     # Check if predicted_sequence is valid
     if predicted_sequence is None:

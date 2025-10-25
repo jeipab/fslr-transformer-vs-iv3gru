@@ -1126,7 +1126,6 @@ def render_continuous_sequence_predictions(filename: str, npz_data: Dict, metada
         results = st.session_state[f'ctc_results_{unique_key_suffix}']
         
         st.markdown("---")
-        st.markdown("### Prediction Results")
         
         # Render CTC prediction card
         render_ctc_prediction_card(

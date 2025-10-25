@@ -222,6 +222,11 @@ class CTCPredictor:
                     else:
                         num_ctc_classes = CTC_CONFIG['num_ctc_classes']
                 
+                # Check for category head in checkpoint
+                num_cat = None
+                if 'category_head.weight' in state_dict:
+                    num_cat = state_dict['category_head.weight'].shape[0]
+                
                 if 'gru1.weight_hh_l0' in state_dict and 'gru2.weight_hh_l0' in state_dict:
                     # For bidirectional GRU: [3*hidden*2, hidden] -> hidden = shape[1]
                     gru1_hidden = state_dict['gru1.weight_hh_l0'].shape[1]
@@ -233,13 +238,20 @@ class CTCPredictor:
                 # Use subset config for GREETINGS models
                 if self.blank_id == CTC_CONFIG_SUBSET['blank_token_id']:
                     num_ctc_classes = CTC_CONFIG_SUBSET['num_ctc_classes']
+                    num_cat = 1  # GREETINGS subset has 1 category
                 else:
                     num_ctc_classes = CTC_CONFIG['num_ctc_classes']
+                    num_cat = None
                 gru1_hidden = 256
                 gru2_hidden = 128
             
-            model = MediaPipeGRUCtc(input_dim=input_dim, num_ctc_classes=num_ctc_classes,
-                                   hidden1=gru1_hidden, hidden2=gru2_hidden)
+            model = MediaPipeGRUCtc(
+                input_dim=input_dim, 
+                num_ctc_classes=num_ctc_classes,
+                hidden1=gru1_hidden, 
+                hidden2=gru2_hidden,
+                num_cat=num_cat  # Pass category classes to enable category head
+            )
         
         elif self.model_type == 'iv3_gru_ctc':
             # InceptionV3GRUCtc uses 2048-D features
@@ -708,6 +720,7 @@ class CTCPredictor:
             'predicted_categories': final_categories,
             'category_confidences': final_category_confidences,
             'predicted_timestamps': predicted_timestamps,
+            'num_predicted': len(final_sequence),
             'num_windows': len(windows),
             'window_size': window_size,
             'stride': stride,
@@ -718,24 +731,42 @@ class CTCPredictor:
         if ground_truth:
             # Handle both metadata format (with segments) and ground truth format
             if 'segments' in ground_truth:
-                # Original metadata format
-                gt_sequence = ground_truth.get('segments', [])
-                gt_labels = [seg.get('gloss_label', f"GLOSS_{seg.get('gloss', '?')}") for seg in gt_sequence]
-                gt_timestamps = [seg.get('timestamp_start_ms', 0) for seg in gt_sequence]
-                # Extract gloss IDs for WER calculation
-                gt_gloss_ids = [seg.get('gloss', 0) for seg in gt_sequence]
+                # Original metadata format - segments is a list
+                segments = ground_truth.get('segments', [])
+                gt_labels = [seg.get('gloss_label', f"GLOSS_{seg.get('gloss', '?')}") for seg in segments]
+                gt_timestamps = []
+                gt_gloss_ids = []
+                for seg in segments:
+                    gt_gloss_ids.append(seg.get('gloss', 0))
+                    gt_timestamps.append({
+                        'start_ms': seg.get('timestamp_start_ms', 0),
+                        'end_ms': seg.get('timestamp_end_ms', 0),
+                        'duration_ms': seg.get('timestamp_end_ms', 0) - seg.get('timestamp_start_ms', 0)
+                    })
             else:
                 # Converted ground truth format
                 gt_labels = ground_truth.get('ground_truth_labels', [])
-                gt_timestamps = [ts.get('start_ms', 0) for ts in ground_truth.get('ground_truth_timestamps', [])]
+                gt_timestamps = ground_truth.get('ground_truth_timestamps', [])
                 gt_gloss_ids = ground_truth.get('ground_truth_sequence', [])
             
-            result.update({
-                'ground_truth_labels': gt_labels,
-                'ground_truth_timestamps': gt_timestamps,
-                'sequence_accuracy': 0.0,  # TODO: Implement sequence accuracy calculation
-                'temporal_alignment': 0.0   # TODO: Implement temporal alignment calculation
-            })
+            result['ground_truth_sequence'] = gt_gloss_ids
+            result['ground_truth_labels'] = gt_labels
+            result['ground_truth_timestamps'] = gt_timestamps
+            result['signer'] = ground_truth.get('signer')
+            result['strategy'] = ground_truth.get('strategy', ground_truth.get('strategy_name'))
+            
+            # Calculate WER and error metrics
+            wer, insertions, deletions, substitutions = calculate_wer_with_details(
+                gt_gloss_ids,
+                final_sequence
+            )
+            
+            result['wer'] = float(wer)
+            result['cer'] = float(wer)
+            result['correct'] = wer == 0.0
+            result['num_insertions'] = insertions
+            result['num_deletions'] = deletions
+            result['num_substitutions'] = substitutions
         
         return result
     
