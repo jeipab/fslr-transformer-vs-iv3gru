@@ -901,10 +901,12 @@ def render_model_status():
     # Check model availability and file existence
     transformer_available = MODEL_CONFIG['transformer']['enabled']
     iv3_gru_available = MODEL_CONFIG['iv3_gru']['enabled']
+    mediapipe_gru_available = MODEL_CONFIG['mediapipe_gru']['enabled']
     
     # Verify checkpoint files actually exist
     transformer_exists = False
     iv3_gru_exists = False
+    mediapipe_gru_exists = False
     
     if transformer_available:
         transformer_path = MODEL_CONFIG['transformer']['checkpoint_path']
@@ -914,8 +916,24 @@ def render_model_status():
         iv3_gru_path = MODEL_CONFIG['iv3_gru']['checkpoint_path']
         iv3_gru_exists = os.path.exists(iv3_gru_path)
     
+    if mediapipe_gru_available:
+        mediapipe_gru_path = MODEL_CONFIG['mediapipe_gru']['checkpoint_path']
+        mediapipe_gru_exists = os.path.exists(mediapipe_gru_path)
+    
     # Create clean, elegant status display based on actual file existence
-    if transformer_exists and iv3_gru_exists:
+    if transformer_exists and iv3_gru_exists and mediapipe_gru_exists:
+        st.sidebar.markdown("""
+        <div style='background: rgba(16, 185, 129, 0.1); border: 1px solid #10b981; border-radius: 8px; padding: 0.75rem; margin-bottom: 0;'>
+            <div style='display: flex; align-items: center; color: #ffffff; font-weight: 500; margin-bottom: 0.3rem;'>
+                <div style='width: 8px; height: 8px; background: #10b981; border-radius: 50%; margin-right: 0.75rem;'></div>
+                <span style='font-size: 1rem;'>All Models Ready</span>
+            </div>
+            <div style='font-size: 0.9rem; color: #a0aec0; line-height: 1.4;'>
+                SignTransformer, InceptionV3+GRU & MediaPipe-GRU
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+    elif transformer_exists and iv3_gru_exists:
         st.sidebar.markdown("""
         <div style='background: rgba(16, 185, 129, 0.1); border: 1px solid #10b981; border-radius: 8px; padding: 0.75rem; margin-bottom: 0;'>
             <div style='display: flex; align-items: center; color: #ffffff; font-weight: 500; margin-bottom: 0.3rem;'>
@@ -924,6 +942,30 @@ def render_model_status():
             </div>
             <div style='font-size: 0.9rem; color: #a0aec0; line-height: 1.4;'>
                 SignTransformer & InceptionV3+GRU
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+    elif transformer_exists and mediapipe_gru_exists:
+        st.sidebar.markdown("""
+        <div style='background: rgba(245, 158, 11, 0.1); border: 1px solid #f59e0b; border-radius: 8px; padding: 0.75rem; margin-bottom: 0;'>
+            <div style='display: flex; align-items: center; color: #ffffff; font-weight: 500; margin-bottom: 0.3rem;'>
+                <div style='width: 8px; height: 8px; background: #f59e0b; border-radius: 50%; margin-right: 0.75rem;'></div>
+                <span style='font-size: 1rem;'>Partial Availability</span>
+            </div>
+            <div style='font-size: 0.9rem; color: #a0aec0; line-height: 1.4;'>
+                SignTransformer & MediaPipe-GRU
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+    elif iv3_gru_exists and mediapipe_gru_exists:
+        st.sidebar.markdown("""
+        <div style='background: rgba(245, 158, 11, 0.1); border: 1px solid #f59e0b; border-radius: 8px; padding: 0.75rem; margin-bottom: 0;'>
+            <div style='display: flex; align-items: center; color: #ffffff; font-weight: 500; margin-bottom: 0.3rem;'>
+                <div style='width: 8px; height: 8px; background: #f59e0b; border-radius: 50%; margin-right: 0.75rem;'></div>
+                <span style='font-size: 1rem;'>Partial Availability</span>
+            </div>
+            <div style='font-size: 0.9rem; color: #a0aec0; line-height: 1.4;'>
+                InceptionV3+GRU & MediaPipe-GRU
             </div>
         </div>
         """, unsafe_allow_html=True)
@@ -948,6 +990,18 @@ def render_model_status():
             </div>
             <div style='font-size: 0.9rem; color: #a0aec0; line-height: 1.4;'>
                 InceptionV3+GRU model only
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+    elif mediapipe_gru_exists:
+        st.sidebar.markdown("""
+        <div style='background: rgba(245, 158, 11, 0.1); border: 1px solid #f59e0b; border-radius: 8px; padding: 0.75rem; margin-bottom: 0;'>
+            <div style='display: flex; align-items: center; color: #ffffff; font-weight: 500; margin-bottom: 0.3rem;'>
+                <div style='width: 8px; height: 8px; background: #f59e0b; border-radius: 50%; margin-right: 0.75rem;'></div>
+                <span style='font-size: 1rem;'>Partial Availability</span>
+            </div>
+            <div style='font-size: 0.9rem; color: #a0aec0; line-height: 1.4;'>
+                MediaPipe-GRU model only
             </div>
         </div>
         """, unsafe_allow_html=True)

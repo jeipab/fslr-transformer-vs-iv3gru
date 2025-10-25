@@ -779,7 +779,7 @@ def render_animated_keypoints(sequence: np.ndarray, mask: Optional[np.ndarray] =
         )
     )
     
-    st.plotly_chart(fig, width='stretch')
+    st.plotly_chart(fig, use_container_width=True)
     
     # Add frame information
     col1, col2, col3 = st.columns(3)
@@ -881,7 +881,7 @@ def render_feature_charts(sequence: np.ndarray, mask: Optional[np.ndarray] = Non
             margin=dict(l=0, r=10, t=70, b=110)  # Match Keypoint Visualization margins
         )
         
-        st.plotly_chart(fig, width='stretch')
+        st.plotly_chart(fig, use_container_width=True)
         
     else:  # Heatmap
         # Create heatmap of features over time
@@ -896,7 +896,7 @@ def render_feature_charts(sequence: np.ndarray, mask: Optional[np.ndarray] = Non
             height=600,
             margin=dict(l=0, r=10, t=70, b=110)  # Match Keypoint Visualization margins
         )
-        st.plotly_chart(fig, width='stretch')
+        st.plotly_chart(fig, use_container_width=True)
 
 
 def create_keypoint_animation_video(keypoints_2d: np.ndarray, mask: Optional[np.ndarray], 

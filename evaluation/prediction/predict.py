@@ -37,11 +37,11 @@ project_root = Path(__file__).resolve().parent.parent.parent
 sys.path.insert(0, str(project_root))
 
 # Local imports
-from models import SignTransformer, InceptionV3GRU
+from models import SignTransformer, InceptionV3GRU, MediaPipeGRU
 
 class ModelPredictor:
     """
-    Unified predictor for both Transformer and IV3-GRU models.
+    Unified predictor for Transformer, IV3-GRU, and MediaPipe-GRU models.
     """
     def __init__(self, model_type, checkpoint_path, device=None):
         self.model_type = model_type.lower()
@@ -106,6 +106,40 @@ class ModelPredictor:
                 num_cat = 1
             
             model = InceptionV3GRU(num_gloss=num_gloss, num_cat=num_cat, hidden1=gru1_hidden, hidden2=gru2_hidden)
+        elif self.model_type == 'mediapipe_gru':
+            input_dim = 178
+            # Try to detect hidden dimensions and class counts from checkpoint
+            try:
+                checkpoint = torch.load(self.checkpoint_path, map_location='cpu')
+                state_dict = checkpoint.get('model_state_dict', checkpoint.get('state_dict', checkpoint.get('model', checkpoint)))
+                
+                # Extract hidden dimensions from GRU weights
+                if 'gru1.weight_hh_l0' in state_dict and 'gru2.weight_hh_l0' in state_dict:
+                    # For GRU: weight_hh_l0 has shape [3*hidden_size, hidden_size]
+                    gru1_hidden = state_dict['gru1.weight_hh_l0'].shape[0] // 3
+                    gru2_hidden = state_dict['gru2.weight_hh_l0'].shape[0] // 3
+                else:
+                    # Fallback to trained model defaults
+                    gru1_hidden = 256
+                    gru2_hidden = 128
+                
+                # Extract class counts from classification head weights
+                if 'gloss_head.weight' in state_dict and 'category_head.weight' in state_dict:
+                    num_gloss = state_dict['gloss_head.weight'].shape[0]
+                    num_cat = state_dict['category_head.weight'].shape[0]
+                else:
+                    # Fallback to trained model defaults
+                    num_gloss = 10
+                    num_cat = 1
+                    
+            except Exception:
+                # Fallback to trained model defaults if checkpoint loading fails
+                gru1_hidden = 256
+                gru2_hidden = 128
+                num_gloss = 10
+                num_cat = 1
+            
+            model = MediaPipeGRU(num_gloss=num_gloss, num_cat=num_cat, hidden1=gru1_hidden, hidden2=gru2_hidden)
         else:
             raise ValueError(f"Unknown model type: {self.model_type}")
         return model.to(self.device), input_dim
@@ -157,6 +191,12 @@ class ModelPredictor:
             lengths = torch.tensor([X2048.shape[1]], dtype=torch.long).to(self.device)
             with torch.no_grad():
                 gloss_logits, cat_logits = self.model(X2048, lengths, features_already=True)
+        
+        elif self.model_type == 'mediapipe_gru':
+            X = torch.from_numpy(data['X']).float().unsqueeze(0).to(self.device)
+            lengths = torch.tensor([X.shape[1]], dtype=torch.long).to(self.device)
+            with torch.no_grad():
+                gloss_logits, cat_logits = self.model(X, lengths)
 
         # Process results
         gloss_probs = torch.softmax(gloss_logits, dim=-1).squeeze(0)
@@ -217,6 +257,12 @@ class ModelPredictor:
             lengths = torch.tensor([X2048.shape[1]], dtype=torch.long).to(self.device)
             with torch.no_grad():
                 gloss_logits, cat_logits = self.model(X2048, lengths, features_already=True)
+        
+        elif self.model_type == 'mediapipe_gru':
+            X = torch.from_numpy(data['X']).float().unsqueeze(0).to(self.device)
+            lengths = torch.tensor([X.shape[1]], dtype=torch.long).to(self.device)
+            with torch.no_grad():
+                gloss_logits, cat_logits = self.model(X, lengths)
 
         # Process results
         gloss_probs = torch.softmax(gloss_logits, dim=-1).squeeze(0)
@@ -278,7 +324,7 @@ def analyze_predictions(predictions, output_path):
 
 def main():
     parser = argparse.ArgumentParser(description="Sign Language Recognition Batch Prediction")
-    parser.add_argument('--model', choices=['transformer', 'iv3_gru'], required=True)
+    parser.add_argument('--model', choices=['transformer', 'iv3_gru', 'mediapipe_gru'], required=True)
     parser.add_argument('--checkpoint', type=str, required=True)
     parser.add_argument('--input-csv', type=str, required=True, help='Input CSV file with labels and metadata')
     parser.add_argument('--npz-dir', type=str, required=True, help='Directory containing the NPZ files')

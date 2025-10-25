@@ -91,6 +91,18 @@ MODEL_CONFIG = {
         'training_mode': 'ctc',
         'ctc_config': 'subset'  # Use subset CTC config for proper blank_id
     },
+    'mediapipe_gru': {
+        'enabled': True,
+        'checkpoint_path': 'trained_models/mediapipe_gru/greetings_classification/MediaPipeGRU_best.pt',
+        'model_type': 'mediapipe_gru',
+        'num_gloss_classes': 10,  # greetings_classification model has 10 gloss classes
+        'num_category_classes': 1,  # greetings_classification model has 1 category class
+        'display_name': 'MediaPipe-GRU',
+        'input_dim': 178,  # MediaPipe keypoints
+        'supports_keypoints': True,
+        'supports_features': False,
+        'training_mode': 'classification'
+    },
     'mediapipe_gru_ctc': {
         'enabled': True,  # Enabled for continuous sign recognition
         'checkpoint_path': 'trained_models/mediapipe_gru/greetings_ctc_v3/MediaPipeGRUCtc_best.pt',
