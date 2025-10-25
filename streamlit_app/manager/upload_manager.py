@@ -284,6 +284,14 @@ def clear_all_files():
     for key in keys_to_remove:
         del st.session_state[key]
     
+    # Clear all CTC prediction results and tracking keys
+    ctc_keys_to_remove = [key for key in st.session_state.keys() 
+                          if (key.startswith("ctc_results_") or 
+                              key.startswith("previous_ctc_model_") or 
+                              key.startswith("previous_decode_method_"))]
+    for key in ctc_keys_to_remove:
+        del st.session_state[key]
+    
     st.toast("All files cleared", icon="🗑️", duration=5000)
 
 
@@ -318,5 +326,13 @@ def remove_file_from_stage(filename: str, stage: str):
     for key in list(st.session_state.keys()):
         if key.startswith(f"confirm_remove_{filename}"):
             del st.session_state[key]
+    
+    # Clear CTC prediction results and tracking keys for this file
+    keys_to_remove = [key for key in st.session_state.keys() 
+                      if (key.startswith("ctc_results_") or 
+                          key.startswith("previous_ctc_model_") or 
+                          key.startswith("previous_decode_method_")) and filename in key]
+    for key in keys_to_remove:
+        del st.session_state[key]
     
     st.toast(f"Removed {filename}", icon="🗑️", duration=5000)

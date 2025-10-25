@@ -615,12 +615,23 @@ class CTCPredictor:
         
         # Add ground truth comparison if available
         if ground_truth:
-            gt_sequence = ground_truth.get('segments', [])
-            gt_labels = [seg.get('gloss_label', f"GLOSS_{seg.get('gloss', '?')}") for seg in gt_sequence]
+            # Handle both metadata format (with segments) and ground truth format
+            if 'segments' in ground_truth:
+                # Original metadata format
+                gt_sequence = ground_truth.get('segments', [])
+                gt_labels = [seg.get('gloss_label', f"GLOSS_{seg.get('gloss', '?')}") for seg in gt_sequence]
+                gt_timestamps = [seg.get('timestamp_start_ms', 0) for seg in gt_sequence]
+                # Extract gloss IDs for WER calculation
+                gt_gloss_ids = [seg.get('gloss', 0) for seg in gt_sequence]
+            else:
+                # Converted ground truth format
+                gt_labels = ground_truth.get('ground_truth_labels', [])
+                gt_timestamps = [ts.get('start_ms', 0) for ts in ground_truth.get('ground_truth_timestamps', [])]
+                gt_gloss_ids = ground_truth.get('ground_truth_sequence', [])
             
             result.update({
-                'ground_truth_sequence': gt_labels,
-                'ground_truth_timestamps': [seg.get('timestamp_start_ms', 0) for seg in gt_sequence],
+                'ground_truth_labels': gt_labels,
+                'ground_truth_timestamps': gt_timestamps,
                 'sequence_accuracy': 0.0,  # TODO: Implement sequence accuracy calculation
                 'temporal_alignment': 0.0   # TODO: Implement temporal alignment calculation
             })

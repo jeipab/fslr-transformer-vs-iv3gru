@@ -35,7 +35,7 @@ def render_sequence_comparison(
     
     has_categories = predicted_categories is not None and len(predicted_categories) > 0
     
-    if ground_truth_sequence:
+    if ground_truth_sequence and len(ground_truth_sequence) > 0:
         # Side-by-side comparison
         col1, col2 = st.columns(2)
         
@@ -53,10 +53,11 @@ def render_sequence_comparison(
             else:
                 render_sequence_chips(predicted_labels, confidence_scores, color='#3b82f6')
         
-        # Alignment visualization
-        render_alignment_chart(predicted_labels, ground_truth_labels)
     else:
-        # Only prediction
+        # Only prediction - show warning if ground truth was expected
+        if ground_truth_sequence is not None and len(ground_truth_sequence) == 0:
+            st.warning("Ground truth sequence is empty - check your JSON file format")
+        
         st.markdown("**Predicted Sequence**")
         if has_categories:
             render_sequence_with_categories(predicted_labels, predicted_categories, confidence_scores, category_confidences)
@@ -207,100 +208,60 @@ def render_alignment_chart(predicted: List[str], ground_truth: List[str]):
             return ['background-color: rgba(239, 68, 68, 0.2)'] * len(row)
     
     styled_df = df.style.apply(highlight_matches, axis=1)
-    st.dataframe(styled_df, use_container_width=True)
+    st.dataframe(styled_df, width='stretch')
 
 
-def render_wer_metrics(
-    wer: float,
-    insertions: int,
-    deletions: int,
-    substitutions: int,
-    sequence_correct: bool
-):
+
+
+def smooth_timestamps(timestamps: List[Dict]) -> List[Dict]:
     """
-    Render WER metrics with breakdown.
+    Smooth timestamps by merging consecutive identical glosses.
     
     Args:
-        wer: Word Error Rate
-        insertions: Number of insertions
-        deletions: Number of deletions
-        substitutions: Number of substitutions
-        sequence_correct: Whether sequence is completely correct
+        timestamps: List of timestamp dictionaries
+        
+    Returns:
+        List of smoothed timestamp dictionaries
     """
-    st.markdown("#### Word Error Rate (WER)")
+    if not timestamps:
+        return []
     
-    # Main WER metric
-    col1, col2, col3, col4, col5 = st.columns(5)
+    smoothed = []
+    current_gloss = timestamps[0].get('gloss', timestamps[0].get('index'))
+    start_ms = timestamps[0]['start_ms']
+    end_ms = timestamps[0]['end_ms']
     
-    with col1:
-        wer_color = "normal" if wer <= 0.2 else "off" if wer <= 0.5 else "inverse"
-        st.metric("WER", f"{wer*100:.1f}%", delta=None, delta_color=wer_color)
+    for i in range(1, len(timestamps)):
+        next_gloss = timestamps[i].get('gloss', timestamps[i].get('index'))
+        
+        if next_gloss == current_gloss:
+            # Merge consecutive identical glosses
+            end_ms = timestamps[i]['end_ms']
+        else:
+            # Add the current merged segment
+            smoothed.append({
+                'gloss': current_gloss,
+                'index': timestamps[i-1].get('index', i-1),
+                'start_ms': start_ms,
+                'end_ms': end_ms,
+                'duration_ms': end_ms - start_ms
+            })
+            
+            # Start new segment
+            current_gloss = next_gloss
+            start_ms = timestamps[i]['start_ms']
+            end_ms = timestamps[i]['end_ms']
     
-    with col2:
-        st.metric("Insertions", insertions)
+    # Add the final segment
+    smoothed.append({
+        'gloss': current_gloss,
+        'index': timestamps[-1].get('index', len(timestamps)-1),
+        'start_ms': start_ms,
+        'end_ms': end_ms,
+        'duration_ms': end_ms - start_ms
+    })
     
-    with col3:
-        st.metric("Deletions", deletions)
-    
-    with col4:
-        st.metric("Substitutions", substitutions)
-    
-    with col5:
-        correct_emoji = "✅" if sequence_correct else "❌"
-        st.metric("Perfect Match", correct_emoji)
-    
-    # WER visualization
-    render_wer_breakdown_chart(insertions, deletions, substitutions)
-
-
-def render_wer_breakdown_chart(insertions: int, deletions: int, substitutions: int):
-    """
-    Render WER error breakdown as bar chart.
-    
-    Args:
-        insertions: Number of insertions
-        deletions: Number of deletions
-        substitutions: Number of substitutions
-    """
-    total_errors = insertions + deletions + substitutions
-    
-    if total_errors == 0:
-        st.success("🎉 Perfect prediction! No errors.")
-        return
-    
-    # Create bar chart
-    error_data = {
-        'Error Type': ['Insertions', 'Deletions', 'Substitutions'],
-        'Count': [insertions, deletions, substitutions],
-        'Percentage': [
-            (insertions / total_errors * 100) if total_errors > 0 else 0,
-            (deletions / total_errors * 100) if total_errors > 0 else 0,
-            (substitutions / total_errors * 100) if total_errors > 0 else 0
-        ]
-    }
-    
-    df = pd.DataFrame(error_data)
-    
-    fig = go.Figure(data=[
-        go.Bar(
-            x=df['Error Type'],
-            y=df['Count'],
-            text=df['Count'],
-            textposition='auto',
-            marker_color=['#f59e0b', '#ef4444', '#8b5cf6']
-        )
-    ])
-    
-    fig.update_layout(
-        title="Error Breakdown",
-        xaxis_title="Error Type",
-        yaxis_title="Count",
-        height=300,
-        showlegend=False,
-        template='plotly_dark'
-    )
-    
-    st.plotly_chart(fig, use_container_width=True)
+    return smoothed
 
 
 def render_temporal_alignment(
@@ -321,42 +282,69 @@ def render_temporal_alignment(
     if temporal_alignment_accuracy is not None:
         st.metric("Temporal Alignment Accuracy", f"{temporal_alignment_accuracy*100:.1f}%")
     
+    # Apply smoothing to predicted timestamps
+    smoothed_predicted = smooth_timestamps(predicted_timestamps)
+    
     if not ground_truth_timestamps:
         # Show only predicted timeline
-        render_timeline(predicted_timestamps, "Predicted Timeline")
+        render_timeline(smoothed_predicted, "Predicted Timeline (Smoothed)")
         return
+    
+    # Load label mappings to convert gloss indices to labels
+    try:
+        from data.labels.label_mapping import load_label_mappings
+        gloss_mapping, _ = load_label_mappings()
+    except Exception as e:
+        st.warning(f"Could not load label mappings: {e}. Showing numeric IDs only.")
+        gloss_mapping = {}
     
     # Create timeline comparison
     fig = go.Figure()
     
     # Ground truth timeline
     for i, ts in enumerate(ground_truth_timestamps):
+        gloss_label = ts.get('gloss_label', ts.get('gloss', ''))
         fig.add_trace(go.Bar(
-            name=f"GT: {ts.get('gloss_label', ts.get('gloss'))}",
+            name=f"GT: {gloss_label}",
             x=[ts['duration_ms']],
             y=['Ground Truth'],
             orientation='h',
-            marker=dict(color='rgba(16, 185, 129, 0.7)'),
-            text=ts.get('gloss_label', str(ts.get('gloss'))),
+            marker=dict(color='rgba(16, 185, 129, 0.8)'),
+            text=gloss_label,
             textposition='inside',
-            hovertemplate=f"<b>{ts.get('gloss_label', '')}</b><br>" +
+            textfont=dict(
+                color='white',
+                size=11,
+                family='Arial Black'
+            ),
+            hovertemplate=f"<b>{gloss_label}</b><br>" +
                          f"Start: {ts['start_ms']}ms<br>" +
                          f"End: {ts['end_ms']}ms<br>" +
                          f"Duration: {ts['duration_ms']}ms<extra></extra>",
             base=ts['start_ms']
         ))
     
-    # Predicted timeline
-    for i, ts in enumerate(predicted_timestamps):
+    # Predicted timeline (smoothed)
+    for i, ts in enumerate(smoothed_predicted):
+        gloss_index = ts.get('gloss', ts.get('index'))
+        # Map gloss index to actual gloss label
+        gloss_label = gloss_mapping.get(gloss_index, f"Gloss {gloss_index}")
+        
         fig.add_trace(go.Bar(
-            name=f"Pred: {ts.get('gloss', ts.get('index'))}",
+            name=f"Pred: {gloss_label}",
             x=[ts['duration_ms']],
             y=['Predicted'],
             orientation='h',
-            marker=dict(color='rgba(59, 130, 246, 0.7)'),
-            text=str(ts.get('gloss', ts.get('index'))),
+            marker=dict(color='rgba(59, 130, 246, 0.8)'),
+            text=gloss_label,
             textposition='inside',
-            hovertemplate=f"<b>Gloss {ts.get('gloss', ts.get('index'))}</b><br>" +
+            textfont=dict(
+                color='white',
+                size=11,
+                family='Arial Black'
+            ),
+            hovertemplate=f"<b>{gloss_label}</b><br>" +
+                         f"Gloss ID: {gloss_index}<br>" +
                          f"Start: {ts['start_ms']}ms<br>" +
                          f"End: {ts['end_ms']}ms<br>" +
                          f"Duration: {ts['duration_ms']}ms<extra></extra>",
@@ -364,17 +352,29 @@ def render_temporal_alignment(
         ))
     
     fig.update_layout(
-        title="Temporal Alignment Comparison",
-        xaxis_title="Time (ms)",
-        yaxis_title="",
+        title=dict(
+            text="Temporal Alignment Comparison",
+            font=dict(size=16, color='white')
+        ),
+        xaxis=dict(
+            title=dict(text="Time (ms)", font=dict(size=12, color='white')),
+            tickfont=dict(size=10, color='white'),
+            gridcolor='rgba(255, 255, 255, 0.1)',
+            range=[0, max(
+                ground_truth_timestamps[-1]['end_ms'] if ground_truth_timestamps else 0,
+                smoothed_predicted[-1]['end_ms'] if smoothed_predicted else 0
+            )]
+        ),
+        yaxis=dict(
+            title="",
+            tickfont=dict(size=12, color='white')
+        ),
         barmode='overlay',
-        height=300,
+        height=350,
         showlegend=False,
-        template='plotly_dark',
-        xaxis=dict(range=[0, max(
-            ground_truth_timestamps[-1]['end_ms'] if ground_truth_timestamps else 0,
-            predicted_timestamps[-1]['end_ms'] if predicted_timestamps else 0
-        )])
+        plot_bgcolor='rgba(0,0,0,0)',
+        paper_bgcolor='rgba(0,0,0,0)',
+        margin=dict(l=50, r=50, t=60, b=50)
     )
     
     st.plotly_chart(fig, use_container_width=True)
@@ -392,10 +392,23 @@ def render_timeline(timestamps: List[Dict], title: str = "Timeline"):
         st.info("No timestamp data available")
         return
     
+    # Apply smoothing to timestamps
+    smoothed_timestamps = smooth_timestamps(timestamps)
+    
+    # Load label mappings to convert gloss indices to labels
+    try:
+        from data.labels.label_mapping import load_label_mappings
+        gloss_mapping, _ = load_label_mappings()
+    except Exception as e:
+        gloss_mapping = {}
+    
     fig = go.Figure()
     
-    for i, ts in enumerate(timestamps):
-        gloss_label = ts.get('gloss_label', str(ts.get('gloss', i)))
+    for i, ts in enumerate(smoothed_timestamps):
+        gloss_index = ts.get('gloss', i)
+        # Map gloss index to actual gloss label
+        gloss_label = gloss_mapping.get(gloss_index, f"Gloss {gloss_index}")
+        
         fig.add_trace(go.Bar(
             name=gloss_label,
             x=[ts['duration_ms']],
@@ -404,7 +417,13 @@ def render_timeline(timestamps: List[Dict], title: str = "Timeline"):
             marker=dict(color=f'hsl({i * 360 / len(timestamps)}, 70%, 60%)'),
             text=gloss_label,
             textposition='inside',
+            textfont=dict(
+                color='white',
+                size=10,
+                family='Arial Black'
+            ),
             hovertemplate=f"<b>{gloss_label}</b><br>" +
+                         f"Gloss ID: {gloss_index}<br>" +
                          f"Start: {ts['start_ms']}ms<br>" +
                          f"End: {ts['end_ms']}ms<br>" +
                          f"Duration: {ts['duration_ms']}ms<extra></extra>",
@@ -412,13 +431,25 @@ def render_timeline(timestamps: List[Dict], title: str = "Timeline"):
         ))
     
     fig.update_layout(
-        title=title,
-        xaxis_title="Time (ms)",
-        yaxis_title="",
+        title=dict(
+            text=title,
+            font=dict(size=16, color='white')
+        ),
+        xaxis=dict(
+            title=dict(text="Time (ms)", font=dict(size=12, color='white')),
+            tickfont=dict(size=10, color='white'),
+            gridcolor='rgba(255, 255, 255, 0.1)'
+        ),
+        yaxis=dict(
+            title="",
+            tickfont=dict(size=12, color='white')
+        ),
         barmode='stack',
         height=200,
         showlegend=False,
-        template='plotly_dark'
+        plot_bgcolor='rgba(0,0,0,0)',
+        paper_bgcolor='rgba(0,0,0,0)',
+        margin=dict(l=50, r=50, t=50, b=50)
     )
     
     st.plotly_chart(fig, use_container_width=True)
@@ -429,62 +460,86 @@ def render_ctc_prediction_card(
     predicted_sequence: List[int],
     predicted_labels: List[str],
     confidence_scores: Optional[List[float]] = None,
-    wer: Optional[float] = None,
     ground_truth_available: bool = False,
     predicted_categories: Optional[List[int]] = None,
     category_confidences: Optional[List[float]] = None,
     category_accuracy: Optional[float] = None
 ):
     """
-    Render comprehensive CTC prediction card.
+    Render comprehensive CTC prediction card with improved UI/UX.
     
     Args:
         file_name: Name of the sequence file
         predicted_sequence: List of predicted gloss IDs
         predicted_labels: List of predicted gloss labels
         confidence_scores: Optional confidence scores
-        wer: Optional WER if ground truth available
         ground_truth_available: Whether ground truth is available
         predicted_categories: Optional list of predicted category IDs
         category_confidences: Optional category confidence scores
         category_accuracy: Optional category accuracy if ground truth available
     """
+    # Enhanced header with file info
     st.markdown(f"### Prediction Results: `{file_name}`")
     
-    # Summary metrics
+    # Check if predicted_sequence is valid
+    if predicted_sequence is None:
+        predicted_sequence = []
+    if predicted_labels is None:
+        predicted_labels = []
+    
+    # Summary metrics with better visual design
     has_categories = predicted_categories is not None and len(predicted_categories) > 0
     cols = st.columns(4 if has_categories else 3)
     
     with cols[0]:
-        st.metric("Sequence Length", len(predicted_sequence))
+        st.metric(
+            "Sequence Length", 
+            len(predicted_sequence),
+            help="Number of predicted glosses in the sequence"
+        )
     
     with cols[1]:
         if confidence_scores:
             avg_conf = np.mean(confidence_scores)
-            st.metric("Avg Gloss Conf", f"{avg_conf*100:.1f}%")
+            conf_color = "normal" if avg_conf >= 0.7 else "off"
+            st.metric(
+                "Average Gloss Confidence", 
+                f"{avg_conf*100:.1f}%",
+                delta=None,
+                delta_color=conf_color,
+                help="Average confidence across all predicted glosses"
+            )
         else:
-            st.metric("Gloss Conf", "N/A")
+            st.metric("Average Gloss Confidence", "N/A", help="No confidence scores available")
     
-    with cols[2]:
-        if wer is not None:
-            wer_color = "normal" if wer <= 0.2 else "off"
-            st.metric("WER", f"{wer*100:.1f}%", delta=None, delta_color=wer_color)
-        else:
-            st.metric("WER", "N/A" if not ground_truth_available else "Computing...")
-    
-    if has_categories and len(cols) > 3:
-        with cols[3]:
+    if has_categories and len(cols) > 2:
+        with cols[2]:
             if category_accuracy is not None:
                 cat_color = "normal" if category_accuracy >= 0.8 else "off"
-                st.metric("Category Acc", f"{category_accuracy*100:.1f}%", delta_color=cat_color)
+                st.metric(
+                    "Category Acc", 
+                    f"{category_accuracy*100:.1f}%", 
+                    delta_color=cat_color,
+                    help="Category prediction accuracy"
+                )
             elif category_confidences:
                 avg_cat_conf = np.mean(category_confidences)
-                st.metric("Avg Cat Conf", f"{avg_cat_conf*100:.1f}%")
+                st.metric(
+                    "Average Category Confidence", 
+                    f"{avg_cat_conf*100:.1f}%",
+                    help="Average category confidence"
+                )
             else:
-                st.metric("Category", "N/A")
+                st.metric("Category", "N/A", help="No category predictions available")
     
-    # Predicted sequence with categories
-    st.markdown("**Predicted Sequence:**")
+    # Enhanced predicted sequence display
+    st.markdown("---")
+    st.markdown("#### Predicted Sequence")
+    
+    if not predicted_labels:
+        st.warning("No predictions generated - sequence may be too short or model failed")
+        return
+    
     if has_categories:
         render_sequence_with_categories(predicted_labels, predicted_categories, confidence_scores, category_confidences)
     else:
@@ -523,7 +578,7 @@ def render_ctc_batch_summary(predictions: List[Dict]):
     df = pd.DataFrame(summary_data)
     
     # Interactive table
-    st.dataframe(df, use_container_width=True, height=400)
+    st.dataframe(df, width='stretch', height=400)
     
     # Overall statistics if ground truth available
     if any('wer' in pred for pred in predictions):

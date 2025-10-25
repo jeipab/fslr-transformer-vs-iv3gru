@@ -1,6 +1,7 @@
 """Prediction manager for NPZ file predictions and visualization."""
 
 import io
+import json
 import streamlit as st
 import streamlit.components.v1 as components
 from typing import List, Dict, Optional, Tuple
@@ -25,13 +26,219 @@ from ..components.visualization import (
 )
 from ..components.components import render_predictions_section
 from ..components.ctc_visualization import (
-    render_sequence_comparison, render_wer_metrics, render_temporal_alignment,
+    render_sequence_comparison, render_temporal_alignment,
     render_ctc_prediction_card
 )
 from .upload_manager import remove_file_from_stage
 
 # Import configuration from core module
 from ..core.config import MODEL_CONFIG, DUMMY_DATA, is_ctc_model
+
+
+def convert_to_ground_truth_format(raw_data: Dict) -> Dict:
+    """
+    Convert JSON data to ground truth format.
+    
+    Handles both metadata format (with 'segments') and ground truth format (with 'ground_truth_sequence').
+    
+    Args:
+        raw_data: Raw JSON data loaded from file
+        
+    Returns:
+        Ground truth dictionary in standardized format
+    """
+    # Check if it's already in ground truth format
+    if 'ground_truth_sequence' in raw_data and 'ground_truth_labels' in raw_data:
+        return raw_data
+    
+    # Check if it's in metadata format (with segments)
+    if 'segments' in raw_data:
+        segments = raw_data['segments']
+        
+        # Extract ground truth sequence and labels
+        ground_truth_sequence = [seg['gloss'] for seg in segments]
+        ground_truth_labels = [seg['gloss_label'] for seg in segments]
+        
+        # Transform timestamps
+        ground_truth_timestamps = []
+        for seg in segments:
+            ground_truth_timestamps.append({
+                'index': seg['index'],
+                'gloss': seg['gloss'],
+                'gloss_label': seg['gloss_label'],
+                'start_ms': seg['timestamp_start_ms'],
+                'end_ms': seg['timestamp_end_ms'],
+                'duration_ms': seg['timestamp_end_ms'] - seg['timestamp_start_ms']
+            })
+        
+        # Extract categories if available
+        ground_truth_categories = [seg.get('category', 0) for seg in segments]
+        
+        # Build ground truth dictionary
+        ground_truth = {
+            'file_name': raw_data.get('file_name', 'unknown'),
+            'ground_truth_sequence': ground_truth_sequence,
+            'ground_truth_labels': ground_truth_labels,
+            'ground_truth_timestamps': ground_truth_timestamps,
+            'ground_truth_categories': ground_truth_categories,
+            'signer': raw_data.get('signer', 'unknown'),
+            'strategy': raw_data.get('strategy_name', raw_data.get('strategy', 'unknown')),
+            'total_duration_sec': raw_data.get('total_duration_sec', 0),
+            'num_segments': raw_data.get('num_segments', len(segments))
+        }
+        
+        return ground_truth
+    
+    # If neither format is recognized, return as-is (might be valid ground truth)
+    return raw_data
+
+
+def validate_ground_truth_data(ground_truth: Dict) -> Dict:
+    """
+    Validate ground truth data structure.
+    
+    Args:
+        ground_truth: Ground truth dictionary to validate
+        
+    Returns:
+        Dictionary with 'valid' boolean and 'error' message if invalid
+    """
+    if not isinstance(ground_truth, dict):
+        return {'valid': False, 'error': 'Ground truth must be a dictionary'}
+    
+    # Check if it's in metadata format (with segments)
+    if 'segments' in ground_truth:
+        segments = ground_truth['segments']
+        if not isinstance(segments, list):
+            return {'valid': False, 'error': 'segments must be a list'}
+        
+        if len(segments) == 0:
+            return {'valid': False, 'error': 'segments list cannot be empty'}
+        
+        # Validate each segment
+        for i, segment in enumerate(segments):
+            if not isinstance(segment, dict):
+                return {'valid': False, 'error': f'Segment {i} must be a dictionary'}
+            
+            required_fields = ['gloss', 'gloss_label']
+            for field in required_fields:
+                if field not in segment:
+                    return {'valid': False, 'error': f'Segment {i} missing required field: {field}'}
+            
+            if not isinstance(segment['gloss'], int):
+                return {'valid': False, 'error': f'Segment {i} gloss must be an integer'}
+            
+            if not isinstance(segment['gloss_label'], str):
+                return {'valid': False, 'error': f'Segment {i} gloss_label must be a string'}
+        
+        return {'valid': True, 'error': None}
+    
+    # Check if it's in ground truth format (with ground_truth_sequence)
+    elif 'ground_truth_sequence' in ground_truth and 'ground_truth_labels' in ground_truth:
+        # Check required fields
+        required_fields = ['ground_truth_sequence', 'ground_truth_labels']
+        for field in required_fields:
+            if field not in ground_truth:
+                return {'valid': False, 'error': f'Missing required field: {field}'}
+        
+        # Check that sequences are lists
+        if not isinstance(ground_truth['ground_truth_sequence'], list):
+            return {'valid': False, 'error': 'ground_truth_sequence must be a list'}
+        
+        if not isinstance(ground_truth['ground_truth_labels'], list):
+            return {'valid': False, 'error': 'ground_truth_labels must be a list'}
+        
+        # Check that sequences have same length
+        if len(ground_truth['ground_truth_sequence']) != len(ground_truth['ground_truth_labels']):
+            return {'valid': False, 'error': 'ground_truth_sequence and ground_truth_labels must have same length'}
+        
+        # Check that sequence is not empty
+        if len(ground_truth['ground_truth_sequence']) == 0:
+            return {'valid': False, 'error': 'Ground truth sequence cannot be empty'}
+        
+        # Check that gloss IDs are integers
+        for i, gloss_id in enumerate(ground_truth['ground_truth_sequence']):
+            if not isinstance(gloss_id, int):
+                return {'valid': False, 'error': f'Gloss ID at position {i} must be an integer, got {type(gloss_id)}'}
+        
+        # Check that labels are strings
+        for i, label in enumerate(ground_truth['ground_truth_labels']):
+            if not isinstance(label, str):
+                return {'valid': False, 'error': f'Label at position {i} must be a string, got {type(label)}'}
+        
+        return {'valid': True, 'error': None}
+    
+    else:
+        return {'valid': False, 'error': 'JSON must contain either "segments" (metadata format) or "ground_truth_sequence" and "ground_truth_labels" (ground truth format)'}
+
+
+def render_ground_truth_preview(ground_truth: Dict):
+    """
+    Render a preview of the ground truth data.
+    
+    Args:
+        ground_truth: Ground truth dictionary
+    """
+    st.markdown("**Ground Truth Information:**")
+    
+    # Basic info
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        st.metric("File", ground_truth.get('file_name', 'N/A'))
+    with col2:
+        st.metric("Signer", ground_truth.get('signer', 'N/A'))
+    with col3:
+        st.metric("Strategy", ground_truth.get('strategy', 'N/A'))
+    
+    # Sequence info
+    col1, col2 = st.columns(2)
+    with col1:
+        sequence_length = len(ground_truth.get('ground_truth_sequence', []))
+        st.metric("Sequence Length", sequence_length)
+    with col2:
+        duration = ground_truth.get('total_duration_sec', 0)
+        st.metric("Duration", f"{duration:.1f}s")
+    
+    # Show sequence as chips
+    st.markdown("**Ground Truth Sequence:**")
+    labels = ground_truth.get('ground_truth_labels', [])
+    if not labels:
+        st.info("No ground truth labels available")
+        return
+    
+    sequence_html = '<div style="display: flex; flex-wrap: wrap; gap: 0.5rem; margin: 1rem 0;">'
+    
+    for i, label in enumerate(labels):
+        chip_style = """
+            background-color: #10b981;
+            color: white;
+            padding: 0.4rem 0.8rem;
+            border-radius: 1rem;
+            font-size: 0.9rem;
+            font-weight: 500;
+        """
+        sequence_html += f'<div style="{chip_style}">{i+1}. {label}</div>'
+    
+    sequence_html += '</div>'
+    st.markdown(sequence_html, unsafe_allow_html=True)
+    
+    # Show timestamps if available
+    if 'ground_truth_timestamps' in ground_truth and ground_truth['ground_truth_timestamps']:
+        st.markdown("**Timestamps:**")
+        timestamp_data = []
+        for ts in ground_truth['ground_truth_timestamps']:
+            timestamp_data.append({
+                'Position': ts.get('index', 0) + 1,
+                'Gloss': ts.get('gloss_label', 'N/A'),
+                'Start (ms)': ts.get('start_ms', 0),
+                'End (ms)': ts.get('end_ms', 0),
+                'Duration (ms)': ts.get('duration_ms', 0)
+            })
+        
+        if timestamp_data:
+            import pandas as pd
+            df = pd.DataFrame(timestamp_data)
+            st.dataframe(df, width='stretch')
 
 
 class ModelManager:
@@ -262,6 +469,16 @@ def make_ctc_prediction(npz_data: Dict[str, np.ndarray], model_name: str,
                 fps=30,
                 temporal_tolerance=500
             )
+            
+            # Add ground truth information to results if available
+            if ground_truth:
+                results['ground_truth_sequence'] = ground_truth.get('ground_truth_sequence', [])
+                results['ground_truth_labels'] = ground_truth.get('ground_truth_labels', [])
+                results['ground_truth_timestamps'] = ground_truth.get('ground_truth_timestamps', [])
+                results['ground_truth_categories'] = ground_truth.get('ground_truth_categories', [])
+                results['signer'] = ground_truth.get('signer', 'unknown')
+                results['strategy'] = ground_truth.get('strategy', 'unknown')
+            
             return results
         finally:
             # Clean up
@@ -802,6 +1019,15 @@ def render_continuous_sequence_predictions(filename: str, npz_data: Dict, metada
             format_func=lambda x: MODEL_CONFIG[x]['display_name'],
             key=f"ctc_model_select_{unique_key_suffix}"
         )
+        
+        # Clear results if model selection changed
+        ctc_key = f'ctc_results_{unique_key_suffix}'
+        if ctc_key in st.session_state:
+            # Check if this is a new model selection (not initial load)
+            if f'previous_ctc_model_{unique_key_suffix}' in st.session_state:
+                if st.session_state[f'previous_ctc_model_{unique_key_suffix}'] != ctc_model:
+                    del st.session_state[ctc_key]
+            st.session_state[f'previous_ctc_model_{unique_key_suffix}'] = ctc_model
     
     with col2:
         # Decode method
@@ -811,6 +1037,14 @@ def render_continuous_sequence_predictions(filename: str, npz_data: Dict, metada
             format_func=lambda x: 'Greedy' if x == 'greedy' else 'Beam Search',
             key=f"decode_method_{unique_key_suffix}"
         )
+        
+        # Clear results if decode method changed
+        if ctc_key in st.session_state:
+            # Check if this is a new decode method selection (not initial load)
+            if f'previous_decode_method_{unique_key_suffix}' in st.session_state:
+                if st.session_state[f'previous_decode_method_{unique_key_suffix}'] != decode_method:
+                    del st.session_state[ctc_key]
+            st.session_state[f'previous_decode_method_{unique_key_suffix}'] = decode_method
         
         if decode_method == 'beam_search':
             beam_width = st.slider(
@@ -825,24 +1059,55 @@ def render_continuous_sequence_predictions(filename: str, npz_data: Dict, metada
     
     # Ground truth upload (optional)
     st.markdown("---")
+    st.markdown("#### Ground Truth Upload")
+    
+    # Enhanced file uploader with better help text
     ground_truth_file = st.file_uploader(
         "Ground Truth JSON (optional)",
         type=['json'],
-        help="Upload ground truth JSON file for WER calculation",
+        help="Upload ground truth JSON file for WER calculation. Supports both metadata format (with 'segments') and ground truth format (with 'ground_truth_sequence')",
         key=f"gt_upload_{unique_key_suffix}"
     )
     
     ground_truth = None
     if ground_truth_file:
         try:
-            ground_truth = json.load(ground_truth_file)
-            st.success(f"✅ Ground truth loaded: {len(ground_truth.get('ground_truth_sequence', []))} glosses")
+            # Reset file pointer to beginning
+            ground_truth_file.seek(0)
+            raw_data = json.load(ground_truth_file)
+            
+            # Convert to ground truth format if needed
+            ground_truth = convert_to_ground_truth_format(raw_data)
+            
+            # Validate the ground truth data
+            validation_result = validate_ground_truth_data(ground_truth)
+            
+            if validation_result['valid']:
+                num_glosses = len(ground_truth.get('ground_truth_sequence', []))
+                st.toast(f"Ground truth loaded successfully: {num_glosses} glosses", duration=3000)
+                
+                # Show ground truth preview
+                with st.expander("Ground Truth Preview", expanded=False):
+                    render_ground_truth_preview(ground_truth)
+            else:
+                st.error(f"Invalid ground truth format: {validation_result['error']}")
+                ground_truth = None
+                
+        except json.JSONDecodeError as e:
+            st.error(f"Invalid JSON format: {str(e)}")
         except Exception as e:
             st.error(f"Failed to load ground truth: {str(e)}")
+            with st.expander("Error Details"):
+                st.code(str(e))
     
     # Predict button
     st.markdown("---")
-    if st.button("🔮 Predict Sequence", type="primary", key=f"predict_ctc_{unique_key_suffix}"):
+    if st.button("Predict Sequence", type="primary", key=f"predict_ctc_{unique_key_suffix}"):
+        # Clear any existing results for this file when making new prediction
+        ctc_key = f'ctc_results_{unique_key_suffix}'
+        if ctc_key in st.session_state:
+            del st.session_state[ctc_key]
+        
         with st.spinner("Predicting sequence..."):
             results = make_ctc_prediction(
                 npz_data, 
@@ -866,10 +1131,9 @@ def render_continuous_sequence_predictions(filename: str, npz_data: Dict, metada
         # Render CTC prediction card
         render_ctc_prediction_card(
             file_name=filename,
-            predicted_sequence=results['predicted_sequence'],
-            predicted_labels=results['predicted_labels'],
+            predicted_sequence=results.get('predicted_sequence', []),
+            predicted_labels=results.get('predicted_labels', []),
             confidence_scores=results.get('confidence_scores'),
-            wer=results.get('wer'),
             ground_truth_available=ground_truth is not None,
             predicted_categories=results.get('predicted_categories'),
             category_confidences=results.get('category_confidences'),
@@ -880,33 +1144,22 @@ def render_continuous_sequence_predictions(filename: str, npz_data: Dict, metada
         if ground_truth:
             st.markdown("---")
             render_sequence_comparison(
-                predicted_sequence=results['predicted_sequence'],
-                predicted_labels=results['predicted_labels'],
-                ground_truth_sequence=ground_truth.get('ground_truth_sequence'),
-                ground_truth_labels=ground_truth.get('ground_truth_labels'),
+                predicted_sequence=results.get('predicted_sequence', []),
+                predicted_labels=results.get('predicted_labels', []),
+                ground_truth_sequence=results.get('ground_truth_sequence'),
+                ground_truth_labels=results.get('ground_truth_labels'),
                 confidence_scores=results.get('confidence_scores'),
                 predicted_categories=results.get('predicted_categories'),
                 category_confidences=results.get('category_confidences'),
-                ground_truth_categories=ground_truth.get('ground_truth_categories')
+                ground_truth_categories=results.get('ground_truth_categories')
             )
             
-            # WER metrics
-            if 'wer' in results:
-                st.markdown("---")
-                render_wer_metrics(
-                    wer=results['wer'],
-                    insertions=results.get('num_insertions', 0),
-                    deletions=results.get('num_deletions', 0),
-                    substitutions=results.get('num_substitutions', 0),
-                    sequence_correct=results.get('correct', False)
-                )
-            
             # Temporal alignment
-            if 'predicted_timestamps' in results and 'ground_truth_timestamps' in ground_truth:
+            if 'predicted_timestamps' in results and 'ground_truth_timestamps' in results:
                 st.markdown("---")
                 render_temporal_alignment(
                     predicted_timestamps=results['predicted_timestamps'],
-                    ground_truth_timestamps=ground_truth['ground_truth_timestamps'],
+                    ground_truth_timestamps=results['ground_truth_timestamps'],
                     temporal_alignment_accuracy=results.get('temporal_alignment_accuracy')
                 )
 
@@ -1104,6 +1357,14 @@ def remove_specific_file_instance(file_obj, stage: str):
                 del st.session_state.file_metadata[filename]
             if filename in st.session_state.original_file_data:
                 del st.session_state.original_file_data[filename]
+            
+            # Clear CTC prediction results and tracking keys for this file
+            keys_to_remove = [key for key in st.session_state.keys() 
+                              if (key.startswith("ctc_results_") or 
+                                  key.startswith("previous_ctc_model_") or 
+                                  key.startswith("previous_decode_method_")) and filename in key]
+            for key in keys_to_remove:
+                del st.session_state[key]
 
 
 def reset_processed_files():
@@ -1238,6 +1499,14 @@ def reset_processed_files():
     
     # Clear current tab
     st.session_state.current_tab = None
+    
+    # Clear all CTC prediction results and tracking keys when resetting files
+    ctc_keys_to_remove = [key for key in st.session_state.keys() 
+                          if (key.startswith("ctc_results_") or 
+                              key.startswith("previous_ctc_model_") or 
+                              key.startswith("previous_decode_method_"))]
+    for key in ctc_keys_to_remove:
+        del st.session_state[key]
     
     if reset_count > 0:
         st.toast(f"Reset {reset_count} files back to pending status", icon="🔄", duration=5000)

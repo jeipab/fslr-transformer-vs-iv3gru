@@ -309,7 +309,7 @@ def render_overall_performance(results: Dict[str, Any]):
         height=400
     )
     
-    st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(fig, width='stretch')
     
     # Top-k Accuracy metrics
     if 'gloss_top1_accuracy' in overall:
@@ -572,7 +572,7 @@ def render_occlusion_analysis(results: Dict[str, Any]):
         height=400
     )
     
-    st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(fig, width='stretch')
     
 
 
@@ -860,7 +860,7 @@ def render_ctc_validation_results(results: Dict[str, Any]):
         signer_data = []
         for signer, wer in summary['per_signer_wer'].items():
             signer_data.append({'Signer': signer, 'WER': f"{wer*100:.2f}%"})
-        st.dataframe(signer_data, use_container_width=True)
+        st.dataframe(signer_data, width='stretch')
     
     # Per-strategy metrics
     if summary.get('per_strategy_wer'):
@@ -870,7 +870,7 @@ def render_ctc_validation_results(results: Dict[str, Any]):
         for strategy, wer in summary['per_strategy_wer'].items():
             strategy_name = f"Strategy {strategy}"
             strategy_data.append({'Strategy': strategy_name, 'WER': f"{wer*100:.2f}%"})
-        st.dataframe(strategy_data, use_container_width=True)
+        st.dataframe(strategy_data, width='stretch')
     
     # Detailed predictions table
     st.markdown("---")
@@ -900,7 +900,7 @@ def render_ctc_validation_results(results: Dict[str, Any]):
             pred_data.append(row)
         
         pred_df = pd.DataFrame(pred_data)
-        st.dataframe(pred_df, use_container_width=True, height=400)
+        st.dataframe(pred_df, width='stretch', height=400)
     
     # Download results
     st.markdown("---")
