@@ -365,71 +365,10 @@ class CTCPredictor:
             predicted_sequence = greedy_ctc_decoder(log_probs, self.blank_id, input_length)[0]
             probs = torch.exp(log_probs[0])
             confidence_scores = [float(probs[:, g].max()) for g in predicted_sequence] if len(predicted_sequence) > 0 else []
-            
-            # CTC Debug: Focus on decoding issue
-            print(f"🔍 CTC Decoding Debug:")
-            print(f"  Input: {X.shape[1]} frames, Blank ID: {self.blank_id}, CTC Classes: {log_probs.shape[2]}")
-            print(f"  Predicted: {predicted_sequence} ({len(predicted_sequence)} signs)")
-            
-            # Robust debug output with proper tensor handling
-            print(f"  Tensor shapes:")
-            print(f"    log_probs: {log_probs.shape}")
-            
-            # Get top predictions with proper tensor handling
-            seq_len = log_probs.shape[1]
-            batch_size = log_probs.shape[0]
-            
-            # Use argmax for simplicity and reliability
-            best_predictions = torch.argmax(log_probs[0], dim=1)  # [seq_len]
-            best_probs = torch.exp(log_probs[0]).max(dim=1)[0]     # [seq_len]
-            
-            print(f"  Per-frame predictions (first 20 frames):")
-            for i in range(min(20, seq_len)):
-                pred_token = best_predictions[i].item()
-                pred_prob = best_probs[i].item()
-                print(f"    Frame {i:2d}: {pred_token}({pred_prob:.3f})")
-            
-            # Show middle frames
-            if seq_len > 40:
-                print(f"  Per-frame predictions (middle 20 frames around {seq_len//2}):")
-                start = max(0, seq_len//2 - 10)
-                for i in range(start, min(start + 20, seq_len)):
-                    pred_token = best_predictions[i].item()
-                    pred_prob = best_probs[i].item()
-                    print(f"    Frame {i:2d}: {pred_token}({pred_prob:.3f})")
-                
-                print(f"  Per-frame predictions (last 20 frames):")
-                for i in range(max(0, seq_len - 20), seq_len):
-                    pred_token = best_predictions[i].item()
-                    pred_prob = best_probs[i].item()
-                    print(f"    Frame {i:2d}: {pred_token}({pred_prob:.3f})")
-            
-            # Summary: Count frames by prediction
-            blank_frames = (best_predictions == 10).sum().item()
-            non_blank_frames = seq_len - blank_frames
-            
-            print(f"  Sequence summary:")
-            print(f"    Total frames: {seq_len}")
-            print(f"    Blank frames: {blank_frames} ({blank_frames/seq_len*100:.1f}%)")
-            print(f"    Non-blank frames: {non_blank_frames} ({non_blank_frames/seq_len*100:.1f}%)")
-            
-            # Check for any frames with high non-blank probability
-            non_blank_probs = torch.exp(log_probs[0, :, :10]).max(dim=1)[0]  # Max prob among non-blank tokens
-            high_conf_frames = torch.where(non_blank_probs > 0.1)[0]
-            if len(high_conf_frames) > 0:
-                print(f"  Frames with high non-blank confidence (>0.1): {high_conf_frames.tolist()}")
-            else:
-                print(f"  ⚠️ No frames with non-blank confidence > 0.1")
         else:
             predicted_sequence, log_prob = beam_search_ctc_decoder(log_probs, self.blank_id, beam_width, input_length)[0]
             avg_conf = np.exp(log_prob / max(len(predicted_sequence), 1))
             confidence_scores = [float(avg_conf)] * len(predicted_sequence)
-            
-            # CTC Debug: Focus on beam search results
-            print(f"🔍 CTC Decoding Debug (Beam Search):")
-            print(f"  Input: {X.shape[1]} frames, Blank ID: {self.blank_id}, Beam Width: {beam_width}")
-            print(f"  Predicted: {predicted_sequence} ({len(predicted_sequence)} signs)")
-            print(f"  Log Probability: {log_prob:.3f}")
         
         # Decode category sequence (per-frame predictions -> per-sign categories)
         predicted_categories = []
@@ -555,13 +494,13 @@ class CTCPredictor:
             raise ValueError(f"Unsupported input dimension {self.input_dim}")
         
         seq_len = X.shape[0]
-        print(f"🔍 Sliding Window CTC Debug:")
-        print(f"  Input: {seq_len} frames, Window size: {window_size}, Stride: {stride}")
         
         # Generate sliding windows
         windows = []
         window_predictions = []
         window_confidences = []
+        window_categories = []
+        window_category_confidences = []
         
         for start_idx in range(0, seq_len - window_size + 1, stride):
             end_idx = start_idx + window_size
@@ -594,17 +533,32 @@ class CTCPredictor:
                 avg_conf = np.exp(log_prob / max(len(window_pred), 1))
                 window_conf = [float(avg_conf)] * len(window_pred)
             
+            # Process category predictions
+            window_cat_preds = []
+            window_cat_confs = []
+            if cat_logits is not None:
+                cat_probs = torch.softmax(cat_logits[0], dim=1)  # [T, num_categories]
+                for i, pred_token in enumerate(window_pred):
+                    if i < cat_probs.shape[0]:
+                        cat_pred = torch.argmax(cat_probs[i]).item()
+                        cat_conf = float(cat_probs[i, cat_pred])
+                        window_cat_preds.append(cat_pred)
+                        window_cat_confs.append(cat_conf)
+                    else:
+                        window_cat_preds.append(0)  # Default category
+                        window_cat_confs.append(0.0)
+            
             window_predictions.append(window_pred)
             window_confidences.append(window_conf)
-            
-            print(f"  Window {start_idx:3d}-{end_idx:3d}: {window_pred} (conf: {[f'{c:.3f}' for c in window_conf]})")
+            window_categories.append(window_cat_preds)
+            window_category_confidences.append(window_cat_confs)
         
         # Aggregate predictions across windows
-        # Simple approach: collect all non-blank predictions with their frame positions
         all_predictions = []
+        all_categories = []
         frame_positions = []
         
-        for i, (window_pred, window_conf, (start_idx, end_idx)) in enumerate(zip(window_predictions, window_confidences, windows)):
+        for i, (window_pred, window_conf, window_cats, window_cat_confs, (start_idx, end_idx)) in enumerate(zip(window_predictions, window_confidences, window_categories, window_category_confidences, windows)):
             for j, (pred_token, conf) in enumerate(zip(window_pred, window_conf)):
                 # Estimate frame position within the window
                 if len(window_pred) > 1:
@@ -614,24 +568,32 @@ class CTCPredictor:
                 
                 all_predictions.append(pred_token)
                 frame_positions.append(frame_pos)
+                
+                # Get corresponding category prediction
+                if j < len(window_cats):
+                    all_categories.append((window_cats[j], window_cat_confs[j]))
+                else:
+                    all_categories.append((0, 0.0))
         
         # Remove duplicates and sort by frame position
         if all_predictions:
             # Group predictions by frame position and take the most confident
             position_groups = {}
-            for pred, pos, conf in zip(all_predictions, frame_positions, [max(c) for c in window_confidences]):
+            for pred, cat_info, pos, conf in zip(all_predictions, all_categories, frame_positions, [max(c) for c in window_confidences]):
                 if pos not in position_groups or conf > position_groups[pos][1]:
-                    position_groups[pos] = (pred, conf)
+                    position_groups[pos] = (pred, conf, cat_info)
             
             # Sort by frame position and extract final sequence
             sorted_positions = sorted(position_groups.keys())
             final_sequence = [position_groups[pos][0] for pos in sorted_positions]
             final_confidences = [position_groups[pos][1] for pos in sorted_positions]
+            final_categories = [position_groups[pos][2][0] for pos in sorted_positions]
+            final_category_confidences = [position_groups[pos][2][1] for pos in sorted_positions]
         else:
             final_sequence = []
             final_confidences = []
-        
-        print(f"  Final aggregated sequence: {final_sequence} ({len(final_sequence)} signs)")
+            final_categories = []
+            final_category_confidences = []
         
         # Convert to labels
         predicted_labels = [self.gloss_mapping.get(g, f"GLOSS_{g}") for g in final_sequence]
@@ -642,6 +604,8 @@ class CTCPredictor:
             'predicted_sequence': final_sequence,
             'predicted_labels': predicted_labels,
             'confidence_scores': final_confidences,
+            'predicted_categories': final_categories,
+            'category_confidences': final_category_confidences,
             'predicted_timestamps': predicted_timestamps,
             'num_windows': len(windows),
             'window_size': window_size,

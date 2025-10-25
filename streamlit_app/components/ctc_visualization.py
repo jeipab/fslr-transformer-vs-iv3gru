@@ -163,29 +163,7 @@ def render_sequence_with_categories(
                 cat_opacity = 0.5 + (cat_conf * 0.5)
         
         # Container for this sign (vertical stack)
-        chips_html += f'''
-        <div style="display: flex; flex-direction: column; gap: 0.25rem;">
-            <div style="
-                background-color: #3b82f6;
-                color: white;
-                padding: 0.4rem 0.8rem;
-                border-radius: 1rem;
-                font-size: 0.9rem;
-                font-weight: 500;
-                opacity: {gloss_opacity};
-            ">{i+1}. {gloss_label}{gloss_conf_text}</div>
-            <div style="
-                background-color: #10b981;
-                color: white;
-                padding: 0.3rem 0.6rem;
-                border-radius: 0.8rem;
-                font-size: 0.75rem;
-                font-weight: 500;
-                opacity: {cat_opacity};
-                text-align: center;
-            ">{cat_label}{cat_conf_text}</div>
-        </div>
-        '''
+        chips_html += f'<div style="display: flex; flex-direction: column; gap: 0.25rem;"><div style="background-color: #3b82f6; color: white; padding: 0.4rem 0.8rem; border-radius: 1rem; font-size: 0.9rem; font-weight: 500; opacity: {gloss_opacity};">{i+1}. {gloss_label}{gloss_conf_text}</div><div style="background-color: #10b981; color: white; padding: 0.3rem 0.6rem; border-radius: 0.8rem; font-size: 0.75rem; font-weight: 500; opacity: {cat_opacity}; text-align: center;">{cat_label}{cat_conf_text}</div></div>'
     
     chips_html += '</div>'
     st.markdown(chips_html, unsafe_allow_html=True)
