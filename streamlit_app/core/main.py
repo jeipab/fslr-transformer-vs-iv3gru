@@ -7,11 +7,12 @@ from ..components import set_page, render_sidebar, render_main_header
 from ..manager.upload_manager import initialize_upload_session_state, render_upload_stage
 from ..manager.preprocessing_manager import render_preprocessing_stage
 from ..manager.prediction_manager import render_predictions_stage, cleanup_on_app_exit
-from ..manager.validation_manager import run_validation_from_folder, cleanup_temp_files
+from ..manager.validation_manager import run_validation_from_folder, run_ctc_validation, cleanup_temp_files
 from ..components.validation_components import (
-    render_model_selection, render_dataset_upload,
-    render_validation_configuration, render_validation_results, render_validation_summary,
-    render_download_results
+    render_model_selection, render_dataset_upload, render_ctc_dataset_upload,
+    render_validation_configuration, render_ctc_validation_configuration,
+    render_validation_results, render_validation_summary, render_download_results,
+    render_ctc_validation_results
 )
 
 
@@ -57,33 +58,62 @@ def render_validation_stage(cfg: Dict):
     if not selected_model:
         return
     
+    # Check if selected model is CTC model
+    from ..core.config import is_ctc_model
+    is_ctc = is_ctc_model(selected_model)
+    
     # Dataset upload
-    npz_folder_path, labels_csv = render_dataset_upload()
+    if is_ctc:
+        npz_folder_path, labels_csv_or_gt = render_ctc_dataset_upload()
+    else:
+        npz_folder_path, labels_csv_or_gt = render_dataset_upload()
+    
+    labels_csv = labels_csv_or_gt  # For compatibility
     
     if not npz_folder_path or not labels_csv:
         st.markdown("---")
         col_left, col_center, col_right = st.columns([1, 2, 1])
         
         with col_center:
-            st.info("""
-            **Validation Setup Required**
-            
-            **Required inputs:**
-            - **NPZ folder path**: Directory containing validation NPZ files
-            - **Labels CSV file**: CSV with columns: file, gloss, cat, occluded
-            
-            **Validation process:**
-            - Model evaluation on validation dataset
-            - Performance metrics calculation (accuracy, precision, recall, F1-score)
-            - Confusion matrix generation and analysis
-            - Occlusion analysis (occluded vs non-occluded performance)
-            - Per-class performance breakdown
-            - Results export and download options
-            """)
+            if is_ctc:
+                st.info("""
+                **CTC Validation Setup Required**
+                
+                **Required inputs:**
+                - **NPZ folder path**: Directory containing continuous sequence NPZ files
+                - **Ground Truth folder**: Directory containing ground truth JSON files (*_gt.json)
+                
+                **CTC Validation process:**
+                - Sequence prediction with CTC decoder
+                - WER (Word Error Rate) calculation
+                - Temporal alignment analysis
+                - Per-signer and per-strategy metrics
+                - Confusion matrix for gloss-level errors
+                """)
+            else:
+                st.info("""
+                **Validation Setup Required**
+                
+                **Required inputs:**
+                - **NPZ folder path**: Directory containing validation NPZ files
+                - **Labels CSV file**: CSV with columns: file, gloss, cat, occluded
+                
+                **Validation process:**
+                - Model evaluation on validation dataset
+                - Performance metrics calculation (accuracy, precision, recall, F1-score)
+                - Confusion matrix generation and analysis
+                - Occlusion analysis (occluded vs non-occluded performance)
+                - Per-class performance breakdown
+                - Results export and download options
+                """)
         return
     
     # Configuration
-    batch_size, device = render_validation_configuration()
+    if is_ctc:
+        batch_size, device, decode_method, beam_width = render_ctc_validation_configuration()
+    else:
+        batch_size, device = render_validation_configuration()
+        decode_method, beam_width = None, None
     
     # Run validation
     if st.button("Run Validation", type="primary", width='stretch'):
@@ -97,29 +127,50 @@ def render_validation_stage(cfg: Dict):
                 status_text.text(f"Processing batch {current_batch}/{total_batches}")
             
             with st.spinner("Running validation..."):
-                results = run_validation_from_folder(
-                    model_type=selected_model,
-                    npz_folder_path=npz_folder_path,
-                    labels_csv_file=labels_csv,
-                    batch_size=batch_size,
-                    progress_callback=progress_callback
-                )
+                if is_ctc:
+                    # CTC validation
+                    results = run_ctc_validation(
+                        model_type=selected_model,
+                        npz_folder_path=npz_folder_path,
+                        ground_truth_folder=labels_csv,  # For CTC, this is GT folder
+                        decode_method=decode_method,
+                        beam_width=beam_width,
+                        progress_callback=progress_callback
+                    )
+                else:
+                    # Standard classification validation
+                    results = run_validation_from_folder(
+                        model_type=selected_model,
+                        npz_folder_path=npz_folder_path,
+                        labels_csv_file=labels_csv,
+                        batch_size=batch_size,
+                        progress_callback=progress_callback
+                    )
             
             st.session_state.validation_results = results
+            st.session_state.validation_is_ctc = is_ctc
             progress_bar.empty()
             status_text.empty()
             st.toast("Validation completed successfully!", icon="✅")
             
         except Exception as e:
             st.error(f"Validation failed: {str(e)}")
+            import traceback
+            with st.expander("Error details"):
+                st.code(traceback.format_exc())
             return
     
     # Display results
     if 'validation_results' in st.session_state and st.session_state.validation_results:
         results = st.session_state.validation_results
-        render_validation_summary(results)
-        render_validation_results(results)
-        render_download_results(results)
+        is_ctc_results = st.session_state.get('validation_is_ctc', False)
+        
+        if is_ctc_results:
+            render_ctc_validation_results(results)
+        else:
+            render_validation_summary(results)
+            render_validation_results(results)
+            render_download_results(results)
     
 
 

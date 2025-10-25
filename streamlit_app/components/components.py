@@ -723,6 +723,26 @@ def render_sidebar() -> Dict:
     </div>
     """, unsafe_allow_html=True)
     
+    # Recognition Mode Section
+    st.sidebar.markdown("""
+    <div style='margin: 0.75rem 0 0;'>
+        <h3 style='color: #e2e8f0; margin: 0; font-size: 1.1rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px;'>Recognition Mode</h3>
+    </div>
+    """, unsafe_allow_html=True)
+    
+    from ..core.config import RECOGNITION_MODES
+    recognition_mode = st.sidebar.radio(
+        "Select mode",
+        options=['isolated', 'continuous'],
+        format_func=lambda x: RECOGNITION_MODES[x],
+        index=0 if st.session_state.get('recognition_mode', 'isolated') == 'isolated' else 1,
+        help="📍 Isolated Mode: Classify single signs from video clips\n\n🎬 Continuous Mode: Recognize sequences of signs using CTC models",
+        key="recognition_mode_radio"
+    )
+    
+    # Update session state
+    st.session_state.recognition_mode = recognition_mode
+    
     # About Section
     st.sidebar.markdown("""
     <div style='margin-bottom: 0;'>
@@ -801,27 +821,34 @@ def render_sidebar() -> Dict:
     </div>
     """, unsafe_allow_html=True)
     
-    # Model Architecture Selection
+    # Model Architecture Selection (mode-aware)
     st.sidebar.markdown("**Model Architecture**")
     
-    available_models = get_available_models()
-    if len(available_models) == 2:
+    available_models = get_available_models_for_mode(recognition_mode)
+    
+    if not available_models:
+        st.sidebar.warning(f"⚠️ No models available for {RECOGNITION_MODES[recognition_mode]}")
+        model_choice = None
+    elif len(available_models) == 1:
+        # Only one model available
+        model_choice = available_models[0]
+        st.sidebar.info(f"Using: **{MODEL_CONFIG[model_choice]['display_name']}**")
+    elif len(available_models) == 2:
         # Create help text with model file paths
         from ..manager.prediction_manager import MODEL_CONFIG
-        help_text = "Select the model architecture for predictions\n\n"
+        help_text = f"Select model for {RECOGNITION_MODES[recognition_mode]}\n\n"
         
-        if MODEL_CONFIG['transformer']['enabled']:
-            transformer_path = MODEL_CONFIG['transformer']['checkpoint_path']
-            help_text += f"SignTransformer:\n{transformer_path}\n\n"
-        
-        if MODEL_CONFIG['iv3_gru']['enabled']:
-            iv3_path = MODEL_CONFIG['iv3_gru']['checkpoint_path']
-            help_text += f"IV3-GRU:\n{iv3_path}"
+        for model_name in available_models:
+            if MODEL_CONFIG[model_name]['enabled']:
+                model_path = MODEL_CONFIG[model_name]['checkpoint_path']
+                display_name = MODEL_CONFIG[model_name]['display_name']
+                help_text += f"{display_name}:\n{model_path}\n\n"
         
         # Use radio button for binary choice
         model_choice = st.sidebar.radio(
             "Choose Model",
             available_models,
+            format_func=lambda x: MODEL_CONFIG[x]['display_name'],
             index=0,
             help=help_text,
             key="model_architecture_radio"
@@ -831,18 +858,17 @@ def render_sidebar() -> Dict:
         from ..manager.prediction_manager import MODEL_CONFIG
         help_text = "Choose between available model architectures\n\n"
         
-        if MODEL_CONFIG['transformer']['enabled']:
-            transformer_path = MODEL_CONFIG['transformer']['checkpoint_path']
-            help_text += f"SignTransformer:\n{transformer_path}\n\n"
-        
-        if MODEL_CONFIG['iv3_gru']['enabled']:
-            iv3_path = MODEL_CONFIG['iv3_gru']['checkpoint_path']
-            help_text += f"IV3-GRU:\n{iv3_path}"
+        for model_name in available_models:
+            if MODEL_CONFIG[model_name]['enabled']:
+                model_path = MODEL_CONFIG[model_name]['checkpoint_path']
+                display_name = MODEL_CONFIG[model_name]['display_name']
+                help_text += f"{display_name}:\n{model_path}\n\n"
         
         # Fallback to selectbox for multiple options
         model_choice = st.sidebar.selectbox(
             "Model Architecture", 
-            available_models, 
+            available_models,
+            format_func=lambda x: MODEL_CONFIG[x]['display_name'],
             index=0,
             help=help_text,
             key="model_architecture_select"
@@ -875,10 +901,12 @@ def render_model_status():
     # Check model availability and file existence
     transformer_available = MODEL_CONFIG['transformer']['enabled']
     iv3_gru_available = MODEL_CONFIG['iv3_gru']['enabled']
+    mediapipe_gru_available = MODEL_CONFIG['mediapipe_gru']['enabled']
     
     # Verify checkpoint files actually exist
     transformer_exists = False
     iv3_gru_exists = False
+    mediapipe_gru_exists = False
     
     if transformer_available:
         transformer_path = MODEL_CONFIG['transformer']['checkpoint_path']
@@ -888,8 +916,24 @@ def render_model_status():
         iv3_gru_path = MODEL_CONFIG['iv3_gru']['checkpoint_path']
         iv3_gru_exists = os.path.exists(iv3_gru_path)
     
+    if mediapipe_gru_available:
+        mediapipe_gru_path = MODEL_CONFIG['mediapipe_gru']['checkpoint_path']
+        mediapipe_gru_exists = os.path.exists(mediapipe_gru_path)
+    
     # Create clean, elegant status display based on actual file existence
-    if transformer_exists and iv3_gru_exists:
+    if transformer_exists and iv3_gru_exists and mediapipe_gru_exists:
+        st.sidebar.markdown("""
+        <div style='background: rgba(16, 185, 129, 0.1); border: 1px solid #10b981; border-radius: 8px; padding: 0.75rem; margin-bottom: 0;'>
+            <div style='display: flex; align-items: center; color: #ffffff; font-weight: 500; margin-bottom: 0.3rem;'>
+                <div style='width: 8px; height: 8px; background: #10b981; border-radius: 50%; margin-right: 0.75rem;'></div>
+                <span style='font-size: 1rem;'>All Models Ready</span>
+            </div>
+            <div style='font-size: 0.9rem; color: #a0aec0; line-height: 1.4;'>
+                SignTransformer, InceptionV3+GRU & MediaPipe-GRU
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+    elif transformer_exists and iv3_gru_exists:
         st.sidebar.markdown("""
         <div style='background: rgba(16, 185, 129, 0.1); border: 1px solid #10b981; border-radius: 8px; padding: 0.75rem; margin-bottom: 0;'>
             <div style='display: flex; align-items: center; color: #ffffff; font-weight: 500; margin-bottom: 0.3rem;'>
@@ -898,6 +942,30 @@ def render_model_status():
             </div>
             <div style='font-size: 0.9rem; color: #a0aec0; line-height: 1.4;'>
                 SignTransformer & InceptionV3+GRU
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+    elif transformer_exists and mediapipe_gru_exists:
+        st.sidebar.markdown("""
+        <div style='background: rgba(245, 158, 11, 0.1); border: 1px solid #f59e0b; border-radius: 8px; padding: 0.75rem; margin-bottom: 0;'>
+            <div style='display: flex; align-items: center; color: #ffffff; font-weight: 500; margin-bottom: 0.3rem;'>
+                <div style='width: 8px; height: 8px; background: #f59e0b; border-radius: 50%; margin-right: 0.75rem;'></div>
+                <span style='font-size: 1rem;'>Partial Availability</span>
+            </div>
+            <div style='font-size: 0.9rem; color: #a0aec0; line-height: 1.4;'>
+                SignTransformer & MediaPipe-GRU
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+    elif iv3_gru_exists and mediapipe_gru_exists:
+        st.sidebar.markdown("""
+        <div style='background: rgba(245, 158, 11, 0.1); border: 1px solid #f59e0b; border-radius: 8px; padding: 0.75rem; margin-bottom: 0;'>
+            <div style='display: flex; align-items: center; color: #ffffff; font-weight: 500; margin-bottom: 0.3rem;'>
+                <div style='width: 8px; height: 8px; background: #f59e0b; border-radius: 50%; margin-right: 0.75rem;'></div>
+                <span style='font-size: 1rem;'>Partial Availability</span>
+            </div>
+            <div style='font-size: 0.9rem; color: #a0aec0; line-height: 1.4;'>
+                InceptionV3+GRU & MediaPipe-GRU
             </div>
         </div>
         """, unsafe_allow_html=True)
@@ -922,6 +990,18 @@ def render_model_status():
             </div>
             <div style='font-size: 0.9rem; color: #a0aec0; line-height: 1.4;'>
                 InceptionV3+GRU model only
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+    elif mediapipe_gru_exists:
+        st.sidebar.markdown("""
+        <div style='background: rgba(245, 158, 11, 0.1); border: 1px solid #f59e0b; border-radius: 8px; padding: 0.75rem; margin-bottom: 0;'>
+            <div style='display: flex; align-items: center; color: #ffffff; font-weight: 500; margin-bottom: 0.3rem;'>
+                <div style='width: 8px; height: 8px; background: #f59e0b; border-radius: 50%; margin-right: 0.75rem;'></div>
+                <span style='font-size: 1rem;'>Partial Availability</span>
+            </div>
+            <div style='font-size: 0.9rem; color: #a0aec0; line-height: 1.4;'>
+                MediaPipe-GRU model only
             </div>
         </div>
         """, unsafe_allow_html=True)
@@ -951,27 +1031,33 @@ def render_model_status():
 
 
 def get_available_models():
-    """Get list of available models for selection."""
+    """Get list of available models for selection (legacy function)."""
+    return get_available_models_for_mode('isolated')
+
+
+def get_available_models_for_mode(mode: str):
+    """Get list of models compatible with recognition mode.
+    
+    Args:
+        mode: Recognition mode ('isolated' or 'continuous')
+        
+    Returns:
+        List of model names compatible with the mode
+    """
     import os
-    from ..manager.prediction_manager import MODEL_CONFIG
+    from ..core.config import get_models_by_mode, MODEL_CONFIG
     
+    # Get models compatible with mode
+    compatible_models = get_models_by_mode(mode)
+    
+    # Filter by checkpoint existence
     available_models = []
-    
-    # Check if transformer model exists
-    if MODEL_CONFIG['transformer']['enabled']:
-        transformer_path = MODEL_CONFIG['transformer']['checkpoint_path']
-        if os.path.exists(transformer_path):
-            available_models.append("SignTransformer")
-    
-    # Check if iv3_gru model exists
-    if MODEL_CONFIG['iv3_gru']['enabled']:
-        iv3_gru_path = MODEL_CONFIG['iv3_gru']['checkpoint_path']
-        if os.path.exists(iv3_gru_path):
-            available_models.append("IV3_GRU")
-    
-    # Fallback to at least one model if none are available
-    if not available_models:
-        available_models = ["SignTransformer"]
+    for model_name in compatible_models:
+        config = MODEL_CONFIG.get(model_name)
+        if config and config['enabled']:
+            checkpoint_path = config['checkpoint_path']
+            if os.path.exists(checkpoint_path):
+                available_models.append(model_name)
     
     return available_models
 
@@ -1247,7 +1333,7 @@ def render_predictions_section(cfg: Dict, npz_data: Dict = None, filename: str =
     if npz_data is not None:
         from ..manager.prediction_manager import make_real_prediction, get_model_manager
         
-        model_name = 'transformer' if cfg['model_choice'] == 'SignTransformer' else 'iv3_gru'
+        model_name = 'transformer' if cfg['model_choice'] == 'transformer' else 'iv3_gru'
         
         with st.spinner("Making prediction..."):
             prediction_results = make_real_prediction(npz_data, model_name)
@@ -1263,12 +1349,16 @@ def render_predictions_section(cfg: Dict, npz_data: Dict = None, filename: str =
         # Format predictions with human-readable labels
         gloss_top5 = []
         for gloss_id, prob in prediction_results['gloss_top5']:
-            gloss_label = gloss_mapping.get(gloss_id, f'Unknown ({gloss_id})')
+            # Convert tensor to int if needed
+            gloss_id_int = gloss_id.item() if hasattr(gloss_id, 'item') else int(gloss_id)
+            gloss_label = gloss_mapping.get(gloss_id_int, f'Unknown ({gloss_id_int})')
             gloss_top5.append((gloss_label, prob))
         
         category_top3 = []
         for cat_id, prob in prediction_results['category_top3']:
-            cat_label = category_mapping.get(cat_id, f'Unknown ({cat_id})')
+            # Convert tensor to int if needed
+            cat_id_int = cat_id.item() if hasattr(cat_id, 'item') else int(cat_id)
+            cat_label = category_mapping.get(cat_id_int, f'Unknown ({cat_id_int})')
             category_top3.append((cat_label, prob))
         
         # Enhanced predictions display - 2 columns: predictions on left, video on right
@@ -1349,8 +1439,16 @@ def render_inline_video_preview(npz_data: Dict, metadata: Dict, filename: str, k
                 X = npz_data['X']
                 time_steps = X.shape[0]
                 
-                # Reshape to [T, 78, 2]
-                keypoints_2d = X.reshape(time_steps, 78, 2)
+                # Calculate number of keypoints based on feature dimension
+                num_keypoints = X.shape[1] // 2
+                
+                # Validate that feature_dim is divisible by 2
+                if X.shape[1] % 2 != 0:
+                    st.error(f"Invalid keypoint feature dimension: {X.shape[1]}. Expected even number for (x,y) coordinates.")
+                    return
+                
+                # Reshape to [T, num_keypoints, 2]
+                keypoints_2d = X.reshape(time_steps, num_keypoints, 2)
                 mask = npz_data.get('mask', None)
                 
                 # Video settings - use fixed size and scale original video to fit

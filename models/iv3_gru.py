@@ -428,3 +428,370 @@ class InceptionV3GRU(nn.Module):
             return_probs=True,
             features_already=features_already,
         )
+
+
+class InceptionV3GRUCtc(nn.Module):
+    """
+    InceptionV3-GRU model with CTC for continuous sign language recognition.
+    
+    This model extends the InceptionV3-GRU architecture for CTC-based continuous
+    sign language recognition. Unlike the classification-based InceptionV3GRU,
+    this model outputs frame-level predictions suitable for CTC decoding.
+    
+    Architecture:
+    Input: [B, T, 3, 299, 299] raw frames OR [B, T, 2048] precomputed features
+      ↓
+    InceptionV3 Feature Extraction (if raw frames): [B, T, 3, 299, 299] → [B, T, 2048]
+      ↓
+    Bidirectional GRU Layer 1: [B, T, 2048] → [B, T, hidden1*2]
+      ↓
+    Dropout
+      ↓
+    Bidirectional GRU Layer 2: [B, T, hidden1*2] → [B, T, hidden2*2]
+      ↓
+    Dropout
+      ↓
+    CTC Head: [B, T, hidden2*2] → [B, T, num_ctc_classes]
+      ↓
+    LogSoftmax: [B, T, num_ctc_classes] → log probabilities
+    
+    Key Features:
+    - Bidirectional GRU for capturing past and future context
+    - Support for both raw frames and precomputed InceptionV3 features
+    - Frame-level predictions for CTC decoding
+    - Optional backbone freezing for transfer learning
+    - Offline-only model (not suitable for real-time production due to size)
+    
+    Comparison with Other CTC Models:
+    - vs SignTransformerCtc: Uses CNN features instead of keypoints, heavier model
+    - vs MediaPipeGRUCtc: 50x larger, uses visual features instead of keypoints
+    - vs InceptionV3GRU: Sequence-to-sequence instead of classification
+    
+    Args:
+        num_ctc_classes (int): Number of CTC classes including blank token (default: 106).
+        hidden1 (int): Hidden units for first GRU layer (default: 256).
+        hidden2 (int): Hidden units for second GRU layer (default: 128).
+        dropout (float): Dropout rate applied after GRU layers (default: 0.3).
+        pretrained_backbone (bool): Load ImageNet weights for InceptionV3 (default: True).
+        freeze_backbone (bool): Freeze CNN weights (default: True, recommended).
+    
+    Forward inputs:
+        frames_or_feats (Tensor):
+            - If features_already=False: Raw frames (B, T, 3, H, W)
+            - If features_already=True: Precomputed features (B, T, 2048)
+        lengths (Tensor, optional): True sequence lengths (B,) for packed sequences
+        features_already (bool): Set True when passing precomputed 2048-D features
+    
+    Returns:
+        Tensor: Log probabilities of shape (B, T, num_ctc_classes).
+               Use .permute(1, 0, 2) for CTCLoss which expects [T, B, C].
+    
+    Usage:
+        # With raw frames
+        model = InceptionV3GRUCtc(num_ctc_classes=106)
+        log_probs = model(frames)  # frames: [B, T, 3, 299, 299]
+        
+        # With precomputed features (faster)
+        log_probs = model(features, features_already=True)  # features: [B, T, 2048]
+        
+        # For CTC loss, permute to [T, B, C]
+        log_probs = log_probs.permute(1, 0, 2)
+        loss = ctc_loss(log_probs, targets, input_lengths, target_lengths)
+    """
+    
+    def __init__(
+        self,
+        num_ctc_classes: int = 106,
+        hidden1: int = 512,  # Increased from 256
+        hidden2: int = 256,  # Increased from 128
+        dropout: float = 0.3,
+        pretrained_backbone: bool = True,
+        freeze_backbone: bool = True,
+        num_cat: Optional[int] = None,
+    ):
+        """
+        Initialize the InceptionV3-GRU-CTC model with optional category head.
+        
+        Args:
+            num_ctc_classes (int): Number of CTC classes including blank.
+            hidden1 (int): Hidden units for first GRU layer.
+            hidden2 (int): Hidden units for second GRU layer.
+            dropout (float): Dropout rate applied after GRU layers.
+            pretrained_backbone (bool): Load ImageNet weights for InceptionV3.
+            freeze_backbone (bool): Freeze CNN weights.
+            num_cat (int, optional): Number of category classes. If None, CTC-only mode.
+        """
+        super().__init__()
+        
+        self.num_ctc_classes = num_ctc_classes
+        self.hidden1 = hidden1
+        self.hidden2 = hidden2
+        self.dropout_p = dropout
+        self.num_cat = num_cat
+        
+        # ===== FEATURE EXTRACTION =====
+        # Initialize InceptionV3 feature extractor
+        self.feat_extractor = InceptionV3FeatureExtractor(
+            pretrained=pretrained_backbone, freeze=freeze_backbone
+        )
+        self.input_dim = self.feat_extractor.out_dim  # 2048
+        
+        # ===== TEMPORAL MODELING =====
+        # Two-layer bidirectional GRU network for temporal sequence modeling
+        self.gru1 = nn.GRU(
+            input_size=self.input_dim,
+            hidden_size=hidden1,
+            num_layers=1,
+            batch_first=True,
+            bidirectional=True
+        )
+        
+        # Calculate effective hidden size after first bidirectional GRU
+        effective_hidden1 = hidden1 * 2  # *2 for bidirectional
+        
+        self.gru2 = nn.GRU(
+            input_size=effective_hidden1,
+            hidden_size=hidden2,
+            num_layers=1,
+            batch_first=True,
+            bidirectional=True
+        )
+        
+        # Calculate effective hidden size after second bidirectional GRU
+        effective_hidden2 = hidden2 * 2  # *2 for bidirectional
+        
+        # ===== REGULARIZATION =====
+        # Dropout layers for regularization
+        self.do1 = nn.Dropout(dropout)  # After first GRU
+        self.do2 = nn.Dropout(dropout)  # After second GRU
+        
+        # Layer normalization for better training stability
+        self.ln1 = nn.LayerNorm(effective_hidden1)  # After first GRU
+        self.ln2 = nn.LayerNorm(effective_hidden2)  # After second GRU
+        
+        # ===== DUAL OUTPUT HEADS =====
+        # CTC head for gloss sequence prediction (per-frame)
+        self.ctc_head = nn.Linear(effective_hidden2, num_ctc_classes)
+        
+        # Optional category head for auxiliary category classification (per-sequence)
+        if num_cat is not None:
+            self.category_head = nn.Linear(effective_hidden2, num_cat)
+        else:
+            self.category_head = None
+        
+        # ===== WEIGHT INITIALIZATION =====
+        # Xavier/orthogonal initialization for GRU stability
+        self._init_weights()
+    
+    def _init_weights(self):
+        """
+        Initialize GRU weights for stable CTC training.
+        
+        Uses Xavier uniform initialization for input-to-hidden weights and
+        orthogonal initialization for hidden-to-hidden weights.
+        Enhanced initialization for better CTC convergence.
+        """
+        for gru in (self.gru1, self.gru2):
+            for name, param in gru.named_parameters():
+                if "weight_ih" in name:
+                    # Input-to-hidden weights: Xavier uniform initialization
+                    nn.init.xavier_uniform_(param)
+                elif "weight_hh" in name:
+                    # Hidden-to-hidden weights: Orthogonal initialization
+                    nn.init.orthogonal_(param)
+                elif "bias" in name:
+                    # Bias terms: Small positive initialization for GRU gates
+                    nn.init.uniform_(param, -0.1, 0.1)
+        
+        # Initialize CTC head with better scaling for CTC training
+        nn.init.xavier_uniform_(self.ctc_head.weight, gain=0.5)  # Smaller gain for stability
+        nn.init.zeros_(self.ctc_head.bias)
+        
+        # Initialize category head if present
+        if self.category_head is not None:
+            nn.init.xavier_uniform_(self.category_head.weight, gain=0.5)
+            nn.init.zeros_(self.category_head.bias)
+    
+    def extract_features(self, frames: torch.Tensor) -> torch.Tensor:
+        """
+        Extract per-frame 2048-D features using InceptionV3.
+        
+        This method processes raw video frames through the InceptionV3 backbone
+        to extract high-level visual features for each frame in the sequence.
+
+        Args:
+            frames (Tensor): Raw frames of shape (B, T, 3, H, W).
+                           Should be ImageNet-normalized.
+
+        Returns:
+            Tensor: Feature tensor of shape (B, T, 2048).
+        
+        Raises:
+            ValueError: If input tensor doesn't have the expected shape.
+        """
+        # ===== INPUT VALIDATION =====
+        # Check tensor dimensions
+        if len(frames.shape) != 5:
+            raise ValueError(
+                f"Expected frames with 5 dimensions [B, T, C, H, W], got shape {frames.shape}"
+            )
+        
+        B, T, C, H, W = frames.shape
+        if C != 3:
+            raise ValueError(f"Expected 3 color channels, got {C}")
+        
+        # ===== FEATURE EXTRACTION =====
+        # Reshape frames for batch processing: (B, T, 3, H, W) → (B*T, 3, H, W)
+        x = frames.reshape(B * T, C, H, W)
+        
+        # Extract features for all frames: (B*T, 3, H, W) → (B*T, 2048)
+        feats = self.feat_extractor(x)
+        
+        # Reshape back to sequence format: (B*T, 2048) → (B, T, 2048)
+        feats = feats.reshape(B, T, -1)
+        
+        return feats
+    
+    def forward(
+        self,
+        frames_or_feats: torch.Tensor,
+        lengths: Optional[torch.Tensor] = None,
+        features_already: bool = False,
+    ) -> torch.Tensor:
+        """
+        Forward pass through the InceptionV3-GRU-CTC model with optional category prediction.
+        
+        Args:
+            frames_or_feats (Tensor): Input data of shape (B, T, 3, H, W) if features_already=False,
+                                    or (B, T, 2048) if features_already=True.
+            lengths (Tensor, optional): True sequence lengths (B,) for packed-sequence processing.
+            features_already (bool): Whether frames_or_feats contains precomputed 2048-D features.
+        
+        Returns:
+            If num_cat is None (CTC-only mode):
+                Tensor: CTC log probabilities of shape (B, T, num_ctc_classes).
+            
+            If num_cat is provided (dual-task mode):
+                Tuple[Tensor, Tensor]: (ctc_log_probs, cat_logits)
+                    - ctc_log_probs: (B, T, num_ctc_classes) for CTC loss
+                    - cat_logits: (B, T, num_cat) for per-frame category classification
+        
+        Raises:
+            ValueError: If input dimensions are invalid.
+        """
+        # ===== INPUT PROCESSING =====
+        # Build feature sequence (B, T, 2048)
+        if features_already:
+            # Use precomputed features directly
+            seq = frames_or_feats  # (B, T, 2048)
+            if seq.shape[-1] != 2048:
+                raise ValueError(
+                    f"Expected features with 2048 dimensions, got {seq.shape[-1]}"
+                )
+        else:
+            # Extract features from raw frames
+            if len(frames_or_feats.shape) != 5:
+                raise ValueError(
+                    f"Expected raw frames with shape [B, T, 3, H, W], got {frames_or_feats.shape}"
+                )
+            seq = self.extract_features(frames_or_feats)  # (B, T, 2048)
+        
+        # ===== TEMPORAL MODELING =====
+        # Process sequence through bidirectional GRU layers
+        if lengths is not None:
+            # ===== PACKED SEQUENCE PROCESSING =====
+            # Validate lengths tensor
+            if lengths.min() < 1:
+                raise ValueError("All sequence lengths must be positive")
+            if lengths.max() > seq.shape[1]:
+                raise ValueError(
+                    f"Maximum length {lengths.max()} exceeds sequence length {seq.shape[1]}"
+                )
+            
+            # Ensure lengths are on CPU for pack_padded_sequence
+            lengths_cpu = lengths if lengths.device.type == 'cpu' else lengths.to("cpu")
+            
+            # Pack sequences for efficient processing
+            packed = nn.utils.rnn.pack_padded_sequence(
+                seq, lengths_cpu, batch_first=True, enforce_sorted=False
+            )
+            
+            # First GRU layer
+            y1, _ = self.gru1(packed)  # y1: PackedSequence
+            y1 = _dropout_packed(y1, self.do1.p, training=self.training)
+            
+            # Second GRU layer
+            y2, _ = self.gru2(y1)  # y2: PackedSequence
+            
+            # Unpack sequence back to padded format
+            y2, _ = nn.utils.rnn.pad_packed_sequence(y2, batch_first=True)
+            
+            # Apply dropout to unpacked sequence
+            y2 = self.do2(y2)  # (B, T, hidden2*2)
+            
+        else:
+            # ===== REGULAR SEQUENCE PROCESSING =====
+            # First GRU layer
+            y1, _ = self.gru1(seq)  # y1: (B, T, hidden1*2)
+            y1 = self.do1(y1)        # Apply dropout
+            y1 = self.ln1(y1)        # Apply layer normalization
+            
+            # Second GRU layer
+            y2, _ = self.gru2(y1)   # y2: (B, T, hidden2*2)
+        
+        # ===== FINAL DROPOUT =====
+        # Apply dropout to the GRU output sequence (only for regular processing)
+        if lengths is None:
+            y2 = self.do2(y2)  # (B, T, hidden2*2)
+            y2 = self.ln2(y2)  # Apply layer normalization
+        
+        # Get batch size and sequence length
+        B, T = y2.shape[0], y2.shape[1]
+        
+        # ===== CTC HEAD (PER-FRAME PREDICTION) =====
+        # Project to CTC vocabulary size
+        # [B, T, hidden2*2] → [B, T, num_ctc_classes]
+        ctc_logits = self.ctc_head(y2)
+        
+        # Apply log softmax for CTC loss
+        # CTCLoss expects log probabilities, not raw logits
+        ctc_log_probs = F.log_softmax(ctc_logits, dim=2)
+        
+        # ===== CATEGORY HEAD (PER-FRAME PREDICTION) =====
+        if self.category_head is not None:
+            # Category prediction per frame: [B, T, hidden2*2] → [B, T, num_cat]
+            # y2 should always have shape [B, T, hidden2*2] for proper GRU processing
+            if len(y2.shape) != 3:
+                raise ValueError(
+                    f"Expected y2 to have 3 dimensions [B, T, hidden2*2], got shape {y2.shape}. "
+                    f"This indicates a problem with GRU sequence processing."
+                )
+            
+            cat_logits = self.category_head(y2)  # [B, T, num_cat]
+            
+            return ctc_log_probs, cat_logits
+        else:
+            # CTC-only mode (backward compatibility)
+            return ctc_log_probs
+    
+    def get_model_info(self) -> dict:
+        """
+        Get model architecture information for logging and debugging.
+        
+        Returns:
+            dict: Dictionary containing model architecture details.
+        """
+        total_params = sum(p.numel() for p in self.parameters())
+        trainable_params = sum(p.numel() for p in self.parameters() if p.requires_grad)
+        
+        return {
+            'model_type': 'InceptionV3GRUCtc',
+            'input_dim': self.input_dim,
+            'hidden1': self.hidden1,
+            'hidden2': self.hidden2,
+            'num_ctc_classes': self.num_ctc_classes,
+            'dropout': self.dropout_p,
+            'total_params': total_params,
+            'trainable_params': trainable_params,
+            'model_size_mb': total_params * 4 / (1024 * 1024),  # Assuming float32
+        }

@@ -8,7 +8,8 @@ numpy>=2.0.0,<2.3.0
 
 # ===== VIDEO PROCESSING & KEYPOINT EXTRACTION (Required for preprocessing) =====
 opencv-python>=4.8.0,<4.12.0
-mediapipe
+mediapipe>=0.10.13,<0.11.0
+protobuf>=4.25.3,<5.0.0
 tqdm
 
 # ===== DATA HANDLING (Required for dataset management) =====

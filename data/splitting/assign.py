@@ -14,12 +14,13 @@ Usage:
     # Labels mode - updates existing labels.csv
     python data/splitting/assign.py --labels data/processed/labels.csv
 
-Output: labels.csv with columns: file, gloss, cat, occluded
+Output: labels.csv with columns: file, gloss, cat, occluded, signer, duration
 """
 
 import argparse
 import json
 import os
+import re
 import numpy as np
 import pandas as pd
 from pathlib import Path
@@ -31,23 +32,50 @@ def extract_metadata_from_npz(npz_path):
         npz_path: Path to NPZ file
         
     Returns:
-        dict: Metadata with occluded flag
+        dict: Metadata with occluded flag, signer, and duration
     """
     try:
         npz_data = np.load(npz_path, allow_pickle=True)
         
-        # Try to load metadata
+        # Default values
+        meta = {}
+        occluded = 0
+        signer = 'N/A'
+        duration = 0.0
+
+        # Try to load metadata from 'meta' key
         if 'meta' in npz_data:
-            meta = json.loads(str(npz_data['meta']))
-            occluded = meta.get('occluded_flag', 0)
-        else:
-            # No metadata, default to not occluded
-            occluded = 0
+            meta_content = npz_data['meta'].item()
+            if isinstance(meta_content, str):
+                meta = json.loads(meta_content)
+            elif isinstance(meta_content, dict):
+                meta = meta_content
             
-        return {'occluded': occluded}
+            occluded = meta.get('occluded_flag', 0)
+            signer = meta.get('signer', 'N/A')
+            duration = meta.get('duration_sec', meta.get('duration', 0.0))
+
+        # If signer is not in metadata, extract from filename
+        if signer == 'N/A' or signer is None:
+            match = re.search(r'_(S[0-7])\.npz$', npz_path.name)
+            if match:
+                signer = match.group(1)
+
+        # Validate signer format
+        if signer is None or not re.match(r'^S[0-7]$', str(signer)):
+            print(f"[WARN] Invalid signer format for {npz_path.name}: {signer}")
+            signer = 'N/A'
+
+        # Calculate duration from timestamps if not in metadata and timestamps exist
+        if duration == 0.0 and 'timestamps_ms' in npz_data:
+            timestamps = npz_data['timestamps_ms']
+            if len(timestamps) > 1:
+                duration = (timestamps[-1] - timestamps[0]) / 1000.0  # Duration in seconds
+
+        return {'occluded': occluded, 'signer': signer, 'duration': duration}
     except Exception as e:
         print(f"[WARN] Could not read metadata from {npz_path.name}: {e}")
-        return {'occluded': 0}
+        return {'occluded': 0, 'signer': 'N/A', 'duration': 0.0}
 
 
 def create_labels_from_directory(directory, output_file=None):
@@ -91,7 +119,9 @@ def create_labels_from_directory(directory, output_file=None):
         meta = extract_metadata_from_npz(npz_path)
         data.append({
             'file': npz_path.name,
-            'occluded': meta['occluded']
+            'occluded': meta['occluded'],
+            'signer': meta['signer'],
+            'duration': meta['duration']
         })
     
     # Create DataFrame and save to CSV
@@ -99,9 +129,23 @@ def create_labels_from_directory(directory, output_file=None):
     df.to_csv(output_file, index=False)
     
     print(f"\n✅ Created labels.csv with {len(data)} files")
-    print(f"📊 Occlusion Statistics:")
+    
+    # Occlusion Statistics
+    print(f"\n📊 Occlusion Statistics:")
     print(f"  Clear (0): {(df['occluded'] == 0).sum()} files")
     print(f"  Occluded (1): {(df['occluded'] == 1).sum()} files")
+    
+    # Signer Distribution
+    print(f"\n📊 Signer Distribution:")
+    signer_counts = df['signer'].value_counts().sort_index()
+    for signer, count in signer_counts.items():
+        print(f"  {signer}: {count} samples")
+
+    # Duration Statistics
+    print(f"\n📊 Duration Statistics:")
+    print(f"  Min: {df['duration'].min():.2f}s")
+    print(f"  Max: {df['duration'].max():.2f}s")
+    print(f"  Average: {df['duration'].mean():.2f}s")
     
     return output_file
 
@@ -123,8 +167,8 @@ Examples:
                        help="Directory containing NPZ files (creates labels.csv automatically)")
     parser.add_argument("--labels", type=str, default=None,
                        help="Path to existing labels CSV file")
-    parser.add_argument("--reference", type=str, default="data/splitting/labels_reference.csv",
-                       help="Path to reference CSV file (default: data/splitting/labels_reference.csv)")
+    parser.add_argument("--reference", type=str, default="data/labels_reference.csv",
+                       help="Path to reference CSV file (default: data/labels_reference.csv)")
     
     args = parser.parse_args()
     
@@ -168,9 +212,17 @@ Examples:
     
     print(f"\n🏷️  Assigning gloss and category IDs...")
 
-    # Create mapping dictionaries
-    gloss_map = dict(zip(gloss_cat["label"].str.lower(), gloss_cat["gloss_id"]))
-    cat_map = dict(zip(gloss_cat["label"].str.lower(), gloss_cat["cat_id"]))
+    # Create mapping dictionaries (normalize labels to match filename format)
+    # Inline slugify to avoid scope issues with pandas.apply()
+    normalized_labels = (gloss_cat["label"]
+                        .str.lower()
+                        .str.replace(' ', '_', regex=False)
+                        .str.replace('-', '_', regex=False)
+                        .str.replace(r'[^a-z0-9_]', '', regex=True)
+                        .str.replace(r'_+', '_', regex=True)
+                        .str.strip('_'))
+    gloss_map = dict(zip(normalized_labels, gloss_cat["gloss_id"]))
+    cat_map = dict(zip(normalized_labels, gloss_cat["cat_id"]))
     
     def get_gloss_from_filename(filename):
         """Extract gloss text from filename.
@@ -181,9 +233,14 @@ Examples:
         Returns:
             Extracted gloss text in lowercase
         """
-        name = filename.split("_", 2)[-1].replace(".npz", "").strip().lower()
-        return name
-    
+        # Updated regex to handle signer suffix
+        match = re.match(r'clip_\d+_(.*?)_S[0-7]\.npz', filename)
+        if match:
+            return match.group(1).lower()
+        else:
+            # Fallback for old format
+            return filename.split("_", 2)[-1].replace(".npz", "").strip().lower()
+
     # Extract gloss text from filenames
     labels["gloss_text"] = labels["file"].apply(get_gloss_from_filename)
     
@@ -204,10 +261,14 @@ Examples:
     # Remove helper column
     labels = labels.drop(columns=["gloss_text"])
     
-    # Reorder columns to match expected format: file, gloss, cat, occluded
-    column_order = ["file", "gloss", "cat"]
-    if "occluded" in labels.columns:
-        column_order.append("occluded")
+    # Reorder columns to match expected format
+    column_order = ["file", "gloss", "cat", "occluded", "signer", "duration"]
+    
+    # Ensure all required columns exist
+    for col in column_order:
+        if col not in labels.columns:
+            labels[col] = 'N/A' # or some other default
+            
     labels = labels[column_order]
     
     # Save updated labels.csv

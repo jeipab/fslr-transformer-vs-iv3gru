@@ -1,6 +1,7 @@
 """Prediction manager for NPZ file predictions and visualization."""
 
 import io
+import json
 import streamlit as st
 import streamlit.components.v1 as components
 from typing import List, Dict, Optional, Tuple
@@ -13,17 +14,231 @@ import sys
 project_root = Path(__file__).parent.parent
 sys.path.insert(0, str(project_root))
 
-from ..components.utils import detect_file_type, check_npz_compatibility, create_npz_bytes, extract_occlusion_flag, interpret_occlusion_flag
+from ..components.utils import (
+    detect_file_type, check_npz_compatibility, create_npz_bytes, 
+    extract_occlusion_flag, interpret_occlusion_flag,
+    is_continuous_sequence, extract_continuous_metadata
+)
 from ..components.visualization import (
     render_consolidated_file_info, render_animated_keypoints, 
     render_feature_charts, render_topk_table, render_file_details_horizontal,
     render_summary_stats_horizontal
 )
 from ..components.components import render_predictions_section
+from ..components.ctc_visualization import (
+    render_sequence_comparison, render_temporal_alignment,
+    render_ctc_prediction_card
+)
 from .upload_manager import remove_file_from_stage
 
 # Import configuration from core module
-from ..core.config import MODEL_CONFIG, DUMMY_DATA
+from ..core.config import MODEL_CONFIG, DUMMY_DATA, is_ctc_model
+
+
+def convert_to_ground_truth_format(raw_data: Dict) -> Dict:
+    """
+    Convert JSON data to ground truth format.
+    
+    Handles both metadata format (with 'segments') and ground truth format (with 'ground_truth_sequence').
+    
+    Args:
+        raw_data: Raw JSON data loaded from file
+        
+    Returns:
+        Ground truth dictionary in standardized format
+    """
+    # Check if it's already in ground truth format
+    if 'ground_truth_sequence' in raw_data and 'ground_truth_labels' in raw_data:
+        return raw_data
+    
+    # Check if it's in metadata format (with segments)
+    if 'segments' in raw_data:
+        segments = raw_data['segments']
+        
+        # Extract ground truth sequence and labels
+        ground_truth_sequence = [seg['gloss'] for seg in segments]
+        ground_truth_labels = [seg['gloss_label'] for seg in segments]
+        
+        # Transform timestamps
+        ground_truth_timestamps = []
+        for seg in segments:
+            ground_truth_timestamps.append({
+                'index': seg['index'],
+                'gloss': seg['gloss'],
+                'gloss_label': seg['gloss_label'],
+                'start_ms': seg['timestamp_start_ms'],
+                'end_ms': seg['timestamp_end_ms'],
+                'duration_ms': seg['timestamp_end_ms'] - seg['timestamp_start_ms']
+            })
+        
+        # Extract categories if available
+        ground_truth_categories = [seg.get('category', 0) for seg in segments]
+        
+        # Build ground truth dictionary
+        ground_truth = {
+            'file_name': raw_data.get('file_name', 'unknown'),
+            'ground_truth_sequence': ground_truth_sequence,
+            'ground_truth_labels': ground_truth_labels,
+            'ground_truth_timestamps': ground_truth_timestamps,
+            'ground_truth_categories': ground_truth_categories,
+            'signer': raw_data.get('signer', 'unknown'),
+            'strategy': raw_data.get('strategy_name', raw_data.get('strategy', 'unknown')),
+            'total_duration_sec': raw_data.get('total_duration_sec', 0),
+            'num_segments': raw_data.get('num_segments', len(segments))
+        }
+        
+        return ground_truth
+    
+    # If neither format is recognized, return as-is (might be valid ground truth)
+    return raw_data
+
+
+def validate_ground_truth_data(ground_truth: Dict) -> Dict:
+    """
+    Validate ground truth data structure.
+    
+    Args:
+        ground_truth: Ground truth dictionary to validate
+        
+    Returns:
+        Dictionary with 'valid' boolean and 'error' message if invalid
+    """
+    if not isinstance(ground_truth, dict):
+        return {'valid': False, 'error': 'Ground truth must be a dictionary'}
+    
+    # Check if it's in metadata format (with segments)
+    if 'segments' in ground_truth:
+        segments = ground_truth['segments']
+        if not isinstance(segments, list):
+            return {'valid': False, 'error': 'segments must be a list'}
+        
+        if len(segments) == 0:
+            return {'valid': False, 'error': 'segments list cannot be empty'}
+        
+        # Validate each segment
+        for i, segment in enumerate(segments):
+            if not isinstance(segment, dict):
+                return {'valid': False, 'error': f'Segment {i} must be a dictionary'}
+            
+            required_fields = ['gloss', 'gloss_label']
+            for field in required_fields:
+                if field not in segment:
+                    return {'valid': False, 'error': f'Segment {i} missing required field: {field}'}
+            
+            if not isinstance(segment['gloss'], int):
+                return {'valid': False, 'error': f'Segment {i} gloss must be an integer'}
+            
+            if not isinstance(segment['gloss_label'], str):
+                return {'valid': False, 'error': f'Segment {i} gloss_label must be a string'}
+        
+        return {'valid': True, 'error': None}
+    
+    # Check if it's in ground truth format (with ground_truth_sequence)
+    elif 'ground_truth_sequence' in ground_truth and 'ground_truth_labels' in ground_truth:
+        # Check required fields
+        required_fields = ['ground_truth_sequence', 'ground_truth_labels']
+        for field in required_fields:
+            if field not in ground_truth:
+                return {'valid': False, 'error': f'Missing required field: {field}'}
+        
+        # Check that sequences are lists
+        if not isinstance(ground_truth['ground_truth_sequence'], list):
+            return {'valid': False, 'error': 'ground_truth_sequence must be a list'}
+        
+        if not isinstance(ground_truth['ground_truth_labels'], list):
+            return {'valid': False, 'error': 'ground_truth_labels must be a list'}
+        
+        # Check that sequences have same length
+        if len(ground_truth['ground_truth_sequence']) != len(ground_truth['ground_truth_labels']):
+            return {'valid': False, 'error': 'ground_truth_sequence and ground_truth_labels must have same length'}
+        
+        # Check that sequence is not empty
+        if len(ground_truth['ground_truth_sequence']) == 0:
+            return {'valid': False, 'error': 'Ground truth sequence cannot be empty'}
+        
+        # Check that gloss IDs are integers
+        for i, gloss_id in enumerate(ground_truth['ground_truth_sequence']):
+            if not isinstance(gloss_id, int):
+                return {'valid': False, 'error': f'Gloss ID at position {i} must be an integer, got {type(gloss_id)}'}
+        
+        # Check that labels are strings
+        for i, label in enumerate(ground_truth['ground_truth_labels']):
+            if not isinstance(label, str):
+                return {'valid': False, 'error': f'Label at position {i} must be a string, got {type(label)}'}
+        
+        return {'valid': True, 'error': None}
+    
+    else:
+        return {'valid': False, 'error': 'JSON must contain either "segments" (metadata format) or "ground_truth_sequence" and "ground_truth_labels" (ground truth format)'}
+
+
+def render_ground_truth_preview(ground_truth: Dict):
+    """
+    Render a preview of the ground truth data.
+    
+    Args:
+        ground_truth: Ground truth dictionary
+    """
+    st.markdown("**Ground Truth Information:**")
+    
+    # Basic info
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        st.metric("File", ground_truth.get('file_name', 'N/A'))
+    with col2:
+        st.metric("Signer", ground_truth.get('signer', 'N/A'))
+    with col3:
+        st.metric("Strategy", ground_truth.get('strategy', 'N/A'))
+    
+    # Sequence info
+    col1, col2 = st.columns(2)
+    with col1:
+        sequence_length = len(ground_truth.get('ground_truth_sequence', []))
+        st.metric("Sequence Length", sequence_length)
+    with col2:
+        duration = ground_truth.get('total_duration_sec', 0)
+        st.metric("Duration", f"{duration:.1f}s")
+    
+    # Show sequence as chips
+    st.markdown("**Ground Truth Sequence:**")
+    labels = ground_truth.get('ground_truth_labels', [])
+    if not labels:
+        st.info("No ground truth labels available")
+        return
+    
+    sequence_html = '<div style="display: flex; flex-wrap: wrap; gap: 0.5rem; margin: 1rem 0;">'
+    
+    for i, label in enumerate(labels):
+        chip_style = """
+            background-color: #10b981;
+            color: white;
+            padding: 0.4rem 0.8rem;
+            border-radius: 1rem;
+            font-size: 0.9rem;
+            font-weight: 500;
+        """
+        sequence_html += f'<div style="{chip_style}">{i+1}. {label}</div>'
+    
+    sequence_html += '</div>'
+    st.markdown(sequence_html, unsafe_allow_html=True)
+    
+    # Show timestamps if available
+    if 'ground_truth_timestamps' in ground_truth and ground_truth['ground_truth_timestamps']:
+        st.markdown("**Timestamps:**")
+        timestamp_data = []
+        for ts in ground_truth['ground_truth_timestamps']:
+            timestamp_data.append({
+                'Position': ts.get('index', 0) + 1,
+                'Gloss': ts.get('gloss_label', 'N/A'),
+                'Start (ms)': ts.get('start_ms', 0),
+                'End (ms)': ts.get('end_ms', 0),
+                'Duration (ms)': ts.get('duration_ms', 0)
+            })
+        
+        if timestamp_data:
+            import pandas as pd
+            df = pd.DataFrame(timestamp_data)
+            st.dataframe(df, width='stretch')
 
 
 class ModelManager:
@@ -98,7 +313,7 @@ class ModelManager:
                 if str(project_root) not in sys.path:
                     sys.path.insert(0, str(project_root))
                 
-                from data import load_label_mappings
+                from data.labels.label_mapping import load_label_mappings
                 self._label_mappings = load_label_mappings()
             except Exception as e:
                 st.toast(f"Could not load label mappings: {str(e)}", icon="⚠️", duration=3000)
@@ -117,9 +332,15 @@ class ModelManager:
         self._models.clear()
 
 
+# Global singleton instance
+_model_manager_instance = None
+
 def get_model_manager():
     """Get the singleton model manager instance."""
-    return ModelManager()
+    global _model_manager_instance
+    if _model_manager_instance is None:
+        _model_manager_instance = ModelManager()
+    return _model_manager_instance
 
 
 def make_real_prediction(npz_data: Dict[str, np.ndarray], model_name: str) -> Dict:
@@ -163,7 +384,7 @@ def make_real_prediction(npz_data: Dict[str, np.ndarray], model_name: str) -> Di
         
         try:
             # Make prediction
-            results = predictor.predict_from_npz(tmp_path)
+            results = predictor.predict_from_npz_simple(tmp_path)
             return results
         finally:
             # Clean up temporary file with retry mechanism
@@ -183,6 +404,95 @@ def make_real_prediction(npz_data: Dict[str, np.ndarray], model_name: str) -> Di
     except Exception as e:
         # Show error as toast instead of st.error
         st.toast(f"Prediction failed: {str(e)}", icon="⚠️", duration=5000)
+        return None
+
+
+def make_ctc_prediction(npz_data: Dict[str, np.ndarray], model_name: str, 
+                       ground_truth: Optional[Dict] = None,
+                       decode_method: str = 'greedy',
+                       beam_width: int = 10) -> Dict:
+    """
+    Make CTC prediction for continuous sign sequence.
+    
+    Args:
+        npz_data: NPZ data dictionary
+        model_name: Name of CTC model ('transformer_ctc' or 'iv3_gru_ctc')
+        ground_truth: Optional ground truth dictionary
+        decode_method: Decoding method ('greedy' or 'beam_search')
+        beam_width: Beam width for beam search
+        
+    Returns:
+        Dictionary with CTC prediction results
+    """
+    # Check if model is CTC model
+    if not is_ctc_model(model_name):
+        st.error(f"{model_name} is not a CTC model. Use make_real_prediction for classification models.")
+        return None
+    
+    # Check if model is available
+    if not MODEL_CONFIG[model_name]['enabled']:
+        st.error(f"CTC model {model_name} is not available.")
+        return None
+    
+    try:
+        # Import CTC predictor
+        from evaluation.prediction.predict_ctc import CTCPredictor
+        import tempfile
+        import os
+        
+        # Get model config
+        config = MODEL_CONFIG[model_name]
+        
+        # Initialize CTC predictor
+        device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+        predictor = CTCPredictor(
+            model_type=config['model_type'],
+            checkpoint_path=config['checkpoint_path'],
+            blank_id=config['num_gloss_classes'],  # Blank ID is num_gloss_classes
+            device=device
+        )
+        
+        # Create temporary NPZ file
+        with tempfile.NamedTemporaryFile(suffix='.npz', delete=False) as tmp_file:
+            tmp_path = tmp_file.name
+            np.savez_compressed(tmp_path, **npz_data)
+        
+        try:
+            # Make prediction using sliding window approach
+            results = predictor.predict_sequence_sliding_window(
+                npz_path=Path(tmp_path),
+                ground_truth=ground_truth,
+                window_size=120,  # Window size for isolated signs (4 seconds at 30fps)
+                stride=40,       # Overlap between windows (1.3 seconds)
+                decode_method=decode_method,
+                beam_width=beam_width,
+                fps=30,
+                temporal_tolerance=500
+            )
+            
+            # Add ground truth information to results if available
+            if ground_truth:
+                results['ground_truth_sequence'] = ground_truth.get('ground_truth_sequence', [])
+                results['ground_truth_labels'] = ground_truth.get('ground_truth_labels', [])
+                results['ground_truth_timestamps'] = ground_truth.get('ground_truth_timestamps', [])
+                results['ground_truth_categories'] = ground_truth.get('ground_truth_categories', [])
+                results['signer'] = ground_truth.get('signer', 'unknown')
+                results['strategy'] = ground_truth.get('strategy', 'unknown')
+            
+            return results
+        finally:
+            # Clean up
+            if os.path.exists(tmp_path):
+                try:
+                    os.unlink(tmp_path)
+                except:
+                    pass
+    
+    except Exception as e:
+        st.toast(f"CTC Prediction failed: {str(e)}", icon="⚠️", duration=5000)
+        import traceback
+        with st.expander("Error details"):
+            st.code(traceback.format_exc())
         return None
 
 
@@ -414,6 +724,10 @@ def process_single_npz_file(uploaded_file, filename: str):
         file_bytes = io.BytesIO(file_content)
         npz_data = dict(np.load(file_bytes, allow_pickle=True))
         
+        # Detect if continuous sequence
+        is_continuous = is_continuous_sequence(npz_data)
+        continuous_meta = extract_continuous_metadata(npz_data) if is_continuous else None
+        
         # Check compatibility
         compatibility = check_npz_compatibility(npz_data)
         
@@ -431,9 +745,16 @@ def process_single_npz_file(uploaded_file, filename: str):
             **existing_metadata,
             'compatibility': compatibility,
             'file_type': 'npz',
-            'frame_count': npz_data['X'].shape[0] if 'X' in npz_data else npz_data['X2048'].shape[0] if 'X2048' in npz_data else 0
+            'frame_count': npz_data['X'].shape[0] if 'X' in npz_data else npz_data['X2048'].shape[0] if 'X2048' in npz_data else 0,
+            'is_continuous': is_continuous,
+            'continuous_metadata': continuous_meta
         }
         st.session_state.file_status[filename] = 'completed'
+        
+        # Show appropriate message based on sequence type
+        if is_continuous:
+            num_segments = continuous_meta.get('num_segments', '?') if continuous_meta else '?'
+            st.toast(f"✅ Continuous sequence loaded ({num_segments} segments)", icon="🎬", duration=3000)
         
     except Exception as e:
         st.session_state.file_status[filename] = 'error'
@@ -488,9 +809,26 @@ def render_visualization_tabs(cfg: Dict):
     if not completed_files:
         return
     
+    # Check if we have continuous sequences
+    continuous_files = []
+    isolated_files = []
+    for f in completed_files:
+        metadata = st.session_state.file_metadata.get(f.name, {})
+        if metadata.get('is_continuous', False):
+            continuous_files.append(f)
+        else:
+            isolated_files.append(f)
+    
     # Create file selection interface
     st.markdown("<div style='height: 20px;'></div>", unsafe_allow_html=True)
-    st.markdown("<div class='main-section-header'>RESULTS</div>", unsafe_allow_html=True)
+    
+    # Show file type indicator if we have mixed types
+    if continuous_files and isolated_files:
+        st.markdown(f"<div class='main-section-header'>RESULTS ({len(isolated_files)} Isolated, {len(continuous_files)} Continuous)</div>", unsafe_allow_html=True)
+    elif continuous_files:
+        st.markdown("<div class='main-section-header'>RESULTS (Continuous Sequences)</div>", unsafe_allow_html=True)
+    else:
+        st.markdown("<div class='main-section-header'>RESULTS</div>", unsafe_allow_html=True)
     
     # File selection dropdown
     file_options = []
@@ -591,29 +929,36 @@ def render_visualization_tabs(cfg: Dict):
             # Create unique key suffix using file object id to handle duplicate filenames
             unique_key_suffix = f"{filename}_{id(selected_uploaded_file)}"
             
-            # Render consolidated file info (includes sequence overview data)
+            # Check if continuous sequence
+            is_continuous = metadata.get('is_continuous', False)
+            
             try:
-                X_pad, mask, meta = render_consolidated_file_info(filename, npz_data, metadata, cfg["sequence_length"])
+                if is_continuous:
+                    # Render CTC prediction interface for continuous sequences
+                    render_continuous_sequence_predictions(filename, npz_data, metadata, cfg, unique_key_suffix)
+                else:
+                    # Render standard classification interface for isolated signs
+                    # Render consolidated file info (includes sequence overview data)
+                    X_pad, mask, meta = render_consolidated_file_info(filename, npz_data, metadata, cfg["sequence_length"])
+                    
+                    # Generate and render predictions (with metadata and key_suffix for video preview)
+                    render_predictions_section(cfg, npz_data, filename, metadata, unique_key_suffix)
+                    
+                    # Side-by-side layout for Keypoint Visualization and Feature Analysis
+                    st.markdown('<div class="viz-side-by-side">', unsafe_allow_html=True)
+                    viz_col1, viz_col2 = st.columns([1, 1])
+                    
+                    with viz_col1:
+                        render_animated_keypoints(X_pad, mask if mask.size > 0 else None, key_suffix=unique_key_suffix, meta_dict=meta)
+                    
+                    with viz_col2:
+                        render_feature_charts(X_pad, mask if mask.size > 0 else None, key_suffix=unique_key_suffix)
+                    
+                    st.markdown('</div>', unsafe_allow_html=True)
                 
-                # Generate and render predictions (with metadata and key_suffix for video preview)
-                render_predictions_section(cfg, npz_data, filename, metadata, unique_key_suffix)
-                
-                # Side-by-side layout for Keypoint Visualization and Feature Analysis
-                st.markdown('<div class="viz-side-by-side">', unsafe_allow_html=True)
-                viz_col1, viz_col2 = st.columns([1, 1])
-                
-                with viz_col1:
-                    render_animated_keypoints(X_pad, mask if mask.size > 0 else None, key_suffix=unique_key_suffix, meta_dict=meta)
-                
-                with viz_col2:
-                    render_feature_charts(X_pad, mask if mask.size > 0 else None, key_suffix=unique_key_suffix)
-                
-                st.markdown('</div>', unsafe_allow_html=True)
-                
-                # Download button
+                # Download button (for both types)
                 st.markdown("### Download")
                 npz_bytes = create_npz_bytes(npz_data)
-                # Ensure filename has .npz extension
                 npz_filename = filename if filename.endswith('.npz') else f"{Path(filename).stem}.npz"
                 st.download_button(
                     label=f"Download {npz_filename}",
@@ -625,6 +970,198 @@ def render_visualization_tabs(cfg: Dict):
                 
             except Exception as e:
                 st.toast(f"Visualization error: {str(e)}", icon="⚠️", duration=5000)
+
+
+def render_continuous_sequence_predictions(filename: str, npz_data: Dict, metadata: Dict, cfg: Dict, unique_key_suffix: str):
+    """
+    Render CTC prediction interface for continuous sequences.
+    
+    Args:
+        filename: Name of the file
+        npz_data: NPZ data dictionary
+        metadata: File metadata
+        cfg: Configuration dictionary
+        unique_key_suffix: Unique key suffix for widgets
+    """
+    st.markdown("### Continuous Sequence Recognition")
+    
+    # Show continuous sequence info
+    continuous_meta = metadata.get('continuous_metadata', {})
+    if continuous_meta:
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            st.metric("Segments", continuous_meta.get('num_segments', 'N/A'))
+        with col2:
+            st.metric("Duration", f"{continuous_meta.get('total_duration_sec', 0):.1f}s")
+        with col3:
+            strategy_name = continuous_meta.get('strategy', 'N/A')
+            st.metric("Strategy", strategy_name)
+    
+    # CTC Configuration
+    st.markdown("---")
+    st.markdown("#### CTC Configuration")
+    
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        # Get available CTC models
+        from ..core.config import get_models_by_mode, MODEL_CONFIG
+        ctc_models = get_models_by_mode('continuous')
+        
+        if not ctc_models:
+            st.error("No CTC models available. Please ensure CTC model checkpoints exist.")
+            return
+        
+        # Model selector
+        ctc_model = st.selectbox(
+            "CTC Model",
+            options=ctc_models,
+            format_func=lambda x: MODEL_CONFIG[x]['display_name'],
+            key=f"ctc_model_select_{unique_key_suffix}"
+        )
+        
+        # Clear results if model selection changed
+        ctc_key = f'ctc_results_{unique_key_suffix}'
+        if ctc_key in st.session_state:
+            # Check if this is a new model selection (not initial load)
+            if f'previous_ctc_model_{unique_key_suffix}' in st.session_state:
+                if st.session_state[f'previous_ctc_model_{unique_key_suffix}'] != ctc_model:
+                    del st.session_state[ctc_key]
+            st.session_state[f'previous_ctc_model_{unique_key_suffix}'] = ctc_model
+    
+    with col2:
+        # Decode method
+        decode_method = st.radio(
+            "Decode Method",
+            options=['greedy', 'beam_search'],
+            format_func=lambda x: 'Greedy' if x == 'greedy' else 'Beam Search',
+            key=f"decode_method_{unique_key_suffix}"
+        )
+        
+        # Clear results if decode method changed
+        if ctc_key in st.session_state:
+            # Check if this is a new decode method selection (not initial load)
+            if f'previous_decode_method_{unique_key_suffix}' in st.session_state:
+                if st.session_state[f'previous_decode_method_{unique_key_suffix}'] != decode_method:
+                    del st.session_state[ctc_key]
+            st.session_state[f'previous_decode_method_{unique_key_suffix}'] = decode_method
+        
+        if decode_method == 'beam_search':
+            beam_width = st.slider(
+                "Beam Width",
+                min_value=1,
+                max_value=20,
+                value=10,
+                key=f"beam_width_{unique_key_suffix}"
+            )
+        else:
+            beam_width = 1
+    
+    # Ground truth upload (optional)
+    st.markdown("---")
+    st.markdown("#### Ground Truth Upload")
+    
+    # Enhanced file uploader with better help text
+    ground_truth_file = st.file_uploader(
+        "Ground Truth JSON (optional)",
+        type=['json'],
+        help="Upload ground truth JSON file for WER calculation. Supports both metadata format (with 'segments') and ground truth format (with 'ground_truth_sequence')",
+        key=f"gt_upload_{unique_key_suffix}"
+    )
+    
+    ground_truth = None
+    if ground_truth_file:
+        try:
+            # Reset file pointer to beginning
+            ground_truth_file.seek(0)
+            raw_data = json.load(ground_truth_file)
+            
+            # Convert to ground truth format if needed
+            ground_truth = convert_to_ground_truth_format(raw_data)
+            
+            # Validate the ground truth data
+            validation_result = validate_ground_truth_data(ground_truth)
+            
+            if validation_result['valid']:
+                num_glosses = len(ground_truth.get('ground_truth_sequence', []))
+                st.toast(f"Ground truth loaded successfully: {num_glosses} glosses", duration=3000)
+                
+                # Show ground truth preview
+                with st.expander("Ground Truth Preview", expanded=False):
+                    render_ground_truth_preview(ground_truth)
+            else:
+                st.error(f"Invalid ground truth format: {validation_result['error']}")
+                ground_truth = None
+                
+        except json.JSONDecodeError as e:
+            st.error(f"Invalid JSON format: {str(e)}")
+        except Exception as e:
+            st.error(f"Failed to load ground truth: {str(e)}")
+            with st.expander("Error Details"):
+                st.code(str(e))
+    
+    # Predict button
+    st.markdown("---")
+    if st.button("Predict Sequence", type="primary", key=f"predict_ctc_{unique_key_suffix}"):
+        # Clear any existing results for this file when making new prediction
+        ctc_key = f'ctc_results_{unique_key_suffix}'
+        if ctc_key in st.session_state:
+            del st.session_state[ctc_key]
+        
+        with st.spinner("Predicting sequence..."):
+            results = make_ctc_prediction(
+                npz_data, 
+                ctc_model,
+                ground_truth=ground_truth,
+                decode_method=decode_method,
+                beam_width=beam_width
+            )
+            
+            if results:
+                st.session_state[f'ctc_results_{unique_key_suffix}'] = results
+                st.rerun()
+    
+    # Display results if available
+    if f'ctc_results_{unique_key_suffix}' in st.session_state:
+        results = st.session_state[f'ctc_results_{unique_key_suffix}']
+        
+        st.markdown("---")
+        st.markdown("### Prediction Results")
+        
+        # Render CTC prediction card
+        render_ctc_prediction_card(
+            file_name=filename,
+            predicted_sequence=results.get('predicted_sequence', []),
+            predicted_labels=results.get('predicted_labels', []),
+            confidence_scores=results.get('confidence_scores'),
+            ground_truth_available=ground_truth is not None,
+            predicted_categories=results.get('predicted_categories'),
+            category_confidences=results.get('category_confidences'),
+            category_accuracy=results.get('category_accuracy')
+        )
+        
+        # Sequence comparison
+        if ground_truth:
+            st.markdown("---")
+            render_sequence_comparison(
+                predicted_sequence=results.get('predicted_sequence', []),
+                predicted_labels=results.get('predicted_labels', []),
+                ground_truth_sequence=results.get('ground_truth_sequence'),
+                ground_truth_labels=results.get('ground_truth_labels'),
+                confidence_scores=results.get('confidence_scores'),
+                predicted_categories=results.get('predicted_categories'),
+                category_confidences=results.get('category_confidences'),
+                ground_truth_categories=results.get('ground_truth_categories')
+            )
+            
+            # Temporal alignment
+            if 'predicted_timestamps' in results and 'ground_truth_timestamps' in results:
+                st.markdown("---")
+                render_temporal_alignment(
+                    predicted_timestamps=results['predicted_timestamps'],
+                    ground_truth_timestamps=results['ground_truth_timestamps'],
+                    temporal_alignment_accuracy=results.get('temporal_alignment_accuracy')
+                )
 
 
 def render_batch_summary_tab(cfg: Dict):
@@ -649,7 +1186,7 @@ def render_batch_summary_tab(cfg: Dict):
         source_type = metadata.get('source_type', 'original')
         
         # Generate real predictions for this file
-        model_name = 'transformer' if cfg['model_choice'] == 'SignTransformer' else 'iv3_gru'
+        model_name = 'transformer' if cfg['model_choice'] == 'transformer' else 'iv3_gru'
         npz_data = st.session_state.processed_data[filename]
         prediction_results = make_real_prediction(npz_data, model_name)
         
@@ -666,8 +1203,12 @@ def render_batch_summary_tab(cfg: Dict):
             gloss_prob = prediction_results['gloss_probability']
             cat_prob = prediction_results['category_probability']
             
-            gloss_label = gloss_mapping.get(gloss_id, f'Unknown ({gloss_id})')
-            cat_label = category_mapping.get(cat_id, f'Unknown ({cat_id})')
+            # Convert tensors to ints if needed
+            gloss_id_int = gloss_id.item() if hasattr(gloss_id, 'item') else int(gloss_id)
+            cat_id_int = cat_id.item() if hasattr(cat_id, 'item') else int(cat_id)
+            
+            gloss_label = gloss_mapping.get(gloss_id_int, f'Unknown ({gloss_id_int})')
+            cat_label = category_mapping.get(cat_id_int, f'Unknown ({cat_id_int})')
             
             top_gloss = f"{gloss_label} ({gloss_prob*100:.1f}%)"
             top_category = f"{cat_label} ({cat_prob*100:.1f}%)"
@@ -816,6 +1357,14 @@ def remove_specific_file_instance(file_obj, stage: str):
                 del st.session_state.file_metadata[filename]
             if filename in st.session_state.original_file_data:
                 del st.session_state.original_file_data[filename]
+            
+            # Clear CTC prediction results and tracking keys for this file
+            keys_to_remove = [key for key in st.session_state.keys() 
+                              if (key.startswith("ctc_results_") or 
+                                  key.startswith("previous_ctc_model_") or 
+                                  key.startswith("previous_decode_method_")) and filename in key]
+            for key in keys_to_remove:
+                del st.session_state[key]
 
 
 def reset_processed_files():
@@ -950,6 +1499,14 @@ def reset_processed_files():
     
     # Clear current tab
     st.session_state.current_tab = None
+    
+    # Clear all CTC prediction results and tracking keys when resetting files
+    ctc_keys_to_remove = [key for key in st.session_state.keys() 
+                          if (key.startswith("ctc_results_") or 
+                              key.startswith("previous_ctc_model_") or 
+                              key.startswith("previous_decode_method_"))]
+    for key in ctc_keys_to_remove:
+        del st.session_state[key]
     
     if reset_count > 0:
         st.toast(f"Reset {reset_count} files back to pending status", icon="🔄", duration=5000)

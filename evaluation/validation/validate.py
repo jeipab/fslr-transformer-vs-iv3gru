@@ -31,8 +31,9 @@ from tqdm import tqdm
 project_root = Path(__file__).parent.parent
 sys.path.insert(0, str(project_root))
 
-from models import SignTransformer, InceptionV3GRU
+from models import SignTransformer, InceptionV3GRU, MediaPipeGRU
 from data.labels.label_mapping import load_label_mappings, format_prediction_results
+from streamlit_app.core.config import MODEL_CONFIG, get_model_config
 
 # Suppress warnings for cleaner output
 warnings.filterwarnings('ignore', category=UserWarning)
@@ -46,26 +47,32 @@ class ValidationDataset:
     and providing data in the format expected by the models.
     """
     
-    def __init__(self, data_dir: str, labels_csv: str, model_type: str, model=None):
+    def __init__(self, data_dir: str, labels_csv: str, model_type: str, model=None, 
+                 signer_filter: List[str] = None, category_filter: List[int] = None):
         """
         Initialize validation dataset by loading labels and filtering valid NPZ files.
         
         Steps:
         1. Load labels CSV with multiple encoding fallbacks
         2. Clean file names (remove .npz extension)
-        3. Filter to only include files that actually exist
-        4. Store metadata for each valid sample
+        3. Apply signer and category filters if specified
+        4. Filter to only include files that actually exist
+        5. Store metadata for each valid sample
         
         Args:
             data_dir: Directory containing NPZ files
             labels_csv: Path to labels CSV file
             model_type: 'transformer' or 'iv3_gru' (determines data format)
             model: Model instance (needed to check expected input dimensions)
+            signer_filter: List of signer IDs to include (None for all)
+            category_filter: List of category IDs to include (None for all)
         """
         self.data_dir = Path(data_dir)
         self.labels_csv = labels_csv
         self.model_type = model_type
         self.model = model
+        self.signer_filter = signer_filter
+        self.category_filter = category_filter
         
         # Step 1: Load labels CSV with encoding fallbacks
         # Try UTF-8 first, then fallback encodings for compatibility
@@ -80,7 +87,16 @@ class ValidationDataset:
         # Step 2: Clean file names (remove .npz extension if present)
         self.labels_df['file'] = self.labels_df['file'].str.replace('.npz', '')
         
-        # Step 3: Filter to only include files that actually exist
+        # Step 3: Apply filters if specified
+        if signer_filter is not None:
+            self.labels_df = self.labels_df[self.labels_df['signer'].isin(signer_filter)]
+            print(f"Filtered to signers: {signer_filter}")
+        
+        if category_filter is not None:
+            self.labels_df = self.labels_df[self.labels_df['cat'].isin(category_filter)]
+            print(f"Filtered to categories: {category_filter}")
+        
+        # Step 4: Filter to only include files that actually exist
         self.valid_files = []
         for _, row in self.labels_df.iterrows():
             npz_path = self.data_dir / f"{row['file']}.npz"
@@ -91,6 +107,8 @@ class ValidationDataset:
                     'gloss': int(row['gloss']),    # Ground truth gloss label
                     'cat': int(row['cat']),        # Ground truth category label
                     'occluded': int(row['occluded']),  # Occlusion flag (0/1)
+                    'signer': str(row['signer']),  # Signer ID
+                    'duration': float(row['duration']),  # Duration in seconds
                     'npz_path': str(npz_path)      # Full path to NPZ file
                 })
         
@@ -125,49 +143,30 @@ class ValidationDataset:
         data = np.load(sample['npz_path'])
         
         if self.model_type == 'transformer':
-            # Step 2: Extract features for transformer model
-            # Check what input dimension the model expects
-            expected_dim = self.model.embedding.weight.shape[1]
-            
-            # Load appropriate features based on expected dimension
-            if expected_dim == 2204 and 'X' in data and 'X2048' in data:
-                # Concatenated features: keypoints (156) + InceptionV3 (2048) = 2204
-                X_keypoints = torch.from_numpy(data['X']).float()
-                X_iv3 = torch.from_numpy(data['X2048']).float()
-                # Ensure same sequence length
-                min_len = min(X_keypoints.shape[0], X_iv3.shape[0])
-                X = torch.cat([X_keypoints[:min_len], X_iv3[:min_len]], dim=1)
-            elif expected_dim == 2048 and 'X2048' in data:
-                # InceptionV3 features only
-                X = torch.from_numpy(data['X2048']).float()
-            elif expected_dim == 156 and 'X' in data:
-                # Keypoint features only
-                X = torch.from_numpy(data['X']).float()
-            elif 'X2048' in data:
-                # Default to InceptionV3 if available
-                X = torch.from_numpy(data['X2048']).float()
-            elif 'X' in data:
-                # Fallback to keypoints
-                X = torch.from_numpy(data['X']).float()
-            else:
-                raise ValueError(f"NPZ file {sample['npz_path']} missing both 'X' and 'X2048' keys for transformer")
-            
-            # Verify dimension matches
-            if X.shape[1] != expected_dim:
-                raise ValueError(f"Expected {expected_dim} input features, got {X.shape[1]}")
+            # Step 2: Extract features for transformer model (178-D keypoints)
+            if 'X' not in data:
+                raise ValueError(f"NPZ file {sample['npz_path']} missing 'X' key for transformer model (expected 178-D keypoints)")
+            X = torch.from_numpy(data['X']).float()
             
             # Step 3: Handle sequence length truncation (max 300 frames)
             if X.shape[0] > 300:
                 X = X[:300, :]
             
-            return X, sample['gloss'], sample['cat'], sample['occluded'], sample['file']
+            return X, sample['gloss'], sample['cat'], sample['occluded'], sample['file'], sample['signer'], sample['duration']
         
         elif self.model_type == 'iv3_gru':
-            # Step 2: Extract features for IV3-GRU model (requires InceptionV3 features)
+            # Step 2: Extract features for IV3-GRU model (requires 2048-D InceptionV3 features)
             if 'X2048' not in data:
-                raise ValueError(f"NPZ file {sample['npz_path']} missing 'X2048' key for IV3-GRU")
+                raise ValueError(f"NPZ file {sample['npz_path']} missing 'X2048' key for IV3-GRU model (expected 2048-D features)")
             X = torch.from_numpy(data['X2048']).float()
-            return X, sample['gloss'], sample['cat'], sample['occluded'], sample['file']
+            return X, sample['gloss'], sample['cat'], sample['occluded'], sample['file'], sample['signer'], sample['duration']
+        
+        elif self.model_type == 'mediapipe_gru':
+            # Step 2: Extract features for MediaPipe-GRU model (requires 178-D keypoint features)
+            if 'X' not in data:
+                raise ValueError(f"NPZ file {sample['npz_path']} missing 'X' key for MediaPipe-GRU model (expected 178-D keypoints)")
+            X = torch.from_numpy(data['X']).float()
+            return X, sample['gloss'], sample['cat'], sample['occluded'], sample['file'], sample['signer'], sample['duration']
         
         else:
             raise ValueError(f"Unknown model type: {self.model_type}")
@@ -216,49 +215,47 @@ class ModelValidator:
     
     def _load_model(self):
         """
-        Load the appropriate model architecture with auto-detected parameters.
+        Load the appropriate model architecture using Streamlit config parameters.
         
         Steps:
-        1. Load checkpoint to inspect model parameters
-        2. Auto-detect architecture parameters from checkpoint weights
-        3. Create model instance with detected parameters
-        4. Move model to target device
+        1. Get model configuration from Streamlit config
+        2. Load checkpoint to inspect model parameters
+        3. Auto-detect architecture parameters from checkpoint weights
+        4. Create model instance with detected parameters
+        5. Move model to target device
         
         Returns:
             Model instance ready for inference
         """
+        # Step 1: Get model configuration from Streamlit config
+        model_config = get_model_config(self.model_type)
+        if not model_config:
+            raise ValueError(f"Model type '{self.model_type}' not found in Streamlit config")
+        
+        # Step 2: Load checkpoint to inspect parameters
+        checkpoint = torch.load(self.checkpoint_path, map_location='cpu')
+        state_dict = checkpoint.get('model_state_dict', checkpoint.get('state_dict', checkpoint.get('model', checkpoint)))
+        
         if self.model_type == 'transformer':
-            # Step 1: Load checkpoint to inspect parameters
-            checkpoint = torch.load(self.checkpoint_path, map_location='cpu')
-            state_dict = checkpoint.get('model_state_dict', checkpoint.get('state_dict', checkpoint.get('model', checkpoint)))
+            # Step 3: Use input dimension from Streamlit config
+            input_dim = model_config.get('input_dim', 178)
+            print(f"Using input_dim={input_dim} from Streamlit config")
             
-            # Step 2: Auto-detect input dimension from embedding layer
-            if 'embedding.weight' in state_dict:
-                embedding_shape = state_dict['embedding.weight'].shape
-                input_dim = embedding_shape[1]  # embedding.weight is [emb_dim, input_dim]
-                print(f"Detected input_dim={input_dim} from checkpoint embedding layer")
-            else:
-                input_dim = 156  # Default fallback for keypoint features
-                print(f"Warning: Could not detect input_dim from checkpoint, using default {input_dim}")
-            
-            # Step 3: Create transformer model with detected parameters
+            # Step 4: Create transformer model with config parameters
             model = SignTransformer(
-                input_dim=input_dim,      # Auto-detected from checkpoint
-                emb_dim=256,             # Fixed architecture parameter
-                n_heads=8,              # Fixed architecture parameter
-                n_layers=4,             # Fixed architecture parameter
-                num_gloss=105,          # Fixed: number of sign classes
-                num_cat=10,             # Fixed: number of category classes
-                dropout=0.1,           # Fixed architecture parameter
-                max_len=300,           # Fixed: maximum sequence length
-                pooling_method='mean'   # Fixed: pooling method
+                input_dim=input_dim,                    # From Streamlit config
+                emb_dim=256,                          # Fixed architecture parameter
+                n_heads=8,                           # Fixed architecture parameter
+                n_layers=4,                          # Fixed architecture parameter
+                num_gloss=model_config['num_gloss_classes'],    # From Streamlit config
+                num_cat=model_config['num_category_classes'],  # From Streamlit config
+                dropout=0.1,                         # Fixed architecture parameter
+                max_len=300,                         # Fixed: maximum sequence length
+                pooling_method='mean'                # Fixed: pooling method
             )
-        elif self.model_type == 'iv3_gru':
-            # Step 1: Load checkpoint to inspect parameters
-            checkpoint = torch.load(self.checkpoint_path, map_location='cpu')
-            state_dict = checkpoint.get('model_state_dict', checkpoint.get('state_dict', checkpoint.get('model', checkpoint)))
             
-            # Step 2: Auto-detect GRU hidden sizes from checkpoint weights
+        elif self.model_type == 'iv3_gru':
+            # Step 3: Auto-detect GRU hidden sizes from checkpoint weights
             if 'gru1.weight_hh_l0' in state_dict and 'gru2.weight_hh_l0' in state_dict:
                 # GRU weight_hh has shape [3*hidden, hidden] for each layer
                 gru1_hidden = state_dict['gru1.weight_hh_l0'].shape[0] // 3
@@ -269,20 +266,44 @@ class ModelValidator:
                 gru2_hidden = 12  # Default fallback
                 print(f"Warning: Could not detect GRU hidden sizes from checkpoint, using defaults: hidden1={gru1_hidden}, hidden2={gru2_hidden}")
             
-            # Step 3: Create IV3-GRU model with detected parameters
+            # Step 4: Create IV3-GRU model with config parameters
             model = InceptionV3GRU(
-                num_gloss=105,          # Fixed: number of sign classes
-                num_cat=10,             # Fixed: number of category classes
-                hidden1=gru1_hidden,   # Auto-detected from checkpoint
-                hidden2=gru2_hidden,   # Auto-detected from checkpoint
-                dropout=0.3,           # Fixed architecture parameter
-                pretrained_backbone=True,  # Fixed: use pretrained InceptionV3
-                freeze_backbone=True   # Fixed: freeze backbone weights
+                num_gloss=model_config['num_gloss_classes'],    # From Streamlit config
+                num_cat=model_config['num_category_classes'],   # From Streamlit config
+                hidden1=gru1_hidden,                           # Auto-detected from checkpoint
+                hidden2=gru2_hidden,                           # Auto-detected from checkpoint
+                dropout=0.3,                                   # Fixed architecture parameter
+                pretrained_backbone=True,                      # Fixed: use pretrained InceptionV3
+                freeze_backbone=True                           # Fixed: freeze backbone weights
             )
+            
+        elif self.model_type == 'mediapipe_gru':
+            # Step 3: Auto-detect GRU hidden sizes from checkpoint weights
+            if 'gru1.weight_hh_l0' in state_dict and 'gru2.weight_hh_l0' in state_dict:
+                # GRU weight_hh has shape [3*hidden, hidden] for each layer
+                gru1_hidden = state_dict['gru1.weight_hh_l0'].shape[0] // 3
+                gru2_hidden = state_dict['gru2.weight_hh_l0'].shape[0] // 3
+                print(f"Detected GRU hidden sizes from checkpoint: hidden1={gru1_hidden}, hidden2={gru2_hidden}")
+            else:
+                gru1_hidden = 256  # Default fallback
+                gru2_hidden = 128  # Default fallback
+                print(f"Warning: Could not detect GRU hidden sizes from checkpoint, using defaults: hidden1={gru1_hidden}, hidden2={gru2_hidden}")
+            
+            # Step 4: Create MediaPipe-GRU model with config parameters
+            model = MediaPipeGRU(
+                num_gloss=model_config['num_gloss_classes'],    # From Streamlit config
+                num_cat=model_config['num_category_classes'],   # From Streamlit config
+                input_dim=model_config['input_dim'],           # From Streamlit config
+                hidden1=gru1_hidden,                           # Auto-detected from checkpoint
+                hidden2=gru2_hidden,                           # Auto-detected from checkpoint
+                dropout=0.3,                                   # Fixed architecture parameter
+                bidirectional=False                            # Fixed: unidirectional GRU
+            )
+            
         else:
             raise ValueError(f"Unknown model type: {self.model_type}")
         
-        # Step 4: Move model to target device
+        # Step 5: Move model to target device
         return model.to(self.device)
     
     def _load_checkpoint(self):
@@ -392,6 +413,29 @@ class ModelValidator:
             with torch.no_grad():
                 gloss_logits, cat_logits = self.model(X, lengths, features_already=True)
         
+        elif self.model_type == 'mediapipe_gru':
+            # Step 1: Get sequence lengths and pad sequences for GRU
+            lengths = torch.tensor([x.shape[0] for x in batch_data], dtype=torch.long)
+            max_len = max(x.shape[0] for x in batch_data)
+            
+            padded_batch = []
+            for x in batch_data:
+                if x.shape[0] < max_len:
+                    # Pad with zeros to max length
+                    pad_len = max_len - x.shape[0]
+                    padded_x = torch.cat([x, torch.zeros(pad_len, x.shape[1])], dim=0)
+                else:
+                    padded_x = x
+                padded_batch.append(padded_x)
+            
+            # Step 2: Stack into batch tensors and move to device
+            X = torch.stack(padded_batch).to(self.device)  # [batch_size, max_len, features]
+            lengths = lengths.to(self.device)  # [batch_size]
+            
+            # Step 3: Run inference
+            with torch.no_grad():
+                gloss_logits, cat_logits = self.model(X, lengths)
+        
         return gloss_logits, cat_logits
     
     def validate(self, dataset: ValidationDataset, batch_size: int = 32, 
@@ -430,6 +474,8 @@ class ModelValidator:
         all_ground_truth = []     # Ground truth labels
         all_occlusions = []       # Occlusion flags
         all_files = []            # File names
+        all_signers = []          # Signer IDs
+        all_durations = []        # Duration values
         all_gloss_probs = []      # All gloss probabilities for top-k accuracy
         all_cat_probs = []        # All category probabilities for top-k accuracy
         
@@ -447,14 +493,18 @@ class ModelValidator:
                 batch_cat = []       # Ground truth category labels
                 batch_occluded = []  # Occlusion flags
                 batch_files = []     # File names
+                batch_signers = []   # Signer IDs
+                batch_durations = [] # Duration values
                 
                 for i in range(start_idx, end_idx):
-                    X, gloss, cat, occluded, file = dataset[i]
+                    X, gloss, cat, occluded, file, signer, duration = dataset[i]
                     batch_data.append(X)
                     batch_gloss.append(gloss)
                     batch_cat.append(cat)
                     batch_occluded.append(occluded)
                     batch_files.append(file)
+                    batch_signers.append(signer)
+                    batch_durations.append(duration)
                 
                 # Step 4: Make predictions on batch
                 gloss_logits, cat_logits = self.predict_batch(batch_data)
@@ -476,6 +526,8 @@ class ModelValidator:
                         'gloss_gt': batch_gloss[i],                # Ground truth gloss class
                         'cat_gt': batch_cat[i],                    # Ground truth category class
                         'occluded': batch_occluded[i],             # Occlusion flag
+                        'signer': batch_signers[i],                # Signer ID
+                        'duration': batch_durations[i],            # Duration in seconds
                         'gloss_prob': float(gloss_probs[i][gloss_preds[i]]),  # Prediction confidence
                         'cat_prob': float(cat_probs[i][cat_preds[i]]),        # Prediction confidence
                         'gloss_top10': [(int(j), float(gloss_probs[i][j]))    # Top 10 gloss predictions
@@ -492,6 +544,8 @@ class ModelValidator:
                 all_ground_truth.extend(list(zip(batch_gloss, batch_cat)))
                 all_occlusions.extend(batch_occluded)
                 all_files.extend(batch_files)
+                all_signers.extend(batch_signers)
+                all_durations.extend(batch_durations)
                 
                 pbar.update(end_idx - start_idx)
         
@@ -508,7 +562,8 @@ class ModelValidator:
         results = self._compute_metrics(
             gloss_preds, cat_preds, gloss_gts, cat_gts, 
             occlusions, gloss_probs, cat_probs,
-            all_predictions, save_predictions, output_dir
+            all_predictions, all_signers, all_durations,
+            save_predictions, output_dir
         )
         
         return results
@@ -516,7 +571,7 @@ class ModelValidator:
     def _compute_metrics(self, gloss_preds: np.ndarray, cat_preds: np.ndarray,
                         gloss_gts: np.ndarray, cat_gts: np.ndarray,
                         occlusions: np.ndarray, gloss_probs: np.ndarray, cat_probs: np.ndarray,
-                        all_predictions: List[Dict],
+                        all_predictions: List[Dict], all_signers: List[str], all_durations: List[float],
                         save_predictions: bool, output_dir: str) -> Dict[str, Any]:
         """Compute comprehensive evaluation metrics."""
         
@@ -554,7 +609,16 @@ class ModelValidator:
         # Per-class metrics
         per_class_results = self._compute_per_class_metrics(gloss_preds, cat_preds, gloss_gts, cat_gts)
         
-        # Confusion matrices
+        # Per-signer metrics
+        per_signer_results = self._compute_per_signer_metrics(gloss_preds, cat_preds, gloss_gts, cat_gts, all_signers)
+        
+        # Per-category metrics
+        per_category_results = self._compute_per_category_metrics(gloss_preds, cat_preds, gloss_gts, cat_gts)
+        
+        # Duration analysis
+        duration_analysis = self._compute_duration_analysis(all_durations, gloss_preds, cat_preds, gloss_gts, cat_gts)
+        
+        # Confusion matrices with proper TP, FP, TN, FN calculations
         confusion_matrices = self._compute_confusion_matrices(gloss_preds, cat_preds, gloss_gts, cat_gts)
         
         # Save individual predictions if requested
@@ -572,12 +636,23 @@ class ModelValidator:
             'dataset_info': {
                 'total_samples': len(gloss_preds),
                 'occluded_samples': int(np.sum(occluded_mask)),
-                'non_occluded_samples': int(np.sum(non_occluded_mask))
+                'non_occluded_samples': int(np.sum(non_occluded_mask)),
+                'unique_signers': len(set(all_signers)),
+                'signers': list(set(all_signers)),
+                'duration_stats': {
+                    'mean': float(np.mean(all_durations)),
+                    'std': float(np.std(all_durations)),
+                    'min': float(np.min(all_durations)),
+                    'max': float(np.max(all_durations))
+                }
             },
             'overall_results': overall_results,
             'occluded_results': occluded_results,
             'non_occluded_results': non_occluded_results,
             'per_class_results': per_class_results,
+            'per_signer_results': per_signer_results,
+            'per_category_results': per_category_results,
+            'duration_analysis': duration_analysis,
             'confusion_matrices': confusion_matrices,
             'detailed_predictions': all_predictions
         }
@@ -705,14 +780,141 @@ class ModelValidator:
     
     def _compute_confusion_matrices(self, gloss_preds: np.ndarray, cat_preds: np.ndarray,
                                   gloss_gts: np.ndarray, cat_gts: np.ndarray) -> Dict[str, Any]:
-        """Compute confusion matrices."""
+        """Compute confusion matrices with proper TP, FP, TN, FN calculations."""
         gloss_cm = confusion_matrix(gloss_gts, gloss_preds)
         cat_cm = confusion_matrix(cat_gts, cat_preds)
         
+        # Calculate TP, FP, TN, FN for each class
+        def calculate_class_metrics(cm):
+            metrics = {}
+            for i in range(cm.shape[0]):
+                tp = cm[i, i]
+                fp = cm[:, i].sum() - tp
+                fn = cm[i, :].sum() - tp
+                tn = cm.sum() - (tp + fp + fn)
+                
+                precision = tp / (tp + fp) if (tp + fp) > 0 else 0
+                recall = tp / (tp + fn) if (tp + fn) > 0 else 0
+                f1 = 2 * (precision * recall) / (precision + recall) if (precision + recall) > 0 else 0
+                
+                metrics[i] = {
+                    'TP': int(tp), 'FP': int(fp), 'TN': int(tn), 'FN': int(fn),
+                    'Precision': float(precision), 'Recall': float(recall), 'F1': float(f1)
+                }
+            return metrics
+        
         return {
             'gloss_confusion_matrix': gloss_cm.tolist(),
-            'category_confusion_matrix': cat_cm.tolist()
+            'category_confusion_matrix': cat_cm.tolist(),
+            'gloss_class_metrics': calculate_class_metrics(gloss_cm),
+            'category_class_metrics': calculate_class_metrics(cat_cm)
         }
+    
+    def _compute_per_signer_metrics(self, gloss_preds: np.ndarray, cat_preds: np.ndarray,
+                                   gloss_gts: np.ndarray, cat_gts: np.ndarray, 
+                                   all_signers: List[str]) -> Dict[str, Any]:
+        """Compute per-signer accuracy metrics."""
+        unique_signers = list(set(all_signers))
+        per_signer_results = {}
+        
+        for signer in unique_signers:
+            signer_mask = np.array([s == signer for s in all_signers])
+            if np.sum(signer_mask) == 0:
+                continue
+                
+            signer_gloss_preds = gloss_preds[signer_mask]
+            signer_cat_preds = cat_preds[signer_mask]
+            signer_gloss_gts = gloss_gts[signer_mask]
+            signer_cat_gts = cat_gts[signer_mask]
+            
+            # Compute metrics for this signer
+            signer_metrics = self._compute_overall_metrics(
+                signer_gloss_preds, signer_cat_preds, signer_gloss_gts, signer_cat_gts
+            )
+            signer_metrics['num_samples'] = int(np.sum(signer_mask))
+            
+            per_signer_results[signer] = signer_metrics
+        
+        return per_signer_results
+    
+    def _compute_per_category_metrics(self, gloss_preds: np.ndarray, cat_preds: np.ndarray,
+                                    gloss_gts: np.ndarray, cat_gts: np.ndarray) -> Dict[str, Any]:
+        """Compute per-category accuracy metrics."""
+        unique_categories = list(set(cat_gts))
+        per_category_results = {}
+        
+        for category in unique_categories:
+            cat_mask = cat_gts == category
+            if np.sum(cat_mask) == 0:
+                continue
+                
+            cat_gloss_preds = gloss_preds[cat_mask]
+            cat_gloss_gts = gloss_gts[cat_mask]
+            
+            # Compute gloss accuracy for this category
+            cat_gloss_acc = accuracy_score(cat_gloss_gts, cat_gloss_preds)
+            
+            # Get category name from mapping
+            cat_name = self.category_mapping.get(category, f'Category_{category}')
+            
+            per_category_results[category] = {
+                'category_name': cat_name,
+                'gloss_accuracy': float(cat_gloss_acc),
+                'num_samples': int(np.sum(cat_mask))
+            }
+        
+        return per_category_results
+    
+    def _compute_duration_analysis(self, all_durations: List[float], gloss_preds: np.ndarray, 
+                                 cat_preds: np.ndarray, gloss_gts: np.ndarray, 
+                                 cat_gts: np.ndarray) -> Dict[str, Any]:
+        """Compute duration-based analysis."""
+        durations = np.array(all_durations)
+        
+        # Duration bins for analysis
+        duration_bins = [0, 1, 2, 3, 5, 10, float('inf')]
+        bin_labels = ['0-1s', '1-2s', '2-3s', '3-5s', '5-10s', '10s+']
+        
+        duration_analysis = {
+            'overall_stats': {
+                'mean': float(np.mean(durations)),
+                'std': float(np.std(durations)),
+                'min': float(np.min(durations)),
+                'max': float(np.max(durations)),
+                'median': float(np.median(durations))
+            },
+            'bin_analysis': {}
+        }
+        
+        # Analyze performance by duration bins
+        for i in range(len(duration_bins) - 1):
+            bin_min = duration_bins[i]
+            bin_max = duration_bins[i + 1]
+            
+            if bin_max == float('inf'):
+                bin_mask = durations >= bin_min
+            else:
+                bin_mask = (durations >= bin_min) & (durations < bin_max)
+            
+            if np.sum(bin_mask) == 0:
+                continue
+                
+            bin_gloss_preds = gloss_preds[bin_mask]
+            bin_cat_preds = cat_preds[bin_mask]
+            bin_gloss_gts = gloss_gts[bin_mask]
+            bin_cat_gts = cat_gts[bin_mask]
+            
+            bin_metrics = self._compute_overall_metrics(
+                bin_gloss_preds, bin_cat_preds, bin_gloss_gts, bin_cat_gts
+            )
+            
+            duration_analysis['bin_analysis'][bin_labels[i]] = {
+                'duration_range': f"{bin_min}-{bin_max}s" if bin_max != float('inf') else f"{bin_min}s+",
+                'num_samples': int(np.sum(bin_mask)),
+                'metrics': bin_metrics
+            }
+        
+        return duration_analysis
     
     def _save_individual_predictions(self, predictions: List[Dict], output_dir: str):
         """Save individual predictions to JSON files."""
@@ -723,6 +925,8 @@ class ModelValidator:
             # Format prediction results
             formatted_pred = {
                 'file': pred['file'],
+                'signer': pred['signer'],
+                'duration': pred['duration'],
                 'ground_truth': {
                     'gloss': f"{self.gloss_mapping.get(pred['gloss_gt'], 'Unknown')} ({pred['gloss_gt']})",
                     'category': f"{self.category_mapping.get(pred['cat_gt'], 'Unknown')} ({pred['cat_gt']})",
@@ -791,6 +995,26 @@ class ModelValidator:
         print(f"  Occluded Category Accuracy: {occluded['category_accuracy']:.4f}")
         print(f"  Non-Occluded Category Accuracy: {non_occluded['category_accuracy']:.4f}")
         print(f"  Category Accuracy Difference: {non_occluded['category_accuracy'] - occluded['category_accuracy']:+.4f}")
+        
+        # Per-signer results
+        per_signer = results['per_signer_results']
+        print(f"\nPER-SIGNER PERFORMANCE:")
+        for signer, metrics in per_signer.items():
+            print(f"  Signer {signer}: Gloss Acc={metrics['gloss_accuracy']:.4f}, "
+                  f"Cat Acc={metrics['category_accuracy']:.4f} ({metrics['num_samples']} samples)")
+        
+        # Duration analysis
+        duration_stats = results['dataset_info']['duration_stats']
+        print(f"\nDURATION ANALYSIS:")
+        print(f"  Mean Duration: {duration_stats['mean']:.2f}s")
+        print(f"  Duration Range: {duration_stats['min']:.2f}s - {duration_stats['max']:.2f}s")
+        
+        # Per-category results
+        per_category = results['per_category_results']
+        print(f"\nPER-CATEGORY PERFORMANCE:")
+        for cat_id, metrics in per_category.items():
+            print(f"  {metrics['category_name']}: Gloss Acc={metrics['gloss_accuracy']:.4f} "
+                  f"({metrics['num_samples']} samples)")
 
 
 def save_results(results: Dict[str, Any], output_dir: str):
@@ -804,6 +1028,9 @@ def save_results(results: Dict[str, Any], output_dir: str):
         ('occluded_results.json', results['occluded_results']),
         ('non_occluded_results.json', results['non_occluded_results']),
         ('per_class_results.json', results['per_class_results']),
+        ('per_signer_results.json', results['per_signer_results']),
+        ('per_category_results.json', results['per_category_results']),
+        ('duration_analysis.json', results['duration_analysis']),
         ('confusion_matrices.json', results['confusion_matrices'])
     ]
     
@@ -829,7 +1056,7 @@ def main():
     )
     
     # Required arguments
-    parser.add_argument('--model', choices=['transformer', 'iv3_gru'], required=True,
+    parser.add_argument('--model', choices=['transformer', 'iv3_gru', 'mediapipe_gru'], required=True,
                        help='Model type to validate')
     parser.add_argument('--checkpoint', type=str, required=True,
                        help='Path to model checkpoint (.pt file)')
@@ -853,6 +1080,10 @@ def main():
                        help='Save individual predictions to JSON files')
     parser.add_argument('--verbose', action='store_true',
                        help='Enable detailed output')
+    parser.add_argument('--signer-filter', type=str, nargs='+', default=None,
+                       help='Filter by specific signer(s) (e.g., --signer-filter S1 S2)')
+    parser.add_argument('--category-filter', type=int, nargs='+', default=None,
+                       help='Filter by specific category(ies) (e.g., --category-filter 0 1 2)')
     
     args = parser.parse_args()
     
@@ -861,7 +1092,8 @@ def main():
         validator = ModelValidator(args.model, args.checkpoint, args.device)
         
         # Load dataset
-        dataset = ValidationDataset(args.data_dir, args.labels_csv, args.model, validator.model)
+        dataset = ValidationDataset(args.data_dir, args.labels_csv, args.model, validator.model,
+                                  signer_filter=args.signer_filter, category_filter=args.category_filter)
         
         # Perform validation
         results = validator.validate(

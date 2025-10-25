@@ -20,7 +20,7 @@ python -m evaluation.prediction.predict --model transformer --checkpoint trained
 python -m evaluation.prediction.predict --model iv3_gru --checkpoint trained_models\iv3_gru\cmb_optimal\InceptionV3GRU_best.pt --input video.mp4
 ```
 
-**Note**: Model input dimensions (156 for keypoints, 2048 for features) are auto-detected from checkpoints.
+**Note**: Model input dimensions (178 for keypoints, 2048 for features) are auto-detected from checkpoints.
 
 ## Arguments
 
@@ -90,7 +90,7 @@ python -m evaluation.prediction.predict --model iv3_gru --checkpoint trained_mod
 
 ### Transformer
 
-- **Input**: Keypoints (156-dim) or InceptionV3 features (2048-dim)
+- **Input**: Keypoints (178-dim) or InceptionV3 features (2048-dim)
 - **NPZ keys**: `X` for keypoints, `X2048` for features
 - **Video**: Automatically extracts appropriate features
 
@@ -106,7 +106,7 @@ python -m evaluation.prediction.predict --model iv3_gru --checkpoint trained_mod
 
 **Transformer:**
 
-- `X`: Keypoints `[T, 156]` (78 keypoints × 2 coordinates)
+- `X`: Keypoints `[T, 178]` (89 keypoints × 2 coordinates)
 - `X2048`: InceptionV3 features `[T, 2048]` (alternative)
 
 **IV3-GRU:**
@@ -149,14 +149,84 @@ trained_models\
     └── InceptionV3GRU_last.pt
 ```
 
+## CTC Prediction (Continuous Recognition)
+
+### Quick Start
+
+**From NPZ file**:
+
+```powershell
+python evaluation\prediction\predict_ctc.py ^
+  --model transformer_ctc ^
+  --checkpoint trained_models\transformer_ctc\optimal\SignTransformerCtc_best.pt ^
+  --input data\demo\clip_1830_spaghetti.npz
+```
+
+**With beam search** (more accurate):
+
+```powershell
+python evaluation\prediction\predict_ctc.py ^
+  --model transformer_ctc ^
+  --checkpoint trained_models\transformer_ctc\optimal\SignTransformerCtc_best.pt ^
+  --input data\demo\clip_1830_spaghetti.npz ^
+  --decode-method beam_search ^
+  --beam-width 10
+```
+
+### Python API
+
+```python
+from evaluation.prediction.predict_ctc import CTCPredictor
+
+# Initialize
+predictor = CTCPredictor(
+    model_type='transformer_ctc',
+    checkpoint_path='trained_models/transformer_ctc/best.pt'
+)
+
+# Predict
+results = predictor.predict_from_npz('clip.npz', decode_method='greedy')
+print(f"Predicted: {results['predicted_glosses']}")
+print(f"Confidence: {results['confidence']:.4f}")
+
+# Sliding window for long sequences
+import numpy as np
+keypoints = np.load('long_clip.npz')['X']
+results = predictor.predict_continuous(
+    keypoints,
+    window_size=60,  # ~2 seconds at 30fps
+    stride=15        # 75% overlap
+)
+```
+
+### Decoding Methods
+
+- **Greedy** (`--decode-method greedy`): Fast, deterministic
+- **Beam Search** (`--decode-method beam_search`): More accurate, slower
+
+### Output Format
+
+```json
+{
+  "predicted_glosses": [42, 17, 89],
+  "num_glosses": 3,
+  "confidence": 0.8542,
+  "input_frames": 122
+}
+```
+
+---
+
 ## Troubleshooting
 
 **Checkpoint not found**: Verify .pt file path exists
 
-**Missing NPZ key**: Transformer needs `X` or `X2048`, IV3-GRU needs `X2048`
+**Missing NPZ key**: Transformer needs `X` or `X2048`, IV3-GRU needs `X2048`, CTC models need `X`
 
 **CUDA out of memory**: Use `--device cpu`
 
 **Missing mediapipe**: Install for video processing: `pip install mediapipe`
 
-**Help**: Run `python -m evaluation.prediction.predict --help`
+**CTC predictions empty**: Check model trained properly (loss < 5.0), try beam search
+
+**Help**: Run `python -m evaluation.prediction.predict --help` or `python evaluation/prediction/predict_ctc.py --help`

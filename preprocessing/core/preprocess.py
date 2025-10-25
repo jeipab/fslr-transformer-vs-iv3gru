@@ -2,7 +2,7 @@
 Unified video preprocessing pipeline for Filipino sign language recognition.
 
 This module processes raw video files to extract:
-- MediaPipe keypoints (pose, hands, face) → 156-dimensional vectors
+- MediaPipe keypoints (pose, hands, face) → 178-dimensional vectors
 - InceptionV3 CNN features → 2048-dimensional vectors  
 - Occlusion detection flags
 - Frame timestamps and metadata
@@ -50,9 +50,9 @@ from ..core.occlusion_detection import compute_occlusion_detection  # Detect whe
 from ..extractors.keypoints_features import (
     POSE_UPPER_25,        # Upper body pose keypoint indices (25 points)
     N_HAND,               # Number of hand keypoints per hand (21 points each)
-    FACEMESH_11,          # Face mesh keypoint indices (11 key facial points)
+    FACE_MINIMAL_22,      # Face mesh keypoint indices (22 key facial points)
     extract_keypoints_from_frame,  # Main keypoint extraction function
-    interpolate_gaps,     # Fill missing keypoints using interpolation
+    interpolate_gaps,     # Fill missing keypoints using linear interpolation (Android-compatible)
     xy_from_landmark,     # Convert MediaPipe landmarks to normalized coordinates
     create_models,        # Initialize MediaPipe models
     close_models,         # Clean up MediaPipe models
@@ -72,6 +72,23 @@ def ensure_dir(p):
     os.makedirs(p, exist_ok=True)
 
 
+def validate_signer_id(signer_id):
+    """Validate signer ID format (S0-S7).
+    
+    Args:
+        signer_id (str): Signer ID to validate
+        
+    Returns:
+        bool: True if valid format, False otherwise
+    """
+    if signer_id is None:
+        return True  # Optional parameter
+    
+    import re
+    pattern = r'^S[0-7]$'
+    return bool(re.match(pattern, signer_id))
+
+
 def to_npz(out_path, X, mask, timestamps_ms, meta, also_parquet=True):
     """Save processed keypoint data to compressed .npz file with optional parquet export.
     
@@ -81,8 +98,8 @@ def to_npz(out_path, X, mask, timestamps_ms, meta, also_parquet=True):
     
     Args:
         out_path: Base path for output files (without extension)
-        X: Keypoint coordinates [T, 156] as float32 - flattened x,y coords for 78 keypoints
-        mask: Keypoint visibility mask [T, 78] as bool - True if keypoint is visible/confident
+        X: Keypoint coordinates [T, 178] as float32 - flattened x,y coords for 89 keypoints
+        mask: Keypoint visibility mask [T, 89] as bool - True if keypoint is visible/confident
         timestamps_ms: Frame timestamps [T] as int64 - milliseconds from video start
         meta: Metadata dictionary (converted to JSON string) - processing parameters
         also_parquet: If True, also create .parquet file for inspection in spreadsheet tools
@@ -112,7 +129,7 @@ def to_npz(out_path, X, mask, timestamps_ms, meta, also_parquet=True):
 # ----------------------------
 # Store references to MediaPipe solutions for keypoint detection
 mp_hands = mp.solutions.hands          # Hand landmark detection (21 points per hand)
-mp_face_mesh = mp.solutions.face_mesh  # Face mesh detection (468 points, we use 11)
+mp_face_mesh = mp.solutions.face_mesh  # Face mesh detection (468 points, we use 22)
 mp_drawing = mp.solutions.drawing_utils # Visualization utilities (unused in processing)
 mp_pose = mp.solutions.pose            # Body pose detection (33 points, we use upper 25)
 
@@ -185,28 +202,87 @@ def _append_label_row(path, file_entry, gloss_id, cat_id, occluded_flag=0):
         print(f"[WARN] Failed to append to labels csv '{path}': {e}")
 
 
-def process_video(video_path, out_dir, target_fps=30, out_size=256, conf_thresh=0.5, max_gap=5, write_keypoints=True, write_iv3_features=True, feature_key='X2048',
-                 compute_occlusion=True, occ_detailed=False, labels_csv_path=None, gloss_id=None, cat_id=None):
+def resize_with_aspect_ratio_and_pad(frame, target_size=256, pad_color=(0, 0, 0)):
+    """
+    Resize frame preserving aspect ratio, then pad to square.
+    
+    This prevents geometric distortion of keypoint spatial relationships while
+    ensuring consistent input dimensions for MediaPipe.
+    
+    For 640×360 input with target_size=256:
+    - Resizes to 256×144 (preserves 16:9 aspect ratio)
+    - Adds 56px black padding on top and bottom
+    - Output: 256×256 with content centered
+    
+    Args:
+        frame: Input BGR frame (H, W, 3)
+        target_size: Target square dimension (default 256)
+        pad_color: RGB color for padding (default black)
+    
+    Returns:
+        tuple: (padded_frame, metadata_dict)
+            padded_frame: (target_size, target_size, 3) numpy array
+            metadata_dict: {
+                'scale': scaling factor applied,
+                'x_offset': horizontal padding offset,
+                'y_offset': vertical padding offset,
+                'original_size': (orig_h, orig_w),
+                'resized_size': (new_h, new_w)
+            }
+    """
+    h, w = frame.shape[:2]
+    
+    # Calculate scaling to fit within target_size while preserving aspect ratio
+    scale = target_size / max(h, w)
+    new_w = int(w * scale)
+    new_h = int(h * scale)
+    
+    # Resize preserving aspect ratio
+    resized = cv2.resize(frame, (new_w, new_h), interpolation=cv2.INTER_AREA)
+    
+    # Create padded canvas
+    canvas = np.full((target_size, target_size, 3), pad_color, dtype=np.uint8)
+    
+    # Center the resized frame on canvas
+    y_offset = (target_size - new_h) // 2
+    x_offset = (target_size - new_w) // 2
+    canvas[y_offset:y_offset+new_h, x_offset:x_offset+new_w] = resized
+    
+    # Store metadata for debugging and validation
+    metadata = {
+        'scale': scale,
+        'x_offset': x_offset,
+        'y_offset': y_offset,
+        'original_size': (h, w),
+        'resized_size': (new_h, new_w)
+    }
+    
+    return canvas, metadata
+
+
+def process_video(video_path, out_dir, target_fps=30, out_size=256, conf_thresh=0.35, max_gap=5, write_keypoints=True, write_iv3_features=True, feature_key='X2048',
+                 compute_occlusion=True, occ_detailed=False, labels_csv_path=None, gloss_id=None, cat_id=None, signer_id=None, flip_horizontal=False):
     """Process a single video file and extract multi-modal features for sign language recognition.
     
     This is the main processing function that converts raw video files into structured
     feature representations suitable for machine learning. It performs:
     1. Video loading and frame sampling at target FPS
-    2. Person segmentation to remove background
-    3. MediaPipe keypoint extraction (pose, hands, face)
-    4. InceptionV3 CNN feature extraction
-    5. Gap interpolation for missing keypoints
-    6. Occlusion detection and quality assessment
-    7. Data saving in compressed .npz format
+    2. Optional horizontal flip for front camera videos
+    3. Person segmentation to remove background
+    4. MediaPipe keypoint extraction (pose, hands, face)
+    5. Linear gap interpolation (max 5 frames, Android-compatible)
+    6. InceptionV3 CNN feature extraction
+    7. Occlusion detection and quality assessment
+    8. Data saving in compressed .npz format
     
     Args:
         video_path: Path to input video file (.mp4, .mov, .avi, .mkv)
         out_dir: Output directory for processed .npz files
         target_fps: Target frame sampling rate (downsamples high FPS videos)
         out_size: Image resize dimension for keypoint extraction (256x256)
-        conf_thresh: Confidence threshold for keypoint detection (0.0-1.0)
-        max_gap: Maximum gap size for interpolation (frames)
-        write_keypoints: Extract MediaPipe keypoints (156D vectors per frame)
+        conf_thresh: Confidence threshold for keypoint detection (0.0-1.0, default=0.35)
+        max_gap: Maximum gap size for interpolation (frames, default=5)
+        write_keypoints: Extract MediaPipe keypoints (178D vectors per frame)
         write_iv3_features: Extract InceptionV3 features (2048D vectors per frame)
         feature_key: Unused parameter (kept for compatibility)
         compute_occlusion: Enable occlusion detection for quality filtering
@@ -214,6 +290,8 @@ def process_video(video_path, out_dir, target_fps=30, out_size=256, conf_thresh=
         labels_csv_path: Path to labels CSV file for training data mapping
         gloss_id: Sign language gloss class ID for labeling
         cat_id: Category class ID for labeling
+        signer_id: Signer ID (S0-S7)
+        flip_horizontal: Apply horizontal flip for front camera videos (Android-compatible)
     """
     # STEP 1: Setup output paths and directories
     basename = os.path.splitext(os.path.basename(video_path))[0]  # Extract filename without extension
@@ -231,6 +309,10 @@ def process_video(video_path, out_dir, target_fps=30, out_size=256, conf_thresh=
     src_fps = cap.get(cv2.CAP_PROP_FPS)
     if not src_fps or math.isnan(src_fps) or src_fps < 1:
         src_fps = 30.0  # fallback for videos with invalid FPS metadata
+    
+    # Extract video duration in seconds
+    frame_count = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+    duration_sec = frame_count / src_fps if src_fps > 0 else 0.0
 
     # Calculate frame sampling parameters for target FPS
     step_s = 1.0 / target_fps  # Time interval between sampled frames (seconds)
@@ -243,8 +325,8 @@ def process_video(video_path, out_dir, target_fps=30, out_size=256, conf_thresh=
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     # Initialize lists to collect processed data from each frame
-    X_frames = []      # Keypoint coordinates [frame_idx] -> [156] (78 keypoints * 2 coords)
-    M_frames = []      # Keypoint visibility masks [frame_idx] -> [78] (boolean visibility)
+    X_frames = []      # Keypoint coordinates [frame_idx] -> [178] (89 keypoints * 2 coords)
+    M_frames = []      # Keypoint visibility masks [frame_idx] -> [89] (boolean visibility)
     X2048_frames = []  # InceptionV3 CNN features [frame_idx] -> [2048] (deep features)
     T_ms = []          # Frame timestamps [frame_idx] -> timestamp_ms
 
@@ -265,30 +347,34 @@ def process_video(video_path, out_dir, target_fps=30, out_size=256, conf_thresh=
             if ms < next_t * 1000.0:  # Skip frame if not at target sampling time
                 continue
 
-            # STEP 4a: Resize frame for consistent processing
-            frame_bgr_resized = cv2.resize(frame_bgr, (out_size, out_size), interpolation=cv2.INTER_AREA)
+            # STEP 4a: Resize frame for consistent processing (preserving aspect ratio)
+            frame_bgr_resized, resize_meta = resize_with_aspect_ratio_and_pad(frame_bgr, out_size)
 
-            # STEP 4b: Person segmentation to remove background
+            # STEP 4b: Convert to RGB and apply front camera flip if needed
             frame_rgb = cv2.cvtColor(frame_bgr_resized, cv2.COLOR_BGR2RGB)  # Convert to RGB for MediaPipe
+            if flip_horizontal:
+                frame_rgb = cv2.flip(frame_rgb, 1)  # Horizontal flip for front camera (mirror x-axis)
+            
+            # STEP 4c: Person segmentation to remove background
             seg_mask = models.seg.process(frame_rgb).segmentation_mask  # Get person segmentation mask
             fg_mask = (seg_mask > 0.5).astype(np.float32)[..., None]  # Threshold mask (0.5 confidence)
             black_bg = np.zeros_like(frame_rgb, dtype=np.uint8)  # Create black background
             comp_rgb = (frame_rgb * fg_mask + black_bg * (1 - fg_mask)).astype(np.uint8)  # Composite person on black
 
-            # STEP 4c: Extract MediaPipe keypoints (always done for visualization)
-            # Returns 156D vector (78 keypoints * 2 coords) and 78D visibility mask
-            vec156, mask78 = extract_keypoints_from_frame(comp_rgb, models, conf_thresh=conf_thresh)
-            X_frames.append(vec156)    # Store keypoint coordinates
-            M_frames.append(mask78)    # Store visibility flags
+            # STEP 4d: Extract MediaPipe keypoints (always done for visualization)
+            # Returns 178D vector (89 keypoints * 2 coords) and 89D visibility mask
+            vec178, mask89 = extract_keypoints_from_frame(comp_rgb, models, conf_thresh=conf_thresh)
+            X_frames.append(vec178)    # Store keypoint coordinates
+            M_frames.append(mask89)    # Store visibility flags
 
-            # STEP 4d: Extract InceptionV3 CNN features
+            # STEP 4e: Extract InceptionV3 CNN features
             if write_iv3_features:
                 # Extract 2048-D InceptionV3 features from the original BGR frame (not segmented)
                 # Uses full frame to capture contextual information for CNN
                 iv3_features = extract_iv3_features(frame_bgr, image_size=(299, 299), device=device)
                 X2048_frames.append(iv3_features)
 
-            # STEP 4e: Record frame timestamp and advance to next sampling time
+            # STEP 4f: Record frame timestamp and advance to next sampling time
             T_ms.append(ms)
             next_t += step_s  # Advance to next target sampling time
     finally:
@@ -314,10 +400,10 @@ def process_video(video_path, out_dir, target_fps=30, out_size=256, conf_thresh=
         return
     
     # Stack individual frame data into temporal sequences
-    X = np.stack(X_frames, axis=0)  # Shape: [T, 156] - keypoint coordinates over time
-    M = np.stack(M_frames, axis=0)  # Shape: [T, 78] - visibility masks over time
+    X = np.stack(X_frames, axis=0)  # Shape: [T, 178] - keypoint coordinates over time
+    M = np.stack(M_frames, axis=0)  # Shape: [T, 89] - visibility masks over time
     
-    # Fill gaps in keypoint sequences using interpolation
+    # Apply gap interpolation (linear only, max 5 frames - Android-compatible)
     X_filled, M_filled = interpolate_gaps(X, M, max_gap=max_gap)
     
     # Ensure keypoint coordinates stay within valid bounds [0, 1]
@@ -341,14 +427,17 @@ def process_video(video_path, out_dir, target_fps=30, out_size=256, conf_thresh=
         video=os.path.basename(video_path),      # Original video filename
         target_fps=target_fps,                   # Frame sampling rate used
         out_size=out_size,                       # Image resize dimension
-        dims_per_frame=156,                      # Keypoint vector dimension (78 points * 2 coords)
-        keypoints_total=78,                      # Total number of keypoints tracked
-        order="pose25,left_hand21,right_hand21,face11",  # Keypoint ordering in the 156D vector
+        dims_per_frame=178,                      # Keypoint vector dimension (89 points * 2 coords)
+        keypoints_total=89,                      # Total number of keypoints tracked
+        order="pose25,left_hand21,right_hand21,face22",  # Keypoint ordering in the 178D vector
         pose_indices=POSE_UPPER_25,              # Which pose keypoints are used
-        face_indices=FACEMESH_11,                # Which face keypoints are used
+        face_indices=FACE_MINIMAL_22,                # Which face keypoints are used
         conf_thresh=conf_thresh,                 # Confidence threshold used for detection
         interpolation_max_gap=max_gap,           # Maximum gap size for interpolation
+        flip_horizontal=flip_horizontal,         # Whether horizontal flip was applied (front camera)
         model_type=model_type,                   # T=Transformer only, I=IV3-GRU only, B=Both
+        duration_sec=duration_sec,               # Video duration in seconds
+        signer=signer_id,                        # Signer ID (S0-S7)
         occluded_flag=0                          # Will be updated after occlusion computation
     )
 
@@ -399,8 +488,8 @@ def process_video(video_path, out_dir, target_fps=30, out_size=256, conf_thresh=
 
     # STEP 13: Save final processed data with all features and updated metadata
     save_dict = {
-        'X': X_filled,                    # Keypoint coordinates [T, 156]
-        'mask': M_filled,                 # Keypoint visibility masks [T, 78]
+        'X': X_filled,                    # Keypoint coordinates [T, 178]
+        'mask': M_filled,                 # Keypoint visibility masks [T, 89]
         'timestamps_ms': T_ms,            # Frame timestamps [T]
         'meta': json.dumps(meta)          # Processing metadata as JSON string
     }
@@ -436,7 +525,7 @@ def process_video_worker(args):
     # Unpack parameters
     (video_path, out_dir, target_fps, out_size, conf_thresh, max_gap, 
      write_keypoints, write_iv3_features, feature_key, compute_occlusion, 
-     occ_detailed, labels_csv_path, gloss_id, cat_id, batch_size, device_id, disable_parquet) = args
+     occ_detailed, labels_csv_path, gloss_id, cat_id, signer_id, batch_size, device_id, disable_parquet, flip_horizontal) = args
     
     try:
         # Setup GPU device for this worker
@@ -461,6 +550,10 @@ def process_video_worker(args):
         src_fps = cap.get(cv2.CAP_PROP_FPS)
         if not src_fps or math.isnan(src_fps) or src_fps < 1:
             src_fps = 30.0
+        
+        # Extract video duration in seconds
+        frame_count = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+        duration_sec = frame_count / src_fps if src_fps > 0 else 0.0
 
         # Calculate frame sampling parameters
         step_s = 1.0 / target_fps
@@ -492,11 +585,15 @@ def process_video_worker(args):
                 if ms < next_t * 1000.0:
                     continue
 
-                # Resize frame
-                frame_bgr_resized = cv2.resize(frame_bgr, (out_size, out_size), interpolation=cv2.INTER_AREA)
+                # Resize frame (preserving aspect ratio)
+                frame_bgr_resized, resize_meta = resize_with_aspect_ratio_and_pad(frame_bgr, out_size)
 
-                # Person segmentation
+                # Convert to RGB and apply front camera flip if needed
                 frame_rgb = cv2.cvtColor(frame_bgr_resized, cv2.COLOR_BGR2RGB)
+                if flip_horizontal:
+                    frame_rgb = cv2.flip(frame_rgb, 1)  # Horizontal flip for front camera
+                
+                # Person segmentation
                 seg_mask = models.seg.process(frame_rgb).segmentation_mask
                 fg_mask = (seg_mask > 0.5).astype(np.float32)[..., None]
                 black_bg = np.zeros_like(frame_rgb, dtype=np.uint8)
@@ -504,9 +601,9 @@ def process_video_worker(args):
 
                 # Extract keypoints
                 if write_keypoints:
-                    vec156, mask78 = extract_keypoints_from_frame(comp_rgb, models, conf_thresh=conf_thresh)
-                    X_frames.append(vec156)
-                    M_frames.append(mask78)
+                    vec178, mask89 = extract_keypoints_from_frame(comp_rgb, models, conf_thresh=conf_thresh)
+                    X_frames.append(vec178)
+                    M_frames.append(mask89)
 
                 # Collect frames for batched InceptionV3 processing
                 if write_iv3_features:
@@ -537,6 +634,8 @@ def process_video_worker(args):
         if write_keypoints:
             X = np.stack(X_frames, axis=0)
             M = np.stack(M_frames, axis=0)
+            
+            # Apply gap interpolation (linear only, Android-compatible)
             X_filled, M_filled = interpolate_gaps(X, M, max_gap=max_gap)
             X_filled = np.clip(X_filled, 0.0, 1.0).astype(np.float32)
         else:
@@ -571,13 +670,16 @@ def process_video_worker(args):
             video=os.path.basename(video_path),
             target_fps=target_fps,
             out_size=out_size,
-            dims_per_frame=156,
-            keypoints_total=78,
-            order="pose25,left_hand21,right_hand21,face11",
+            dims_per_frame=178,
+            keypoints_total=89,
+            order="pose25,left_hand21,right_hand21,face22",
             pose_indices=POSE_UPPER_25,
-            face_indices=FACEMESH_11,
+            face_indices=FACE_MINIMAL_22,
             conf_thresh=conf_thresh,
             interpolation_max_gap=max_gap,
+            flip_horizontal=flip_horizontal,
+            duration_sec=duration_sec,
+            signer=signer_id,
             occluded_flag=occluded_flag
         )
         
@@ -613,10 +715,10 @@ def process_video_worker(args):
         return {"error": f"Error processing {video_path}: {str(e)}", "video": os.path.splitext(os.path.basename(video_path))[0]}
 
 
-def process_videos_multiprocess(video_files, out_dir, target_fps=30, out_size=256, conf_thresh=0.5, 
+def process_videos_multiprocess(video_files, out_dir, target_fps=30, out_size=256, conf_thresh=0.35, 
                                max_gap=5, write_keypoints=True, write_iv3_features=True, feature_key='X2048',
-                               compute_occlusion=True, occ_detailed=False, labels_csv_path=None, gloss_id=None, cat_id=None, 
-                               workers=None, batch_size=32, disable_parquet=False):
+                               compute_occlusion=True, occ_detailed=False, labels_csv_path=None, gloss_id=None, cat_id=None, signer_id=None,
+                               workers=None, batch_size=32, disable_parquet=False, flip_horizontal=False):
     """Orchestrate parallel video processing with multi-GPU support and batched inference.
     
     This is the main coordination function for multiprocessing video preprocessing.
@@ -631,9 +733,9 @@ def process_videos_multiprocess(video_files, out_dir, target_fps=30, out_size=25
         out_dir: Output directory for processed .npz files
         target_fps: Target frame sampling rate (lower = faster processing)
         out_size: Image resize dimension for keypoint extraction (256x256)
-        conf_thresh: Confidence threshold for keypoint detection (0.0-1.0)
-        max_gap: Maximum gap size for keypoint interpolation (frames)
-        write_keypoints: Extract MediaPipe keypoints (156D vectors per frame)
+        conf_thresh: Confidence threshold for keypoint detection (0.0-1.0, default=0.35)
+        max_gap: Maximum gap size for keypoint interpolation (frames, default=5)
+        write_keypoints: Extract MediaPipe keypoints (178D vectors per frame)
         write_iv3_features: Extract InceptionV3 features (2048D vectors per frame)
         feature_key: Unused parameter (kept for compatibility)
         compute_occlusion: Enable occlusion detection for quality filtering
@@ -641,9 +743,11 @@ def process_videos_multiprocess(video_files, out_dir, target_fps=30, out_size=25
         labels_csv_path: Path to labels CSV file for training data mapping
         gloss_id: Sign language gloss class ID for labeling
         cat_id: Category class ID for labeling
+        signer_id: Signer ID (S0-S7)
         workers: Number of parallel workers (default: min(cpu_count, 12))
         batch_size: Batch size for InceptionV3 GPU inference (32 optimal for most GPUs)
         disable_parquet: Disable parquet file creation for faster I/O
+        flip_horizontal: Apply horizontal flip for front camera videos (Android-compatible)
     """
     
     # Configure multiprocessing parameters
@@ -668,7 +772,7 @@ def process_videos_multiprocess(video_files, out_dir, target_fps=30, out_size=25
         # Pack all processing parameters for worker function
         args = (video_path, out_dir, target_fps, out_size, conf_thresh, max_gap,
                 write_keypoints, write_iv3_features, feature_key, compute_occlusion, 
-                occ_detailed, labels_csv_path, gloss_id, cat_id, batch_size, device_id, disable_parquet)
+                occ_detailed, labels_csv_path, gloss_id, cat_id, signer_id, batch_size, device_id, disable_parquet, flip_horizontal)
         worker_args.append(args)
     
     # Execute parallel processing with progress tracking
@@ -722,11 +826,12 @@ if __name__ == "__main__":
     # Video processing parameters
     parser.add_argument('--target-fps', type=int, default=30, help='Target frames per second (default: 30)')
     parser.add_argument('--out-size', type=int, default=256, help='Output image size for keypoint extraction (default: 256)')
-    parser.add_argument('--conf-thresh', type=float, default=0.5, help='Confidence threshold for keypoint detection (default: 0.5)')
-    parser.add_argument('--max-gap', type=int, default=5, help='Maximum gap for keypoint interpolation (default: 5)')
+    parser.add_argument('--conf-thresh', type=float, default=0.35, help='Confidence threshold for keypoint detection (default: 0.35)')
+    parser.add_argument('--max-gap', type=int, default=5, help='Maximum gap for keypoint interpolation (default: 5, Android-compatible)')
+    parser.add_argument('--flip-horizontal', action='store_true', help='Apply horizontal flip for front camera videos (Android-compatible)')
     
     # Feature extraction controls
-    parser.add_argument('--write-keypoints', action='store_true', help='Extract and save MediaPipe keypoints (156D vectors)')
+    parser.add_argument('--write-keypoints', action='store_true', help='Extract and save MediaPipe keypoints (178D vectors)')
     parser.add_argument('--write-iv3-features', action='store_true', help='Extract and save InceptionV3 CNN features (2048D vectors)')
     parser.add_argument('--feature-key', type=str, default='X2048', help='Feature key name for compatibility (default: X2048)')
     
@@ -739,6 +844,7 @@ if __name__ == "__main__":
     parser.add_argument('--id', dest='single_id', type=int, default=None, help='Single integer ID to use for both gloss and category labels')
     parser.add_argument('--gloss-id', type=int, default=None, help='Override gloss class ID (defaults to --id)')
     parser.add_argument('--cat-id', type=int, default=None, help='Override category class ID (defaults to --id or --gloss-id)')
+    parser.add_argument('--signer', type=str, default=None, help='Signer ID (S0-S7)')
     parser.add_argument('--labels-csv', type=str, default=None, help='Path to labels CSV file (default: <output_directory>/labels.csv)')
     parser.add_argument('--append', action='store_true', help='Append to existing labels CSV instead of overwriting header')
     
@@ -747,6 +853,11 @@ if __name__ == "__main__":
     parser.add_argument('--occ-detailed', action='store_true', help='Output detailed occlusion analysis results')
     
     args = parser.parse_args()
+    
+    # VALIDATE SIGNER ID FORMAT
+    if args.signer is not None and not validate_signer_id(args.signer):
+        print(f"Error: Invalid signer ID format '{args.signer}'. Must be S0-S7.")
+        exit(1)
     
     # INPUT VALIDATION: Accept either a single video file or directory of videos
     input_path = args.video_directory
@@ -829,6 +940,8 @@ if __name__ == "__main__":
                     labels_csv_path=labels_csv,         # Training labels file
                     gloss_id=gloss_id,                  # Sign language class ID
                     cat_id=cat_id,                      # Category class ID
+                    signer_id=args.signer,              # Signer ID (S0-S7)
+                    flip_horizontal=args.flip_horizontal,  # Front camera flip
                 )
             except Exception as e:
                 print(f"Error processing {video_path}: {e}")
@@ -851,9 +964,11 @@ if __name__ == "__main__":
             labels_csv_path=labels_csv,           # Training labels file
             gloss_id=gloss_id,                    # Sign language class ID
             cat_id=cat_id,                        # Category class ID
+            signer_id=args.signer,                # Signer ID (S0-S7)
             workers=args.workers,                 # Number of parallel processes
             batch_size=args.batch_size,           # GPU batch size for efficiency
-            disable_parquet=args.disable_parquet  # Disable parquet for speed
+            disable_parquet=args.disable_parquet, # Disable parquet for speed
+            flip_horizontal=args.flip_horizontal  # Front camera flip
         )
     
     # COMPLETION: Report final results

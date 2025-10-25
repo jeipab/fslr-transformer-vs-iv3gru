@@ -60,7 +60,7 @@ cloudflared tunnel --url http://localhost:8081 --protocol http2
 **Clone the repository:**
 
 ```bash
-git clone https://github.com/jeipab/fslr-transformer-vs-iv3gru.git
+git clone -b continuous https://github.com/jeipab/fslr-transformer-vs-iv3gru.git
 ```
 
 **Navigate to the project directory:**
@@ -193,10 +193,6 @@ cp "shared/for vast ai/visualization_vast_ai.py" "streamlit_app/components/visua
 
 ```bash
 cp "shared/for vast ai/validation_components_vast_ai.py" "streamlit_app/components/validation_components.py"
-```
-
-```bash
-cp "shared/for vast ai/config_vast_ai.py" "streamlit_app/core/config.py"
 ```
 
 ---

@@ -100,7 +100,7 @@ def render_summary_stats_horizontal(completed_files: List) -> None:
 
 def render_file_details_horizontal(filename: str, npz_data: Dict, metadata: Dict) -> None:
     """Render file details in horizontal layout for combined Results section."""
-    X_raw = np.array(npz_data["X"])  # [T, 156]
+    X_raw = np.array(npz_data["X"])  # [T, 178]
     X2048 = np.array(npz_data.get("X2048", [])) if "X2048" in npz_data else None
     raw_length, raw_features = X_raw.shape[0], X_raw.shape[1] if X_raw.ndim == 2 else (0, 0)
     
@@ -125,7 +125,7 @@ def render_file_details_horizontal(filename: str, npz_data: Dict, metadata: Dict
     with detail_col1:
         st.markdown("<div style='text-align: center;'>", unsafe_allow_html=True)
         st.metric("Frames", raw_length)
-        if raw_features == 156:
+        if raw_features == 178:
             st.markdown("<span class='status-good'>✓ Valid keypoints</span>", unsafe_allow_html=True)
         else:
             st.markdown("<span class='status-warning'>⚠ Unexpected shape</span>", unsafe_allow_html=True)
@@ -133,12 +133,12 @@ def render_file_details_horizontal(filename: str, npz_data: Dict, metadata: Dict
     
     with detail_col2:
         st.markdown("<div style='text-align: center;'>", unsafe_allow_html=True)
-        # Display "Keypoints" when feature dimension is 156, otherwise "Features"
-        label = "Keypoints" if raw_features == 156 else "Features"
+        # Display "Keypoints" when feature dimension is 178, otherwise "Features"
+        label = "Keypoints" if raw_features == 178 else "Features"
         st.metric(label, raw_features)
         # Show transformer readiness
         model_type = meta_parsed.get('model_type') if meta_parsed else None
-        if raw_features == 156 and (model_type in ['T', 'B'] or model_type is None):
+        if raw_features == 178 and (model_type in ['T', 'B'] or model_type is None):
             st.markdown("<span class='status-good'>✓ Transformer ready</span>", unsafe_allow_html=True)
         elif model_type == 'I':
             st.markdown("<span class='status-good'>✓ IV3-GRU ready</span>", unsafe_allow_html=True)
@@ -179,9 +179,9 @@ def render_consolidated_file_info(filename: str, npz_data: Dict, metadata: Dict,
         (X_pad, mask, meta_dict)
     """
     if "X" not in npz_data:
-        raise KeyError("Uploaded .npz must contain key 'X' with shape [T, 156]")
+        raise KeyError("Uploaded .npz must contain key 'X' with shape [T, 178]")
 
-    X_raw = np.array(npz_data["X"])  # [T, 156]
+    X_raw = np.array(npz_data["X"])  # [T, 178]
     mask = np.array(npz_data.get("mask", []))
     timestamps_ms = np.array(npz_data.get("timestamps_ms", []))
     X2048 = np.array(npz_data.get("X2048", [])) if "X2048" in npz_data else None
@@ -232,14 +232,14 @@ def render_consolidated_file_info(filename: str, npz_data: Dict, metadata: Dict,
     with exp_col2:
         with st.expander("Data checks", expanded=False):
             issues = []
-            if not (X_raw.ndim == 2 and X_raw.shape[1] == 156):
-                issues.append(f"X shape expected [T,156], got {getattr(X_raw, 'shape', None)}")
+            if not (X_raw.ndim == 2 and X_raw.shape[1] == 178):
+                issues.append(f"X shape expected [T,178], got {getattr(X_raw, 'shape', None)}")
             if mask.size > 0:
-                if mask.ndim == 2 and mask.shape[1] == 78:
+                if mask.ndim == 2 and mask.shape[1] == 89:
                     coverage = float(mask.mean() * 100.0)
                     st.caption(f"Mask coverage: {coverage:.1f}% of keypoints marked visible")
                 else:
-                    issues.append(f"mask shape expected [T,78], got {getattr(mask, 'shape', None)}")
+                    issues.append(f"mask shape expected [T,89], got {getattr(mask, 'shape', None)}")
             if timestamps_ms.size > 1:
                 mono = bool((timestamps_ms[1:] >= timestamps_ms[:-1]).all())
                 if not mono:
@@ -266,7 +266,7 @@ def render_sequence_overview(npz_dict: Dict, sequence_length: int) -> Tuple[np.n
         (X_pad, mask, meta_dict)
     """
     if "X" not in npz_dict:
-        raise KeyError("Uploaded .npz must contain key 'X' with shape [T, 156]")
+        raise KeyError("Uploaded .npz must contain key 'X' with shape [T, 178]")
 
     X_raw = np.array(npz_dict["X"])  # [T, 156]
     mask = np.array(npz_dict.get("mask", []))
@@ -296,10 +296,10 @@ def render_sequence_overview(npz_dict: Dict, sequence_length: int) -> Tuple[np.n
         st.metric("Frames", str(raw_length), delta=None)
     
     with col2:
-        # Display "Keypoints" when feature dimension is 156, otherwise "Features"
-        label = "Keypoints" if raw_features == 156 else "Features"
+        # Display "Keypoints" when feature dimension is 178, otherwise "Features"
+        label = "Keypoints" if raw_features == 178 else "Features"
         st.metric(label, str(raw_features), delta=None)
-        if raw_features == 156:
+        if raw_features == 178:
             st.markdown("<span class='status-good'>✓ Valid keypoints</span>", unsafe_allow_html=True)
             # Check model_type to determine what to display
             model_type = meta_parsed.get('model_type') if meta_parsed else None
@@ -345,14 +345,14 @@ def render_sequence_overview(npz_dict: Dict, sequence_length: int) -> Tuple[np.n
 
     with st.expander("Data checks", expanded=False):
         issues = []
-        if not (X_raw.ndim == 2 and X_raw.shape[1] == 156):
-            issues.append(f"X shape expected [T,156], got {getattr(X_raw, 'shape', None)}")
+        if not (X_raw.ndim == 2 and X_raw.shape[1] == 178):
+            issues.append(f"X shape expected [T,178], got {getattr(X_raw, 'shape', None)}")
         if mask.size > 0:
-            if mask.ndim == 2 and mask.shape[1] == 78:
+            if mask.ndim == 2 and mask.shape[1] == 89:
                 coverage = float(mask.mean() * 100.0)
                 st.caption(f"Mask coverage: {coverage:.1f}% of keypoints marked visible")
             else:
-                issues.append(f"mask shape expected [T,78], got {getattr(mask, 'shape', None)}")
+                issues.append(f"mask shape expected [T,89], got {getattr(mask, 'shape', None)}")
         if timestamps_ms.size > 1:
             mono = bool((timestamps_ms[1:] >= timestamps_ms[:-1]).all())
             if not mono:
@@ -542,8 +542,8 @@ def render_animated_keypoints(sequence: np.ndarray, mask: Optional[np.ndarray] =
     
     
     # Define skeleton connections for MediaPipe Holistic based on actual preprocessing layout
-    # Layout: Pose(0-24), Left Hand(25-45), Right Hand(46-66), Face(67-77)
-    # Face landmarks use FACEMESH_11 = [1, 33, 263, 133, 362, 61, 291, 105, 334, 199, 4]
+    # Layout: Pose(0-24), Left Hand(25-45), Right Hand(46-66), Face(67-88)
+    # Face landmarks use FACE_MINIMAL_22 = [81, 13, 311, 61, 178, 14, 402, 291, 33, 133, 159, 362, 263, 386, 70, 107, 46, 300, 336, 276, 1, 4]
     # Mapped to indices 0-10: [nose_tip, left_eye_outer, right_eye_outer, left_eye_inner, 
     #                        right_eye_inner, mouth_left, mouth_right, left_eyebrow, 
     #                        right_eyebrow, chin, nose_bridge]
@@ -585,21 +585,31 @@ def render_animated_keypoints(sequence: np.ndarray, mask: Optional[np.ndarray] =
             (0, 17), (17, 18), (18, 19), (19, 20)
         ],
         "face": [
-            # Face connections (indices 67-77, relative to 0-10)
-            # FACEMESH_11 landmarks: [nose_tip, left_eye_outer, right_eye_outer, left_eye_inner, 
-            #                        right_eye_inner, mouth_left, mouth_right, left_eyebrow, 
-            #                        right_eyebrow, chin, nose_bridge]
-            # Meaningful face connections based on facial anatomy
-            (0, 10),  # nose_tip to nose_bridge
-            (1, 3),   # left_eye_outer to left_eye_inner
-            (2, 4),   # right_eye_outer to right_eye_inner
-            (1, 7),   # left_eye_outer to left_eyebrow
-            (2, 8),   # right_eye_outer to right_eyebrow
-            (5, 6),   # mouth_left to mouth_right
-            (0, 5),   # nose_tip to mouth_left
-            (0, 6),   # nose_tip to mouth_right
-            (9, 5),   # chin to mouth_left
-            (9, 6)    # chin to mouth_right
+            # Face connections based on exact MediaPipe landmark paths
+            # Mouth: 70→67→68→69→74→73→72→71→70 (circular)
+            # Left Eyebrow: 81→82→83→81 (triangular)
+            # Right Eyebrow: 84→85→86→84 (triangular)
+            # Left Eye: 75→76→77→75 (triangular)
+            # Right Eye: 78→79→80→78 (triangular)
+            # Nose: 87→88 (vertical)
+            
+            # Mouth connections - circular path: 70→67→68→69→74→73→72→71→70
+            (0, 1), (1, 2), (2, 3), (3, 4), (4, 5), (5, 6), (6, 7), (7, 0),
+            
+            # Left Eyebrow connections - triangular: 81→82→83→81
+            (8, 9), (9, 10), (10, 8),
+            
+            # Right Eyebrow connections - triangular: 84→85→86→84
+            (11, 12), (12, 13), (13, 11),
+            
+            # Left Eye connections - triangular: 75→76→77→75
+            (14, 15), (15, 16), (16, 14),
+            
+            # Right Eye connections - triangular: 78→79→80→78
+            (17, 18), (18, 19), (19, 17),
+            
+            # Nose connections - vertical: 87→88
+            (20, 21)
         ]
     }
     
@@ -661,7 +671,7 @@ def render_animated_keypoints(sequence: np.ndarray, mask: Optional[np.ndarray] =
         elif part_name == "right_hand":
             start_idx, end_idx = 46, 67  # 21 hand landmarks
         elif part_name == "face":
-            start_idx, end_idx = 67, 78  # 11 face landmarks (FACEMESH_11)
+            start_idx, end_idx = 67, 89  # 22 face landmarks (FACE_MINIMAL_22)
         
         part_keypoints = current_keypoints[start_idx:end_idx]
         
@@ -676,7 +686,7 @@ def render_animated_keypoints(sequence: np.ndarray, mask: Optional[np.ndarray] =
             # Create hover text with keypoint numbers
             hover_texts = []
             for i, (x, y) in enumerate(valid_keypoints):
-                # Calculate the actual keypoint index in the full 78-point array
+                # Calculate the actual keypoint index in the full 89-point array
                 actual_keypoint_idx = start_idx + np.where(valid_mask)[0][i]
                 hover_texts.append(f"Keypoint {actual_keypoint_idx}<br>X: {x:.3f}<br>Y: {y:.3f}")
             
@@ -784,7 +794,7 @@ def render_feature_charts(sequence: np.ndarray, mask: Optional[np.ndarray] = Non
             "Pose (upper body)": (0, 50),    # 25 landmarks * 2 coordinates = 50 features
             "Left hand": (50, 92),           # 21 landmarks * 2 coordinates = 42 features  
             "Right hand": (92, 134),         # 21 landmarks * 2 coordinates = 42 features
-            "Face landmarks": (134, 156)     # 11 landmarks * 2 coordinates = 22 features
+            "Face landmarks": (134, 178)     # 22 landmarks * 2 coordinates = 44 features
         }
         
         selected_group = st.selectbox(
@@ -905,20 +915,38 @@ def create_keypoint_animation_video(keypoints_2d: np.ndarray, mask: Optional[np.
             (0, 17), (17, 18), (18, 19), (19, 20)
         ],
         "face": [
-            # FACEMESH_11 landmarks: [nose_tip, left_eye_outer, right_eye_outer, left_eye_inner, 
-            #                        right_eye_inner, mouth_left, mouth_right, left_eyebrow, 
-            #                        right_eyebrow, chin, nose_bridge]
-            # Meaningful face connections based on facial anatomy
-            (0, 10),  # nose_tip to nose_bridge
-            (1, 3),   # left_eye_outer to left_eye_inner
-            (2, 4),   # right_eye_outer to right_eye_inner
-            (1, 7),   # left_eye_outer to left_eyebrow
-            (2, 8),   # right_eye_outer to right_eyebrow
-            (5, 6),   # mouth_left to mouth_right
-            (0, 5),   # nose_tip to mouth_left
-            (0, 6),   # nose_tip to mouth_right
-            (9, 5),   # chin to mouth_left
-            (9, 6)    # chin to mouth_right
+            # FACE_MINIMAL_22 landmarks: [lips(8), eyes(6), eyebrows(6), nose(2)]
+            # Lips: 81, 13, 311, 61, 178, 14, 402, 291 (indices 0-7)
+            # Eyes: 33, 133, 159, 362, 263, 386 (indices 8-13)  
+            # Eyebrows: 70, 107, 46, 300, 336, 276 (indices 14-19)
+            # Nose: 1, 4 (indices 20-21)
+            
+            # New mouth connection pattern (arc-based) - from migration guide
+            (0, 1), (1, 2),  # Upper lip arc: 81 → 13 → 311
+            (4, 5), (5, 6),  # Lower lip arc: 178 → 14 → 402
+            (0, 3), (3, 4),  # Left side: 81 → 61 → 178
+            (2, 7), (7, 6),  # Right side: 311 → 291 → 402
+            
+            # Eye connections
+            (8, 9),   # left_eye_outer to left_eye_inner
+            (10, 11), # right_eye_inner to right_eye_outer
+            (9, 12),  # left_eye_inner to right_eye_inner
+            
+            # Eyebrow connections
+            (14, 15), # left_eyebrow_inner to left_eyebrow_outer
+            (16, 17), # right_eyebrow_inner to right_eyebrow_outer
+            (15, 18), # left_eyebrow_outer to right_eyebrow_outer
+            
+            # Nose connections
+            (20, 21), # nose_tip to nose_bridge
+            
+            # Face structure connections
+            (8, 14),  # left_eye_outer to left_eyebrow_inner
+            (10, 16), # right_eye_inner to right_eyebrow_inner
+            (20, 8),  # nose_tip to left_eye_outer
+            (20, 10), # nose_tip to right_eye_inner
+            (20, 0),  # nose_tip to upper_lip_left
+            (20, 2)   # nose_tip to upper_lip_right
         ]
     }
     
@@ -1061,7 +1089,7 @@ def create_keypoint_animation_video(keypoints_2d: np.ndarray, mask: Optional[np.
                 elif part_name == "right_hand":
                     start_idx, end_idx = 46, 67  # 21 hand landmarks (46-66)
                 elif part_name == "face":
-                    start_idx, end_idx = 67, 78  # 11 face landmarks (67-77)
+                    start_idx, end_idx = 67, 89  # 22 face landmarks (67-88)
                 
                 part_keypoints = pixel_points[start_idx:end_idx]
                 part_valid = valid_mask[start_idx:end_idx]
@@ -1168,7 +1196,7 @@ def create_video_with_keypoints(uploaded_video_file, keypoints: np.ndarray,
     
     Args:
         uploaded_video_file: Original uploaded video file
-        keypoints: Keypoint data [T, 156]
+        keypoints: Keypoint data [T, 178]
         output_filename: Name for output video file
         
     Returns:
@@ -1238,8 +1266,8 @@ def create_video_with_keypoints(uploaded_video_file, keypoints: np.ndarray,
                     if valid_mask[i]:
                         cv2.circle(frame, tuple(pixel_points[i]), 2, (0, 255, 0), -1)
                         
-                # Face (orange/yellow) - 11 landmarks (67-77)
-                for i in range(67, min(78, len(pixel_points))):
+                # Face (orange/yellow) - 22 landmarks (67-88)
+                for i in range(67, min(89, len(pixel_points))):
                     if valid_mask[i]:
                         cv2.circle(frame, tuple(pixel_points[i]), 1, (0, 165, 255), -1)
                         

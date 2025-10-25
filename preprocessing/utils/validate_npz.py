@@ -23,6 +23,7 @@ import argparse
 import glob
 import json
 import os
+import re
 import sys
 from typing import List, Tuple
 
@@ -99,9 +100,9 @@ def validate_npz_file(
         errors.append(str(exc))
 
     # Shapes and dtypes (core invariants)
-    if not (X.ndim == 2 and X.shape[1] == 156 and X.dtype == np.float32):
+    if not (X.ndim == 2 and X.shape[1] == 178 and X.dtype == np.float32):
         errors.append(f"X bad shape/dtype: {X.shape} {X.dtype}")
-    if not (mask.ndim == 2 and mask.shape[1] == 78 and mask.dtype == np.bool_):
+    if not (mask.ndim == 2 and mask.shape[1] == 89 and mask.dtype == np.bool_):
         errors.append(f"mask bad shape/dtype: {mask.shape} {mask.dtype}")
     if not (timestamps_ms.ndim == 1 and timestamps_ms.dtype == np.int64):
         errors.append(
@@ -132,13 +133,43 @@ def validate_npz_file(
         # Meta invariants
         try:
             meta = _load_meta(data["meta"])
-            if meta.get("dims_per_frame") not in (156, "156"):
-                errors.append(f"meta.dims_per_frame != 156 (got {meta.get('dims_per_frame')})")
-            if meta.get("keypoints_total") not in (78, "78"):
-                errors.append(f"meta.keypoints_total != 78 (got {meta.get('keypoints_total')})")
+            if meta.get("dims_per_frame") not in (178, "178"):
+                errors.append(f"meta.dims_per_frame != 178 (got {meta.get('dims_per_frame')})")
+            if meta.get("keypoints_total") not in (89, "89"):
+                errors.append(f"meta.keypoints_total != 89 (got {meta.get('keypoints_total')})")
             order = meta.get("order")
-            if order not in ("pose25,left_hand21,right_hand21,face11",):
+            if order not in ("pose25,left_hand21,right_hand21,face22",):
                 errors.append(f"meta.order unexpected: {order}")
+            
+            # Check signer field
+            signer = meta.get("signer")
+            if signer is None:
+                errors.append("meta.signer missing")
+            elif not isinstance(signer, str) or not re.match(r'^S[0-7]$', str(signer)):
+                errors.append(f"meta.signer invalid format: {signer} (must be S0-S7)")
+            
+            # Check duration_sec field
+            duration_sec = meta.get("duration_sec")
+            if duration_sec is None:
+                errors.append("meta.duration_sec missing")
+            else:
+                try:
+                    duration_val = float(duration_sec)
+                    if duration_val <= 0:
+                        errors.append(f"meta.duration_sec not positive: {duration_val}")
+                    
+                    # Check duration approximately matches timestamps
+                    if timestamps_ms.size > 0:
+                        actual_duration = timestamps_ms[-1] / 1000.0
+                        tolerance = 0.5  # 500ms tolerance
+                        if abs(duration_val - actual_duration) > tolerance:
+                            errors.append(
+                                f"meta.duration_sec ({duration_val:.2f}s) doesn't match "
+                                f"timestamps_ms ({actual_duration:.2f}s), diff > {tolerance}s"
+                            )
+                except (ValueError, TypeError):
+                    errors.append(f"meta.duration_sec not a valid number: {duration_sec}")
+                    
         except Exception as exc:
             # Already reported bad meta json above; add a hint here
             errors.append(f"meta validation failed: {exc}")
@@ -177,9 +208,9 @@ def validate_npz_file(
                         if col not in df.columns:
                             errors.append(f"parquet missing column: {col}")
                     if "mask_bits" in df.columns:
-                        ok_len = df["mask_bits"].map(lambda s: isinstance(s, str) and len(s) == 78)
+                        ok_len = df["mask_bits"].map(lambda s: isinstance(s, str) and len(s) == 89)
                         if not bool(ok_len.all()):
-                            errors.append("parquet mask_bits not length 78 for all rows")
+                            errors.append("parquet mask_bits not length 89 for all rows")
                 except Exception as exc:
                     errors.append(f"parquet read error: {exc}")
 

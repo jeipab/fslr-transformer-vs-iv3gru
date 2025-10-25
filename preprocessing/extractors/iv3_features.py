@@ -38,8 +38,10 @@ from torchvision.models import inception_v3, Inception_V3_Weights  # Pre-trained
 from ..extractors.keypoints_features import (
     extract_keypoints_from_frame,  # Main keypoint extraction function
     interpolate_gaps,     # Fill missing keypoints using interpolation
+    smooth_keypoints_ema, # Apply EMA smoothing for temporal consistency (v2.0)
+    validate_and_clean_keypoints,  # Remove outlier keypoints (v2.0)
     POSE_UPPER_25,        # Upper body pose keypoint indices (25 points)
-    FACEMESH_11,          # Face mesh keypoint indices (11 key facial points)
+    FACE_MINIMAL_22,      # Face mesh keypoint indices (22 key facial points)
     create_models,        # Initialize MediaPipe models
     close_models,         # Clean up MediaPipe models
 )
@@ -226,6 +228,64 @@ def ensure_dir(p):
     """
     os.makedirs(p, exist_ok=True)
 
+
+def resize_with_aspect_ratio_and_pad(frame, target_size=256, pad_color=(0, 0, 0)):
+    """
+    Resize frame preserving aspect ratio, then pad to square.
+    
+    This prevents geometric distortion of keypoint spatial relationships while
+    ensuring consistent input dimensions for MediaPipe.
+    
+    For 640×360 input with target_size=256:
+    - Resizes to 256×144 (preserves 16:9 aspect ratio)
+    - Adds 56px black padding on top and bottom
+    - Output: 256×256 with content centered
+    
+    Args:
+        frame: Input BGR frame (H, W, 3)
+        target_size: Target square dimension (default 256)
+        pad_color: RGB color for padding (default black)
+    
+    Returns:
+        tuple: (padded_frame, metadata_dict)
+            padded_frame: (target_size, target_size, 3) numpy array
+            metadata_dict: {
+                'scale': scaling factor applied,
+                'x_offset': horizontal padding offset,
+                'y_offset': vertical padding offset,
+                'original_size': (orig_h, orig_w),
+                'resized_size': (new_h, new_w)
+            }
+    """
+    h, w = frame.shape[:2]
+    
+    # Calculate scaling to fit within target_size while preserving aspect ratio
+    scale = target_size / max(h, w)
+    new_w = int(w * scale)
+    new_h = int(h * scale)
+    
+    # Resize preserving aspect ratio
+    resized = cv2.resize(frame, (new_w, new_h), interpolation=cv2.INTER_AREA)
+    
+    # Create padded canvas
+    canvas = np.full((target_size, target_size, 3), pad_color, dtype=np.uint8)
+    
+    # Center the resized frame on canvas
+    y_offset = (target_size - new_h) // 2
+    x_offset = (target_size - new_w) // 2
+    canvas[y_offset:y_offset+new_h, x_offset:x_offset+new_w] = resized
+    
+    # Store metadata for debugging and validation
+    metadata = {
+        'scale': scale,
+        'x_offset': x_offset,
+        'y_offset': y_offset,
+        'original_size': (h, w),
+        'resized_size': (new_h, new_w)
+    }
+    
+    return canvas, metadata
+
 def to_npz(out_path, X, X2048, mask, timestamps_ms, meta, also_parquet=True):
     """Save processed video data (keypoints + CNN features) to compressed .npz file.
     
@@ -235,9 +295,9 @@ def to_npz(out_path, X, X2048, mask, timestamps_ms, meta, also_parquet=True):
     
     Args:
         out_path: Base path for output files (without extension)
-        X: Keypoint coordinates [T, 156] as float32 - flattened x,y coords for 78 keypoints
+        X: Keypoint coordinates [T, 178] as float32 - flattened x,y coords for 89 keypoints
         X2048: InceptionV3 features [T, 2048] as float32 - CNN feature vectors
-        mask: Keypoint visibility mask [T, 78] as bool - True if keypoint is visible/confident
+        mask: Keypoint visibility mask [T, 89] as bool - True if keypoint is visible/confident
         timestamps_ms: Frame timestamps [T] as int64 - milliseconds from video start
         meta: Metadata dictionary (converted to JSON string) - processing parameters
         also_parquet: If True, also create .parquet file for inspection in spreadsheet tools
@@ -305,16 +365,17 @@ def update_labels_csv(label_file, video_file, gloss, cat):
 # Main Video Processing Function
 # ----------------------------
 
-def process_video(video_path, out_dir, label_file=None, target_fps=30, out_size=256, conf_thresh=0.5, max_gap=5, write_keypoints=True, write_iv3_features=True, feature_key='X2048', gloss=None, cat=None):
+def process_video(video_path, out_dir, label_file=None, target_fps=30, out_size=256, conf_thresh=0.5, max_gap=5, write_keypoints=True, write_iv3_features=True, feature_key='X2048', gloss=None, cat=None, flip_horizontal=False):
     """Process a single video file and extract multi-modal features.
     
     This function performs the complete processing pipeline for a single video:
     1. Video loading and frame sampling at target FPS
-    2. MediaPipe keypoint extraction (pose, hands, face)
-    3. InceptionV3 CNN feature extraction
-    4. Gap interpolation for missing keypoints
-    5. Data saving in compressed .npz format
-    6. Labels CSV updates for training data
+    2. Optional horizontal flip for front camera videos
+    3. MediaPipe keypoint extraction (pose, hands, face)
+    4. InceptionV3 CNN feature extraction
+    5. Linear gap interpolation (max 5 frames, Android-compatible)
+    6. Data saving in compressed .npz format
+    7. Labels CSV updates for training data
     
     Args:
         video_path: Path to input video file (.mp4, .mov, .avi, .mkv)
@@ -323,12 +384,13 @@ def process_video(video_path, out_dir, label_file=None, target_fps=30, out_size=
         target_fps: Target frame sampling rate (downsamples high FPS videos)
         out_size: Image resize dimension for keypoint extraction (256x256)
         conf_thresh: Confidence threshold for keypoint detection (0.0-1.0)
-        max_gap: Maximum gap size for keypoint interpolation (frames)
-        write_keypoints: Extract MediaPipe keypoints (156D vectors per frame)
+        max_gap: Maximum gap size for keypoint interpolation (frames, default=5)
+        write_keypoints: Extract MediaPipe keypoints (178D vectors per frame)
         write_iv3_features: Extract InceptionV3 features (2048D vectors per frame)
         feature_key: Unused parameter (kept for compatibility)
         gloss: Sign language gloss class ID for labeling
         cat: Category class ID for labeling
+        flip_horizontal: Apply horizontal flip for front camera videos (Android-compatible)
     """
     # STEP 1: Setup output paths and directories
     basename = os.path.splitext(os.path.basename(video_path))[0]  # Extract filename without extension
@@ -364,8 +426,8 @@ def process_video(video_path, out_dir, label_file=None, target_fps=30, out_size=
         models = create_models(seg_model=1, detection_conf=conf_thresh, tracking_conf=conf_thresh)
 
     # STEP 3: Initialize data containers for collected features
-    X_frames = []      # Keypoint coordinates [frame_idx] -> [156] (78 keypoints * 2 coords)
-    M_frames = []      # Keypoint visibility masks [frame_idx] -> [78] (boolean visibility)
+    X_frames = []      # Keypoint coordinates [frame_idx] -> [178] (89 keypoints * 2 coords)
+    M_frames = []      # Keypoint visibility masks [frame_idx] -> [89] (boolean visibility)
     X2048_frames = []  # InceptionV3 CNN features [frame_idx] -> [2048] (deep features)
     T_ms = []          # Frame timestamps [frame_idx] -> timestamp_ms
 
@@ -386,18 +448,20 @@ def process_video(video_path, out_dir, label_file=None, target_fps=30, out_size=
             if ms < next_t * 1000.0:  # Skip frame if not at target sampling time
                 continue
 
-            # STEP 4a: Resize frame for consistent processing
-            frame_bgr_resized = cv2.resize(frame_bgr, (out_size, out_size), interpolation=cv2.INTER_AREA)
+            # STEP 4a: Resize frame for consistent processing (preserving aspect ratio)
+            frame_bgr_resized, resize_meta = resize_with_aspect_ratio_and_pad(frame_bgr, out_size)
 
-            # STEP 4b: Prepare RGB frame for MediaPipe keypoint extraction
+            # STEP 4b: Prepare RGB frame and apply front camera flip if needed
             frame_rgb = cv2.cvtColor(frame_bgr_resized, cv2.COLOR_BGR2RGB)
+            if flip_horizontal:
+                frame_rgb = cv2.flip(frame_rgb, 1)  # Horizontal flip for front camera (mirror x-axis)
 
             # STEP 4c: Extract MediaPipe keypoints (if requested)
             if write_keypoints:
-                # Returns 156D vector (78 keypoints * 2 coords) and 78D visibility mask
-                vec156, mask78 = extract_keypoints_from_frame(frame_rgb, models, conf_thresh=conf_thresh)
-                X_frames.append(vec156)    # Store keypoint coordinates
-                M_frames.append(mask78)    # Store visibility flags
+                # Returns 178D vector (89 keypoints * 2 coords) and 89D visibility mask
+                vec178, mask89 = extract_keypoints_from_frame(frame_rgb, models, conf_thresh=conf_thresh)
+                X_frames.append(vec178)    # Store keypoint coordinates
+                M_frames.append(mask89)    # Store visibility flags
 
             # STEP 4d: Extract InceptionV3 CNN features (if requested)
             if write_iv3_features:
@@ -421,8 +485,8 @@ def process_video(video_path, out_dir, label_file=None, target_fps=30, out_size=
         return
 
     # Convert lists to numpy arrays for efficient processing
-    X = np.stack(X_frames, axis=0)  # Shape: [T, 156] - keypoint coordinates over time
-    M = np.stack(M_frames, axis=0)  # Shape: [T, 78] - visibility masks over time
+    X = np.stack(X_frames, axis=0)  # Shape: [T, 178] - keypoint coordinates over time
+    M = np.stack(M_frames, axis=0)  # Shape: [T, 89] - visibility masks over time
     X2048 = np.stack(X2048_frames, axis=0) if X2048_frames else np.array([])  # Shape: [T, 2048] - CNN features
     T_ms = np.array(T_ms, dtype=np.int64)  # Convert timestamps to numpy array
 
@@ -434,7 +498,7 @@ def process_video(video_path, out_dir, label_file=None, target_fps=30, out_size=
     if write_iv3_features and len(X2048_frames) == 0:
         print("[WARN] No IV3 features extracted.")
 
-    # Fill gaps in keypoint sequences using interpolation
+    # Apply gap interpolation (linear only, max 5 frames - Android-compatible)
     X_filled, M_filled = interpolate_gaps(X, M, max_gap=max_gap)
     # Ensure keypoint coordinates stay within valid bounds [0, 1]
     X_filled = np.clip(X_filled, 0.0, 1.0).astype(np.float32)
@@ -446,13 +510,15 @@ def process_video(video_path, out_dir, label_file=None, target_fps=30, out_size=
         video=os.path.basename(video_path),      # Original video filename
         target_fps=target_fps,                   # Frame sampling rate used
         out_size=out_size,                       # Image resize dimension
-        dims_per_frame=156,                      # Keypoint vector dimension (78 points * 2 coords)
-        keypoints_total=78,                      # Total number of keypoints tracked
-        order="pose25,left_hand21,right_hand21,face11",  # Keypoint ordering in the 156D vector
+        dims_per_frame=178,                      # Keypoint vector dimension (89 points * 2 coords)
+        keypoints_total=89,                      # Total number of keypoints tracked
+        order="pose25,left_hand21,right_hand21,face22",  # Keypoint ordering in the 178D vector
         pose_indices=POSE_UPPER_25,              # Which pose keypoints are used
-        face_indices=FACEMESH_11,                # Which face keypoints are used
+        face_indices=FACE_MINIMAL_22,                # Which face keypoints are used
         conf_thresh=conf_thresh,                 # Confidence threshold used for detection
         interpolation_max_gap=max_gap,           # Maximum gap size for interpolation
+        flip_horizontal=flip_horizontal,         # Whether horizontal flip was applied (front camera)
+        aspect_ratio_preserved=True,             # Aspect ratio preserved during preprocessing
         gloss=gloss,                             # Sign language gloss class ID
         cat=cat                                  # Category class ID
     )
@@ -480,7 +546,7 @@ if __name__ == "__main__":
     parser.add_argument('out_dir', type=str, help='Directory to save the processed output')
     
     # Feature extraction controls
-    parser.add_argument('--write-keypoints', action='store_true', help='Extract and save MediaPipe keypoints (156D vectors)')
+    parser.add_argument('--write-keypoints', action='store_true', help='Extract and save MediaPipe keypoints (178D vectors)')
     parser.add_argument('--write-iv3-features', action='store_true', help='Extract and save InceptionV3 CNN features (2048D vectors)')
     
     # Processing parameters

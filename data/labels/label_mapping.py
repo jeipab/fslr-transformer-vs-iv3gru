@@ -19,7 +19,7 @@ def load_label_mappings():
         FileNotFoundError: If labels reference file is not found
     """
     # Path to the labels reference CSV
-    csv_path = Path(__file__).parent.parent.parent / "data" / "splitting" / "labels_reference.csv"
+    csv_path = Path(__file__).parent.parent / "labels_reference.csv"
     
     if not csv_path.exists():
         raise FileNotFoundError(f"Labels reference file not found: {csv_path}")
@@ -124,22 +124,73 @@ def get_all_labels():
     
     return gloss_labels, category_labels
 
+
+def get_num_gloss_classes():
+    """Get the number of gloss classes (vocabulary size, not including blank).
+    
+    Returns:
+        int: Number of gloss classes
+    """
+    gloss_mapping, _ = load_label_mappings()
+    return len(gloss_mapping)
+
+
+def get_ctc_config():
+    """Get CTC configuration parameters.
+    
+    Returns:
+        dict: {'num_gloss': 105, 'num_ctc_classes': 106, 'blank_id': 105}
+    """
+    num_gloss = get_num_gloss_classes()
+    return {
+        'num_gloss': num_gloss,
+        'num_ctc_classes': num_gloss + 1,
+        'blank_id': num_gloss
+    }
+
+
+def validate_ctc_config(num_gloss, num_ctc_classes, blank_id):
+    """Validate CTC configuration for consistency.
+    
+    Args:
+        num_gloss: Number of gloss classes (can be subset of full vocabulary)
+        num_ctc_classes: Total CTC classes (should be num_gloss + 1)
+        blank_id: Blank token ID (should be num_gloss)
+        
+    Raises:
+        ValueError: If configuration is internally inconsistent
+    
+    Note:
+        Allows training on subsets of the full vocabulary. Only validates
+        internal consistency, not against the full labels_reference.csv.
+    """
+    expected_full = get_num_gloss_classes()
+    
+    # Check internal consistency (these must match)
+    if num_ctc_classes != num_gloss + 1:
+        raise ValueError(f"num_ctc_classes should be {num_gloss + 1}, got {num_ctc_classes}")
+    
+    if blank_id != num_gloss:
+        raise ValueError(f"blank_id should be {num_gloss}, got {blank_id}")
+    
+    # Warn if training on subset (but allow it)
+    if num_gloss < expected_full:
+        print(f"⚠️  Training on subset: {num_gloss}/{expected_full} glosses (subset training enabled)")
+    elif num_gloss > expected_full:
+        raise ValueError(f"num_gloss={num_gloss} exceeds available labels ({expected_full})")
+    
+    return True
+
 if __name__ == "__main__":
     # Test the mapping
     try:
         gloss_mapping, category_mapping = load_label_mappings()
-        print("✓ Label mappings loaded successfully")
-        print(f"  - {len(gloss_mapping)} gloss labels")
-        print(f"  - {len(category_mapping)} category labels")
+        print(f"✓ Loaded {len(gloss_mapping)} glosses, {len(category_mapping)} categories")
         
-        # Show some examples
-        print("\nSample gloss labels:")
-        for i in range(5):
-            print(f"  {i}: {gloss_mapping[i]}")
-        
-        print("\nSample category labels:")
-        for i in range(5):
-            print(f"  {i}: {category_mapping[i]}")
+        # Test CTC config
+        config = get_ctc_config()
+        validate_ctc_config(config['num_gloss'], config['num_ctc_classes'], config['blank_id'])
+        print(f"✓ CTC config: {config}")
             
     except Exception as e:
-        print(f"Error loading mappings: {e}")
+        print(f"Error: {e}")

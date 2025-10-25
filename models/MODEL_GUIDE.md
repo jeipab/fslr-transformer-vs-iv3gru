@@ -20,7 +20,7 @@ Multi-head attention Transformer encoder that processes temporal sequences of bo
 ### Architecture Flow
 
 ```
-Input: [B, T, 156]
+Input: [B, T, 178]
   ↓
 Linear Embedding → [B, T, E]
   ↓
@@ -45,7 +45,7 @@ Dual Heads → [B, 105], [B, 10]
 
 ```python
 SignTransformer.__init__(
-    input_dim=156,        # Keypoint features per frame
+    input_dim=178,        # Keypoint features per frame
     emb_dim=256,          # Embedding dimension
     n_heads=8,            # Attention heads
     n_layers=4,           # Encoder layers
@@ -64,7 +64,7 @@ SignTransformer.__init__(
 def forward(x, mask=None):
     """
     Args:
-        x: [B, T, 156] keypoint sequences
+        x: [B, T, 178] keypoint sequences
         mask: [B, T] binary mask (1=valid, 0=padding)
 
     Returns:
@@ -88,7 +88,7 @@ def get_attention_weights(x, mask=None):
 
 **Implementation**: `nn.Linear(input_dim, emb_dim)`
 
-Projects 156-D keypoint vectors to embedding space. Trainable linear transformation applied per frame independently.
+Projects 178-D keypoint vectors to embedding space. Trainable linear transformation applied per frame independently.
 
 #### 2. Positional Encoding
 
@@ -499,7 +499,7 @@ self.category_head = nn.Linear(hidden2, num_cat)     # 12 → 10
 
 | Aspect            | SignTransformer     | InceptionV3GRU           |
 | ----------------- | ------------------- | ------------------------ |
-| **Input**         | Keypoints [T, 156]  | Features [T, 2048]       |
+| **Input**         | Keypoints [T, 178]  | Features [T, 2048]       |
 | **Architecture**  | Attention encoder   | CNN + RNN                |
 | **Context**       | Global (parallel)   | Local (sequential)       |
 | **Pretrained**    | No                  | Yes (ImageNet)           |
@@ -531,10 +531,10 @@ self.category_head = nn.Linear(hidden2, num_cat)     # 12 → 10
 
 **Input**:
 
-- Shape: `[batch, time, 156]`
+- Shape: `[batch, time, 178]`
 - Type: `torch.FloatTensor`
 - Range: Normalized [0, 1]
-- Content: 78 keypoints × 2 coordinates
+- Content: 89 keypoints × 2 coordinates
 
 **Optional Mask**:
 
@@ -590,17 +590,114 @@ gloss_confidence = gloss_probs.gather(1, gloss_pred.unsqueeze(1))
 
 ---
 
+## CTC Models (Continuous Recognition)
+
+Two CTC models for sequence-to-sequence sign language recognition without frame-level alignment.
+
+### SignTransformerCtc
+
+**Architecture**: Transformer encoder + CTC head (no pooling)
+
+**Input/Output**:
+
+- Input: `[B, T, 178]` keypoints
+- Output: `[B, T, 106]` log probabilities (105 glosses + 1 blank)
+
+**Usage**:
+
+```python
+from models import SignTransformerCtc
+
+model = SignTransformerCtc(input_dim=178, num_ctc_classes=106)
+log_probs = model(x)  # [B, T, 106]
+
+# For CTCLoss
+log_probs = log_probs.permute(1, 0, 2)  # [T, B, C]
+```
+
+**Key Differences from SignTransformer**:
+
+- ❌ No pooling layer
+- ❌ No category head
+- ✅ Full temporal output
+- ✅ Single CTC head
+
+### MediaPipeGRUCtc
+
+**Architecture**: Bidirectional 2-layer GRU + CTC head
+
+**Input/Output**:
+
+- Input: `[B, T, 178]` keypoints
+- Output: `[B, T, 106]` log probabilities
+
+**Usage**:
+
+```python
+from models import MediaPipeGRUCtc
+
+model = MediaPipeGRUCtc(num_ctc_classes=106, hidden1=256, hidden2=128)
+log_probs = model(x, lengths=lengths)  # [B, T, 106]
+```
+
+**Advantages**: Lightweight (~500KB), faster inference, mobile-friendly
+
+### CTC vs Classification
+
+| Feature      | Classification     | CTC                         |
+| ------------ | ------------------ | --------------------------- |
+| **Task**     | One sign per video | Multiple signs per sequence |
+| **Output**   | `[B, num_classes]` | `[B, T, num_classes]`       |
+| **Pooling**  | Required           | None                        |
+| **Loss**     | CrossEntropy       | CTCLoss                     |
+| **Use Case** | Isolated signs     | Continuous signs            |
+
+### CTC Technical Details
+
+**CTCLoss Requirements**:
+
+```python
+# Model output
+log_probs = model(X)  # [B, T, C]
+log_probs = log_probs.permute(1, 0, 2)  # [T, B, C] for CTCLoss
+
+# Compute loss
+criterion = nn.CTCLoss(blank=105, zero_infinity=True)
+loss = criterion(log_probs, targets, input_lengths, target_lengths)
+```
+
+**Decoding Strategies**:
+
+- **Greedy**: Fast (O(T)), deterministic, good for real-time
+- **Beam Search**: Accurate, explores multiple paths, slower
+
+```python
+from evaluation.ctc_utils import greedy_ctc_decoder, beam_search_ctc_decoder
+
+# Greedy
+decoded = greedy_ctc_decoder(log_probs, blank_id=105)
+
+# Beam search
+decoded, score = beam_search_ctc_decoder(log_probs, blank_id=105, beam_width=10)
+```
+
+---
+
 ## Implementation Files
 
-- `models/transformer.py`: SignTransformer implementation (~819 lines)
+- `models/transformer.py`: SignTransformer + SignTransformerCtc (~1020 lines)
+- `models/mediapipe_gru.py`: MediaPipeGRU + MediaPipeGRUCtc (~679 lines)
 - `models/iv3_gru.py`: InceptionV3GRU implementation (~430 lines)
 - `models/__init__.py`: Module exports
+- `evaluation/ctc_utils.py`: CTC decoders and utilities
 
 ---
 
 ## Additional Resources
 
-- [Training Guide](../training/TRAINING_GUIDE.md): How to train both models
+- [Training Guide](../training/TRAINING_GUIDE.md): How to train both classification and CTC models
+- [Prediction Guide](../evaluation/prediction/PREDICTION_GUIDE.md): Making predictions with all models
+- [Validation Guide](../evaluation/validation/VALIDATION_GUIDE.md): Evaluating model performance
 - [Trained Model Guide](../trained_models/TRAINED_MODEL_GUIDE.md): Loading and using trained models
 - [Data Guide](../data/DATA_GUIDE.md): Data preparation and format
 - [Preprocessing Guide](../preprocessing/docs/PREPROCESS_GUIDE.MD): Video to NPZ conversion

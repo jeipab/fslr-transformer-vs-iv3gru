@@ -239,36 +239,22 @@ class VideoResizer:
             logger.error(f"Error processing {video_path.name}: {e}")
             return False
     
-    def resize_video_batch(self, video_batch: List[Path], output_folder: Path) -> List[bool]:
-        """
-        Process a batch of videos in parallel.
-        
-        Args:
-            video_batch (List[Path]): List of video files to process
-            output_folder (Path): Output folder path
-            
-        Returns:
-            List[bool]: List of success status for each video
-        """
+    def resize_video_batch(self, video_batch: List[Path], input_folder: Path, output_folder: Path) -> List[bool]:
         results = []
         
-        # Create thread pool for I/O operations
         with ThreadPoolExecutor(max_workers=self.batch_size) as executor:
             futures = []
             
             for video_path in video_batch:
-                # Calculate relative path and create output path
-                relative_path = video_path.relative_to(video_path.parents[len(video_path.parents) - 2])
+                relative_path = video_path.relative_to(input_folder)
                 output_path = output_folder / relative_path.with_suffix('.mp4')
                 
-                # Submit resize task
                 future = executor.submit(self.resize_video_cuda, video_path, output_path)
                 futures.append(future)
             
-            # Collect results
             for future in futures:
                 try:
-                    result = future.result(timeout=300)  # 5 minute timeout per video
+                    result = future.result(timeout=300)
                     results.append(result)
                 except Exception as e:
                     logger.error(f"Batch processing error: {e}")
@@ -277,17 +263,6 @@ class VideoResizer:
         return results
     
     def resize_videos(self, input_folder: Path, output_folder: Path) -> Tuple[int, int]:
-        """
-        Resize all videos in the input folder.
-        
-        Args:
-            input_folder (Path): Input folder containing videos
-            output_folder (Path): Output folder for resized videos
-            
-        Returns:
-            Tuple[int, int]: (successful_count, total_count)
-        """
-        # Get all video files
         video_files = self.get_video_files(input_folder)
         if not video_files:
             logger.warning(f"No video files found in {input_folder}")
@@ -296,11 +271,9 @@ class VideoResizer:
         logger.info(f"Starting batch processing of {len(video_files)} videos")
         logger.info(f"Target resolution: {self.target_width}x{self.target_height}")
         
-        # Process videos in batches
         successful_count = 0
         total_count = len(video_files)
         
-        # Create batches
         batches = [video_files[i:i + self.batch_size] 
                   for i in range(0, len(video_files), self.batch_size)]
         
@@ -309,13 +282,11 @@ class VideoResizer:
                 logger.info(f"Processing batch {batch_idx + 1}/{len(batches)} "
                            f"({len(batch)} videos)")
                 
-                # Process batch
-                batch_results = self.resize_video_batch(batch, output_folder)
+                batch_results = self.resize_video_batch(batch, input_folder, output_folder)
                 successful_count += sum(batch_results)
                 
                 batch_pbar.update(1)
                 
-                # Memory cleanup
                 if self.use_cuda:
                     torch.cuda.empty_cache()
         

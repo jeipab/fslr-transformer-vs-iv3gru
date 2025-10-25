@@ -44,11 +44,11 @@ pip install pyarrow  # optional, for parquet inspection
 ### Interactive Demo with PANSINAYAN
 
 ```powershell
-# Run the PANSINAYAN application
-streamlit run run_app.py
-
 # Check network connection info (local IP and access URLs)
 python show_network_info.py
+
+# Run the PANSINAYAN application
+streamlit run run_app.py
 ```
 
 **PANSINAYAN Features**:
@@ -157,9 +157,9 @@ python -m preprocessing.core.preprocess ^
 
 **Output**: `.npz` files with:
 
-- Keypoints `X [T,156]` - 78 MediaPipe keypoints (pose, hands, face)
+- Keypoints `X [T,178]` - 89 MediaPipe keypoints (pose, hands, face)
 - Features `X2048 [T,2048]` - InceptionV3 features
-- Visibility mask `mask [T,78]`
+- Visibility mask `mask [T,89]`
 - Timestamps `timestamps_ms [T]`
 - Metadata with occlusion detection
 
@@ -229,6 +229,20 @@ python -m training.train ^
 
 For detailed training instructions, see [Training Guide](training/TRAINING_GUIDE.md).
 
+### 3.1 CTC Training (Continuous Recognition) 🆕
+
+Train models for continuous sign recognition using CTC (no frame-level alignment needed).
+
+```powershell
+# SignTransformerCtc
+python training/train.py --model transformer_ctc --keypoints-train data\processed\fsl_train --keypoints-val data\processed\fsl_val --labels-train-csv data\processed\fsl_train.csv --labels-val-csv data\processed\fsl_val.csv --epochs 100 --grad-clip 1.0 --amp
+
+# MediaPipeGRUCtc (baseline)
+python training/train.py --model mediapipe_gru_ctc --keypoints-train data\processed\fsl_train --keypoints-val data\processed\fsl_val --labels-train-csv data\processed\fsl_train.csv --labels-val-csv data\processed\fsl_val.csv --epochs 100 --grad-clip 1.0
+```
+
+For detailed CTC training options, see [Training Guide](training/TRAINING_GUIDE.md#ctc-training-continuous-recognition).
+
 ### 4. Validation
 
 **Data Validation:**
@@ -266,26 +280,76 @@ python -m training.train --model iv3_gru --smoke-test --num-gloss 105 --num-cat 
 
 For detailed validation instructions, see [Validation Guide](evaluation/validation/VALIDATION_GUIDE.md).
 
+### 5. CTC Prediction & Evaluation 🆕
+
+**Predict**:
+
+```powershell
+python evaluation\prediction\predict_ctc.py --model transformer_ctc --checkpoint model.pt --input clip.npz
+```
+
+**Evaluate** (computes WER, sequence accuracy):
+
+```powershell
+python evaluation\validation\evaluate_ctc.py --model transformer_ctc --checkpoint model.pt --test-data data\processed\fsl_val --test-labels fsl_val.csv
+```
+
+See [Prediction Guide](evaluation/prediction/PREDICTION_GUIDE.md#ctc-prediction-continuous-recognition) and [Validation Guide](evaluation/validation/VALIDATION_GUIDE.md#ctc-evaluation-continuous-recognition).
+
 ## 🧠 Models
 
-### Transformer (SignTransformer)
+### Classification Models (Isolated Sign Recognition)
 
-- **Input**: MediaPipe keypoints [T, 156]
+#### Transformer (SignTransformer)
+
+- **Input**: MediaPipe keypoints [T, 178]
 - **Architecture**: Multi-head attention with positional encoding
 - **Advantages**: Lighter, interpretable attention weights
 - **Best for**: Keypoint-based sign recognition
 
-### InceptionV3-GRU
+#### InceptionV3-GRU
 
 - **Input**: InceptionV3 features [T, 2048]
 - **Architecture**: CNN + GRU with pretrained backbone
 - **Advantages**: Transfer learning from ImageNet
 - **Best for**: Visual feature-based recognition
 
-Both models predict:
+#### MediaPipe-GRU
+
+- **Input**: MediaPipe keypoints [T, 178]
+- **Architecture**: Bidirectional GRU
+- **Advantages**: Lightweight, mobile-friendly
+- **Best for**: Baseline comparison
+
+Classification models predict:
 
 - **Gloss**: Specific sign word (105 classes)
 - **Category**: Semantic category (10 classes)
+
+### CTC Models (Continuous Sign Language Recognition) 🆕
+
+#### SignTransformerCtc
+
+- **Input**: MediaPipe keypoints [T, 178]
+- **Output**: Gloss sequences (variable length)
+- **Architecture**: Transformer encoder + CTC head
+- **Advantages**: No frame-level alignment required, attention-based
+- **Best for**: Continuous sign recognition
+
+#### MediaPipeGRUCtc
+
+- **Input**: MediaPipe keypoints [T, 178]
+- **Output**: Gloss sequences (variable length)
+- **Architecture**: Bidirectional GRU + CTC head
+- **Advantages**: Lightweight, fast inference
+- **Best for**: Baseline for continuous recognition
+
+**CTC Features:**
+
+- ✅ Sequence-to-sequence learning
+- ✅ Variable-length output
+- ✅ No alignment required
+- ✅ Supports continuous sign sentences
 
 For architecture details, see [Model Guide](models/MODEL_GUIDE.md).
 
@@ -293,19 +357,19 @@ For architecture details, see [Model Guide](models/MODEL_GUIDE.md).
 
 ### 🎯 Prediction & Usage
 
-- **[Prediction Guide](evaluation/prediction/PREDICTION_GUIDE.md)** - Using trained models for predictions
-- **[Validation Guide](evaluation/validation/VALIDATION_GUIDE.md)** - Model validation and evaluation
+- **[Prediction Guide](evaluation/prediction/PREDICTION_GUIDE.md)** - Using trained models (classification & CTC)
+- **[Validation Guide](evaluation/validation/VALIDATION_GUIDE.md)** - Model validation and evaluation (classification & CTC)
 - **[Label Mapping Table](data/labels/LABEL_MAPPING_TABLE.md)** - Complete list of signs and categories
 - **[Trained Models Guide](trained_models/TRAINED_MODEL_GUIDE.md)** - Model checkpoints and usage
 - **[Tool Guide](streamlit_app/TOOL_GUIDE.md)** - Interactive visualization app
 
 ### 🔧 Development & Training
 
+- **[Model Guide](models/MODEL_GUIDE.md)** - Architecture details (classification & CTC models)
+- **[Training Guide](training/TRAINING_GUIDE.md)** - Model training (classification & CTC)
 - **[Data Guide](data/DATA_GUIDE.md)** - File formats and data structures
 - **[Preprocessing Guide](preprocessing/docs/PREPROCESS_GUIDE.MD)** - Video preprocessing
 - **[Occlusion Guide](preprocessing/docs/OCCLUSION_GUIDE.md)** - Hand occlusion detection and handling
-- **[Model Guide](models/MODEL_GUIDE.md)** - Architecture details and usage
-- **[Training Guide](training/TRAINING_GUIDE.md)** - Model training instructions
 - **[Sharing Guide](shared/SHARING_GUIDE.md)** - Vast.ai deployment and collaboration
 
 ## 🛠️ Troubleshooting
@@ -319,7 +383,7 @@ For architecture details, see [Model Guide](models/MODEL_GUIDE.md).
 
 **Wrong shapes:**
 
-- Transformer needs `X [T,156]` keypoints
+- Transformer needs `X [T,178]` keypoints
 - IV3-GRU needs `X2048 [T,2048]` InceptionV3 features
 
 **Label ranges:**

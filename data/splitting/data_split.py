@@ -6,10 +6,12 @@ with proper stratified sampling and file management.
 
 Features:
 - Stratified splitting by gloss and category
+- Signer-aware splitting (mixed or independent modes)
 - Automatic category ID encoding
 - File collision handling
 - Support for filtering by specific categories/glosses
 - Optional parquet file synchronization
+- Strict validation of signer (S0-S7) and duration (> 0)
 
 Usage:
 - Default 80/20 split:
@@ -28,7 +30,7 @@ Usage:
         --copy \
         --cats greeting survival number \
         --gloss yes no wrong \
-        --label-ref data/splitting/labels_reference.csv
+        --label-ref data/labels_reference.csv
 """
 
 import argparse
@@ -141,14 +143,14 @@ def _write_csv(path: Path, rows):
     
     Args:
         path: Output CSV file path
-        rows: List of dictionaries with file, gloss, cat, occluded keys
+        rows: List of dictionaries with file, gloss, cat, occluded, signer, duration keys
     """
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("w", newline="") as f:
         writer = csv.writer(f)
-        writer.writerow(["file", "gloss", "cat", "occluded"])
+        writer.writerow(["file", "gloss", "cat", "occluded", "signer", "duration"])
         for r in rows:
-            writer.writerow([r["file"], r["gloss"], r["cat"], r["occluded"]])
+            writer.writerow([r["file"], r["gloss"], r["cat"], r["occluded"], r["signer"], r["duration"]])
 
 def main():
     ap = argparse.ArgumentParser(description="Organize preprocessed dataset into train/val splits")
@@ -164,6 +166,9 @@ def main():
     ap.add_argument("--val-dir", type=str, default="keypoints_val", help="Name for val directory (default: keypoints_val)")
     ap.add_argument("--train-csv", type=str, default="train_labels.csv", help="Name for train CSV (default: train_labels.csv)")
     ap.add_argument("--val-csv", type=str, default="val_labels.csv", help="Name for val CSV (default: val_labels.csv)")
+    ap.add_argument("--signer-split-mode", type=str, default="mixed", choices=["mixed", "independent"],
+                   help="Signer splitting mode: 'mixed' (default, signers in both train/val) or "
+                        "'independent' (each signer in train OR val only for generalization testing)")
     args = ap.parse_args()
 
     # Handle single or multiple input directories
@@ -191,12 +196,35 @@ def main():
     df = pd.concat(df_list, ignore_index=True)
     print(f"Combined {len(df)} samples from {len(processed_roots)} dataset(s)")
 
-    # Validate required columns  
-    required_cols = {"file", "gloss", "cat", "occluded"}
+    # Validate required columns (strict - no defaults)
+    required_cols = {"file", "gloss", "cat", "occluded", "signer", "duration"}
     missing = required_cols - set(df.columns)
     if missing:
         print(f"ERROR: labels CSV missing required columns: {sorted(missing)}", file=sys.stderr)
+        print(f"Required format: file, gloss, cat, occluded, signer, duration", file=sys.stderr)
         return 2
+    
+    # Validate signer format (S0-S7)
+    invalid_signers = df[~df['signer'].astype(str).str.match(r'^S[0-7]$', na=False)]
+    if len(invalid_signers) > 0:
+        print(f"ERROR: {len(invalid_signers)} files have invalid signer IDs (must be S0-S7):", file=sys.stderr)
+        for idx, row in invalid_signers.head(5).iterrows():
+            print(f"  - {row['file']}: signer='{row['signer']}'", file=sys.stderr)
+        if len(invalid_signers) > 5:
+            print(f"  ... and {len(invalid_signers) - 5} more", file=sys.stderr)
+        return 2
+    
+    # Validate duration is positive
+    invalid_durations = df[(df['duration'] <= 0) | df['duration'].isna()]
+    if len(invalid_durations) > 0:
+        print(f"ERROR: {len(invalid_durations)} files have invalid duration (must be > 0):", file=sys.stderr)
+        for idx, row in invalid_durations.head(5).iterrows():
+            print(f"  - {row['file']}: duration={row['duration']}", file=sys.stderr)
+        if len(invalid_durations) > 5:
+            print(f"  ... and {len(invalid_durations) - 5} more", file=sys.stderr)
+        return 2
+    
+    print(f"✓ Validation passed: {len(df)} samples with valid signer and duration")
     
     # Load label reference for mapping gloss/cat names to IDs (if provided)
     gloss_name_to_id, cat_name_to_id = {}, {}
@@ -285,31 +313,43 @@ def main():
         print(f"ERROR: No samples left after filtering by categories/glosses", file=sys.stderr)
         return 2
 
-    # Handle split
+    # Handle split with signer-aware logic
     if "split" not in df.columns:
-        # Deterministic hash-based splitting per gloss (ensures consistency across runs)
-        # Each file goes to same split based on its filename hash, regardless of dataset combination
-        import hashlib
-        
-        def hash_to_split(filename, train_ratio):
-            """Deterministically assign split based on filename hash"""
-            hash_val = int(hashlib.md5(filename.encode()).hexdigest(), 16)
-            return "train" if (hash_val % 100) < (train_ratio * 100) else "val"
-        
-        # Apply hash-based split per gloss to maintain stratification
-        splits = []
-        for idx, row in df.iterrows():
-            splits.append(hash_to_split(row['file'], args.train_ratio))
-        
-        df["split"] = splits
-        
-        # Verify stratification is maintained
-        for gloss_id in df['gloss'].unique():
-            gloss_df = df[df['gloss'] == gloss_id]
-            train_count = (gloss_df['split'] == 'train').sum()
-            total_count = len(gloss_df)
-            actual_ratio = train_count / total_count if total_count > 0 else 0
-            # Should be close to args.train_ratio (small variations due to rounding)
+        if args.signer_split_mode == 'independent':
+            # Signer-independent split: each signer goes to train OR val exclusively
+            print(f"\nUsing signer-independent split (signer-exclusive for generalization testing)")
+            
+            unique_signers = sorted(df['signer'].unique())
+            signer_splits = {}
+            
+            # Deterministically assign signers based on hash
+            for signer in unique_signers:
+                hash_val = int(hashlib.md5(signer.encode()).hexdigest(), 16)
+                signer_splits[signer] = "train" if (hash_val % 100) < (args.train_ratio * 100) else "val"
+            
+            df["split"] = df["signer"].map(signer_splits)
+            
+            # Report signer assignment
+            train_signers = sorted([s for s, split in signer_splits.items() if split == 'train'])
+            val_signers = sorted([s for s, split in signer_splits.items() if split == 'val'])
+            print(f"  Train signers: {', '.join(train_signers)} ({len(train_signers)} signers)")
+            print(f"  Val signers: {', '.join(val_signers)} ({len(val_signers)} signers)")
+            
+        else:
+            # Mixed mode: hash on filename (each signer appears in both splits)
+            print(f"\nUsing mixed split (signers appear in both train/val)")
+            
+            def hash_to_split(filename, train_ratio):
+                """Deterministically assign split based on filename hash"""
+                hash_val = int(hashlib.md5(filename.encode()).hexdigest(), 16)
+                return "train" if (hash_val % 100) < (train_ratio * 100) else "val"
+            
+            # Apply hash-based split
+            splits = []
+            for idx, row in df.iterrows():
+                splits.append(hash_to_split(row['file'], args.train_ratio))
+            
+            df["split"] = splits
         
         # Shuffle the entire dataframe to randomize order for training
         df = df.sample(frac=1, random_state=42).reset_index(drop=True)
@@ -342,14 +382,42 @@ def main():
         stem = _move_or_copy_unique(p, d_val, args.copy)
         basenames_val.append(stem)
 
-    # Write CSVs (file = final basenames)
+    # Write CSVs (file = final basenames) with 6 columns
     rows_train = [
-        {"file": b, "gloss": int(g), "cat": int(c), "occluded": int(o)}
-        for b, g, c, o in zip(basenames_train, df_train["gloss"], df_train["cat"], df_train["occluded"])
+        {
+            "file": b, 
+            "gloss": int(g), 
+            "cat": int(c), 
+            "occluded": int(o),
+            "signer": str(s),
+            "duration": float(d)
+        }
+        for b, g, c, o, s, d in zip(
+            basenames_train, 
+            df_train["gloss"], 
+            df_train["cat"], 
+            df_train["occluded"],
+            df_train["signer"],
+            df_train["duration"]
+        )
     ]
     rows_val = [
-        {"file": b, "gloss": int(g), "cat": int(c), "occluded": int(o)}
-        for b, g, c, o in zip(basenames_val, df_val["gloss"], df_val["cat"], df_val["occluded"])
+        {
+            "file": b, 
+            "gloss": int(g), 
+            "cat": int(c), 
+            "occluded": int(o),
+            "signer": str(s),
+            "duration": float(d)
+        }
+        for b, g, c, o, s, d in zip(
+            basenames_val, 
+            df_val["gloss"], 
+            df_val["cat"], 
+            df_val["occluded"],
+            df_val["signer"],
+            df_val["duration"]
+        )
     ]
 
     csv_train = out_root / args.train_csv
@@ -357,17 +425,54 @@ def main():
     _write_csv(csv_train, rows_train)
     _write_csv(csv_val, rows_val)
 
-    print("Done!")
-    print(f"- Train samples:   {len(rows_train)}")
-    print(f"- Val samples:     {len(rows_val)}")
-    print(f"- Total samples:   {len(rows_train) + len(rows_val)}")
-    print(f"- Train ratio:     {len(rows_train)/(len(rows_train) + len(rows_val))*100:.1f}%")
-    print(f"- Val ratio:       {len(rows_val)/(len(rows_train) + len(rows_val))*100:.1f}%")
-    print(f"- Train CSV:       {csv_train}")
-    print(f"- Val CSV:         {csv_val}")
-    print(f"- Train files dir: {d_train}")
-    print(f"- Val files dir:   {d_val}")
-    print(f"- Cat mapping:     {cat_map_path}")
+    print("\n" + "="*80)
+    print("SPLIT SUMMARY")
+    print("="*80)
+    print(f"Train samples:   {len(rows_train)}")
+    print(f"Val samples:     {len(rows_val)}")
+    print(f"Total samples:   {len(rows_train) + len(rows_val)}")
+    print(f"Train ratio:     {len(rows_train)/(len(rows_train) + len(rows_val))*100:.1f}%")
+    print(f"Val ratio:       {len(rows_val)/(len(rows_train) + len(rows_val))*100:.1f}%")
+    
+    # Signer distribution statistics
+    print(f"\nSigner Distribution:")
+    print(f"  Train:")
+    for signer in sorted(df_train['signer'].unique()):
+        count = (df_train['signer'] == signer).sum()
+        pct = count / len(df_train) * 100 if len(df_train) > 0 else 0
+        print(f"    {signer}: {count:4d} videos ({pct:.1f}%)")
+    
+    print(f"  Val:")
+    for signer in sorted(df_val['signer'].unique()):
+        count = (df_val['signer'] == signer).sum()
+        pct = count / len(df_val) * 100 if len(df_val) > 0 else 0
+        print(f"    {signer}: {count:4d} videos ({pct:.1f}%)")
+    
+    # Validate no leakage in independent mode
+    if args.signer_split_mode == 'independent':
+        train_signers = set(df_train['signer'].unique())
+        val_signers = set(df_val['signer'].unique())
+        overlap = train_signers & val_signers
+        
+        if overlap:
+            print(f"\nERROR: Signer leakage detected in independent mode: {sorted(overlap)}", file=sys.stderr)
+            print(f"In independent mode, each signer must be exclusively in train OR val", file=sys.stderr)
+            return 2
+        
+        print(f"\n✓ Signer-independent validation passed:")
+        print(f"  Train signers only: {sorted(train_signers)}")
+        print(f"  Val signers only: {sorted(val_signers)}")
+    
+    print(f"\n" + "="*80)
+    print("OUTPUT FILES")
+    print("="*80)
+    print(f"Train CSV:       {csv_train}")
+    print(f"Val CSV:         {csv_val}")
+    print(f"Train files dir: {d_train}")
+    print(f"Val files dir:   {d_val}")
+    print(f"Cat mapping:     {cat_map_path}")
+    print("="*80)
+    
     return 0
 
 if __name__ == "__main__":

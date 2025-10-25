@@ -15,7 +15,7 @@ This comprehensive training module supports:
 
 3. DATA HANDLING:
    - File-based datasets from preprocessed .npz files
-   - Support for keypoints [T, 156], features [T, 2048], or combined [T, 2204]
+   - Support for keypoints [T, 178], features [T, 2048], or combined [T, 2226]
    - Combined mode: concatenates keypoints + features for richer representations
    - Temporal data augmentation (noise, masking)
    - Variable-length sequence padding and batching
@@ -61,7 +61,8 @@ import torch.optim as optim
 from torch.utils.data import DataLoader, Dataset
 
 # Local imports
-from models import InceptionV3GRU, SignTransformer
+from models import InceptionV3GRU, SignTransformer, MediaPipeGRU, SignTransformerCtc, MediaPipeGRUCtc, InceptionV3GRUCtc
+from streamlit_app.core.config import CTC_CONFIG
 
 # ============================================================================
 # LOGGING UTILITIES
@@ -119,32 +120,36 @@ class FSLFeatureFileDataset(Dataset):
     
     The dataset expects:
     - A directory of .npz files containing feature arrays
-    - A CSV file mapping filenames to gloss and category labels
+    - A CSV file mapping filenames to gloss, category, occlusion, signer, and duration labels
     - Optional temporal augmentation for training data
     
     Data Flow:
-    1. Load CSV to build filename -> (gloss, category) mapping
+    1. Load CSV to build filename -> (gloss, category, occluded, signer, duration) mapping
     2. For each sample, load corresponding .npz file
     3. Extract feature array using specified key (default: 'X2048')
     4. Apply temporal augmentation if enabled and in training mode
-    5. Return (features, gloss_label, category_label, sequence_length)
+    5. Return data based on mode (classification or CTC)
 
     Args:
         features_dir (str): Directory containing .npz feature files
-        labels_csv (str): CSV file with columns: file, gloss, cat
+        labels_csv (str): CSV file with columns: file, gloss, cat, occluded, signer, duration
         feature_key (str): Key in .npz files containing [T, 2048] features
         augment (bool): Enable temporal data augmentation
         augment_params (dict): Augmentation parameters (noise_std, mask_prob, etc.)
+        mode (str): Dataset mode - 'classification' or 'ctc'
+        signer_filter (str, optional): Filter dataset to only include samples from this signer
+        return_metadata (bool): Whether to return signer and duration in __getitem__
 
     Returns:
-        __getitem__ returns (features[T,2048] float32, gloss long, cat long, length long)
+        Classification mode: (features[T,2048] float32, gloss long, cat long, length long)
+        CTC mode: (features[T,2048] float32, gloss_seq[1] long, input_length long, target_length long, cat long)
         
     Raises:
         ValueError: If CSV format is invalid or required columns missing
         FileNotFoundError: If feature file doesn't exist
         KeyError: If expected feature key not found in .npz file
     """
-    def __init__(self, features_dir, labels_csv, feature_key='X2048', augment=False, augment_params=None):
+    def __init__(self, features_dir, labels_csv, feature_key='X2048', augment=False, augment_params=None, mode='classification', signer_filter=None, return_metadata=False):
         """
         Initialize the feature dataset.
         
@@ -152,14 +157,32 @@ class FSLFeatureFileDataset(Dataset):
         1. Storing configuration parameters
         2. Setting up augmentation if enabled
         3. Loading and parsing the labels CSV file
-        4. Building an index of (filename_stem, gloss_id, category_id) tuples
+        4. Building an index of (filename_stem, gloss_id, category_id, occluded, signer, duration) tuples
+        5. Optionally filtering by signer
+        
+        Args:
+            features_dir (str): Directory containing .npz feature files
+            labels_csv (str): CSV file with columns: file, gloss, cat, occluded, signer, duration
+            feature_key (str): Key to extract features from .npz files
+            augment (bool): Whether to apply temporal augmentation
+            augment_params (dict): Augmentation parameters
+            mode (str): Dataset mode - 'classification' or 'ctc'
+            signer_filter (str, optional): Filter dataset to only include samples from this signer
+            return_metadata (bool): Whether to return signer and duration in __getitem__
         """
         # Store dataset configuration
         self.features_dir = features_dir  # Directory containing .npz feature files
         self.feature_key = feature_key    # Key to extract features from .npz files
-        self.index = []                   # List of (stem, gloss, cat) tuples for indexing
+        self.index = []                   # List of (stem, gloss, cat, occluded, signer, duration) tuples for indexing
         self.augment = augment            # Whether to apply temporal augmentation
         self.training = True              # Training mode flag (set by DataLoader)
+        self.mode = mode                  # Dataset mode: 'classification' or 'ctc'
+        self.signer_filter = signer_filter  # Optional signer filter
+        self.return_metadata = return_metadata  # Whether to return metadata in __getitem__
+        
+        # Validate mode parameter
+        if mode not in ['classification', 'ctc']:
+            raise ValueError(f"mode must be 'classification' or 'ctc', got '{mode}'")
         
         # Initialize temporal augmentation if enabled
         if augment and augment_params:
@@ -178,7 +201,7 @@ class FSLFeatureFileDataset(Dataset):
             reader = csv.DictReader(f)
             
             # Validate CSV structure - must have required columns
-            required = {'file', 'gloss', 'cat'}
+            required = {'file', 'gloss', 'cat', 'occluded', 'signer', 'duration'}
             if not required.issubset(set(reader.fieldnames or [])):
                 raise ValueError(f"labels_csv must have columns: {required}")
             
@@ -189,12 +212,19 @@ class FSLFeatureFileDataset(Dataset):
                     # This allows CSV to have filenames with or without .npz extension
                     stem = os.path.splitext(row['file'])[0]
                     
-                    # Convert labels to integers (class indices)
+                    # Convert labels to appropriate types
                     gloss = int(row['gloss'])  # Gloss class ID
                     cat = int(row['cat'])       # Category class ID
+                    occluded = int(row['occluded'])  # Occlusion flag
+                    signer = row['signer']      # Signer identifier
+                    duration = float(row['duration'])  # Duration in seconds
+                    
+                    # Apply signer filter if specified
+                    if signer_filter is not None and signer != signer_filter:
+                        continue
                     
                     # Add to index for later retrieval
-                    self.index.append((stem, gloss, cat))
+                    self.index.append((stem, gloss, cat, occluded, signer, duration))
                 except (ValueError, KeyError) as e:
                     raise ValueError(f"Invalid data in row {row}: {e}")
 
@@ -210,16 +240,17 @@ class FSLFeatureFileDataset(Dataset):
         2. Constructs the full path to the .npz file
         3. Loads and validates the feature data
         4. Applies temporal augmentation if enabled
-        5. Returns tensors in the expected format
+        5. Returns tensors in the expected format based on mode
         
         Args:
             idx (int): Index of the sample to retrieve
             
         Returns:
-            tuple: (features[T,2048] float32, gloss_label long, cat_label long, length long)
+            Classification mode: (features[T,2048] float32, gloss_label long, cat_label long, length long) or with metadata
+            CTC mode: (features[T,2048] float32, gloss_seq[1] long, input_length long, target_length long, cat long) or with metadata
         """
         # Get filename stem and labels from the pre-built index
-        stem, gloss, cat = self.index[idx]
+        stem, gloss, cat, occluded, signer, duration = self.index[idx]
         
         # Construct full path to the .npz feature file
         path = os.path.join(self.features_dir, stem + '.npz')
@@ -228,20 +259,46 @@ class FSLFeatureFileDataset(Dataset):
         
         # Load feature data from .npz file and convert to PyTorch tensor
         data = torch.from_numpy(self._load_npz_features(path))  # Shape: [T, 2048]
-        length = data.shape[0]  # Temporal dimension (sequence length)
+        input_length = data.shape[0]  # Temporal dimension (sequence length)
         
         # Apply temporal augmentation if enabled and in training mode
         # Augmentation helps improve model generalization by adding noise/variations
         if self.augment and self.training and hasattr(self, 'augmentation'):
             data = self.augmentation(data)
         
-        # Return tensors with appropriate data types for PyTorch
-        return (
-            data.float(),                                    # Features as float32
-            torch.tensor(gloss, dtype=torch.long),          # Gloss label as int64
-            torch.tensor(cat, dtype=torch.long),            # Category label as int64
-            torch.tensor(length, dtype=torch.long)          # Sequence length as int64
-        )
+        # Return tensors based on mode
+        if self.mode == 'ctc':
+            gloss_label_seq = torch.tensor([gloss], dtype=torch.long)
+            cat_label_seq = torch.tensor([cat], dtype=torch.long)
+            target_length = torch.tensor([1], dtype=torch.long)
+            
+            base_return = (
+                data.float(),                                    # Features as float32 [T, 2048]
+                gloss_label_seq,                                 # Gloss sequence [1]
+                torch.tensor(input_length, dtype=torch.long),    # Input sequence length
+                target_length,                                   # Target sequence length [1]
+                cat_label_seq                                    # Category sequence [1]
+            )
+            
+            # Add metadata if requested
+            if self.return_metadata:
+                return base_return + (signer, duration)
+            else:
+                return base_return
+        else:
+            # Classification mode: original format
+            base_return = (
+                data.float(),                                    # Features as float32
+                torch.tensor(gloss, dtype=torch.long),          # Gloss label as int64
+                torch.tensor(cat, dtype=torch.long),            # Category label as int64
+                torch.tensor(input_length, dtype=torch.long)    # Sequence length as int64
+            )
+            
+            # Add metadata if requested
+            if self.return_metadata:
+                return base_return + (signer, duration)
+            else:
+                return base_return
 
     def _load_npz_features(self, path):
         """
@@ -285,44 +342,56 @@ class FSLKeypointFileDataset(Dataset):
     """
     PyTorch Dataset for precomputed keypoint sequences from pose estimation.
     
-    This dataset loads keypoint sequences with shape [T, 156] from .npz files,
-    where T is the temporal dimension (variable length sequences) and 156 represents
-    the flattened keypoint coordinates (typically 52 keypoints × 3 coordinates = 156).
+    This dataset loads keypoint sequences with shape [T, 178] from .npz files,
+    where T is the temporal dimension (variable length sequences) and 178 represents
+    the flattened keypoint coordinates (89 keypoints × 2 coordinates = 178).
     
     The dataset supports both raw keypoints and processed features:
-    - Raw keypoints [T, 156]: Direct pose estimation output
+    - Raw keypoints [T, 178]: Direct pose estimation output (89 keypoints: 25 pose + 21 left hand + 21 right hand + 22 face)
     - Processed features [T, 2048]: Keypoints processed through feature extraction
     
     Data Flow:
-    1. Load CSV to build filename -> (gloss, category) mapping
+    1. Load CSV to build filename -> (gloss, category, occluded, signer, duration) mapping
     2. For each sample, load corresponding .npz file
     3. Extract keypoint array using specified key (default: 'X')
     4. Validate array dimensions based on key type
     5. Apply temporal augmentation if enabled and in training mode
-    6. Return (keypoints, gloss_label, category_label, sequence_length)
+    6. Return data based on mode (classification or CTC)
 
     Args:
         keypoints_dir (str): Directory containing .npz keypoint files
-        labels_csv (str): CSV file with columns: file, gloss, cat
+        labels_csv (str): CSV file with columns: file, gloss, cat, occluded, signer, duration
         kp_key (str): Key in .npz files containing keypoint data
         augment (bool): Enable temporal data augmentation
         augment_params (dict): Augmentation parameters (noise_std, mask_prob, etc.)
+        mode (str): Dataset mode - 'classification' or 'ctc'
+        signer_filter (str, optional): Filter dataset to only include samples from this signer
+        return_metadata (bool): Whether to return signer and duration in __getitem__
 
     Returns:
-        __getitem__ returns (keypoints[T,D] float32, gloss long, cat long, length long)
-        where D is 156 for raw keypoints or 2048 for processed features
+        Classification mode: (keypoints[T,D] float32, gloss long, cat long, length long)
+        CTC mode: (keypoints[T,D] float32, gloss_seq[1] long, input_length long, target_length long, cat long)
+        where D is 178 for raw keypoints or 2048 for processed features
         
     Raises:
         ValueError: If CSV format is invalid or array dimensions don't match key type
         FileNotFoundError: If keypoint file doesn't exist
         KeyError: If expected keypoint key not found in .npz file
     """
-    def __init__(self, keypoints_dir, labels_csv, kp_key='X', augment=False, augment_params=None):
+    def __init__(self, keypoints_dir, labels_csv, kp_key='X', augment=False, augment_params=None, mode='classification', signer_filter=None, return_metadata=False):
         self.keypoints_dir = keypoints_dir
         self.kp_key = kp_key
-        self.index = []  # list of (stem, gloss, cat)
+        self.index = []  # list of (stem, gloss, cat, occluded, signer, duration)
         self.augment = augment
         self.training = True  # Will be set by DataLoader
+        self.mode = mode
+        self.signer_filter = signer_filter  # Optional signer filter
+        self.return_metadata = return_metadata  # Whether to return metadata in __getitem__
+        
+        # Validate mode parameter
+        if mode not in ['classification', 'ctc']:
+            raise ValueError(f"mode must be 'classification' or 'ctc', got '{mode}'")
+        
         if augment and augment_params:
             self.augmentation = TemporalAugmentation(**augment_params)
         elif augment:
@@ -333,7 +402,7 @@ class FSLKeypointFileDataset(Dataset):
 
         with open(labels_csv, newline='') as f:
             reader = csv.DictReader(f)
-            required = {'file', 'gloss', 'cat'}
+            required = {'file', 'gloss', 'cat', 'occluded', 'signer', 'duration'}
             if not required.issubset(set(reader.fieldnames or [])):
                 raise ValueError(f"labels_csv must have columns: {required}")
             for row in reader:
@@ -341,7 +410,15 @@ class FSLKeypointFileDataset(Dataset):
                     stem = os.path.splitext(row['file'])[0]
                     gloss = int(row['gloss'])
                     cat = int(row['cat'])
-                    self.index.append((stem, gloss, cat))
+                    occluded = int(row['occluded'])
+                    signer = row['signer']
+                    duration = float(row['duration'])
+                    
+                    # Apply signer filter if specified
+                    if signer_filter is not None and signer != signer_filter:
+                        continue
+                    
+                    self.index.append((stem, gloss, cat, occluded, signer, duration))
                 except (ValueError, KeyError) as e:
                     raise ValueError(f"Invalid data in row {row}: {e}")
 
@@ -349,18 +426,50 @@ class FSLKeypointFileDataset(Dataset):
         return len(self.index)
 
     def __getitem__(self, idx):
-        stem, gloss, cat = self.index[idx]
+        stem, gloss, cat, occluded, signer, duration = self.index[idx]
         path = os.path.join(self.keypoints_dir, stem + '.npz')
         if not os.path.exists(path):
             raise FileNotFoundError(f"Keypoint file not found: {path}")
-        data = torch.from_numpy(self._load_npz_keypoints(path))  # [T, 156] or [T, 2048]
-        length = data.shape[0]
+        data = torch.from_numpy(self._load_npz_keypoints(path))  # [T, 178] or [T, 2048]
+        input_length = data.shape[0]
         
         # Apply augmentation if enabled and in training mode
         if self.augment and self.training and hasattr(self, 'augmentation'):
             data = self.augmentation(data)
         
-        return data.float(), torch.tensor(gloss, dtype=torch.long), torch.tensor(cat, dtype=torch.long), torch.tensor(length, dtype=torch.long)
+        # Return tensors based on mode
+        if self.mode == 'ctc':
+            gloss_label_seq = torch.tensor([gloss], dtype=torch.long)
+            cat_label_seq = torch.tensor([cat], dtype=torch.long)
+            target_length = torch.tensor([1], dtype=torch.long)
+            
+            base_return = (
+                data.float(),
+                gloss_label_seq,
+                torch.tensor(input_length, dtype=torch.long),
+                target_length,
+                cat_label_seq
+            )
+            
+            # Add metadata if requested
+            if self.return_metadata:
+                return base_return + (signer, duration)
+            else:
+                return base_return
+        else:
+            # Classification mode: original format
+            base_return = (
+                data.float(),
+                torch.tensor(gloss, dtype=torch.long),
+                torch.tensor(cat, dtype=torch.long),
+                torch.tensor(input_length, dtype=torch.long)
+            )
+            
+            # Add metadata if requested
+            if self.return_metadata:
+                return base_return + (signer, duration)
+            else:
+                return base_return
 
     def _load_npz_keypoints(self, path):
         with np.load(path, allow_pickle=True) as npz:
@@ -374,52 +483,63 @@ class FSLKeypointFileDataset(Dataset):
         # Validate dimension based on the key being used
         if self.kp_key == "X2048" and X.shape[-1] != 2048:
             raise ValueError(f"Expected [T,2048] features in {path}, got shape {X.shape}")
-        elif self.kp_key == "X" and X.shape[-1] != 156:
-            raise ValueError(f"Expected [T,156] keypoints in {path}, got shape {X.shape}")
+        elif self.kp_key == "X" and X.shape[-1] != 178:
+            raise ValueError(f"Expected [T,178] keypoints in {path}, got shape {X.shape}")
         return X
 
 class FSLCombinedFileDataset(Dataset):
     """
     PyTorch Dataset that combines keypoints and features into single input.
     
-    This dataset loads both keypoints [T, 156] and features [T, 2048] from the same
-    .npz files and concatenates them to create combined input [T, 2204].
+    This dataset loads both keypoints [T, 178] and features [T, 2048] from the same
+    .npz files and concatenates them to create combined input [T, 2226].
     
     The combined approach leverages both:
-    - Raw keypoint information (156-dim): Direct pose landmarks for interpretability
+    - Raw keypoint information (178-dim): Direct pose landmarks for interpretability (89 keypoints × 2)
     - Learned visual features (2048-dim): Rich InceptionV3 representations
     
     Data Flow:
-    1. Load CSV to build filename -> (gloss, category) mapping
+    1. Load CSV to build filename -> (gloss, category, occluded, signer, duration) mapping
     2. For each sample, load corresponding .npz file
     3. Extract both keypoint array (X) and feature array (X2048)
-    4. Concatenate along feature dimension: [T, 156] + [T, 2048] = [T, 2204]
+    4. Concatenate along feature dimension: [T, 178] + [T, 2048] = [T, 2226]
     5. Apply temporal augmentation if enabled and in training mode
-    6. Return (combined_data, gloss_label, category_label, sequence_length)
+    6. Return data based on mode (classification or CTC)
     
     Args:
         data_dir (str): Directory containing .npz files with both X and X2048 keys
-        labels_csv (str): CSV file with columns: file, gloss, cat
+        labels_csv (str): CSV file with columns: file, gloss, cat, occluded, signer, duration
         kp_key (str): Key for keypoints in .npz files (default: 'X')
         feature_key (str): Key for features in .npz files (default: 'X2048')
         augment (bool): Enable temporal data augmentation
         augment_params (dict): Augmentation parameters (noise_std, mask_prob, etc.)
+        mode (str): Dataset mode - 'classification' or 'ctc'
+        signer_filter (str, optional): Filter dataset to only include samples from this signer
+        return_metadata (bool): Whether to return signer and duration in __getitem__
     
     Returns:
-        __getitem__ returns (combined[T,2204] float32, gloss long, cat long, length long)
+        Classification mode: (combined[T,2226] float32, gloss long, cat long, length long)
+        CTC mode: (combined[T,2226] float32, gloss_seq[1] long, input_length long, target_length long, cat long)
         
     Raises:
         ValueError: If CSV format is invalid or array dimensions don't match
         FileNotFoundError: If data file doesn't exist
         KeyError: If expected keys not found in .npz file
     """
-    def __init__(self, data_dir, labels_csv, kp_key='X', feature_key='X2048', augment=False, augment_params=None):
+    def __init__(self, data_dir, labels_csv, kp_key='X', feature_key='X2048', augment=False, augment_params=None, mode='classification', signer_filter=None, return_metadata=False):
         self.data_dir = data_dir
         self.kp_key = kp_key
         self.feature_key = feature_key
-        self.index = []  # list of (stem, gloss, cat)
+        self.index = []  # list of (stem, gloss, cat, occluded, signer, duration)
         self.augment = augment
         self.training = True  # Will be set by DataLoader
+        self.mode = mode
+        self.signer_filter = signer_filter  # Optional signer filter
+        self.return_metadata = return_metadata  # Whether to return metadata in __getitem__
+        
+        # Validate mode parameter
+        if mode not in ['classification', 'ctc']:
+            raise ValueError(f"mode must be 'classification' or 'ctc', got '{mode}'")
         
         # Initialize temporal augmentation if enabled
         if augment and augment_params:
@@ -433,7 +553,7 @@ class FSLCombinedFileDataset(Dataset):
         # Load and parse the labels CSV file
         with open(labels_csv, newline='') as f:
             reader = csv.DictReader(f)
-            required = {'file', 'gloss', 'cat'}
+            required = {'file', 'gloss', 'cat', 'occluded', 'signer', 'duration'}
             if not required.issubset(set(reader.fieldnames or [])):
                 raise ValueError(f"labels_csv must have columns: {required}")
             for row in reader:
@@ -441,7 +561,15 @@ class FSLCombinedFileDataset(Dataset):
                     stem = os.path.splitext(row['file'])[0]
                     gloss = int(row['gloss'])
                     cat = int(row['cat'])
-                    self.index.append((stem, gloss, cat))
+                    occluded = int(row['occluded'])
+                    signer = row['signer']
+                    duration = float(row['duration'])
+                    
+                    # Apply signer filter if specified
+                    if signer_filter is not None and signer != signer_filter:
+                        continue
+                    
+                    self.index.append((stem, gloss, cat, occluded, signer, duration))
                 except (ValueError, KeyError) as e:
                     raise ValueError(f"Invalid data in row {row}: {e}")
     
@@ -449,7 +577,7 @@ class FSLCombinedFileDataset(Dataset):
         return len(self.index)
     
     def __getitem__(self, idx):
-        stem, gloss, cat = self.index[idx]
+        stem, gloss, cat, occluded, signer, duration = self.index[idx]
         path = os.path.join(self.data_dir, stem + '.npz')
         if not os.path.exists(path):
             raise FileNotFoundError(f"Data file not found: {path}")
@@ -457,15 +585,48 @@ class FSLCombinedFileDataset(Dataset):
         # Load both keypoints and features
         keypoints, features = self._load_combined_data(path)
         
-        # Concatenate along feature dimension: [T, 156] + [T, 2048] = [T, 2204]
+        # Concatenate along feature dimension: [T, 178] + [T, 2048] = [T, 2226]
         combined = torch.cat([keypoints, features], dim=1)
-        length = combined.shape[0]
+        input_length = combined.shape[0]
         
         # Apply augmentation if enabled and in training mode
         if self.augment and self.training and hasattr(self, 'augmentation'):
             combined = self.augmentation(combined)
         
-        return combined.float(), torch.tensor(gloss, dtype=torch.long), torch.tensor(cat, dtype=torch.long), torch.tensor(length, dtype=torch.long)
+        # Return tensors based on mode
+        if self.mode == 'ctc':
+            # CTC mode: return sequence format for CTCLoss
+            gloss_label_seq = torch.tensor([gloss], dtype=torch.long)
+            cat_label_seq = torch.tensor([cat], dtype=torch.long)
+            target_length = torch.tensor([1], dtype=torch.long)
+            
+            base_return = (
+                combined.float(),
+                gloss_label_seq,
+                torch.tensor(input_length, dtype=torch.long),
+                target_length,
+                cat_label_seq
+            )
+            
+            # Add metadata if requested
+            if self.return_metadata:
+                return base_return + (signer, duration)
+            else:
+                return base_return
+        else:
+            # Classification mode: original format
+            base_return = (
+                combined.float(),
+                torch.tensor(gloss, dtype=torch.long),
+                torch.tensor(cat, dtype=torch.long),
+                torch.tensor(input_length, dtype=torch.long)
+            )
+            
+            # Add metadata if requested
+            if self.return_metadata:
+                return base_return + (signer, duration)
+            else:
+                return base_return
     
     def _load_combined_data(self, path):
         """Load and validate both keypoints and features from .npz file."""
@@ -481,8 +642,8 @@ class FSLCombinedFileDataset(Dataset):
             features = np.array(npz[self.feature_key])
         
         # Validate shapes
-        if keypoints.ndim != 2 or keypoints.shape[-1] != 156:
-            raise ValueError(f"Expected [T,156] keypoints in {path}, got shape {keypoints.shape}")
+        if keypoints.ndim != 2 or keypoints.shape[-1] != 178:
+            raise ValueError(f"Expected [T,178] keypoints in {path}, got shape {keypoints.shape}")
         if features.ndim != 2 or features.shape[-1] != 2048:
             raise ValueError(f"Expected [T,2048] features in {path}, got shape {features.shape}")
         
@@ -544,13 +705,13 @@ def collate_features_with_padding(batch):
 
 def collate_keypoints_with_padding(batch):
     """
-    Pad variable-length keypoint sequences [T, 156] to the max length in batch.
+    Pad variable-length keypoint sequences [T, 178] to the max length in batch.
 
     Args:
-        batch: Iterable of (X[T,156], gloss, cat, length) items.
+        batch: Iterable of (X[T,178], gloss, cat, length) items.
 
     Returns:
-        tuple: (X_pad [B,Tmax,156], gloss [B], cat [B], lengths [B])
+        tuple: (X_pad [B,Tmax,178], gloss [B], cat [B], lengths [B])
     """
     sequences, gloss, cat, lengths = zip(*batch)
     lengths = torch.stack(lengths, dim=0)
@@ -562,6 +723,154 @@ def collate_keypoints_with_padding(batch):
         t = seq.shape[0]
         X_pad[i, :t] = seq
     return X_pad, torch.stack(gloss, dim=0), torch.stack(cat, dim=0), lengths
+
+def collate_features_with_metadata(batch):
+    """
+    Collate function for feature sequences with optional metadata.
+    
+    This function handles both standard format and metadata-enhanced format:
+    - Standard: (features[T,2048], gloss, cat, length)
+    - With metadata: (features[T,2048], gloss, cat, length, signer, duration)
+    
+    Args:
+        batch: List of tuples from dataset with optional metadata
+        
+    Returns:
+        tuple: Standard format + optional metadata lists
+    """
+    # Check if metadata is present by looking at tuple length
+    if len(batch[0]) == 6:  # With metadata
+        sequences, gloss, cat, lengths, signers, durations = zip(*batch)
+        
+        # Convert lengths to tensor and find maximum sequence length in batch
+        lengths = torch.stack(lengths, dim=0)
+        B = len(sequences)
+        Tmax = int(max(l.item() for l in lengths))
+        D = sequences[0].shape[-1]
+        
+        # Create padded tensor
+        X_pad = torch.zeros((B, Tmax, D), dtype=sequences[0].dtype)
+        for i, seq in enumerate(sequences):
+            t = seq.shape[0]
+            X_pad[i, :t] = seq
+        
+        return (
+            X_pad,                           # Padded features [B, Tmax, D]
+            torch.stack(gloss, dim=0),       # Gloss labels [B]
+            torch.stack(cat, dim=0),         # Category labels [B]
+            lengths,                         # Original lengths [B]
+            list(signers),                   # Signer identifiers [B]
+            list(durations)                  # Duration values [B]
+        )
+    else:  # Standard format without metadata
+        return collate_features_with_padding(batch)
+
+def collate_keypoints_with_metadata(batch):
+    """
+    Collate function for keypoint sequences with optional metadata.
+    
+    This function handles both standard format and metadata-enhanced format:
+    - Standard: (keypoints[T,D], gloss, cat, length)
+    - With metadata: (keypoints[T,D], gloss, cat, length, signer, duration)
+    
+    Args:
+        batch: List of tuples from dataset with optional metadata
+        
+    Returns:
+        tuple: Standard format + optional metadata lists
+    """
+    # Check if metadata is present by looking at tuple length
+    if len(batch[0]) == 6:  # With metadata
+        sequences, gloss, cat, lengths, signers, durations = zip(*batch)
+        
+        # Convert lengths to tensor and find maximum sequence length in batch
+        lengths = torch.stack(lengths, dim=0)
+        B = len(sequences)
+        Tmax = int(max(l.item() for l in lengths))
+        D = sequences[0].shape[-1]
+        
+        # Create padded tensor
+        X_pad = torch.zeros((B, Tmax, D), dtype=sequences[0].dtype)
+        for i, seq in enumerate(sequences):
+            t = seq.shape[0]
+            X_pad[i, :t] = seq
+        
+        return (
+            X_pad,                           # Padded keypoints [B, Tmax, D]
+            torch.stack(gloss, dim=0),       # Gloss labels [B]
+            torch.stack(cat, dim=0),         # Category labels [B]
+            lengths,                         # Original lengths [B]
+            list(signers),                   # Signer identifiers [B]
+            list(durations)                  # Duration values [B]
+        )
+    else:  # Standard format without metadata
+        return collate_keypoints_with_padding(batch)
+
+def collate_for_ctc(batch):
+    """
+    Collate function for CTC training with variable-length sequences.
+    
+    This function batches sequences for CTC loss computation by:
+    1. Padding input sequences to the maximum length in the batch
+    2. Concatenating label sequences (targets) for CTCLoss
+    3. Stacking input and target lengths
+    
+    CTC Loss requires:
+    - log_probs: [T, B, C] - model outputs (will be permuted from [B, T, C])
+    - targets: [sum(target_lengths)] - concatenated target sequences
+    - input_lengths: [B] - actual lengths of each input sequence
+    - target_lengths: [B] - actual lengths of each target sequence
+    
+    Args:
+        batch: List of tuples from CTC-mode dataset, each containing:
+               (data[T,D], gloss_seq[N], input_length, target_length[N], cat_seq[N]) or with metadata
+               
+    Returns:
+        tuple: (X_pad, targets, input_lengths, target_lengths, cat_targets) where:
+            - X_pad: [B, Tmax, D] - padded input sequences
+            - targets: [sum(target_lengths)] - concatenated gloss sequences
+            - input_lengths: [B] - input sequence lengths
+            - target_lengths: [B] - target sequence lengths
+            - cat_targets: [sum(target_lengths)] - concatenated category sequences
+    
+    Example:
+        For a batch of 2 samples with sequences:
+        - Sample 1: input_len=50, target=[3]
+        - Sample 2: input_len=75, target=[17]
+        
+        Output:
+        - X_pad: [2, 75, D] (padded to max length 75)
+        - targets: [3, 17] (concatenated targets)
+        - input_lengths: [50, 75]
+        - target_lengths: [1, 1]
+    """
+    # Unzip the batch to separate components
+    sequences, gloss_label_seqs, input_lengths, target_lengths, cat_label_seqs = zip(*batch)
+    
+    # Get batch dimensions
+    B = len(sequences)                                      # Batch size
+    Tmax = max(seq.shape[0] for seq in sequences)         # Maximum input sequence length
+    D = sequences[0].shape[-1]                              # Feature dimension
+    
+    # Create padded tensor for input sequences
+    X_pad = torch.zeros((B, Tmax, D), dtype=sequences[0].dtype)
+    
+    # Copy each sequence into the padded tensor
+    for i, seq in enumerate(sequences):
+        t = seq.shape[0]  # Actual length of this sequence
+        X_pad[i, :t] = seq  # Copy sequence data, pad remainder with zeros
+    
+    # Concatenate all target label sequences for CTCLoss
+    targets = torch.cat(gloss_label_seqs, dim=0)  # Shape: [sum(target_lengths)]
+    
+    # Stack input and target lengths into tensors
+    input_lengths = torch.stack(input_lengths, dim=0)       # Shape: [B]
+    target_lengths = torch.cat(target_lengths, dim=0)       # Shape: [B]
+    
+    # Concatenate all category label sequences (parallel to gloss targets)
+    cat_targets = torch.cat(cat_label_seqs, dim=0)  # Shape: [sum(target_lengths)]
+    
+    return X_pad, targets, input_lengths, target_lengths, cat_targets
 
 def _make_dataloader(dataset, batch_size, shuffle, args, collate_fn=None):
     """
@@ -586,13 +895,16 @@ def _make_dataloader(dataset, batch_size, shuffle, args, collate_fn=None):
     # Auto-detect optimal number of workers for data loading
     # More workers = faster data loading, but also more memory usage
     num_workers = args.num_workers
-    if args.auto_workers or num_workers == 0:
+    if args.auto_workers:
         # Calculate optimal worker count based on CPU cores
         cpu_count = psutil.cpu_count(logical=False)  # Physical cores only
         # Use 1/2 of CPU cores, but cap between 2 and 8 for stability
         num_workers = min(8, max(2, cpu_count // 2))
-        if args.auto_workers:
-            print(f"Auto-detected {num_workers} DataLoader workers (from {cpu_count} CPU cores)")
+        print(f"Auto-detected {num_workers} DataLoader workers (from {cpu_count} CPU cores)")
+    else:
+        # Respect the user's num_workers setting (default: 0 for single-process loading)
+        if num_workers > 0:
+            print(f"Using {num_workers} DataLoader workers (user-specified)")
     
     # ============================================================================
     # MEMORY PINNING CONFIGURATION
@@ -633,7 +945,27 @@ def _make_dataloader(dataset, batch_size, shuffle, args, collate_fn=None):
         elif isinstance(prefetch_factor, int) and prefetch_factor > 0:
             kwargs['prefetch_factor'] = prefetch_factor
     
-    return DataLoader(dataset, **kwargs)
+    # Create DataLoader with error handling for resource constraints
+    try:
+        return DataLoader(dataset, **kwargs)
+    except (BlockingIOError, OSError, RuntimeError) as e:
+        # Handle resource exhaustion errors (common in containerized environments)
+        if num_workers > 0:
+            print(f"\n⚠️  WARNING: Failed to create DataLoader with {num_workers} workers")
+            print(f"   Error: {type(e).__name__}: {e}")
+            print(f"   Falling back to single-process loading (num_workers=0)")
+            print(f"   This is common in resource-constrained environments (containers, cloud VMs)")
+            
+            # Retry with 0 workers
+            kwargs['num_workers'] = 0
+            kwargs['persistent_workers'] = False
+            if 'prefetch_factor' in kwargs:
+                del kwargs['prefetch_factor']
+            
+            return DataLoader(dataset, **kwargs)
+        else:
+            # If already using 0 workers, re-raise the error
+            raise
 
 def save_checkpoint(state: dict, is_best: bool, output_dir: str, model_name: str) -> None:
     """Save training state to disk, keeping both last and best checkpoints.
@@ -845,14 +1177,14 @@ def log_comprehensive_config(args, device, model=None):
             print(f"  - Training folder: {args.features_train}")
             print(f"  - Validation folder: {args.features_val}")
             print(f"  - Feature key: {args.feature_key}")
-        elif args.model == "transformer":
+        elif args.model in ["transformer", "transformer_ctc", "mediapipe_gru", "mediapipe_gru_ctc"]:
             print(f"  - Training folder: {args.keypoints_train}")
             print(f"  - Validation folder: {args.keypoints_val}")
-            if args.combine_features:
+            if args.combine_features and args.model == "transformer":
                 print(f"  - Mode: Combined (Keypoints + Features)")
-                print(f"  - Keypoint key: {args.kp_key} (156-dim)")
+                print(f"  - Keypoint key: {args.kp_key} (178-dim)")
                 print(f"  - Feature key: {args.feature_key} (2048-dim)")
-                print(f"  - Combined input: 2204-dim")
+                print(f"  - Combined input: 2226-dim")
             else:
                 print(f"  - Keypoint key: {args.kp_key}")
     else:
@@ -2111,7 +2443,454 @@ def evaluate_with_forward(model, dataloader, criterion, device, forward_fn: Call
     cat_accuracy = correct_cat / total_samples if total_samples > 0 else 0.0
     return avg_loss, gloss_accuracy, cat_accuracy
 
-def load_data(n_train_samples=100, n_val_samples=20, seq_length=50, input_dim=156, num_gloss=105, num_cat=10, seed=42):
+def train_ctc(
+    model,
+    train_loader,
+    val_loader,
+    device,
+    blank_id,
+    epochs=50,
+    output_dir=".",
+    lr=1e-4,
+    weight_decay=0.0,
+    use_amp=False,
+    grad_clip=None,
+    scheduler_type=None,
+    scheduler_patience=5,
+    warmup_epochs=5,
+    early_stop_patience=None,
+    resume_path=None,
+    log_csv_path=None,
+    gradient_accumulation_steps=1,
+    compile_model=False,
+    use_ema=False,
+    ema_decay=0.999,
+    alpha=1.0,
+    beta=0.0,
+):
+    """
+    Train a CTC model for continuous sign language recognition with optional category learning.
+    
+    This function implements CTC-based training for sequence-to-sequence learning
+    without requiring frame-level alignment. Supports both CTC-only and dual-task modes:
+    - CTC-only: gloss transcription only (beta=0)
+    - Dual-task: gloss transcription + category classification (beta>0)
+    
+    Args:
+        model: CTC model to train (SignTransformerCtc or MediaPipeGRUCtc)
+        train_loader: DataLoader with CTC-formatted batches (uses collate_for_ctc)
+        val_loader: DataLoader for validation data
+        device: Torch device (cuda/cpu)
+        blank_id: ID of the blank token for CTC (typically num_gloss_classes)
+        epochs: Number of training epochs
+        output_dir: Directory to save checkpoints
+        lr: Learning rate for optimizer
+        weight_decay: Weight decay for regularization
+        use_amp: Enable automatic mixed precision
+        grad_clip: Gradient clipping max norm (None to disable)
+        scheduler_type: LR scheduler ('plateau', 'cosine', 'warmup_cosine', or None)
+        scheduler_patience: Patience for plateau scheduler
+        warmup_epochs: Warmup epochs for warmup_cosine scheduler
+        early_stop_patience: Stop if no improvement for this many epochs
+        resume_path: Path to checkpoint to resume from
+        log_csv_path: Path to CSV log file for metrics
+        gradient_accumulation_steps: Number of steps to accumulate gradients
+        compile_model: Whether to compile model (PyTorch 2.0+)
+        use_ema: Enable Exponential Moving Average
+        ema_decay: EMA decay rate
+    
+    Returns:
+        None (saves checkpoints to output_dir)
+    """
+    # ============================================================================
+    # INITIAL SETUP
+    # ============================================================================
+    
+    # Clear GPU memory for clean start
+    clear_gpu_memory()
+    
+    print("\n" + "="*80)
+    print("CTC TRAINING CONFIGURATION")
+    print("="*80)
+    print(f"Training Mode: Continuous Sign Language Recognition (CTC)")
+    print(f"Model: {model.__class__.__name__}")
+    print(f"Blank Token ID: {blank_id}")
+    print(f"Epochs: {epochs}")
+    print(f"Learning Rate: {lr}")
+    print(f"Batch Size: {train_loader.batch_size}")
+    print(f"Gradient Accumulation: {gradient_accumulation_steps}")
+    print(f"AMP Enabled: {use_amp and device.type == 'cuda'}")
+    print("="*80 + "\n")
+    
+    # ============================================================================
+    # MODEL OPTIMIZATION
+    # ============================================================================
+    
+    # Model compilation for performance (PyTorch 2.0+)
+    if compile_model and hasattr(torch, 'compile'):
+        try:
+            model = torch.compile(model)
+            print("✓ Model compiled for better performance")
+        except Exception as e:
+            print(f"⚠ Model compilation failed: {e}")
+    
+    # ============================================================================
+    # CTC LOSS AND OPTIMIZER SETUP
+    # ============================================================================
+    
+    criterion = nn.CTCLoss(blank=blank_id, zero_infinity=True)
+    print(f"✓ Using CTCLoss (blank={blank_id}, zero_infinity=True)")
+    
+    # Optimizer
+    optimizer = optim.Adam(model.parameters(), lr=lr, weight_decay=weight_decay)
+    
+    # Automatic Mixed Precision (AMP)
+    amp_enabled = bool(use_amp and device.type == "cuda")
+    scaler = torch.amp.GradScaler(enabled=amp_enabled)
+    
+    print(f"✓ Optimizer: Adam (lr={lr}, weight_decay={weight_decay})")
+    print(f"✓ AMP enabled: {amp_enabled}")
+    
+    # ============================================================================
+    # LEARNING RATE SCHEDULER
+    # ============================================================================
+    
+    if scheduler_type == "plateau":
+        scheduler = optim.lr_scheduler.ReduceLROnPlateau(
+            optimizer, mode='min', factor=0.5, patience=scheduler_patience
+        )
+        print(f"✓ Scheduler: ReduceLROnPlateau (patience={scheduler_patience})")
+    elif scheduler_type == "cosine":
+        scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=epochs)
+        print(f"✓ Scheduler: CosineAnnealingLR")
+    elif scheduler_type == "warmup_cosine":
+        scheduler = WarmupCosineScheduler(optimizer, warmup_epochs, epochs, lr)
+        print(f"✓ Scheduler: WarmupCosineScheduler (warmup={warmup_epochs})")
+    else:
+        scheduler = None
+        print("✓ No learning rate scheduler")
+    
+    # ============================================================================
+    # EXPONENTIAL MOVING AVERAGE (EMA)
+    # ============================================================================
+    
+    ema = None
+    if use_ema:
+        ema = EMA(model, decay=ema_decay)
+        ema.register()
+        print(f"✓ EMA enabled (decay={ema_decay})")
+    
+    # ============================================================================
+    # RESUME TRAINING
+    # ============================================================================
+    
+    start_epoch = 0
+    best_metric = float('inf')  # For CTC, lower loss is better
+    
+    if resume_path is not None and os.path.isfile(resume_path):
+        print(f"\nLoading checkpoint: {resume_path}")
+        ckpt = torch.load(resume_path, map_location=device)
+        model.load_state_dict(ckpt['model'])
+        optimizer.load_state_dict(ckpt['optimizer'])
+        
+        if 'scaler' in ckpt and use_amp:
+            scaler.load_state_dict(ckpt['scaler'])
+        if 'scheduler' in ckpt and scheduler is not None:
+            scheduler.load_state_dict(ckpt['scheduler'])
+        
+        start_epoch = ckpt.get('epoch', 0)
+        best_metric = ckpt.get('best_metric', best_metric)
+        print(f"✓ Resumed from epoch {start_epoch} (best_loss={best_metric:.4f})")
+    
+    # ============================================================================
+    # CSV LOGGING
+    # ============================================================================
+    
+    csv_fh = None
+    if log_csv_path is not None:
+        os.makedirs(os.path.dirname(log_csv_path) or '.', exist_ok=True)
+        new_file = not os.path.exists(log_csv_path)
+        csv_fh = open(log_csv_path, 'a', newline='')
+        csv_writer = csv.writer(csv_fh)
+        
+        if new_file:
+            # Write header
+            csv_writer.writerow([
+                "epoch", "train_loss", "val_loss", "lr", "epoch_time",
+                "gpu_memory_allocated", "gpu_memory_reserved"
+            ])
+        print(f"✓ Logging metrics to: {log_csv_path}")
+    
+    # ============================================================================
+    # TRAINING LOOP
+    # ============================================================================
+    
+    print(f"\n{'='*80}")
+    print(f"STARTING CTC TRAINING - {epochs} epochs")
+    print(f"{'='*80}\n")
+    
+    patience_counter = 0
+    
+    for epoch in range(start_epoch, start_epoch + epochs):
+        # ========================================================================
+        # TRAINING PHASE
+        # ========================================================================
+        
+        model.train()
+        total_loss = 0.0
+        num_batches = 0
+        epoch_start_time = time.time()
+        
+        optimizer.zero_grad(set_to_none=True)
+        
+        for batch_idx, batch in enumerate(train_loader):
+            # Unpack CTC batch: (X, targets, input_lengths, target_lengths, cat_targets)
+            X, targets, input_lengths, target_lengths, cat_targets = batch
+            
+            # Move to device
+            X = X.to(device, non_blocking=True)
+            targets = targets.to(device, non_blocking=True)
+            input_lengths = input_lengths.to(device, non_blocking=True)
+            target_lengths = target_lengths.to(device, non_blocking=True)
+            cat_targets = cat_targets.to(device, non_blocking=True)
+            
+            # Forward pass with AMP
+            with torch.amp.autocast(device_type=device.type, enabled=amp_enabled):
+                # Model returns log_probs [B,T,C] or (log_probs, cat_logits) for dual-task
+                # Handle iv3_gru_ctc model which needs features_already=True
+                if hasattr(model, '__class__') and 'InceptionV3GRUCtc' in model.__class__.__name__:
+                    output = model(X, features_already=True)
+                else:
+                    output = model(X)
+                
+                if isinstance(output, tuple):
+                    # Dual-task mode: CTC + Category
+                    log_probs, cat_logits = output  # [B,T,num_ctc], [B,T,num_cat]
+                    log_probs = log_probs.permute(1, 0, 2)  # [T, B, C] for CTC loss
+                    loss_ctc = criterion(log_probs, targets, input_lengths, target_lengths)
+                    
+                    # Per-frame category loss: flatten and align with cat_targets
+                    B, T, num_cat = cat_logits.shape
+                    cat_logits_flat = cat_logits.reshape(B * T, num_cat)  # [B*T, num_cat]
+                    cat_targets_expanded = cat_targets.unsqueeze(1).expand(B, T).reshape(B * T)  # [B*T]
+                    loss_cat = nn.functional.cross_entropy(cat_logits_flat, cat_targets_expanded, reduction='mean')
+                    
+                    loss = alpha * loss_ctc + beta * loss_cat
+                else:
+                    # CTC-only mode
+                    log_probs = output.permute(1, 0, 2)  # [T, B, C]
+                    loss = criterion(log_probs, targets, input_lengths, target_lengths)
+                
+                # Scale loss for gradient accumulation
+                loss = loss / gradient_accumulation_steps
+            
+            # Backward pass
+            scaler.scale(loss).backward()
+            
+            # Gradient accumulation: update every N steps
+            if (batch_idx + 1) % gradient_accumulation_steps == 0:
+                if grad_clip is not None and grad_clip > 0:
+                    scaler.unscale_(optimizer)
+                    torch.nn.utils.clip_grad_norm_(model.parameters(), grad_clip)
+                
+                scaler.step(optimizer)
+                scaler.update()
+                optimizer.zero_grad(set_to_none=True)
+            
+            total_loss += loss.item() * gradient_accumulation_steps
+            num_batches += 1
+        
+        # Handle remaining gradients
+        if len(train_loader) % gradient_accumulation_steps != 0:
+            if grad_clip is not None and grad_clip > 0:
+                scaler.unscale_(optimizer)
+                torch.nn.utils.clip_grad_norm_(model.parameters(), grad_clip)
+            scaler.step(optimizer)
+            scaler.update()
+            optimizer.zero_grad(set_to_none=True)
+        
+        # Update EMA
+        if ema is not None:
+            ema.update()
+        
+        # Average training loss
+        avg_train_loss = total_loss / num_batches if num_batches > 0 else 0.0
+        
+        # ========================================================================
+        # VALIDATION PHASE
+        # ========================================================================
+        
+        clear_gpu_memory()
+        
+        # Apply EMA for validation
+        if ema is not None:
+            ema.apply_shadow()
+        
+        val_loss, val_cat_acc = evaluate_ctc(model, val_loader, criterion, device, alpha, beta)
+        
+        # Restore original parameters
+        if ema is not None:
+            ema.restore()
+        
+        epoch_time = time.time() - epoch_start_time
+        
+        # ========================================================================
+        # LOGGING AND CHECKPOINTING
+        # ========================================================================
+        
+        # Print epoch results
+        avg_train_loss = total_loss / num_batches if num_batches > 0 else 0.0
+        cat_str = f" | Val Cat Acc: {val_cat_acc:.3f}" if beta > 0 else ""
+        print(f"Epoch {epoch+1:3d}/{epochs} | "
+              f"Train Loss: {avg_train_loss:.4f} | "
+              f"Val Loss: {val_loss:.4f}{cat_str} | "
+              f"Time: {epoch_time:.1f}s")
+        
+        # Print GPU memory if available
+        if device.type == 'cuda':
+            mem_alloc = torch.cuda.memory_allocated(0) / 1e9
+            mem_reserved = torch.cuda.memory_reserved(0) / 1e9
+            print(f"  GPU Memory: {mem_alloc:.2f}GB allocated, {mem_reserved:.2f}GB reserved")
+        
+        # Scheduler step
+        if scheduler is not None:
+            if isinstance(scheduler, optim.lr_scheduler.ReduceLROnPlateau):
+                scheduler.step(val_loss)
+            elif isinstance(scheduler, WarmupCosineScheduler):
+                scheduler.step(epoch)
+            else:
+                scheduler.step()
+        
+        current_lr = optimizer.param_groups[0]['lr']
+        
+        # CSV logging
+        if csv_fh is not None:
+            gpu_mem_alloc = torch.cuda.memory_allocated(0) / 1e9 if device.type == 'cuda' else 0.0
+            gpu_mem_reserved = torch.cuda.memory_reserved(0) / 1e9 if device.type == 'cuda' else 0.0
+            csv_writer.writerow([
+                epoch + 1, avg_train_loss, val_loss, current_lr,
+                epoch_time, gpu_mem_alloc, gpu_mem_reserved
+            ])
+            csv_fh.flush()
+        
+        # Checkpointing (lower loss is better for CTC)
+        is_best = val_loss < best_metric
+        if is_best:
+            best_metric = val_loss
+            patience_counter = 0
+            print(f"  ✓ New best validation loss: {best_metric:.4f}")
+        else:
+            patience_counter += 1
+        
+        # Save checkpoint
+        save_state = {
+            'epoch': epoch + 1,
+            'model': model.state_dict(),
+            'optimizer': optimizer.state_dict(),
+            'scaler': scaler.state_dict() if amp_enabled else None,
+            'scheduler': scheduler.state_dict() if scheduler is not None else None,
+            'best_metric': best_metric,
+            'blank_id': blank_id,
+        }
+        save_checkpoint(save_state, is_best, output_dir, model.__class__.__name__)
+        
+        # Early stopping
+        if early_stop_patience is not None and patience_counter >= early_stop_patience:
+            print(f"\nEarly stopping triggered after {epoch + 1} epochs.")
+            print(f"Best validation loss: {best_metric:.4f}")
+            break
+    
+    # ============================================================================
+    # TRAINING COMPLETE
+    # ============================================================================
+    
+    print(f"\n{'='*80}")
+    print("CTC TRAINING COMPLETED!")
+    print(f"Best validation loss: {best_metric:.4f}")
+    print(f"Checkpoints saved to: {output_dir}")
+    print(f"{'='*80}\n")
+    
+    if csv_fh is not None:
+        csv_fh.close()
+
+def evaluate_ctc(model, dataloader, criterion, device, alpha=1.0, beta=0.0):
+    """
+    Evaluate a CTC model on a validation dataset.
+    
+    Args:
+        model: CTC model to evaluate
+        dataloader: DataLoader with CTC-formatted batches
+        criterion: CTCLoss criterion
+        device: Torch device
+        alpha: Weight for CTC loss (dual-task mode)
+        beta: Weight for category loss (dual-task mode)
+    
+    Returns:
+        tuple: (avg_loss, cat_accuracy) - loss and category accuracy (1.0 if CTC-only)
+    """
+    model.eval()
+    total_loss = 0.0
+    num_batches = 0
+    correct_cat = 0
+    total_samples = 0
+    has_cat_head = beta > 0
+    
+    with torch.no_grad():
+        for batch in dataloader:
+            # Unpack CTC batch
+            X, targets, input_lengths, target_lengths, cat_targets = batch
+            
+            # Move to device
+            X = X.to(device)
+            targets = targets.to(device)
+            input_lengths = input_lengths.to(device)
+            target_lengths = target_lengths.to(device)
+            cat_targets = cat_targets.to(device)
+            
+            # Forward pass
+            # Handle iv3_gru_ctc model which needs features_already=True
+            if hasattr(model, '__class__') and 'InceptionV3GRUCtc' in model.__class__.__name__:
+                output = model(X, features_already=True)
+            else:
+                output = model(X)
+            
+            if isinstance(output, tuple):
+                # Dual-task mode
+                log_probs, cat_logits = output  # [B,T,num_ctc], [B,T,num_cat]
+                log_probs = log_probs.permute(1, 0, 2)  # [T, B, C] for CTC loss
+                loss_ctc = criterion(log_probs, targets, input_lengths, target_lengths)
+                
+                # Per-frame category loss
+                B, T, num_cat = cat_logits.shape
+                cat_logits_flat = cat_logits.reshape(B * T, num_cat)
+                cat_targets_expanded = cat_targets.unsqueeze(1).expand(B, T).reshape(B * T)
+                loss_cat = nn.functional.cross_entropy(cat_logits_flat, cat_targets_expanded, reduction='mean')
+                
+                loss = alpha * loss_ctc + beta * loss_cat
+                
+                # Track category accuracy (per-sequence: majority vote)
+                if has_cat_head:
+                    for i in range(B):
+                        seq_len = input_lengths[i]
+                        cat_pred_seq = cat_logits[i, :seq_len].argmax(dim=1)  # [seq_len]
+                        # Majority vote for sequence-level category
+                        pred_cat = cat_pred_seq.mode().values.item()
+                        true_cat = cat_targets[i].item()
+                        correct_cat += (pred_cat == true_cat)
+                    total_samples += B
+            else:
+                # CTC-only mode
+                log_probs = output.permute(1, 0, 2)  # [T, B, C]
+                loss = criterion(log_probs, targets, input_lengths, target_lengths)
+            
+            total_loss += loss.item()
+            num_batches += 1
+    
+    avg_loss = total_loss / num_batches if num_batches > 0 else 0.0
+    cat_accuracy = correct_cat / total_samples if total_samples > 0 else 1.0
+    return avg_loss, cat_accuracy
+
+def load_data(n_train_samples=100, n_val_samples=20, seq_length=150, input_dim=178, num_gloss=105, num_cat=10, seed=42):
     """
     Load training and validation data for sign language recognition.
     
@@ -2120,10 +2899,10 @@ def load_data(n_train_samples=100, n_val_samples=20, seq_length=50, input_dim=15
     
     Returns:
         tuple: (train_X, train_gloss, train_cat, val_X, val_gloss, val_cat)
-            - train_X: Training sequences [N_train, T, 156]
+            - train_X: Training sequences [N_train, T, 178]
             - train_gloss: Training gloss labels [N_train]
             - train_cat: Training category labels [N_train]
-            - val_X: Validation sequences [N_val, T, 156]
+            - val_X: Validation sequences [N_val, T, 178]
             - val_gloss: Validation gloss labels [N_val]
             - val_cat: Validation category labels [N_val]
     """
@@ -2179,22 +2958,28 @@ Examples:
     # ============================================================================
     # BASIC TRAINING CONFIGURATION
     # ============================================================================
-    parser.add_argument("--model", choices=["transformer", "iv3_gru"], default="transformer", 
-                       help="Model architecture to train: 'transformer' for keypoints, 'iv3_gru' for features")
+    parser.add_argument("--model", choices=["transformer", "mediapipe_gru", "iv3_gru", "transformer_ctc", "mediapipe_gru_ctc", "iv3_gru_ctc"], default="transformer", 
+                       help="Model architecture: 'transformer' (keypoints), 'mediapipe_gru' (keypoints, lightweight), 'iv3_gru' (features, offline baseline), 'transformer_ctc' (CTC), 'mediapipe_gru_ctc' (CTC), 'iv3_gru_ctc' (CTC)")
+    parser.add_argument("--training-mode", type=str, choices=["classification", "ctc"], default="classification",
+                       help="Training mode: 'classification' (isolated signs) or 'ctc' (continuous recognition)")
     parser.add_argument("--epochs", type=int, default=20, 
                        help="Number of training epochs to run")
     parser.add_argument("--batch-size", type=int, default=32, 
                        help="Number of samples per training batch")
     parser.add_argument("--alpha", type=float, default=0.5, 
-                       help="Weight for gloss classification loss in multi-task training")
+                       help="Weight for gloss classification loss in multi-task training (classification mode only)")
     parser.add_argument("--beta", type=float, default=0.5, 
-                       help="Weight for category classification loss in multi-task training")
+                       help="Weight for category classification loss in multi-task training (classification mode only)")
     
     # Class configuration
     parser.add_argument("--num-gloss", type=int, default=105, 
                        help="Number of gloss classes in the dataset")
     parser.add_argument("--num-cat", type=int, default=10, 
-                       help="Number of category classes in the dataset")
+                       help="Number of category classes in the dataset (classification mode only)")
+    parser.add_argument("--num-ctc-classes", type=int, default=106,
+                       help="Number of CTC classes including blank token (CTC mode only, default: num_gloss + 1)")
+    parser.add_argument("--ctc-blank-id", type=int, default=None,
+                       help="Blank token ID for CTC (default: num_gloss)")
     # ============================================================================
     # DATA CONFIGURATION - IV3-GRU FEATURES
     # ============================================================================
@@ -2212,13 +2997,13 @@ Examples:
     # DATA CONFIGURATION - TRANSFORMER KEYPOINTS
     # ============================================================================
     parser.add_argument("--keypoints-train", type=str, default=None, 
-                       help="Directory containing training .npz files with keypoint sequences [T,156]")
+                       help="Directory containing training .npz files with keypoint sequences [T,178]")
     parser.add_argument("--keypoints-val", type=str, default=None, 
-                       help="Directory containing validation .npz files with keypoint sequences [T,156]")
+                       help="Directory containing validation .npz files with keypoint sequences [T,178]")
     parser.add_argument("--kp-key", type=str, default="X", 
-                       help="Key name in .npz files containing [T,156] keypoint arrays")
+                       help="Key name in .npz files containing [T,178] keypoint arrays")
     parser.add_argument("--combine-features", action="store_true",
-                       help="Combine keypoints [T,156] and features [T,2048] into single input [T,2204] (Transformer only)")
+                       help="Combine keypoints [T,178] and features [T,2048] into single input [T,2226] (Transformer only)")
     # IV3-GRU hyperparameters
     parser.add_argument("--hidden1", type=int, default=16, help="IV3-GRU first GRU hidden size")
     parser.add_argument("--hidden2", type=int, default=12, help="IV3-GRU second GRU hidden size")
@@ -2246,7 +3031,7 @@ Examples:
     parser.add_argument("--pin-memory", action="store_true", help="DataLoader pin_memory")
     parser.add_argument("--prefetch-factor", type=int, default=None, help="DataLoader prefetch_factor (worker>0)")
     # Sequence length for synthetic data (kept for compatibility)
-    parser.add_argument("--seq-length", type=int, default=50, help="Sequence length (T) - for synthetic data only")
+    parser.add_argument("--seq-length", type=int, default=150, help="Sequence length (T) - for synthetic data only")
     parser.add_argument("--seed", type=int, default=42, help="Global RNG seed")
     parser.add_argument("--deterministic", action="store_true", help="Enable deterministic CUDA ops (slower)")
     # Smoke test
@@ -2369,10 +3154,10 @@ if __name__ == "__main__":
             print(f"✓ IV3-GRU smoke test passed. Saved and loaded: {ckpt}")
             exit(0)
         else:
-            # Transformer smoke (uses existing forward contract on [B, T, 156])
+            # Transformer smoke (uses existing forward contract on [B, T, 178])
             B = args.smoke_batch_size
             T = args.smoke_T
-            X = torch.randn(B, T, 156, dtype=torch.float32, device=device)
+            X = torch.randn(B, T, 178, dtype=torch.float32, device=device)
             model = SignTransformer(num_gloss=args.num_gloss, num_cat=args.num_cat).to(device)
             model.train()
             gloss_logits, cat_logits = model(X)
@@ -2396,13 +3181,18 @@ if __name__ == "__main__":
     try:
         # If dataset directories are provided, use file-based datasets; otherwise synthetic
         use_feature_files = (
-            args.model == "iv3_gru" and args.features_train is not None and args.features_val is not None
+            args.model in ["iv3_gru", "iv3_gru_ctc"] and args.features_train is not None and args.features_val is not None
         )
         use_keypoint_files = (
-            args.model == "transformer" and args.keypoints_train is not None and args.keypoints_val is not None
+            args.model in ["transformer", "transformer_ctc", "mediapipe_gru", "mediapipe_gru_ctc"] and 
+            args.keypoints_train is not None and args.keypoints_val is not None
         )
         if not (use_feature_files or use_keypoint_files):
-            raise ValueError("No data files provided. Please specify either --features-train/--features-val for IV3-GRU model or --keypoints-train/--keypoints-val for Transformer model.")
+            raise ValueError(
+                "No data files provided. Please specify either:\n"
+                "  - --features-train/--features-val for IV3-GRU model, OR\n"
+                "  - --keypoints-train/--keypoints-val for Transformer/MediaPipeGRU models"
+            )
         print(f"✓ Loaded data successfully")
         
         # Check for combined features mode (Transformer only)
@@ -2416,16 +3206,17 @@ if __name__ == "__main__":
             print(f"  - Dataset type: Transformer Combined (Keypoints + Features)")
             print(f"  - Training folder: {args.keypoints_train}")
             print(f"  - Validation folder: {args.keypoints_val}")
-            print(f"  - Keypoint key: {args.kp_key} (156-dim)")
+            print(f"  - Keypoint key: {args.kp_key} (178-dim)")
             print(f"  - Feature key: {args.feature_key} (2048-dim)")
-            print(f"  - Combined dimension: 2204 (156 + 2048)")
+            print(f"  - Combined dimension: 2226 (178 + 2048)")
         elif use_feature_files:
             print(f"  - Dataset type: IV3-GRU Features")
             print(f"  - Training folder: {args.features_train}")
             print(f"  - Validation folder: {args.features_val}")
             print(f"  - Feature key: {args.feature_key}")
         elif use_keypoint_files:
-            print(f"  - Dataset type: Transformer Keypoints")
+            model_name = args.model.replace("_", "-").upper()
+            print(f"  - Dataset type: {model_name} Keypoints")
             print(f"  - Training folder: {args.keypoints_train}")
             print(f"  - Validation folder: {args.keypoints_val}")
             print(f"  - Keypoint key: {args.kp_key}")
@@ -2457,6 +3248,36 @@ if __name__ == "__main__":
             'time_mask_ratio': args.augment_mask_ratio
         }
 
+    # Auto-detect training mode from model name if not explicitly specified
+    if args.training_mode == "classification" and args.model in ["transformer_ctc", "mediapipe_gru_ctc"]:
+        args.training_mode = "ctc"
+        print(f"⚠ Auto-detected CTC training mode from model name: {args.model}")
+    
+    # Set blank token ID for CTC
+    if args.training_mode == "ctc":
+        if args.ctc_blank_id is None:
+            args.ctc_blank_id = args.num_gloss
+        
+        print(f"✓ CTC Mode: blank_id={args.ctc_blank_id}, num_ctc_classes={args.num_ctc_classes}")
+        
+        # Validate configuration
+        try:
+            from data.labels.label_mapping import validate_ctc_config
+            validate_ctc_config(args.num_gloss, args.num_ctc_classes, args.ctc_blank_id)
+        except ValueError as e:
+            print(f"✗ Configuration error: {e}")
+            sys.exit(1)
+        except ImportError:
+            pass
+    
+    # Select appropriate collate function based on mode
+    if args.training_mode == "ctc":
+        collate_fn = collate_for_ctc
+        dataset_mode = "ctc"
+    else:
+        collate_fn = collate_keypoints_with_padding if not use_feature_files else collate_features_with_padding
+        dataset_mode = "classification"
+    
     if use_combined_features:
         # Combined mode: Load both keypoints and features
         if args.labels_train_csv is None or not os.path.exists(args.labels_train_csv):
@@ -2471,6 +3292,7 @@ if __name__ == "__main__":
             feature_key=args.feature_key,
             augment=args.augment,
             augment_params=augment_params,
+            mode=dataset_mode,
         )
         val_dataset = FSLCombinedFileDataset(
             data_dir=args.keypoints_val,
@@ -2479,9 +3301,10 @@ if __name__ == "__main__":
             feature_key=args.feature_key,
             augment=False,  # No augmentation for validation
             augment_params=None,
+            mode=dataset_mode,
         )
-        train_loader = _make_dataloader(train_dataset, batch_size, True, args, collate_fn=collate_keypoints_with_padding)
-        val_loader = _make_dataloader(val_dataset, batch_size, False, args, collate_fn=collate_keypoints_with_padding)
+        train_loader = _make_dataloader(train_dataset, batch_size, True, args, collate_fn=collate_fn)
+        val_loader = _make_dataloader(val_dataset, batch_size, False, args, collate_fn=collate_fn)
     elif use_feature_files:
         # Validate CSV files exist
         if args.labels_train_csv is None or not os.path.exists(args.labels_train_csv):
@@ -2495,6 +3318,7 @@ if __name__ == "__main__":
             feature_key=args.feature_key,
             augment=args.augment,
             augment_params=augment_params,
+            mode=dataset_mode,
         )
         val_dataset = FSLFeatureFileDataset(
             features_dir=args.features_val,
@@ -2502,9 +3326,10 @@ if __name__ == "__main__":
             feature_key=args.feature_key,
             augment=False,  # No augmentation for validation
             augment_params=None,
+            mode=dataset_mode,
         )
-        train_loader = _make_dataloader(train_dataset, batch_size, True, args, collate_fn=collate_features_with_padding)
-        val_loader = _make_dataloader(val_dataset, batch_size, False, args, collate_fn=collate_features_with_padding)
+        train_loader = _make_dataloader(train_dataset, batch_size, True, args, collate_fn=collate_fn)
+        val_loader = _make_dataloader(val_dataset, batch_size, False, args, collate_fn=collate_fn)
     elif use_keypoint_files:
         # Validate CSV files exist
         if args.labels_train_csv is None or not os.path.exists(args.labels_train_csv):
@@ -2518,6 +3343,7 @@ if __name__ == "__main__":
             kp_key=args.kp_key,
             augment=args.augment,
             augment_params=augment_params,
+            mode=dataset_mode,
         )
         val_dataset = FSLKeypointFileDataset(
             keypoints_dir=args.keypoints_val,
@@ -2525,9 +3351,10 @@ if __name__ == "__main__":
             kp_key=args.kp_key,
             augment=False,  # No augmentation for validation
             augment_params=None,
+            mode=dataset_mode,
         )
-        train_loader = _make_dataloader(train_dataset, batch_size, True, args, collate_fn=collate_keypoints_with_padding)
-        val_loader = _make_dataloader(val_dataset, batch_size, False, args, collate_fn=collate_keypoints_with_padding)
+        train_loader = _make_dataloader(train_dataset, batch_size, True, args, collate_fn=collate_fn)
+        val_loader = _make_dataloader(val_dataset, batch_size, False, args, collate_fn=collate_fn)
     
     print(f"✓ Created datasets and data loaders")
     print(f"  - Batch size: {batch_size}")
@@ -2540,7 +3367,7 @@ if __name__ == "__main__":
     if use_combined_features:
         print(f"  - Training dataset size: {len(train_dataset)} samples")
         print(f"  - Validation dataset size: {len(val_dataset)} samples")
-        print(f"  - Data format: [T, 2204] combined (156 keypoints + 2048 features)")
+        print(f"  - Data format: [T, 2226] combined (178 keypoints + 2048 features)")
     elif use_feature_files:
         print(f"  - Training dataset size: {len(train_dataset)} samples")
         print(f"  - Validation dataset size: {len(val_dataset)} samples")
@@ -2548,7 +3375,7 @@ if __name__ == "__main__":
     elif use_keypoint_files:
         print(f"  - Training dataset size: {len(train_dataset)} samples")
         print(f"  - Validation dataset size: {len(val_dataset)} samples")
-        print(f"  - Data format: [T, 156] keypoints")
+        print(f"  - Data format: [T, 178] keypoints")
 
     # Model selection
     print("\n" + "="*60)
@@ -2556,17 +3383,23 @@ if __name__ == "__main__":
     print("="*60)
     
     print("Available models:")
-    print("- transformer: Multi-head attention transformer")
-    print("- iv3_gru: InceptionV3 + GRU hybrid")
+    print("Classification models (isolated signs):")
+    print("  - transformer: Multi-head attention transformer (keypoints)")
+    print("  - mediapipe_gru: Lightweight GRU (keypoints, mobile-friendly)")
+    print("  - iv3_gru: InceptionV3 + GRU hybrid (features, offline baseline)")
+    print("CTC models (continuous recognition):")
+    print("  - transformer_ctc: Transformer with CTC (keypoints)")
+    print("  - mediapipe_gru_ctc: Lightweight GRU with CTC (keypoints)")
+    print("  - iv3_gru_ctc: InceptionV3 + GRU with CTC (features, offline baseline)")
     
     if args.model == "transformer":
         # Determine input dimension based on the data mode being used
         if use_combined_features:
-            input_dim = 2204  # 156 keypoints + 2048 features
+            input_dim = 2226  # 178 keypoints + 2048 features
         elif args.kp_key == "X2048":
             input_dim = 2048
         else:
-            input_dim = 156  # Default for keypoints
+            input_dim = 178  # Default for keypoints
         
         model = SignTransformer(
             input_dim=input_dim,
@@ -2574,6 +3407,67 @@ if __name__ == "__main__":
             num_cat=args.num_cat,
         ).to(device)
         print(f"✓ Using SignTransformer model (input_dim={input_dim})")
+    
+    elif args.model == "transformer_ctc":
+        # Determine input dimension
+        if use_combined_features:
+            input_dim = 2226
+        elif args.kp_key == "X2048":
+            input_dim = 2048
+        else:
+            input_dim = 178
+        
+        model = SignTransformerCtc(
+            input_dim=input_dim,
+            num_ctc_classes=args.num_ctc_classes,
+            num_cat=args.num_cat if hasattr(args, 'num_cat') else None,
+        ).to(device)
+        cat_info = f", num_cat={args.num_cat}" if hasattr(args, 'num_cat') and args.num_cat else ""
+        print(f"✓ Using SignTransformerCtc model (input_dim={input_dim}, num_ctc_classes={args.num_ctc_classes}{cat_info})")
+    
+    elif args.model == "mediapipe_gru":
+        # MediaPipeGRU always uses keypoints (178D)
+        if use_feature_files or args.kp_key == "X2048":
+            raise ValueError(
+                "MediaPipeGRU requires keypoint data (178D), not features (2048D). "
+                "Use --kp-files or ensure --kp-key='X' (default)"
+            )
+        
+        input_dim = 178  # Keypoints only
+        
+        model = MediaPipeGRU(
+            input_dim=input_dim,
+            num_gloss=args.num_gloss,
+            num_cat=args.num_cat,
+            projection_dim=None,  # No projection by default
+            hidden1=args.hidden1,
+            hidden2=args.hidden2,
+            dropout=args.dropout,
+            bidirectional=False,  # Default to unidirectional for speed
+        ).to(device)
+        print(f"✓ Using MediaPipeGRU model (input_dim={input_dim}, hidden1={args.hidden1}, hidden2={args.hidden2})")
+    
+    elif args.model == "mediapipe_gru_ctc":
+        # MediaPipeGRUCtc always uses keypoints (178D)
+        if use_feature_files or args.kp_key == "X2048":
+            raise ValueError(
+                "MediaPipeGRUCtc requires keypoint data (178D), not features (2048D). "
+                "Use --keypoints-train/--keypoints-val with --kp-key='X'"
+            )
+        
+        input_dim = 178
+        
+        model = MediaPipeGRUCtc(
+            input_dim=input_dim,
+            num_ctc_classes=args.num_ctc_classes,
+            num_cat=args.num_cat if hasattr(args, 'num_cat') else None,
+            projection_dim=None,
+            hidden1=args.hidden1,
+            hidden2=args.hidden2,
+            dropout=args.dropout,
+        ).to(device)
+        print(f"✓ Using MediaPipeGRUCtc model (input_dim={input_dim}, num_ctc_classes={args.num_ctc_classes})")
+    
     elif args.model == "iv3_gru":
         model = InceptionV3GRU(
             num_gloss=args.num_gloss,
@@ -2585,6 +3479,26 @@ if __name__ == "__main__":
             freeze_backbone=args.freeze_backbone,
         ).to(device)
         print("✓ Using InceptionV3GRU model")
+    
+    elif args.model == "iv3_gru_ctc":
+        # InceptionV3GRUCtc uses 2048-D features (precomputed or extracted)
+        if use_keypoint_files and not use_feature_files:
+            raise ValueError(
+                "InceptionV3GRUCtc requires feature data (2048D), not keypoints (178D). "
+                "Use --features-train/--features-val with --kp-key='X2048'"
+            )
+        
+        model = InceptionV3GRUCtc(
+            num_ctc_classes=args.num_ctc_classes,
+            num_cat=args.num_cat if hasattr(args, 'num_cat') else None,
+            hidden1=args.hidden1,
+            hidden2=args.hidden2,
+            dropout=args.dropout,
+            pretrained_backbone=args.pretrained_backbone,
+            freeze_backbone=args.freeze_backbone,
+        ).to(device)
+        print(f"✓ Using InceptionV3GRUCtc model (num_ctc_classes={args.num_ctc_classes})")
+    
     else:
         raise ValueError(f"Invalid --model {args.model}")
     
@@ -2596,67 +3510,110 @@ if __name__ == "__main__":
     # Log model information with comprehensive config
     log_comprehensive_config(args, device, model)
 
-    # Forward adapter per model (unifies calling convention)
-    if args.model == "transformer":
-        def forward_fn(m, X, lengths=None):
-            # Build attention mask from lengths if provided
-            if lengths is not None:
-                B, T, _ = X.shape
-                device = X.device
-                time_indices = torch.arange(T, device=device).unsqueeze(0)
-                mask = (time_indices < lengths.unsqueeze(1))
-            else:
-                mask = None
-            return m(X, mask=mask)
-    else:
-        def forward_fn(m, X, lengths=None):
-            return m(X, lengths=lengths, features_already=True)
-
     # Training execution
     print("\n" + "="*60)
     print("TRAINING START")
     print("="*60)
     
     try:
-        train_model(
-            model,
-            train_loader,
-            val_loader,
-            device,
-            forward_fn,
-            epochs=args.epochs,
-            alpha=args.alpha,
-            beta=args.beta,
-            output_dir=args.output_dir,
-            lr=args.lr,
-            weight_decay=args.weight_decay,
-            use_amp=args.amp,
-            grad_clip=args.grad_clip,
-            scheduler_type=args.scheduler,
-            scheduler_patience=args.scheduler_patience,
-            warmup_epochs=args.warmup_epochs,
-            early_stop_patience=args.early_stop,
-            resume_path=args.resume,
-            log_csv_path=args.log_csv,
-            gradient_accumulation_steps=args.gradient_accumulation_steps,
-            compile_model=args.compile_model,
-            curriculum_strategy=args.curriculum,
-            curriculum_epochs=args.curriculum_epochs,
-            curriculum_warmup=args.curriculum_warmup,
-            curriculum_min_weight=args.curriculum_min_weight,
-            curriculum_schedule=args.curriculum_schedule,
-            loss_weighting_strategy=args.loss_weighting,
-            grid_search_weights=args.grid_search_weights,
-            uncertainty_init=args.uncertainty_init,
-            gradnorm_alpha=args.gradnorm_alpha,
-            gradnorm_update_freq=args.gradnorm_update_freq,
-            loss_type=args.loss_type,
-            focal_gamma=args.focal_gamma,
-            focal_alpha=args.focal_alpha,
-            label_smoothing=args.label_smoothing,
-            use_ema=args.use_ema,
-            ema_decay=args.ema_decay,
-        )
+        if args.training_mode == "ctc":
+            # ============================================================
+            # CTC TRAINING PATH
+            # ============================================================
+            print(f"Training mode: CTC (Continuous Sign Language Recognition)")
+            
+            train_ctc(
+                model=model,
+                train_loader=train_loader,
+                val_loader=val_loader,
+                device=device,
+                blank_id=args.ctc_blank_id,
+                epochs=args.epochs,
+                output_dir=args.output_dir,
+                lr=args.lr,
+                weight_decay=args.weight_decay,
+                use_amp=args.amp,
+                grad_clip=args.grad_clip,
+                scheduler_type=args.scheduler,
+                scheduler_patience=args.scheduler_patience,
+                warmup_epochs=args.warmup_epochs,
+                early_stop_patience=args.early_stop,
+                resume_path=args.resume,
+                log_csv_path=args.log_csv,
+                gradient_accumulation_steps=args.gradient_accumulation_steps,
+                compile_model=args.compile_model,
+                use_ema=args.use_ema,
+                ema_decay=args.ema_decay,
+                alpha=args.alpha if hasattr(args, 'alpha') else 1.0,
+                beta=args.beta if hasattr(args, 'beta') else 0.0,
+            )
+        else:
+            # ============================================================
+            # CLASSIFICATION TRAINING PATH (existing multi-task)
+            # ============================================================
+            print(f"Training mode: Classification (Isolated Sign Recognition)")
+            
+            # Forward adapter per model (unifies calling convention)
+            if args.model == "transformer":
+                def forward_fn(m, X, lengths=None):
+                    # Build attention mask from lengths if provided
+                    if lengths is not None:
+                        B, T, _ = X.shape
+                        device = X.device
+                        time_indices = torch.arange(T, device=device).unsqueeze(0)
+                        mask = (time_indices < lengths.unsqueeze(1))
+                    else:
+                        mask = None
+                    return m(X, mask=mask)
+            
+            elif args.model == "mediapipe_gru":
+                def forward_fn(m, X, lengths=None):
+                    # MediaPipeGRU accepts keypoint sequences directly
+                    return m(X, lengths=lengths)
+            
+            else:  # iv3_gru
+                def forward_fn(m, X, lengths=None):
+                    return m(X, lengths=lengths, features_already=True)
+            
+            train_model(
+                model,
+                train_loader,
+                val_loader,
+                device,
+                forward_fn,
+                epochs=args.epochs,
+                alpha=args.alpha,
+                beta=args.beta,
+                output_dir=args.output_dir,
+                lr=args.lr,
+                weight_decay=args.weight_decay,
+                use_amp=args.amp,
+                grad_clip=args.grad_clip,
+                scheduler_type=args.scheduler,
+                scheduler_patience=args.scheduler_patience,
+                warmup_epochs=args.warmup_epochs,
+                early_stop_patience=args.early_stop,
+                resume_path=args.resume,
+                log_csv_path=args.log_csv,
+                gradient_accumulation_steps=args.gradient_accumulation_steps,
+                compile_model=args.compile_model,
+                curriculum_strategy=args.curriculum,
+                curriculum_epochs=args.curriculum_epochs,
+                curriculum_warmup=args.curriculum_warmup,
+                curriculum_min_weight=args.curriculum_min_weight,
+                curriculum_schedule=args.curriculum_schedule,
+                loss_weighting_strategy=args.loss_weighting,
+                grid_search_weights=args.grid_search_weights,
+                uncertainty_init=args.uncertainty_init,
+                gradnorm_alpha=args.gradnorm_alpha,
+                gradnorm_update_freq=args.gradnorm_update_freq,
+                loss_type=args.loss_type,
+                focal_gamma=args.focal_gamma,
+                focal_alpha=args.focal_alpha,
+                label_smoothing=args.label_smoothing,
+                use_ema=args.use_ema,
+                ema_decay=args.ema_decay,
+            )
     finally:
         # Restore stdout and close log file if it was opened
         if args.log_file and original_stdout is not None:
