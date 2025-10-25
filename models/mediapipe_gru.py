@@ -464,8 +464,8 @@ class MediaPipeGRUCtc(nn.Module):
         num_ctc_classes: int = 106,
         input_dim: int = 178,
         projection_dim: Optional[int] = None,
-        hidden1: int = 256,
-        hidden2: int = 128,
+        hidden1: int = 512,  # Increased from 256
+        hidden2: int = 256,  # Increased from 128
         dropout: float = 0.3,
         num_cat: Optional[int] = None,
     ):
@@ -529,6 +529,10 @@ class MediaPipeGRUCtc(nn.Module):
         self.do1 = nn.Dropout(dropout)  # After first GRU
         self.do2 = nn.Dropout(dropout)  # After second GRU
         
+        # Layer normalization for better training stability
+        self.ln1 = nn.LayerNorm(effective_hidden1)  # After first GRU
+        self.ln2 = nn.LayerNorm(effective_hidden2)  # After second GRU
+        
         # ===== DUAL OUTPUT HEADS =====
         # CTC head for gloss sequence prediction (per-frame)
         self.ctc_head = nn.Linear(effective_hidden2, num_ctc_classes)
@@ -545,10 +549,11 @@ class MediaPipeGRUCtc(nn.Module):
     
     def _init_weights(self):
         """
-        Initialize GRU weights for stable training.
+        Initialize GRU weights for stable CTC training.
         
         Uses Xavier uniform initialization for input-to-hidden weights and
         orthogonal initialization for hidden-to-hidden weights.
+        Enhanced initialization for better CTC convergence.
         """
         for gru in (self.gru1, self.gru2):
             for name, param in gru.named_parameters():
@@ -559,17 +564,22 @@ class MediaPipeGRUCtc(nn.Module):
                     # Hidden-to-hidden weights: Orthogonal initialization
                     nn.init.orthogonal_(param)
                 elif "bias" in name:
-                    # Bias terms: Zero initialization
-                    nn.init.zeros_(param)
+                    # Bias terms: Small positive initialization for GRU gates
+                    nn.init.uniform_(param, -0.1, 0.1)
         
         # Initialize projection layer if it exists
         if self.input_projection is not None:
-            nn.init.xavier_uniform_(self.input_projection.weight)
+            nn.init.xavier_uniform_(self.input_projection.weight, gain=0.5)
             nn.init.zeros_(self.input_projection.bias)
         
-        # Initialize CTC head
-        nn.init.xavier_uniform_(self.ctc_head.weight)
+        # Initialize CTC head with better scaling for CTC training
+        nn.init.xavier_uniform_(self.ctc_head.weight, gain=0.5)  # Smaller gain for stability
         nn.init.zeros_(self.ctc_head.bias)
+        
+        # Initialize category head if present
+        if self.category_head is not None:
+            nn.init.xavier_uniform_(self.category_head.weight, gain=0.5)
+            nn.init.zeros_(self.category_head.bias)
     
     def forward(
         self,
@@ -642,18 +652,24 @@ class MediaPipeGRUCtc(nn.Module):
             # Unpack sequence back to padded format
             y2, _ = nn.utils.rnn.pad_packed_sequence(y2, batch_first=True)
             
+            # Apply dropout to unpacked sequence
+            y2 = self.do2(y2)  # (B, T, hidden2*2)
+            
         else:
             # ===== REGULAR SEQUENCE PROCESSING =====
             # First GRU layer
             y1, _ = self.gru1(x)    # y1: (B, T, hidden1*2)
             y1 = self.do1(y1)        # Apply dropout
+            y1 = self.ln1(y1)        # Apply layer normalization
             
             # Second GRU layer
             y2, _ = self.gru2(y1)   # y2: (B, T, hidden2*2)
         
         # ===== FINAL DROPOUT =====
-        # Apply dropout to the GRU output sequence
-        y2 = self.do2(y2)  # (B, T, hidden2*2)
+        # Apply dropout to the GRU output sequence (only for regular processing)
+        if lengths is None:
+            y2 = self.do2(y2)  # (B, T, hidden2*2)
+            y2 = self.ln2(y2)  # Apply layer normalization
         
         # ===== CTC HEAD (PER-FRAME PREDICTION) =====
         # Project to CTC vocabulary size

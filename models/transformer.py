@@ -869,12 +869,12 @@ class SignTransformerCtc(nn.Module):
     
     def __init__(self,
                  input_dim=178,
-                 emb_dim=256,
+                 emb_dim=512,  # Increased from 256
                  n_heads=8,
-                 n_layers=4,
+                 n_layers=6,   # Increased from 4
                  num_ctc_classes=106,
                  num_cat=None,
-                 dropout=0.1,
+                 dropout=0.05, # Reduced from 0.1
                  max_len=300,
                  ff_dim=None):
         super(SignTransformerCtc, self).__init__()
@@ -899,6 +899,9 @@ class SignTransformerCtc(nn.Module):
             EncoderLayer(emb_dim, n_heads, ff_dim=ff_dim, dropout=dropout)
             for _ in range(n_layers)
         ])
+        
+        # Layer normalization after encoder stack for better training stability
+        self.output_norm = LayerNormalization(emb_dim)
         
         # ===== DUAL OUTPUT HEADS =====
         # CTC head for gloss sequence prediction (per-frame)
@@ -985,6 +988,9 @@ class SignTransformerCtc(nn.Module):
         # Output shape: [B, T, E]
         for encoder_layer in self.encoder_layers:
             x = encoder_layer(x, attention_mask)
+        
+        # Apply layer normalization after encoder stack
+        x = self.output_norm(x)
         
         # ===== CTC HEAD (PER-FRAME PREDICTION) =====
         # Project to CTC vocabulary size

@@ -26,6 +26,16 @@ CTC_CONFIG = {
     'window_stride': 15  # Stride between windows for sliding window inference
 }
 
+# CTC configuration for subset models (e.g., GREETINGS-only)
+CTC_CONFIG_SUBSET = {
+    'num_gloss_classes': 10,
+    'blank_token_id': 10,  # The ID for the CTC blank token (num_gloss_classes)
+    'num_ctc_classes': 11,  # num_gloss_classes + 1 for blank token
+    'beam_width': 10,  # For beam search decoding
+    'window_size': 60,  # Frames per window for sliding window inference
+    'window_stride': 15  # Stride between windows for sliding window inference
+}
+
 # Model configuration
 MODEL_CONFIG = {
     'transformer': {
@@ -42,7 +52,7 @@ MODEL_CONFIG = {
     },
     'transformer_ctc': {
         'enabled': True,  # Enabled for continuous sign recognition
-        'checkpoint_path': 'trained_models/transformer/greetings_ctc/SignTransformerCtc_best.pt',
+        'checkpoint_path': 'trained_models/transformer/greetings_ctc_v2/SignTransformerCtc_best.pt',
         'model_type': 'transformer_ctc',
         'num_gloss_classes': 10,  # greetings_ctc model has 10 gloss classes
         'num_ctc_classes': 11,  # greetings_ctc model has 11 CTC classes (10 gloss + 1 blank)
@@ -68,15 +78,33 @@ MODEL_CONFIG = {
     },
     'iv3_gru_ctc': {
         'enabled': True,  # Enabled for continuous sign recognition
-        'checkpoint_path': 'trained_models/iv3_gru/greetings_ctc/InceptionV3GRUCtc_best.pt',
+        'checkpoint_path': 'trained_models/iv3_gru/greetings_ctc_v2/InceptionV3GRUCtc_best.pt',
         'model_type': 'iv3_gru_ctc',
-        'num_gloss_classes': CTC_CONFIG['num_gloss_classes'],
-        'num_ctc_classes': CTC_CONFIG['num_ctc_classes'],
+        'num_gloss_classes': 10,  # greetings_ctc model has 10 gloss classes
+        'num_ctc_classes': 11,  # greetings_ctc model has 11 CTC classes (10 gloss + 1 blank)
+        'num_category_classes': 1,  # greetings_ctc model has 1 category class (dual-task)
+        'blank_token_id': 10,  # greetings_ctc model uses blank_id=10 (subset training)
         'display_name': 'InceptionV3+GRU-CTC',
         'input_dim': 2048,
         'supports_keypoints': False,
         'supports_features': True,
-        'training_mode': 'ctc'
+        'training_mode': 'ctc',
+        'ctc_config': 'subset'  # Use subset CTC config for proper blank_id
+    },
+    'mediapipe_gru_ctc': {
+        'enabled': True,  # Enabled for continuous sign recognition
+        'checkpoint_path': 'trained_models/mediapipe_gru/greetings_ctc_v3/MediaPipeGRUCtc_best.pt',
+        'model_type': 'mediapipe_gru_ctc',
+        'num_gloss_classes': 10,  # greetings_ctc model has 10 gloss classes
+        'num_ctc_classes': 11,  # greetings_ctc model has 11 CTC classes (10 gloss + 1 blank)
+        'num_category_classes': 1,  # greetings_ctc model has 1 category class (dual-task)
+        'blank_token_id': 10,  # greetings_ctc model uses blank_id=10 (subset training)
+        'display_name': 'MediaPipe-GRU CTC',
+        'input_dim': 178,  # MediaPipe keypoints
+        'supports_keypoints': True,
+        'supports_features': False,
+        'training_mode': 'ctc',
+        'ctc_config': 'subset'  # Use subset CTC config for proper blank_id
     }
 }
 

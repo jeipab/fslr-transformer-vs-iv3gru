@@ -502,8 +502,8 @@ class InceptionV3GRUCtc(nn.Module):
     def __init__(
         self,
         num_ctc_classes: int = 106,
-        hidden1: int = 256,
-        hidden2: int = 128,
+        hidden1: int = 512,  # Increased from 256
+        hidden2: int = 256,  # Increased from 128
         dropout: float = 0.3,
         pretrained_backbone: bool = True,
         freeze_backbone: bool = True,
@@ -565,6 +565,10 @@ class InceptionV3GRUCtc(nn.Module):
         self.do1 = nn.Dropout(dropout)  # After first GRU
         self.do2 = nn.Dropout(dropout)  # After second GRU
         
+        # Layer normalization for better training stability
+        self.ln1 = nn.LayerNorm(effective_hidden1)  # After first GRU
+        self.ln2 = nn.LayerNorm(effective_hidden2)  # After second GRU
+        
         # ===== DUAL OUTPUT HEADS =====
         # CTC head for gloss sequence prediction (per-frame)
         self.ctc_head = nn.Linear(effective_hidden2, num_ctc_classes)
@@ -581,10 +585,11 @@ class InceptionV3GRUCtc(nn.Module):
     
     def _init_weights(self):
         """
-        Initialize GRU weights for stable training.
+        Initialize GRU weights for stable CTC training.
         
         Uses Xavier uniform initialization for input-to-hidden weights and
         orthogonal initialization for hidden-to-hidden weights.
+        Enhanced initialization for better CTC convergence.
         """
         for gru in (self.gru1, self.gru2):
             for name, param in gru.named_parameters():
@@ -595,12 +600,17 @@ class InceptionV3GRUCtc(nn.Module):
                     # Hidden-to-hidden weights: Orthogonal initialization
                     nn.init.orthogonal_(param)
                 elif "bias" in name:
-                    # Bias terms: Zero initialization
-                    nn.init.zeros_(param)
+                    # Bias terms: Small positive initialization for GRU gates
+                    nn.init.uniform_(param, -0.1, 0.1)
         
-        # Initialize CTC head
-        nn.init.xavier_uniform_(self.ctc_head.weight)
+        # Initialize CTC head with better scaling for CTC training
+        nn.init.xavier_uniform_(self.ctc_head.weight, gain=0.5)  # Smaller gain for stability
         nn.init.zeros_(self.ctc_head.bias)
+        
+        # Initialize category head if present
+        if self.category_head is not None:
+            nn.init.xavier_uniform_(self.category_head.weight, gain=0.5)
+            nn.init.zeros_(self.category_head.bias)
     
     def extract_features(self, frames: torch.Tensor) -> torch.Tensor:
         """
@@ -716,18 +726,24 @@ class InceptionV3GRUCtc(nn.Module):
             # Unpack sequence back to padded format
             y2, _ = nn.utils.rnn.pad_packed_sequence(y2, batch_first=True)
             
+            # Apply dropout to unpacked sequence
+            y2 = self.do2(y2)  # (B, T, hidden2*2)
+            
         else:
             # ===== REGULAR SEQUENCE PROCESSING =====
             # First GRU layer
             y1, _ = self.gru1(seq)  # y1: (B, T, hidden1*2)
             y1 = self.do1(y1)        # Apply dropout
+            y1 = self.ln1(y1)        # Apply layer normalization
             
             # Second GRU layer
             y2, _ = self.gru2(y1)   # y2: (B, T, hidden2*2)
         
         # ===== FINAL DROPOUT =====
-        # Apply dropout to the GRU output sequence
-        y2 = self.do2(y2)  # (B, T, hidden2*2)
+        # Apply dropout to the GRU output sequence (only for regular processing)
+        if lengths is None:
+            y2 = self.do2(y2)  # (B, T, hidden2*2)
+            y2 = self.ln2(y2)  # Apply layer normalization
         
         # Get batch size and sequence length
         B, T = y2.shape[0], y2.shape[1]
@@ -744,14 +760,12 @@ class InceptionV3GRUCtc(nn.Module):
         # ===== CATEGORY HEAD (PER-FRAME PREDICTION) =====
         if self.category_head is not None:
             # Category prediction per frame: [B, T, hidden2*2] → [B, T, num_cat]
-            # Ensure y2 maintains time dimension for per-frame prediction
-            if len(y2.shape) == 2:
-                # If y2 is [B, hidden2*2], we need to expand it to [B, T, hidden2*2]
-                # This shouldn't happen with proper GRU processing, but handle it gracefully
-                B = y2.shape[0]
-                T = ctc_log_probs.shape[1]  # Use CTC output time dimension
-                hidden_dim = y2.shape[1]
-                y2 = y2.unsqueeze(1).expand(B, T, hidden_dim)  # [B, T, hidden2*2]
+            # y2 should always have shape [B, T, hidden2*2] for proper GRU processing
+            if len(y2.shape) != 3:
+                raise ValueError(
+                    f"Expected y2 to have 3 dimensions [B, T, hidden2*2], got shape {y2.shape}. "
+                    f"This indicates a problem with GRU sequence processing."
+                )
             
             cat_logits = self.category_head(y2)  # [B, T, num_cat]
             

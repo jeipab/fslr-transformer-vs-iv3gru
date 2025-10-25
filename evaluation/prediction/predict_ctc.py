@@ -22,7 +22,7 @@ sys.path.insert(0, str(project_root))
 
 from models import SignTransformerCtc, MediaPipeGRUCtc, InceptionV3GRUCtc
 from evaluation.ctc_utils import greedy_ctc_decoder, beam_search_ctc_decoder, calculate_wer
-from streamlit_app.core.config import CTC_CONFIG
+from streamlit_app.core.config import CTC_CONFIG, CTC_CONFIG_SUBSET, MODEL_CONFIG
 from data.labels.label_mapping import load_label_mappings
 
 
@@ -160,7 +160,20 @@ class CTCPredictor:
         self.model_type = model_type.lower()
         self.checkpoint_path = checkpoint_path
         self.device = device or torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-        self.blank_id = blank_id if blank_id is not None else CTC_CONFIG['blank_token_id']
+        
+        # Auto-detect blank_id from model configuration or use provided value
+        if blank_id is not None:
+            self.blank_id = blank_id
+        else:
+            # Check if this is a subset model (e.g., GREETINGS-only)
+            if self.model_type in MODEL_CONFIG and 'ctc_config' in MODEL_CONFIG[self.model_type]:
+                if MODEL_CONFIG[self.model_type]['ctc_config'] == 'subset':
+                    self.blank_id = CTC_CONFIG_SUBSET['blank_token_id']
+                else:
+                    self.blank_id = CTC_CONFIG['blank_token_id']
+            else:
+                # Fallback to default CTC config
+                self.blank_id = CTC_CONFIG['blank_token_id']
         
         self.model, self.input_dim = self._load_model()
         self._load_checkpoint()
@@ -194,7 +207,7 @@ class CTCPredictor:
             model = SignTransformerCtc(input_dim=input_dim, num_ctc_classes=num_ctc_classes, num_cat=num_cat, max_len=1000)
         
         elif self.model_type == 'mediapipe_gru_ctc':
-            input_dim = 156
+            input_dim = 178
             try:
                 checkpoint = torch.load(self.checkpoint_path, map_location='cpu')
                 state_dict = checkpoint.get('model_state_dict', checkpoint.get('state_dict', checkpoint.get('model', checkpoint)))
@@ -202,22 +215,26 @@ class CTCPredictor:
                 # Extract CTC class count from checkpoint
                 if 'ctc_head.weight' in state_dict:
                     num_ctc_classes = state_dict['ctc_head.weight'].shape[0]
-                    print(f"✓ Detected MediaPipe CTC classes: {num_ctc_classes}")
                 else:
-                    num_ctc_classes = CTC_CONFIG['num_ctc_classes']
-                    print(f"⚠️ Using default MediaPipe CTC classes: {num_ctc_classes}")
+                    # Use subset config for GREETINGS models
+                    if self.blank_id == CTC_CONFIG_SUBSET['blank_token_id']:
+                        num_ctc_classes = CTC_CONFIG_SUBSET['num_ctc_classes']
+                    else:
+                        num_ctc_classes = CTC_CONFIG['num_ctc_classes']
                 
                 if 'gru1.weight_hh_l0' in state_dict and 'gru2.weight_hh_l0' in state_dict:
                     # For bidirectional GRU: [3*hidden*2, hidden] -> hidden = shape[1]
                     gru1_hidden = state_dict['gru1.weight_hh_l0'].shape[1]
                     gru2_hidden = state_dict['gru2.weight_hh_l0'].shape[1]
-                    print(f"✓ Detected MediaPipe GRU hidden dimensions: gru1={gru1_hidden}, gru2={gru2_hidden}")
                 else:
                     gru1_hidden = 256
                     gru2_hidden = 128
-                    print(f"⚠️ Using default MediaPipe GRU hidden dimensions: gru1={gru1_hidden}, gru2={gru2_hidden}")
             except:
-                num_ctc_classes = CTC_CONFIG['num_ctc_classes']
+                # Use subset config for GREETINGS models
+                if self.blank_id == CTC_CONFIG_SUBSET['blank_token_id']:
+                    num_ctc_classes = CTC_CONFIG_SUBSET['num_ctc_classes']
+                else:
+                    num_ctc_classes = CTC_CONFIG['num_ctc_classes']
                 gru1_hidden = 256
                 gru2_hidden = 128
             
@@ -234,41 +251,41 @@ class CTCPredictor:
                 # Extract CTC class count from checkpoint
                 if 'ctc_head.weight' in state_dict:
                     num_ctc_classes = state_dict['ctc_head.weight'].shape[0]
-                    print(f"✓ Detected CTC classes: {num_ctc_classes}")
                 else:
-                    num_ctc_classes = CTC_CONFIG['num_ctc_classes']
-                    print(f"⚠️ Using default CTC classes: {num_ctc_classes}")
+                    # Use subset config for GREETINGS models
+                    if self.blank_id == CTC_CONFIG_SUBSET['blank_token_id']:
+                        num_ctc_classes = CTC_CONFIG_SUBSET['num_ctc_classes']
+                    else:
+                        num_ctc_classes = CTC_CONFIG['num_ctc_classes']
                 
                 # Check for category head in checkpoint
                 num_cat = None
                 if 'category_head.weight' in state_dict:
                     num_cat = state_dict['category_head.weight'].shape[0]
-                    print(f"✓ Detected category classes: {num_cat}")
-                else:
-                    print(f"⚠️ No category head found in checkpoint")
                 
                 # Try to extract hidden dimensions from checkpoint
                 if 'gru1.weight_hh_l0' in state_dict and 'gru2.weight_hh_l0' in state_dict:
                     # For bidirectional GRU: weight_hh_l0 has shape [3*hidden_size*2, hidden_size]
-                    # From error: checkpoint has [90, 30] -> gru1_hidden = 90 // 3 // 2 = 15
-                    # But this is wrong! Let's check the actual shape
+                    # The hidden_size is actually shape[1], not shape[0] // 3 // 2
                     gru1_shape = state_dict['gru1.weight_hh_l0'].shape
                     gru2_shape = state_dict['gru2.weight_hh_l0'].shape
-                    print(f"✓ GRU weight shapes: gru1={gru1_shape}, gru2={gru2_shape}")
                     
                     # For bidirectional GRU: [3*hidden*2, hidden] -> hidden = shape[1]
                     gru1_hidden = state_dict['gru1.weight_hh_l0'].shape[1]
                     gru2_hidden = state_dict['gru2.weight_hh_l0'].shape[1]
-                    print(f"✓ Detected GRU hidden dimensions: gru1={gru1_hidden}, gru2={gru2_hidden}")
                 else:
                     gru1_hidden = 256
                     gru2_hidden = 128
-                    print(f"⚠️ Using default GRU hidden dimensions: gru1={gru1_hidden}, gru2={gru2_hidden}")
             except:
-                num_ctc_classes = CTC_CONFIG['num_ctc_classes']
+                # Use subset config for GREETINGS models
+                if self.blank_id == CTC_CONFIG_SUBSET['blank_token_id']:
+                    num_ctc_classes = CTC_CONFIG_SUBSET['num_ctc_classes']
+                    num_cat = 1  # GREETINGS subset has 1 category
+                else:
+                    num_ctc_classes = CTC_CONFIG['num_ctc_classes']
+                    num_cat = None
                 gru1_hidden = 256
                 gru2_hidden = 128
-                num_cat = None
             
             model = InceptionV3GRUCtc(
                 num_ctc_classes=num_ctc_classes,
@@ -314,7 +331,7 @@ class CTCPredictor:
                 
                 filtered_state_dict[key] = value
             else:
-                print(f"⚠️ Skipping unexpected key: {key}")
+                pass
         
         # Load the filtered state dict
         self.model.load_state_dict(filtered_state_dict, strict=False)
@@ -375,6 +392,7 @@ class CTCPredictor:
             predicted_sequence = greedy_ctc_decoder(log_probs, self.blank_id, input_length)[0]
             probs = torch.exp(log_probs[0])
             confidence_scores = [float(probs[:, g].max()) for g in predicted_sequence] if len(predicted_sequence) > 0 else []
+            
         else:
             predicted_sequence, log_prob = beam_search_ctc_decoder(log_probs, self.blank_id, beam_width, input_length)[0]
             avg_conf = np.exp(log_prob / max(len(predicted_sequence), 1))
@@ -531,14 +549,15 @@ class CTCPredictor:
         window_categories = []
         window_category_confidences = []
         
-        for start_idx in range(0, seq_len - window_size + 1, stride):
-            end_idx = start_idx + window_size
-            window_data = X[start_idx:end_idx].unsqueeze(0).to(self.device)  # [1, window_size, features]
-            input_length = torch.tensor([window_size], dtype=torch.long).to(self.device)
+        # Handle sequences shorter than window_size
+        if seq_len < window_size:
+            # Use the entire sequence as a single window
+            window_data = X.unsqueeze(0).to(self.device)  # [1, seq_len, features]
+            input_length = torch.tensor([seq_len], dtype=torch.long).to(self.device)
             
-            windows.append((start_idx, end_idx))
+            windows.append((0, seq_len))
             
-            # Get model prediction for this window
+            # Get model prediction for this single window
             with torch.no_grad():
                 if self.model_type == 'iv3_gru_ctc':
                     output = self.model(window_data, features_already=True)
@@ -557,6 +576,7 @@ class CTCPredictor:
                 window_pred = greedy_ctc_decoder(log_probs, self.blank_id, input_length)[0]
                 probs = torch.exp(log_probs[0])
                 window_conf = [float(probs[:, g].max()) for g in window_pred] if len(window_pred) > 0 else []
+                
             else:
                 window_pred, log_prob = beam_search_ctc_decoder(log_probs, self.blank_id, beam_width, input_length)[0]
                 avg_conf = np.exp(log_prob / max(len(window_pred), 1))
@@ -581,6 +601,58 @@ class CTCPredictor:
             window_confidences.append(window_conf)
             window_categories.append(window_cat_preds)
             window_category_confidences.append(window_cat_confs)
+        else:
+            # Normal sliding window processing for longer sequences
+            for start_idx in range(0, seq_len - window_size + 1, stride):
+                end_idx = start_idx + window_size
+                window_data = X[start_idx:end_idx].unsqueeze(0).to(self.device)  # [1, window_size, features]
+                input_length = torch.tensor([window_size], dtype=torch.long).to(self.device)
+                
+                windows.append((start_idx, end_idx))
+                
+                # Get model prediction for this window
+                with torch.no_grad():
+                    if self.model_type == 'iv3_gru_ctc':
+                        output = self.model(window_data, features_already=True)
+                    else:
+                        output = self.model(window_data)
+                    
+                    # Handle dual-task models
+                    cat_logits = None
+                    if isinstance(output, tuple):
+                        log_probs, cat_logits = output
+                    else:
+                        log_probs = output
+                
+                # Decode window prediction
+                if decode_method == 'greedy':
+                    window_pred = greedy_ctc_decoder(log_probs, self.blank_id, input_length)[0]
+                    probs = torch.exp(log_probs[0])
+                    window_conf = [float(probs[:, g].max()) for g in window_pred] if len(window_pred) > 0 else []
+                else:
+                    window_pred, log_prob = beam_search_ctc_decoder(log_probs, self.blank_id, beam_width, input_length)[0]
+                    avg_conf = np.exp(log_prob / max(len(window_pred), 1))
+                    window_conf = [float(avg_conf)] * len(window_pred)
+                
+                # Process category predictions
+                window_cat_preds = []
+                window_cat_confs = []
+                if cat_logits is not None:
+                    cat_probs = torch.softmax(cat_logits[0], dim=1)  # [T, num_categories]
+                    for i, pred_token in enumerate(window_pred):
+                        if i < cat_probs.shape[0]:
+                            cat_pred = torch.argmax(cat_probs[i]).item()
+                            cat_conf = float(cat_probs[i, cat_pred])
+                            window_cat_preds.append(cat_pred)
+                            window_cat_confs.append(cat_conf)
+                        else:
+                            window_cat_preds.append(0)  # Default category
+                            window_cat_confs.append(0.0)
+                
+                window_predictions.append(window_pred)
+                window_confidences.append(window_conf)
+                window_categories.append(window_cat_preds)
+                window_category_confidences.append(window_cat_confs)
         
         # Aggregate predictions across windows
         all_predictions = []
@@ -608,7 +680,7 @@ class CTCPredictor:
         if all_predictions:
             # Group predictions by frame position and take the most confident
             position_groups = {}
-            for pred, cat_info, pos, conf in zip(all_predictions, all_categories, frame_positions, [max(c) for c in window_confidences]):
+            for pred, cat_info, pos, conf in zip(all_predictions, all_categories, frame_positions, [max(c) if c else 0.0 for c in window_confidences]):
                 if pos not in position_groups or conf > position_groups[pos][1]:
                     position_groups[pos] = (pred, conf, cat_info)
             
