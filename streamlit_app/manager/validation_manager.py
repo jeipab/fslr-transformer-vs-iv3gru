@@ -17,7 +17,7 @@ from tqdm import tqdm
 project_root = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(project_root))
 
-from ..core.config import MODEL_CONFIG, is_ctc_model
+from ..core.config import MODEL_CONFIG, is_ctc_model, get_model_config
 from ..components.utils import detect_file_type
 
 
@@ -76,53 +76,29 @@ class ValidationDataset:
         data = np.load(sample['npz_path'])
         
         if self.model_type == 'transformer':
-            # Try to load the appropriate key based on expected input dimensions
-            # Determine input data based on model's detected input dimension
-            from ..core.config import get_model_input_dim
+            # Transformer uses 178-dimensional keypoint features
+            if 'X' not in data:
+                raise ValueError(f"NPZ file {sample['npz_path']} missing 'X' key for transformer model (expected 178-D keypoints)")
+            X = torch.from_numpy(data['X']).float()
             
-            input_dim = get_model_input_dim('transformer')
-            if input_dim == 2048:
-                if 'X2048' not in data:
-                    raise ValueError(f"NPZ file {sample['npz_path']} missing 'X2048' key for 2048-D transformer model")
-                X = torch.from_numpy(data['X2048']).float()
-            elif input_dim == 156:
-                if 'X' not in data:
-                    raise ValueError(f"NPZ file {sample['npz_path']} missing 'X' key for 156-D transformer model")
-                X = torch.from_numpy(data['X']).float()
-            elif input_dim == 2204:
-                # Combined features: concatenate keypoints (156-D) and features (2048-D)
-                if 'X' not in data or 'X2048' not in data:
-                    raise ValueError(f"NPZ file {sample['npz_path']} missing 'X' or 'X2048' key for 2204-D combined transformer model")
-                
-                # Load both keypoints and features
-                X_keypoints = torch.from_numpy(data['X']).float()  # [T, 156]
-                X_features = torch.from_numpy(data['X2048']).float()  # [T, 2048]
-                
-                # Ensure both have the same sequence length
-                if X_keypoints.shape[0] != X_features.shape[0]:
-                    raise ValueError(f"Sequence length mismatch: keypoints {X_keypoints.shape[0]} vs features {X_features.shape[0]}")
-                
-                # Concatenate along feature dimension: [T, 156] + [T, 2048] = [T, 2204]
-                X = torch.cat([X_keypoints, X_features], dim=1)
-            else:
-                # Fallback to legacy behavior if input_dim not detected yet
-                if 'X2048' in data:
-                    X = torch.from_numpy(data['X2048']).float()
-                elif 'X' in data:
-                    X = torch.from_numpy(data['X']).float()
-                else:
-                    raise ValueError(f"NPZ file {sample['npz_path']} missing both 'X' and 'X2048' keys for transformer")
-            
-            # Handle sequence length truncation
+            # Truncate sequence if too long
             if X.shape[0] > 300:
                 X = X[:300, :]
             
             return X, sample['gloss'], sample['cat'], sample['occluded'], sample['file']
         
         elif self.model_type == 'iv3_gru':
+            # IV3-GRU uses 2048-dimensional InceptionV3 features
             if 'X2048' not in data:
-                raise ValueError(f"NPZ file {sample['npz_path']} missing 'X2048' key for IV3-GRU")
+                raise ValueError(f"NPZ file {sample['npz_path']} missing 'X2048' key for IV3-GRU model (expected 2048-D features)")
             X = torch.from_numpy(data['X2048']).float()
+            return X, sample['gloss'], sample['cat'], sample['occluded'], sample['file']
+        
+        elif self.model_type == 'mediapipe_gru':
+            # MediaPipe-GRU uses 178-dimensional keypoint features
+            if 'X' not in data:
+                raise ValueError(f"NPZ file {sample['npz_path']} missing 'X' key for MediaPipe-GRU model (expected 178-D keypoints)")
+            X = torch.from_numpy(data['X']).float()
             return X, sample['gloss'], sample['cat'], sample['occluded'], sample['file']
         
         else:
@@ -155,38 +131,26 @@ class ModelValidator:
         print(f"✓ Initialized {self.model_type} validator on {self.device}")
     
     def _load_model(self):
-        """Load the appropriate model architecture."""
+        """Load the appropriate model architecture using Streamlit config."""
+        # Get model configuration from Streamlit config
+        model_config = get_model_config(self.model_type)
+        if not model_config:
+            raise ValueError(f"Model type '{self.model_type}' not found in Streamlit config")
+        
         if self.model_type == 'transformer':
             from models.transformer import SignTransformer
             
-            # Try to determine input_dim from checkpoint
-            try:
-                checkpoint = torch.load(self.checkpoint_path, map_location='cpu')
-                state_dict = checkpoint.get('model_state_dict', checkpoint.get('state_dict', checkpoint.get('model', checkpoint)))
-                
-                # Check embedding layer shape to determine input_dim
-                if 'embedding.weight' in state_dict:
-                    embedding_shape = state_dict['embedding.weight'].shape
-                    input_dim = embedding_shape[1]  # embedding.weight is [emb_dim, input_dim]
-                    print(f"Detected input dimension from checkpoint: {input_dim}")
-                else:
-                    input_dim = 156  # Default fallback
-                    print(f"Warning: Could not detect input dimension from checkpoint, using default: {input_dim}")
-            except Exception as e:
-                input_dim = 156  # Default fallback
-                print(f"Warning: Could not load checkpoint to detect input dimension, using default: {input_dim}: {e}")
-            
-            # Update the model configuration with detected input dimension
-            from ..core.config import update_model_input_dim
-            update_model_input_dim('transformer', input_dim)
+            # Use input dimension from Streamlit config (178 for keypoints)
+            input_dim = model_config.get('input_dim', 178)
+            print(f"Using input dimension from config: {input_dim}")
             
             model = SignTransformer(
                 input_dim=input_dim,
                 emb_dim=256,
                 n_heads=8,
                 n_layers=4,
-                num_gloss=105,
-                num_cat=10,
+                num_gloss=model_config['num_gloss_classes'],    # From Streamlit config
+                num_cat=model_config['num_category_classes'],  # From Streamlit config
                 dropout=0.1,
                 max_len=300,
                 pooling_method='mean'
@@ -194,7 +158,7 @@ class ModelValidator:
         elif self.model_type == 'iv3_gru':
             from models.iv3_gru import InceptionV3GRU
             
-            # Try to determine hidden sizes and class counts from checkpoint
+            # Try to determine hidden sizes from checkpoint
             try:
                 checkpoint = torch.load(self.checkpoint_path, map_location='cpu')
                 state_dict = checkpoint.get('model_state_dict', checkpoint.get('state_dict', checkpoint.get('model', checkpoint)))
@@ -206,35 +170,56 @@ class ModelValidator:
                     gru2_hidden = state_dict['gru2.weight_hh_l0'].shape[0] // 3
                     print(f"Detected GRU hidden sizes from checkpoint: hidden1={gru1_hidden}, hidden2={gru2_hidden}")
                 else:
-                    gru1_hidden = 30  # Fallback to trained model defaults
-                    gru2_hidden = 22  # Fallback to trained model defaults
-                    print(f"Warning: Could not detect GRU hidden sizes from checkpoint, using trained model defaults: hidden1={gru1_hidden}, hidden2={gru2_hidden}")
-                
-                # Detect class counts from classification head weights
-                if 'gloss_head.weight' in state_dict and 'category_head.weight' in state_dict:
-                    num_gloss = state_dict['gloss_head.weight'].shape[0]
-                    num_cat = state_dict['category_head.weight'].shape[0]
-                    print(f"Detected class counts from checkpoint: num_gloss={num_gloss}, num_cat={num_cat}")
-                else:
-                    num_gloss = 10  # Fallback to trained model defaults
-                    num_cat = 1  # Fallback to trained model defaults
-                    print(f"Warning: Could not detect class counts from checkpoint, using trained model defaults: num_gloss={num_gloss}, num_cat={num_cat}")
+                    gru1_hidden = 16  # Fallback to default
+                    gru2_hidden = 12  # Fallback to default
+                    print(f"Warning: Could not detect GRU hidden sizes from checkpoint, using defaults: hidden1={gru1_hidden}, hidden2={gru2_hidden}")
                     
             except Exception as e:
-                gru1_hidden = 30  # Fallback to trained model defaults
-                gru2_hidden = 22  # Fallback to trained model defaults
-                num_gloss = 10  # Fallback to trained model defaults
-                num_cat = 1  # Fallback to trained model defaults
-                print(f"Warning: Could not load checkpoint to detect model parameters, using trained model defaults: hidden1={gru1_hidden}, hidden2={gru2_hidden}, num_gloss={num_gloss}, num_cat={num_cat}: {e}")
+                gru1_hidden = 16  # Fallback to default
+                gru2_hidden = 12  # Fallback to default
+                print(f"Warning: Could not load checkpoint to detect GRU hidden sizes, using defaults: {e}")
             
             model = InceptionV3GRU(
-                num_gloss=num_gloss,
-                num_cat=num_cat,
+                num_gloss=model_config['num_gloss_classes'],    # From Streamlit config
+                num_cat=model_config['num_category_classes'],  # From Streamlit config
                 hidden1=gru1_hidden,
                 hidden2=gru2_hidden,
                 dropout=0.3,
                 pretrained_backbone=True,
                 freeze_backbone=True
+            )
+        elif self.model_type == 'mediapipe_gru':
+            from models.mediapipe_gru import MediaPipeGRU
+            
+            # Try to determine hidden sizes from checkpoint
+            try:
+                checkpoint = torch.load(self.checkpoint_path, map_location='cpu')
+                state_dict = checkpoint.get('model_state_dict', checkpoint.get('state_dict', checkpoint.get('model', checkpoint)))
+                
+                # Detect GRU hidden sizes from checkpoint weights
+                if 'gru1.weight_hh_l0' in state_dict and 'gru2.weight_hh_l0' in state_dict:
+                    # GRU weight_hh has shape [3*hidden, hidden] for each layer
+                    gru1_hidden = state_dict['gru1.weight_hh_l0'].shape[0] // 3
+                    gru2_hidden = state_dict['gru2.weight_hh_l0'].shape[0] // 3
+                    print(f"Detected GRU hidden sizes from checkpoint: hidden1={gru1_hidden}, hidden2={gru2_hidden}")
+                else:
+                    gru1_hidden = 256  # Fallback to default
+                    gru2_hidden = 128  # Fallback to default
+                    print(f"Warning: Could not detect GRU hidden sizes from checkpoint, using defaults: hidden1={gru1_hidden}, hidden2={gru2_hidden}")
+                    
+            except Exception as e:
+                gru1_hidden = 256  # Fallback to default
+                gru2_hidden = 128  # Fallback to default
+                print(f"Warning: Could not load checkpoint to detect GRU hidden sizes, using defaults: {e}")
+            
+            model = MediaPipeGRU(
+                num_gloss=model_config['num_gloss_classes'],    # From Streamlit config
+                num_cat=model_config['num_category_classes'],   # From Streamlit config
+                input_dim=model_config['input_dim'],           # From Streamlit config
+                hidden1=gru1_hidden,
+                hidden2=gru2_hidden,
+                dropout=0.3,
+                bidirectional=False
             )
         else:
             raise ValueError(f"Unknown model type: {self.model_type}")
@@ -323,6 +308,26 @@ class ModelValidator:
             
             with torch.no_grad():
                 gloss_logits, cat_logits = self.model(X, lengths, features_already=True)
+        
+        elif self.model_type == 'mediapipe_gru':
+            # Get lengths and pad sequences
+            lengths = torch.tensor([x.shape[0] for x in batch_data], dtype=torch.long)
+            max_len = max(x.shape[0] for x in batch_data)
+            
+            padded_batch = []
+            for x in batch_data:
+                if x.shape[0] < max_len:
+                    pad_len = max_len - x.shape[0]
+                    padded_x = torch.cat([x, torch.zeros(pad_len, x.shape[1])], dim=0)
+                else:
+                    padded_x = x
+                padded_batch.append(padded_x)
+            
+            X = torch.stack(padded_batch).to(self.device)
+            lengths = lengths.to(self.device)
+            
+            with torch.no_grad():
+                gloss_logits, cat_logits = self.model(X, lengths)
         
         return gloss_logits, cat_logits
     

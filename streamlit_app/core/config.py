@@ -45,7 +45,7 @@ MODEL_CONFIG = {
         'num_gloss_classes': 10,  # greetings_classification model has 10 gloss classes
         'num_category_classes': 1,  # greetings_classification model has 1 category class
         'display_name': 'SignTransformer',
-        'input_dim': None, 
+        'input_dim': 178,  # MediaPipe keypoints (89 keypoints × 2 coordinates)
         'supports_keypoints': True,  
         'supports_features': True,
         'training_mode': 'classification'  # 'classification' or 'ctc'
@@ -59,7 +59,7 @@ MODEL_CONFIG = {
         'num_category_classes': 1,  # greetings_ctc model has 1 category class (dual-task)
         'max_len': 1000,  # Support longer continuous sequences
         'display_name': 'SignTransformer-CTC',
-        'input_dim': None,
+        'input_dim': 178,  # MediaPipe keypoints (89 keypoints × 2 coordinates)
         'supports_keypoints': True,
         'supports_features': True,
         'training_mode': 'ctc'
@@ -68,8 +68,8 @@ MODEL_CONFIG = {
         'enabled': True,
         'checkpoint_path': 'trained_models/iv3_gru/greetings_classification/InceptionV3GRU_best.pt',
         'model_type': 'iv3_gru',
-        'num_gloss_classes': CTC_CONFIG['num_gloss_classes'],
-        'num_category_classes': 10,
+        'num_gloss_classes': 10,  # greetings_classification model has 10 gloss classes
+        'num_category_classes': 1,  # greetings_classification model has 1 category class
         'display_name': 'InceptionV3+GRU',
         'input_dim': 2048, 
         'supports_keypoints': False,  

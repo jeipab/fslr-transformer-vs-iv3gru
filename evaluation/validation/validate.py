@@ -31,8 +31,9 @@ from tqdm import tqdm
 project_root = Path(__file__).parent.parent
 sys.path.insert(0, str(project_root))
 
-from models import SignTransformer, InceptionV3GRU
+from models import SignTransformer, InceptionV3GRU, MediaPipeGRU
 from data.labels.label_mapping import load_label_mappings, format_prediction_results
+from streamlit_app.core.config import MODEL_CONFIG, get_model_config
 
 # Suppress warnings for cleaner output
 warnings.filterwarnings('ignore', category=UserWarning)
@@ -142,36 +143,10 @@ class ValidationDataset:
         data = np.load(sample['npz_path'])
         
         if self.model_type == 'transformer':
-            # Step 2: Extract features for transformer model
-            # Check what input dimension the model expects
-            expected_dim = self.model.embedding.weight.shape[1]
-            
-            # Load appropriate features based on expected dimension
-            if expected_dim == 2204 and 'X' in data and 'X2048' in data:
-                # Concatenated features: keypoints (156) + InceptionV3 (2048) = 2204
-                X_keypoints = torch.from_numpy(data['X']).float()
-                X_iv3 = torch.from_numpy(data['X2048']).float()
-                # Ensure same sequence length
-                min_len = min(X_keypoints.shape[0], X_iv3.shape[0])
-                X = torch.cat([X_keypoints[:min_len], X_iv3[:min_len]], dim=1)
-            elif expected_dim == 2048 and 'X2048' in data:
-                # InceptionV3 features only
-                X = torch.from_numpy(data['X2048']).float()
-            elif expected_dim == 156 and 'X' in data:
-                # Keypoint features only
-                X = torch.from_numpy(data['X']).float()
-            elif 'X2048' in data:
-                # Default to InceptionV3 if available
-                X = torch.from_numpy(data['X2048']).float()
-            elif 'X' in data:
-                # Fallback to keypoints
-                X = torch.from_numpy(data['X']).float()
-            else:
-                raise ValueError(f"NPZ file {sample['npz_path']} missing both 'X' and 'X2048' keys for transformer")
-            
-            # Verify dimension matches
-            if X.shape[1] != expected_dim:
-                raise ValueError(f"Expected {expected_dim} input features, got {X.shape[1]}")
+            # Step 2: Extract features for transformer model (178-D keypoints)
+            if 'X' not in data:
+                raise ValueError(f"NPZ file {sample['npz_path']} missing 'X' key for transformer model (expected 178-D keypoints)")
+            X = torch.from_numpy(data['X']).float()
             
             # Step 3: Handle sequence length truncation (max 300 frames)
             if X.shape[0] > 300:
@@ -180,10 +155,17 @@ class ValidationDataset:
             return X, sample['gloss'], sample['cat'], sample['occluded'], sample['file'], sample['signer'], sample['duration']
         
         elif self.model_type == 'iv3_gru':
-            # Step 2: Extract features for IV3-GRU model (requires InceptionV3 features)
+            # Step 2: Extract features for IV3-GRU model (requires 2048-D InceptionV3 features)
             if 'X2048' not in data:
-                raise ValueError(f"NPZ file {sample['npz_path']} missing 'X2048' key for IV3-GRU")
+                raise ValueError(f"NPZ file {sample['npz_path']} missing 'X2048' key for IV3-GRU model (expected 2048-D features)")
             X = torch.from_numpy(data['X2048']).float()
+            return X, sample['gloss'], sample['cat'], sample['occluded'], sample['file'], sample['signer'], sample['duration']
+        
+        elif self.model_type == 'mediapipe_gru':
+            # Step 2: Extract features for MediaPipe-GRU model (requires 178-D keypoint features)
+            if 'X' not in data:
+                raise ValueError(f"NPZ file {sample['npz_path']} missing 'X' key for MediaPipe-GRU model (expected 178-D keypoints)")
+            X = torch.from_numpy(data['X']).float()
             return X, sample['gloss'], sample['cat'], sample['occluded'], sample['file'], sample['signer'], sample['duration']
         
         else:
@@ -233,49 +215,47 @@ class ModelValidator:
     
     def _load_model(self):
         """
-        Load the appropriate model architecture with auto-detected parameters.
+        Load the appropriate model architecture using Streamlit config parameters.
         
         Steps:
-        1. Load checkpoint to inspect model parameters
-        2. Auto-detect architecture parameters from checkpoint weights
-        3. Create model instance with detected parameters
-        4. Move model to target device
+        1. Get model configuration from Streamlit config
+        2. Load checkpoint to inspect model parameters
+        3. Auto-detect architecture parameters from checkpoint weights
+        4. Create model instance with detected parameters
+        5. Move model to target device
         
         Returns:
             Model instance ready for inference
         """
+        # Step 1: Get model configuration from Streamlit config
+        model_config = get_model_config(self.model_type)
+        if not model_config:
+            raise ValueError(f"Model type '{self.model_type}' not found in Streamlit config")
+        
+        # Step 2: Load checkpoint to inspect parameters
+        checkpoint = torch.load(self.checkpoint_path, map_location='cpu')
+        state_dict = checkpoint.get('model_state_dict', checkpoint.get('state_dict', checkpoint.get('model', checkpoint)))
+        
         if self.model_type == 'transformer':
-            # Step 1: Load checkpoint to inspect parameters
-            checkpoint = torch.load(self.checkpoint_path, map_location='cpu')
-            state_dict = checkpoint.get('model_state_dict', checkpoint.get('state_dict', checkpoint.get('model', checkpoint)))
+            # Step 3: Use input dimension from Streamlit config
+            input_dim = model_config.get('input_dim', 178)
+            print(f"Using input_dim={input_dim} from Streamlit config")
             
-            # Step 2: Auto-detect input dimension from embedding layer
-            if 'embedding.weight' in state_dict:
-                embedding_shape = state_dict['embedding.weight'].shape
-                input_dim = embedding_shape[1]  # embedding.weight is [emb_dim, input_dim]
-                print(f"Detected input_dim={input_dim} from checkpoint embedding layer")
-            else:
-                input_dim = 156  # Default fallback for keypoint features
-                print(f"Warning: Could not detect input_dim from checkpoint, using default {input_dim}")
-            
-            # Step 3: Create transformer model with detected parameters
+            # Step 4: Create transformer model with config parameters
             model = SignTransformer(
-                input_dim=input_dim,      # Auto-detected from checkpoint
-                emb_dim=256,             # Fixed architecture parameter
-                n_heads=8,              # Fixed architecture parameter
-                n_layers=4,             # Fixed architecture parameter
-                num_gloss=105,          # Fixed: number of sign classes
-                num_cat=10,             # Fixed: number of category classes
-                dropout=0.1,           # Fixed architecture parameter
-                max_len=300,           # Fixed: maximum sequence length
-                pooling_method='mean'   # Fixed: pooling method
+                input_dim=input_dim,                    # From Streamlit config
+                emb_dim=256,                          # Fixed architecture parameter
+                n_heads=8,                           # Fixed architecture parameter
+                n_layers=4,                          # Fixed architecture parameter
+                num_gloss=model_config['num_gloss_classes'],    # From Streamlit config
+                num_cat=model_config['num_category_classes'],  # From Streamlit config
+                dropout=0.1,                         # Fixed architecture parameter
+                max_len=300,                         # Fixed: maximum sequence length
+                pooling_method='mean'                # Fixed: pooling method
             )
-        elif self.model_type == 'iv3_gru':
-            # Step 1: Load checkpoint to inspect parameters
-            checkpoint = torch.load(self.checkpoint_path, map_location='cpu')
-            state_dict = checkpoint.get('model_state_dict', checkpoint.get('state_dict', checkpoint.get('model', checkpoint)))
             
-            # Step 2: Auto-detect GRU hidden sizes from checkpoint weights
+        elif self.model_type == 'iv3_gru':
+            # Step 3: Auto-detect GRU hidden sizes from checkpoint weights
             if 'gru1.weight_hh_l0' in state_dict and 'gru2.weight_hh_l0' in state_dict:
                 # GRU weight_hh has shape [3*hidden, hidden] for each layer
                 gru1_hidden = state_dict['gru1.weight_hh_l0'].shape[0] // 3
@@ -286,20 +266,44 @@ class ModelValidator:
                 gru2_hidden = 12  # Default fallback
                 print(f"Warning: Could not detect GRU hidden sizes from checkpoint, using defaults: hidden1={gru1_hidden}, hidden2={gru2_hidden}")
             
-            # Step 3: Create IV3-GRU model with detected parameters
+            # Step 4: Create IV3-GRU model with config parameters
             model = InceptionV3GRU(
-                num_gloss=105,          # Fixed: number of sign classes
-                num_cat=10,             # Fixed: number of category classes
-                hidden1=gru1_hidden,   # Auto-detected from checkpoint
-                hidden2=gru2_hidden,   # Auto-detected from checkpoint
-                dropout=0.3,           # Fixed architecture parameter
-                pretrained_backbone=True,  # Fixed: use pretrained InceptionV3
-                freeze_backbone=True   # Fixed: freeze backbone weights
+                num_gloss=model_config['num_gloss_classes'],    # From Streamlit config
+                num_cat=model_config['num_category_classes'],   # From Streamlit config
+                hidden1=gru1_hidden,                           # Auto-detected from checkpoint
+                hidden2=gru2_hidden,                           # Auto-detected from checkpoint
+                dropout=0.3,                                   # Fixed architecture parameter
+                pretrained_backbone=True,                      # Fixed: use pretrained InceptionV3
+                freeze_backbone=True                           # Fixed: freeze backbone weights
             )
+            
+        elif self.model_type == 'mediapipe_gru':
+            # Step 3: Auto-detect GRU hidden sizes from checkpoint weights
+            if 'gru1.weight_hh_l0' in state_dict and 'gru2.weight_hh_l0' in state_dict:
+                # GRU weight_hh has shape [3*hidden, hidden] for each layer
+                gru1_hidden = state_dict['gru1.weight_hh_l0'].shape[0] // 3
+                gru2_hidden = state_dict['gru2.weight_hh_l0'].shape[0] // 3
+                print(f"Detected GRU hidden sizes from checkpoint: hidden1={gru1_hidden}, hidden2={gru2_hidden}")
+            else:
+                gru1_hidden = 256  # Default fallback
+                gru2_hidden = 128  # Default fallback
+                print(f"Warning: Could not detect GRU hidden sizes from checkpoint, using defaults: hidden1={gru1_hidden}, hidden2={gru2_hidden}")
+            
+            # Step 4: Create MediaPipe-GRU model with config parameters
+            model = MediaPipeGRU(
+                num_gloss=model_config['num_gloss_classes'],    # From Streamlit config
+                num_cat=model_config['num_category_classes'],   # From Streamlit config
+                input_dim=model_config['input_dim'],           # From Streamlit config
+                hidden1=gru1_hidden,                           # Auto-detected from checkpoint
+                hidden2=gru2_hidden,                           # Auto-detected from checkpoint
+                dropout=0.3,                                   # Fixed architecture parameter
+                bidirectional=False                            # Fixed: unidirectional GRU
+            )
+            
         else:
             raise ValueError(f"Unknown model type: {self.model_type}")
         
-        # Step 4: Move model to target device
+        # Step 5: Move model to target device
         return model.to(self.device)
     
     def _load_checkpoint(self):
@@ -408,6 +412,29 @@ class ModelValidator:
             # Step 3: Run inference (features_already=True means input is already InceptionV3 features)
             with torch.no_grad():
                 gloss_logits, cat_logits = self.model(X, lengths, features_already=True)
+        
+        elif self.model_type == 'mediapipe_gru':
+            # Step 1: Get sequence lengths and pad sequences for GRU
+            lengths = torch.tensor([x.shape[0] for x in batch_data], dtype=torch.long)
+            max_len = max(x.shape[0] for x in batch_data)
+            
+            padded_batch = []
+            for x in batch_data:
+                if x.shape[0] < max_len:
+                    # Pad with zeros to max length
+                    pad_len = max_len - x.shape[0]
+                    padded_x = torch.cat([x, torch.zeros(pad_len, x.shape[1])], dim=0)
+                else:
+                    padded_x = x
+                padded_batch.append(padded_x)
+            
+            # Step 2: Stack into batch tensors and move to device
+            X = torch.stack(padded_batch).to(self.device)  # [batch_size, max_len, features]
+            lengths = lengths.to(self.device)  # [batch_size]
+            
+            # Step 3: Run inference
+            with torch.no_grad():
+                gloss_logits, cat_logits = self.model(X, lengths)
         
         return gloss_logits, cat_logits
     
@@ -1029,7 +1056,7 @@ def main():
     )
     
     # Required arguments
-    parser.add_argument('--model', choices=['transformer', 'iv3_gru'], required=True,
+    parser.add_argument('--model', choices=['transformer', 'iv3_gru', 'mediapipe_gru'], required=True,
                        help='Model type to validate')
     parser.add_argument('--checkpoint', type=str, required=True,
                        help='Path to model checkpoint (.pt file)')

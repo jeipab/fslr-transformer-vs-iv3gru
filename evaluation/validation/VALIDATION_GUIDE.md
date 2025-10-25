@@ -10,7 +10,7 @@ python -m evaluation.validation.validate --model <model_type> --checkpoint <chec
 
 ### Required Arguments
 
-- `--model`: Model type (`transformer` or `iv3_gru`)
+- `--model`: Model type (`transformer`, `iv3_gru`, or `mediapipe_gru`)
 - `--checkpoint`: Path to model checkpoint (.pt file)
 
 ### Optional Arguments
@@ -52,6 +52,12 @@ python -m evaluation.validation.validate --model transformer --checkpoint traine
 
 ```bash
 python -m evaluation.validation.validate --model iv3_gru --checkpoint trained_models/iv3_gru/optimal/InceptionV3GRU_best.pt
+```
+
+### MediaPipe-GRU Model
+
+```bash
+python -m evaluation.validation.validate --model mediapipe_gru --checkpoint trained_models/mediapipe_gru/optimal/MediaPipeGRU_best.pt
 ```
 
 ### With Options
@@ -167,6 +173,9 @@ python -m evaluation.validation.validate --model transformer --checkpoint traine
 
 # IV3-GRU
 python -m evaluation.validation.validate --model iv3_gru --checkpoint trained_models/iv3_gru/optimal/InceptionV3GRU_best.pt --output-dir results_iv3gru
+
+# MediaPipe-GRU
+python -m evaluation.validation.validate --model mediapipe_gru --checkpoint trained_models/mediapipe_gru/optimal/MediaPipeGRU_best.pt --output-dir results_mediapipe_gru
 ```
 
 Compare `overall_results.json` from each output directory.
