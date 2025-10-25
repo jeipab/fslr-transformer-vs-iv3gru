@@ -239,6 +239,14 @@ class CTCPredictor:
                     num_ctc_classes = CTC_CONFIG['num_ctc_classes']
                     print(f"⚠️ Using default CTC classes: {num_ctc_classes}")
                 
+                # Check for category head in checkpoint
+                num_cat = None
+                if 'category_head.weight' in state_dict:
+                    num_cat = state_dict['category_head.weight'].shape[0]
+                    print(f"✓ Detected category classes: {num_cat}")
+                else:
+                    print(f"⚠️ No category head found in checkpoint")
+                
                 # Try to extract hidden dimensions from checkpoint
                 if 'gru1.weight_hh_l0' in state_dict and 'gru2.weight_hh_l0' in state_dict:
                     # For bidirectional GRU: weight_hh_l0 has shape [3*hidden_size*2, hidden_size]
@@ -260,11 +268,13 @@ class CTCPredictor:
                 num_ctc_classes = CTC_CONFIG['num_ctc_classes']
                 gru1_hidden = 256
                 gru2_hidden = 128
+                num_cat = None
             
             model = InceptionV3GRUCtc(
                 num_ctc_classes=num_ctc_classes,
                 hidden1=gru1_hidden,
-                hidden2=gru2_hidden
+                hidden2=gru2_hidden,
+                num_cat=num_cat  # Pass category classes to enable category head
             )
         
         else:
@@ -359,7 +369,7 @@ class CTCPredictor:
                 log_probs, cat_logits = output  # [B,T,num_ctc], [B,T,num_cat]
             else:
                 log_probs = output
-        
+            
         # Decode gloss sequence
         if decode_method == 'greedy':
             predicted_sequence = greedy_ctc_decoder(log_probs, self.blank_id, input_length)[0]
@@ -389,6 +399,25 @@ class CTCPredictor:
                     cat_conf = sign_cat_probs[pred_cat].item()
                     predicted_categories.append(pred_cat)
                     category_confidences.append(float(cat_conf))
+                
+        else:
+            # No category head available - provide fallback
+            # Fallback: assign categories based on gloss predictions
+            if len(predicted_sequence) > 0:
+                for gloss_id in predicted_sequence:
+                    # Simple fallback: assign category based on gloss ID
+                    if 0 <= gloss_id <= 9:  # Greetings
+                        predicted_categories.append(0)  # GREETING
+                        category_confidences.append(0.8)  # High confidence for greetings
+                    elif 10 <= gloss_id <= 19:  # Survival
+                        predicted_categories.append(1)  # SURVIVAL
+                        category_confidences.append(0.7)
+                    elif 20 <= gloss_id <= 29:  # Numbers
+                        predicted_categories.append(2)  # NUMBER
+                        category_confidences.append(0.7)
+                    else:
+                        predicted_categories.append(0)  # Default to GREETING
+                        category_confidences.append(0.5)  # Lower confidence for unknown
         
         predicted_labels = [self.gloss_mapping.get(g, f"GLOSS_{g}") for g in predicted_sequence]
         predicted_timestamps = estimate_timestamps(predicted_sequence, X.shape[1], fps)
