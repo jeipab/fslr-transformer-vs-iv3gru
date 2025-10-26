@@ -184,7 +184,8 @@ class MediaPipeGRU(nn.Module):
             hidden_size=hidden1,
             num_layers=1,
             batch_first=True,
-            bidirectional=bidirectional
+            bidirectional=True,
+            linear_before_reset=False
         )
         
         # Calculate effective hidden size after first GRU
@@ -195,7 +196,8 @@ class MediaPipeGRU(nn.Module):
             hidden_size=hidden2,
             num_layers=1,
             batch_first=True,
-            bidirectional=bidirectional
+            bidirectional=True,
+            linear_before_reset=False
         )
         
         # Calculate effective hidden size after second GRU
