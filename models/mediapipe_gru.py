@@ -184,8 +184,7 @@ class MediaPipeGRU(nn.Module):
             hidden_size=hidden1,
             num_layers=1,
             batch_first=True,
-            bidirectional=True,
-            linear_before_reset=False
+            bidirectional=bidirectional
         )
         
         # Calculate effective hidden size after first GRU
@@ -196,8 +195,7 @@ class MediaPipeGRU(nn.Module):
             hidden_size=hidden2,
             num_layers=1,
             batch_first=True,
-            bidirectional=True,
-            linear_before_reset=False
+            bidirectional=bidirectional
         )
         
         # Calculate effective hidden size after second GRU
@@ -467,7 +465,7 @@ class MediaPipeGRUCtc(nn.Module):
         input_dim: int = 178,
         projection_dim: Optional[int] = None,
         hidden1: int = 512,  # Increased from 256
-        hidden2: int = 256,  # Increased from 128
+        hidden2: int = 512,  # Increased from 128
         dropout: float = 0.3,
         num_cat: Optional[int] = None,
     ):
@@ -509,22 +507,22 @@ class MediaPipeGRUCtc(nn.Module):
             hidden_size=hidden1,
             num_layers=1,
             batch_first=True,
-            bidirectional=True
+            bidirectional=False
         )
         
         # Calculate effective hidden size after first bidirectional GRU
-        effective_hidden1 = hidden1 * 2  # *2 for bidirectional
+        effective_hidden1 = hidden1
         
         self.gru2 = nn.GRU(
             input_size=effective_hidden1,
             hidden_size=hidden2,
             num_layers=1,
             batch_first=True,
-            bidirectional=True
+            bidirectional=False
         )
         
         # Calculate effective hidden size after second bidirectional GRU
-        effective_hidden2 = hidden2 * 2  # *2 for bidirectional
+        effective_hidden2 = hidden2
         
         # ===== REGULARIZATION =====
         # Dropout layers for regularization
