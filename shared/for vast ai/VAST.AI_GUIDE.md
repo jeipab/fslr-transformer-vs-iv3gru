@@ -60,7 +60,7 @@ cloudflared tunnel --url http://localhost:8081 --protocol http2
 **Clone the repository:**
 
 ```bash
-git clone -b continuous https://github.com/jeipab/fslr-transformer-vs-iv3gru.git
+git clone https://github.com/jeipab/fslr-transformer-vs-iv3gru.git
 ```
 
 **Navigate to the project directory:**
