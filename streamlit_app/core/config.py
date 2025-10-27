@@ -105,7 +105,7 @@ MODEL_CONFIG = {
     },
     'mediapipe_gru_ctc': {
         'enabled': True,  # Enabled for continuous sign recognition
-        'checkpoint_path': 'trained_models/mediapipe_gru/greetings_ctc_v3/MediaPipeGRUCtc_best.pt',
+        'checkpoint_path': 'trained_models/mediapipe_gru/greetings_ctc_v4/MediaPipeGRUCtc_best.pt',
         'model_type': 'mediapipe_gru_ctc',
         'num_gloss_classes': 10,  # greetings_ctc model has 10 gloss classes
         'num_ctc_classes': 11,  # greetings_ctc model has 11 CTC classes (10 gloss + 1 blank)

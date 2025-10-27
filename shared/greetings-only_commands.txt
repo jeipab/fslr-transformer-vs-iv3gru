@@ -310,7 +310,7 @@ python -m training.train \
     --labels-val-csv data/processed/greetings_val.csv \
     --kp-key X \
     --hidden1 512 \
-    --hidden2 256 \
+    --hidden2 512 \
     --dropout 0.2 \
     --amp \
     --augment \
@@ -322,9 +322,9 @@ python -m training.train \
     --early-stop 50 \
     --weight-decay 1e-4 \
     --grad-clip 1.0 \
-    --output-dir trained_models/mediapipe_gru/greetings_ctc_v3
+    --output-dir trained_models/mediapipe_gru/greetings_ctc_v4
 
-Output: trained_models/mediapipe_gru/greetings_ctc_v3/
+Output: trained_models/mediapipe_gru/greetings_ctc_v4/
   - best_model.pth
   - training_*.log
   - training_*_metrics.csv
