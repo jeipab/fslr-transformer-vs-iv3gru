@@ -356,7 +356,10 @@ def preprocess_single_video(uploaded_file, filename: str):
             'file_type': 'npz',
             'frame_count': npz_data['X'].shape[0] if 'X' in npz_data else npz_data['X2048'].shape[0] if 'X2048' in npz_data else 0,
             'source_type': 'video',
-            'preprocessing_options': options
+            'preprocessing_options': options,
+            # Respect the user's selected mode at preprocessing time
+            'is_continuous': st.session_state.get('recognition_mode', 'isolated') == 'continuous',
+            'continuous_metadata': None
         }
         
         # Move from video_files to preprocessed_files
@@ -476,7 +479,10 @@ def preprocess_multiple_videos_batch(uploaded_files):
                     'file_type': 'npz',
                     'frame_count': npz_data['X'].shape[0] if 'X' in npz_data else npz_data['X2048'].shape[0] if 'X2048' in npz_data else 0,
                     'source_type': 'video',
-                    'preprocessing_options': options
+                    'preprocessing_options': options,
+                    # Respect the user's selected mode at preprocessing time
+                    'is_continuous': st.session_state.get('recognition_mode', 'isolated') == 'continuous',
+                    'continuous_metadata': None
                 }
                 
                 # Move from video_files to preprocessed_files

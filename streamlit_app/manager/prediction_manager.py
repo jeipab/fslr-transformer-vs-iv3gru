@@ -1127,20 +1127,32 @@ def render_continuous_sequence_predictions(filename: str, npz_data: Dict, metada
         
         st.markdown("---")
         
-        # Render CTC prediction card
-        render_ctc_prediction_card(
-            file_name=filename,
-            predicted_sequence=results.get('predicted_sequence', []),
-            predicted_labels=results.get('predicted_labels', []),
-            confidence_scores=results.get('confidence_scores'),
-            ground_truth_available=ground_truth is not None,
-            predicted_categories=results.get('predicted_categories'),
-            category_confidences=results.get('category_confidences'),
-            category_accuracy=results.get('category_accuracy'),
-            gloss_accuracy=results.get('gloss_accuracy')
-        )
+        # Side-by-side layout: Prediction Results on left, Video Preview on right
+        col_left, col_right = st.columns([1, 1], gap="large")
         
-        # Sequence comparison
+        with col_left:
+            # Render CTC prediction card
+            render_ctc_prediction_card(
+                file_name=filename,
+                predicted_sequence=results.get('predicted_sequence', []),
+                predicted_labels=results.get('predicted_labels', []),
+                confidence_scores=results.get('confidence_scores'),
+                ground_truth_available=ground_truth is not None,
+                predicted_categories=results.get('predicted_categories'),
+                category_confidences=results.get('category_confidences'),
+                category_accuracy=results.get('category_accuracy'),
+                gloss_accuracy=results.get('gloss_accuracy')
+            )
+        
+        with col_right:
+            # Auto-generate and show keypoint video preview (Grid background), like isolated mode
+            try:
+                from ..components.components import render_inline_video_preview
+                render_inline_video_preview(npz_data, metadata, filename, unique_key_suffix)
+            except Exception as e:
+                st.warning(f"Video preview unavailable: {str(e)}")
+        
+        # Sequence comparison and temporal alignment below
         if ground_truth:
             st.markdown("---")
             render_sequence_comparison(
