@@ -1,0 +1,43 @@
+{
+  "file_name": "continuous_0003_S1_strategy1.mov",
+  "signer": "S1",
+  "strategy": 1,
+  "strategy_name": "same_category",
+  "total_duration_sec": 12.18,
+  "num_segments": 3,
+  "segments": [
+    {
+      "index": 0,
+      "timestamp_start_ms": 0,
+      "timestamp_end_ms": 4050,
+      "gloss": 5,
+      "gloss_label": "IM FINE",
+      "category": 0,
+      "category_label": "GREETING",
+      "signer": "S1",
+      "original_file": "clip_0631_im_fine_S1.MOV"
+    },
+    {
+      "index": 1,
+      "timestamp_start_ms": 4050,
+      "timestamp_end_ms": 8116,
+      "gloss": 3,
+      "gloss_label": "HELLO",
+      "category": 0,
+      "category_label": "GREETING",
+      "signer": "S1",
+      "original_file": "clip_0378_hello_S1.MOV"
+    },
+    {
+      "index": 2,
+      "timestamp_start_ms": 8116,
+      "timestamp_end_ms": 12183,
+      "gloss": 1,
+      "gloss_label": "GOOD AFTERNOON",
+      "category": 0,
+      "category_label": "GREETING",
+      "signer": "S1",
+      "original_file": "clip_0132_good_afternoon_S1.MOV"
+    }
+  ]
+}

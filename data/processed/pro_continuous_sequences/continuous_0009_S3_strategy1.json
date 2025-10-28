@@ -1,0 +1,58 @@
+{
+  "file_name": "continuous_0009_S3_strategy1.npz",
+  "signer": "S3",
+  "strategy": 1,
+  "strategy_name": "same_category",
+  "total_duration_sec": 16.13,
+  "num_segments": 4,
+  "segments": [
+    {
+      "index": 0,
+      "timestamp_start_ms": 0,
+      "timestamp_end_ms": 4033,
+      "gloss": 1,
+      "gloss_label": "GOOD AFTERNOON",
+      "category": 0,
+      "category_label": "GREETING",
+      "occluded": 1,
+      "signer": "S3",
+      "original_file": "clip_0144_good_afternoon_S3"
+    },
+    {
+      "index": 1,
+      "timestamp_start_ms": 4033,
+      "timestamp_end_ms": 8066,
+      "gloss": 2,
+      "gloss_label": "GOOD EVENING",
+      "category": 0,
+      "category_label": "GREETING",
+      "occluded": 1,
+      "signer": "S3",
+      "original_file": "clip_0270_good_evening_S3"
+    },
+    {
+      "index": 2,
+      "timestamp_start_ms": 8066,
+      "timestamp_end_ms": 12099,
+      "gloss": 4,
+      "gloss_label": "HOW ARE YOU",
+      "category": 0,
+      "category_label": "GREETING",
+      "occluded": 0,
+      "signer": "S3",
+      "original_file": "clip_0515_how_are_you_S3"
+    },
+    {
+      "index": 3,
+      "timestamp_start_ms": 12099,
+      "timestamp_end_ms": 16132,
+      "gloss": 3,
+      "gloss_label": "HELLO",
+      "category": 0,
+      "category_label": "GREETING",
+      "occluded": 1,
+      "signer": "S3",
+      "original_file": "clip_0389_hello_S3"
+    }
+  ]
+}

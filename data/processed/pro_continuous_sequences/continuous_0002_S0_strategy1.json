@@ -1,0 +1,58 @@
+{
+  "file_name": "continuous_0002_S0_strategy1.npz",
+  "signer": "S0",
+  "strategy": 1,
+  "strategy_name": "same_category",
+  "total_duration_sec": 16.1,
+  "num_segments": 4,
+  "segments": [
+    {
+      "index": 0,
+      "timestamp_start_ms": 0,
+      "timestamp_end_ms": 4033,
+      "gloss": 4,
+      "gloss_label": "HOW ARE YOU",
+      "category": 0,
+      "category_label": "GREETING",
+      "occluded": 1,
+      "signer": "S0",
+      "original_file": "clip_0501_how_are_you_S0"
+    },
+    {
+      "index": 1,
+      "timestamp_start_ms": 4033,
+      "timestamp_end_ms": 8066,
+      "gloss": 4,
+      "gloss_label": "HOW ARE YOU",
+      "category": 0,
+      "category_label": "GREETING",
+      "occluded": 1,
+      "signer": "S0",
+      "original_file": "clip_0497_how_are_you_S0"
+    },
+    {
+      "index": 2,
+      "timestamp_start_ms": 8066,
+      "timestamp_end_ms": 12099,
+      "gloss": 8,
+      "gloss_label": "YOURE WELCOME",
+      "category": 0,
+      "category_label": "GREETING",
+      "occluded": 1,
+      "signer": "S0",
+      "original_file": "clip_0974_youre_welcome_S0"
+    },
+    {
+      "index": 3,
+      "timestamp_start_ms": 12099,
+      "timestamp_end_ms": 16099,
+      "gloss": 9,
+      "gloss_label": "SEE YOU TOMORROW",
+      "category": 0,
+      "category_label": "GREETING",
+      "occluded": 1,
+      "signer": "S0",
+      "original_file": "clip_1101_see_you_tomorrow_S0"
+    }
+  ]
+}

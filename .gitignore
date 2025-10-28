@@ -41,9 +41,6 @@ data/*
 # Demo data (for sample showcases)
 !data/demo/
 !data/demo/**
-!data/demo/*.npz
-!data/demo/*.mov
-!data/demo/*.MOV
 
 # Labels (metadata or annotation files)
 !data/labels/
@@ -60,15 +57,17 @@ data/*
 # Selective un-ignore for processed/raw data
 # ------------------------------
 
-# Processed data: only track "raw_continuous_sequences"
+# Processed data: only track "pro_continuous_sequences"
+!data/processed/
 data/processed/*
-!data/processed/raw_continuous_sequences/
-!data/processed/raw_continuous_sequences/**
+!data/processed/pro_continuous_sequences/
+!data/processed/pro_continuous_sequences/**
 
-# Raw data: only track "pro_continuous_sequences"
+# Raw data: only track "raw_continuous_sequences"
+!data/raw/
 data/raw/*
-!data/raw/pro_continuous_sequences/
-!data/raw/pro_continuous_sequences/**
+!data/raw/raw_continuous_sequences/
+!data/raw/raw_continuous_sequences/**
 
 # ------------------------------
 # Exclude caches inside allowed data dirs
@@ -82,21 +81,6 @@ data/splitting/**/*.pyc
 # Allow specific CSV reference
 # ------------------------------
 !data/labels_reference.csv
-
-# ======================================================
-# 📊 Data File Formats (Ignored)
-# ======================================================
-*.npy
-*.csv
-*.npz
-*.parquet
-
-# ======================================================
-# 🎞️ Video Files (Ignored)
-# ======================================================
-*.mp4
-*.avi
-*.mov
 
 # ======================================================
 # 📓 Notebooks & Tools

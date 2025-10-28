@@ -1,0 +1,46 @@
+{
+  "file_name": "continuous_0001_S0_strategy1.npz",
+  "signer": "S0",
+  "strategy": 1,
+  "strategy_name": "same_category",
+  "total_duration_sec": 12.13,
+  "num_segments": 3,
+  "segments": [
+    {
+      "index": 0,
+      "timestamp_start_ms": 0,
+      "timestamp_end_ms": 4066,
+      "gloss": 0,
+      "gloss_label": "GOOD MORNING",
+      "category": 0,
+      "category_label": "GREETING",
+      "occluded": 1,
+      "signer": "S0",
+      "original_file": "clip_0001_good_morning_S0"
+    },
+    {
+      "index": 1,
+      "timestamp_start_ms": 4066,
+      "timestamp_end_ms": 8099,
+      "gloss": 6,
+      "gloss_label": "NICE TO MEET YOU",
+      "category": 0,
+      "category_label": "GREETING",
+      "occluded": 1,
+      "signer": "S0",
+      "original_file": "clip_0749_nice_to_meet_you_S0"
+    },
+    {
+      "index": 2,
+      "timestamp_start_ms": 8099,
+      "timestamp_end_ms": 12132,
+      "gloss": 3,
+      "gloss_label": "HELLO",
+      "category": 0,
+      "category_label": "GREETING",
+      "occluded": 1,
+      "signer": "S0",
+      "original_file": "clip_0372_hello_S0"
+    }
+  ]
+}

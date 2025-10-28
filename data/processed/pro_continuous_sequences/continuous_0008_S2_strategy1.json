@@ -1,0 +1,46 @@
+{
+  "file_name": "continuous_0008_S2_strategy1.npz",
+  "signer": "S2",
+  "strategy": 1,
+  "strategy_name": "same_category",
+  "total_duration_sec": 12.1,
+  "num_segments": 3,
+  "segments": [
+    {
+      "index": 0,
+      "timestamp_start_ms": 0,
+      "timestamp_end_ms": 4033,
+      "gloss": 2,
+      "gloss_label": "GOOD EVENING",
+      "category": 0,
+      "category_label": "GREETING",
+      "occluded": 0,
+      "signer": "S2",
+      "original_file": "clip_0261_good_evening_S2"
+    },
+    {
+      "index": 1,
+      "timestamp_start_ms": 4033,
+      "timestamp_end_ms": 8066,
+      "gloss": 4,
+      "gloss_label": "HOW ARE YOU",
+      "category": 0,
+      "category_label": "GREETING",
+      "occluded": 1,
+      "signer": "S2",
+      "original_file": "clip_0508_how_are_you_S2"
+    },
+    {
+      "index": 2,
+      "timestamp_start_ms": 8066,
+      "timestamp_end_ms": 12099,
+      "gloss": 7,
+      "gloss_label": "THANK YOU",
+      "category": 0,
+      "category_label": "GREETING",
+      "occluded": 1,
+      "signer": "S2",
+      "original_file": "clip_0862_thank_you_S2"
+    }
+  ]
+}
