@@ -1,75 +1,118 @@
-# Python
+# ======================================================
+# 🐍 Python
+# ======================================================
 __pycache__/
 *.pyc
 *.ipynb
 
-# Virtual Environments
+# ======================================================
+# 🧩 Virtual Environments
+# ======================================================
 .venv/
 env/
 venv/
 venv311/
 
-# Archive
+# ======================================================
+# 🗃️ Archives & Temporary Files
+# ======================================================
 .archive/
 
-# Streamlit
+# ======================================================
+# 🖥️ Streamlit
+# ======================================================
 .streamlit/Guides/
 
-# Data Directory Structure
+# ======================================================
+# 📁 Data Directory Structure
+# ======================================================
+
 # Ignore everything in data/ by default
 data/*
 
-# Allow specific data subdirectories and files
+# Allow core scripts or initialization files
 !data/__init__.py
 !data/resize_360p.py
+
+# ------------------------------
+# Allow specific subdirectories
+# ------------------------------
+
+# Demo data (for sample showcases)
 !data/demo/
 !data/demo/**
+!data/demo/*.npz
+!data/demo/*.mov
+!data/demo/*.MOV
+
+# Labels (metadata or annotation files)
 !data/labels/
+
+# Data splitting configurations
 !data/splitting/
 !data/splitting/**
+
+# Color correction utilities
 !data/color_correction/
 !data/color_correction/**
 
-# Exclude pycache in allowed data directories
+# ------------------------------
+# Selective un-ignore for processed/raw data
+# ------------------------------
+
+# Processed data: only track "raw_continuous_sequences"
+data/processed/*
+!data/processed/raw_continuous_sequences/
+!data/processed/raw_continuous_sequences/**
+
+# Raw data: only track "pro_continuous_sequences"
+data/raw/*
+!data/raw/pro_continuous_sequences/
+!data/raw/pro_continuous_sequences/**
+
+# ------------------------------
+# Exclude caches inside allowed data dirs
+# ------------------------------
 data/labels/__pycache__/
 data/labels/**/*.pyc
 data/splitting/__pycache__/
 data/splitting/**/*.pyc
 
-# Data File Formats
+# ------------------------------
+# Allow specific CSV reference
+# ------------------------------
+!data/labels_reference.csv
+
+# ======================================================
+# 📊 Data File Formats (Ignored)
+# ======================================================
 *.npy
 *.csv
 *.npz
 *.parquet
 
-# Video Files
+# ======================================================
+# 🎞️ Video Files (Ignored)
+# ======================================================
 *.mp4
 *.avi
 *.mov
 
-# Notebooks folder
+# ======================================================
+# 📓 Notebooks & Tools
+# ======================================================
 notebooks/
-
-# Tool folder
 android/
 
-# Exception: Allow demo files
-!data/demo/*.npz
-!data/demo/*.mov
-!data/demo/*.MOV
+# ======================================================
+# 🧠 Model Checkpoints
+# ======================================================
 
-# Exception: Allow specific CSV files
-!data/labels_reference.csv
-
-# Model Checkpoints (ignore all model files)
+# Ignore all model weights by default
 *.pt
 *.pth
 
-# Note: Best model files are also ignored
-# If you want to track best models, uncomment the line below:
-# !trained_models/**/*_best.pt
-
-# Track specific best model checkpoints
+# Track only specific best model checkpoints
 !trained_models/transformer/greetings_classification/SignTransformer_best.pt
 !trained_models/transformer/greetings_ctc_v2/SignTransformerCtc_best.pt
 !trained_models/iv3_gru/greetings_classification/InceptionV3GRU_best.pt
@@ -77,18 +120,8 @@ android/
 !trained_models/mediapipe_gru/greetings_classification/MediaPipeGRU_best.pt
 !trained_models/mediapipe_gru/greetings_ctc_v4/MediaPipeGRUCtc_best.pt
 
-# Exception: Allow shared directory
+# ======================================================
+# 🤝 Shared Resources
+# ======================================================
 !shared/
 !shared/**
-
-# Allow sharing specific processed/raw continuous sequence samples
-!data/processed/continuous_sequences_sample/
-!data/processed/continuous_sequences_sample/**
-!data/processed/continuous_sequences_sample/**/*.npz
-!data/processed/continuous_sequences_sample/**/*.json
-
-!data/raw/continuous_sequences/
-!data/raw/continuous_sequences/**
-!data/raw/continuous_sequences/**/*.json
-!data/raw/continuous_sequences/**/*.mov
-!data/raw/continuous_sequences/**/*.MOV
