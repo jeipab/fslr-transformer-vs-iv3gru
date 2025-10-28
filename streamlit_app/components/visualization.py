@@ -1085,10 +1085,54 @@ def create_keypoint_animation_video(keypoints_2d: np.ndarray, mask: Optional[np.
             current_keypoints = keypoints_2d[frame_idx]
             
             # Convert normalized coordinates to pixel coordinates
-            pixel_points = current_keypoints.copy()
-            pixel_points[:, 0] *= width
-            pixel_points[:, 1] *= height
-            pixel_points = pixel_points.astype(np.int32)
+            if bg_type == "Original Video" and original_video_frames:
+                # Inverse letterbox from square (out_size) back to original frame
+                target_square = 256
+                try:
+                    # Try to read out_size from processed meta if available
+                    clean_suffix = key_suffix
+                    if key_suffix.startswith('manual_'):
+                        clean_suffix = key_suffix[7:]
+                    elif key_suffix.startswith('auto_'):
+                        clean_suffix = key_suffix[5:]
+                    parts = clean_suffix.split('_')
+                    fname = '_'.join(parts[:-1]) if len(parts) > 1 else clean_suffix
+                    flip_back = False
+                    if fname and fname in st.session_state.get('processed_data', {}):
+                        meta_raw = st.session_state.processed_data[fname].get('meta')
+                        if isinstance(meta_raw, (str, bytes)):
+                            meta_parsed = json.loads(meta_raw)
+                        elif isinstance(meta_raw, dict):
+                            meta_parsed = meta_raw
+                        else:
+                            meta_parsed = {}
+                        target_square = int(meta_parsed.get('out_size', 256))
+                        flip_back = bool(meta_parsed.get('flip_horizontal', False))
+                except Exception:
+                    target_square = 256
+                    flip_back = False
+                # Compute resize-and-pad parameters used during preprocessing
+                scale = target_square / max(height, width)
+                new_w = int(width * scale)
+                new_h = int(height * scale)
+                x_off = (target_square - new_w) / 2.0
+                y_off = (target_square - new_h) / 2.0
+                # Map normalized [0,1] on square canvas back to original pixel coords
+                square_px = current_keypoints.copy() * target_square
+                square_px[:, 0] = (square_px[:, 0] - x_off) / scale
+                square_px[:, 1] = (square_px[:, 1] - y_off) / scale
+                # If preprocessing flipped horizontally, undo it to align with original video
+                if flip_back:
+                    square_px[:, 0] = (width - 1) - square_px[:, 0]
+                # Clip to original frame bounds
+                square_px[:, 0] = np.clip(square_px[:, 0], 0, width - 1)
+                square_px[:, 1] = np.clip(square_px[:, 1], 0, height - 1)
+                pixel_points = square_px.astype(np.int32)
+            else:
+                pixel_points = current_keypoints.copy()
+                pixel_points[:, 0] *= width
+                pixel_points[:, 1] *= height
+                pixel_points = pixel_points.astype(np.int32)
             
             # Filter out keypoints at (0,0)
             valid_mask = ~((pixel_points[:, 0] == 0) & (pixel_points[:, 1] == 0))

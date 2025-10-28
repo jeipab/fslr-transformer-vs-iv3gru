@@ -371,7 +371,14 @@ def render_sequence_overview(npz_dict: Dict, sequence_length: int) -> Tuple[np.n
 def render_keypoint_video(sequence: np.ndarray, mask: Optional[np.ndarray] = None, key_suffix: str = "", show_skeleton: bool = True, fps: int = 15) -> None:
     """Generate and display a video with keypoint animation."""
     time_steps, feature_dim = sequence.shape
-    keypoints_2d = sequence.reshape(time_steps, 78, 2)
+    # Calculate number of keypoints based on feature dimension
+    # Each keypoint has 2 coordinates (x, y)
+    num_keypoints = feature_dim // 2
+    # Validate that feature_dim is divisible by 2
+    if feature_dim % 2 != 0:
+        st.error(f"Invalid keypoint feature dimension: {feature_dim}. Expected even number for (x,y) coordinates.")
+        return
+    keypoints_2d = sequence.reshape(time_steps, num_keypoints, 2)
     
     # Video settings - FPS is now controlled from main controls
     
@@ -468,7 +475,7 @@ def render_keypoint_video(sequence: np.ndarray, mask: Optional[np.ndarray] = Non
             # Create a container with dynamic sizing and unique key to prevent ID conflicts
             video_container = st.container(key=f"manual_video_container_{key_suffix}")
             with video_container:
-                st.video(video_bytes, format="video/avi", autoplay=True, loop=True)
+                st.video(video_bytes, format="video/mp4", autoplay=True, loop=True)
             
             # Add custom CSS for dynamic video sizing and autoplay/loop
             st.markdown("""
@@ -525,8 +532,14 @@ def render_animated_keypoints(sequence: np.ndarray, mask: Optional[np.ndarray] =
     
     time_steps, feature_dim = sequence.shape
     
-    # Reshape keypoints to [T, 78, 2] for easier handling
-    keypoints_2d = sequence.reshape(time_steps, 78, 2)
+    # Calculate number of keypoints based on feature dimension
+    num_keypoints = feature_dim // 2
+    # Validate that feature_dim is divisible by 2
+    if feature_dim % 2 != 0:
+        st.error(f"Invalid keypoint feature dimension: {feature_dim}. Expected even number for (x,y) coordinates.")
+        return
+    # Reshape keypoints to [T, num_keypoints, 2] for easier handling
+    keypoints_2d = sequence.reshape(time_steps, num_keypoints, 2)
     
     # Extract frame-by-frame occlusion information from metadata
     frame_occlusion_data = None
@@ -585,30 +598,17 @@ def render_animated_keypoints(sequence: np.ndarray, mask: Optional[np.ndarray] =
             (0, 17), (17, 18), (18, 19), (19, 20)
         ],
         "face": [
-            # Face connections based on exact MediaPipe landmark paths
-            # Mouth: 70→67→68→69→74→73→72→71→70 (circular)
-            # Left Eyebrow: 81→82→83→81 (triangular)
-            # Right Eyebrow: 84→85→86→84 (triangular)
-            # Left Eye: 75→76→77→75 (triangular)
-            # Right Eye: 78→79→80→78 (triangular)
-            # Nose: 87→88 (vertical)
-            
             # Mouth connections - circular path: 70→67→68→69→74→73→72→71→70
-            (0, 1), (1, 2), (2, 3), (3, 4), (4, 5), (5, 6), (6, 7), (7, 0),
-            
-            # Left Eyebrow connections - triangular: 81→82→83→81
+            (0, 3), (1, 2), (2, 4), (3, 4), (4, 5), (5, 6), (6, 7), (7, 0),
+            # Left Eyebrow connections - triangular
             (8, 9), (9, 10), (10, 8),
-            
-            # Right Eyebrow connections - triangular: 84→85→86→84
+            # Right Eyebrow connections - triangular
             (11, 12), (12, 13), (13, 11),
-            
-            # Left Eye connections - triangular: 75→76→77→75
+            # Left Eye connections - triangular
             (14, 15), (15, 16), (16, 14),
-            
-            # Right Eye connections - triangular: 78→79→80→78
+            # Right Eye connections - triangular
             (17, 18), (18, 19), (19, 17),
-            
-            # Nose connections - vertical: 87→88
+            # Nose connections - vertical
             (20, 21)
         ]
     }
@@ -762,7 +762,7 @@ def render_animated_keypoints(sequence: np.ndarray, mask: Optional[np.ndarray] =
         )
     )
     
-    st.plotly_chart(fig, width='stretch', key=f"keypoint_plot_{key_suffix}")
+    st.plotly_chart(fig, use_container_width=True)
     
     # Add frame information
     col1, col2, col3 = st.columns(3)
@@ -863,7 +863,7 @@ def render_feature_charts(sequence: np.ndarray, mask: Optional[np.ndarray] = Non
             margin=dict(l=0, r=10, t=70, b=110)  # Match Keypoint Visualization margins
         )
         
-        st.plotly_chart(fig, width='stretch', key=f"feature_line_plot_{key_suffix}")
+        st.plotly_chart(fig, use_container_width=True)
         
     else:  # Heatmap
         # Create heatmap of features over time
@@ -878,7 +878,7 @@ def render_feature_charts(sequence: np.ndarray, mask: Optional[np.ndarray] = Non
             height=600,
             margin=dict(l=0, r=10, t=70, b=110)  # Match Keypoint Visualization margins
         )
-        st.plotly_chart(fig, width='stretch', key=f"feature_heatmap_{key_suffix}")
+        st.plotly_chart(fig, use_container_width=True)
 
 
 def create_keypoint_animation_video(keypoints_2d: np.ndarray, mask: Optional[np.ndarray], 
@@ -920,33 +920,24 @@ def create_keypoint_animation_video(keypoints_2d: np.ndarray, mask: Optional[np.
             # Eyes: 33, 133, 159, 362, 263, 386 (indices 8-13)  
             # Eyebrows: 70, 107, 46, 300, 336, 276 (indices 14-19)
             # Nose: 1, 4 (indices 20-21)
+
+            # Mouth connections - circular path: 70→67→68→69→74→73→72→71→70
+            (0, 3), (1, 2), (2, 4), (3, 4), (4, 5), (5, 6), (6, 7), (7, 0),
             
-            # New mouth connection pattern (arc-based) - from migration guide
-            (0, 1), (1, 2),  # Upper lip arc: 81 → 13 → 311
-            (4, 5), (5, 6),  # Lower lip arc: 178 → 14 → 402
-            (0, 3), (3, 4),  # Left side: 81 → 61 → 178
-            (2, 7), (7, 6),  # Right side: 311 → 291 → 402
+            # Left Eyebrow connections - triangular: 81→82→83→81
+            (8, 9), (9, 10), (10, 8),
             
-            # Eye connections
-            (8, 9),   # left_eye_outer to left_eye_inner
-            (10, 11), # right_eye_inner to right_eye_outer
-            (9, 12),  # left_eye_inner to right_eye_inner
+            # Right Eyebrow connections - triangular: 84→85→86→84
+            (11, 12), (12, 13), (13, 11),
             
-            # Eyebrow connections
-            (14, 15), # left_eyebrow_inner to left_eyebrow_outer
-            (16, 17), # right_eyebrow_inner to right_eyebrow_outer
-            (15, 18), # left_eyebrow_outer to right_eyebrow_outer
+            # Left Eye connections - triangular: 75→76→77→75
+            (14, 15), (15, 16), (16, 14),
             
-            # Nose connections
-            (20, 21), # nose_tip to nose_bridge
+            # Right Eye connections - triangular: 78→79→80→78
+            (17, 18), (18, 19), (19, 17),
             
-            # Face structure connections
-            (8, 14),  # left_eye_outer to left_eyebrow_inner
-            (10, 16), # right_eye_inner to right_eyebrow_inner
-            (20, 8),  # nose_tip to left_eye_outer
-            (20, 10), # nose_tip to right_eye_inner
-            (20, 0),  # nose_tip to upper_lip_left
-            (20, 2)   # nose_tip to upper_lip_right
+            # Nose connections - vertical: 87→88
+            (20, 21)
         ]
     }
     
@@ -1072,10 +1063,54 @@ def create_keypoint_animation_video(keypoints_2d: np.ndarray, mask: Optional[np.
             current_keypoints = keypoints_2d[frame_idx]
             
             # Convert normalized coordinates to pixel coordinates
-            pixel_points = current_keypoints.copy()
-            pixel_points[:, 0] *= width
-            pixel_points[:, 1] *= height
-            pixel_points = pixel_points.astype(np.int32)
+            if bg_type == "Original Video" and original_video_frames:
+                # Inverse letterbox from square (out_size) back to original frame
+                target_square = 256
+                try:
+                    # Try to read out_size from processed meta if available
+                    clean_suffix = key_suffix
+                    if key_suffix.startswith('manual_'):
+                        clean_suffix = key_suffix[7:]
+                    elif key_suffix.startswith('auto_'):
+                        clean_suffix = key_suffix[5:]
+                    parts = clean_suffix.split('_')
+                    fname = '_'.join(parts[:-1]) if len(parts) > 1 else clean_suffix
+                    flip_back = False
+                    if fname and fname in st.session_state.get('processed_data', {}):
+                        meta_raw = st.session_state.processed_data[fname].get('meta')
+                        if isinstance(meta_raw, (str, bytes)):
+                            meta_parsed = json.loads(meta_raw)
+                        elif isinstance(meta_raw, dict):
+                            meta_parsed = meta_raw
+                        else:
+                            meta_parsed = {}
+                        target_square = int(meta_parsed.get('out_size', 256))
+                        flip_back = bool(meta_parsed.get('flip_horizontal', False))
+                except Exception:
+                    target_square = 256
+                    flip_back = False
+                # Compute resize-and-pad parameters used during preprocessing
+                scale = target_square / max(height, width)
+                new_w = int(width * scale)
+                new_h = int(height * scale)
+                x_off = (target_square - new_w) / 2.0
+                y_off = (target_square - new_h) / 2.0
+                # Map normalized [0,1] on square canvas back to original pixel coords
+                square_px = current_keypoints.copy() * target_square
+                square_px[:, 0] = (square_px[:, 0] - x_off) / scale
+                square_px[:, 1] = (square_px[:, 1] - y_off) / scale
+                # If preprocessing flipped horizontally, undo it to align with original video
+                if flip_back:
+                    square_px[:, 0] = (width - 1) - square_px[:, 0]
+                # Clip to original frame bounds
+                square_px[:, 0] = np.clip(square_px[:, 0], 0, width - 1)
+                square_px[:, 1] = np.clip(square_px[:, 1], 0, height - 1)
+                pixel_points = square_px.astype(np.int32)
+            else:
+                pixel_points = current_keypoints.copy()
+                pixel_points[:, 0] *= width
+                pixel_points[:, 1] *= height
+                pixel_points = pixel_points.astype(np.int32)
             
             # Filter out keypoints at (0,0)
             valid_mask = ~((pixel_points[:, 0] == 0) & (pixel_points[:, 1] == 0))
@@ -1229,7 +1264,13 @@ def create_video_with_keypoints(uploaded_video_file, keypoints: np.ndarray,
         out = cv2.VideoWriter(output_path, fourcc, fps, (width, height))
         
         # Process frames
-        keypoint_frames = keypoints.reshape(keypoints.shape[0], 78, 2)
+        # Calculate number of keypoints based on feature dimension
+        num_keypoints = keypoints.shape[1] // 2
+        # Validate that feature_dim is divisible by 2
+        if keypoints.shape[1] % 2 != 0:
+            st.error(f"Invalid keypoint feature dimension: {keypoints.shape[1]}. Expected even number for (x,y) coordinates.")
+            return
+        keypoint_frames = keypoints.reshape(keypoints.shape[0], num_keypoints, 2)
         frame_idx = 0
         
         while True:

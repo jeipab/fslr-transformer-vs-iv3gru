@@ -334,8 +334,8 @@ class CTCPredictor:
                     if current_shape != checkpoint_shape:
                         # Always expand to the current model's max_len (1000)
                         if current_shape[1] > checkpoint_shape[1]:
-                            # Need to expand - pad with zeros
-                            padding = torch.zeros(current_shape[0], current_shape[1] - checkpoint_shape[1], current_shape[2])
+                            # Need to expand - pad with zeros (match device and dtype)
+                            padding = value.new_zeros(current_shape[0], current_shape[1] - checkpoint_shape[1], current_shape[2])
                             value = torch.cat([value, padding], dim=1)
                         else:
                             # Need to truncate

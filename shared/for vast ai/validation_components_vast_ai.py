@@ -12,16 +12,16 @@ from plotly.subplots import make_subplots
 import json
 
 from ..core.config import MODEL_CONFIG
+import os
 
 
 def render_model_selection():
     """Render model selection interface."""
-    
+    # List all enabled models regardless of checkpoint presence (per directive)
     available_models = []
-    if MODEL_CONFIG['transformer']['enabled']:
-        available_models.append(('transformer', 'SignTransformer'))
-    if MODEL_CONFIG['iv3_gru']['enabled']:
-        available_models.append(('iv3_gru', 'InceptionV3+GRU'))
+    for model_name, config in MODEL_CONFIG.items():
+        if config.get('enabled', False):
+            available_models.append((model_name, config.get('display_name', model_name)))
     
     if not available_models:
         st.error("No models are available for validation.")
@@ -57,16 +57,14 @@ def render_model_selection():
 
 
 def render_dataset_upload():
-    """Render dataset upload interface."""
-    
-    # NPZ folder selection - Updated for Linux/Vast AI compatibility
+    """Render dataset upload interface for classification models."""
+    # NPZ folder selection - Linux/Vast AI paths
     st.markdown("**Validation NPZ Folder**")
     npz_folder_path = st.text_input(
         "Enter path to folder containing NPZ files (default: data/processed/fsl_val)",
         placeholder="e.g., data/processed/fsl_val",
         help="Path to directory containing NPZ files for validation"
     )
-    
     # Labels CSV upload
     st.markdown("**Labels CSV File**")
     labels_csv = st.file_uploader(
@@ -74,8 +72,24 @@ def render_dataset_upload():
         type=["csv"],
         help="CSV file with columns: file, gloss, cat, occluded"
     )
-    
     return npz_folder_path, labels_csv
+
+
+def render_ctc_dataset_upload():
+    """Render dataset upload interface for CTC models."""
+    st.markdown("**Continuous Sequences Folder**")
+    npz_folder_path = st.text_input(
+        "Enter path to folder containing continuous sequence NPZ files (default: data/processed/continuous_sequences)",
+        placeholder="e.g., data/processed/continuous_sequences",
+        help="Path to directory containing continuous sequence NPZ files"
+    )
+    st.markdown("**Ground Truth Folder**")
+    gt_folder_path = st.text_input(
+        "Enter path to folder containing ground truth JSON files (default: data/processed/continuous_sequences)",
+        placeholder="e.g., data/processed/continuous_sequences (same as NPZ folder if JSON files are there)",
+        help="Path to directory containing *_gt.json files"
+    )
+    return npz_folder_path, gt_folder_path
 
 
 def render_validation_configuration():
@@ -249,7 +263,7 @@ def render_overall_performance(results: Dict[str, Any]):
         height=400
     )
     
-    st.plotly_chart(fig, width='stretch')
+    st.plotly_chart(fig, use_container_width=True)
     
     # Top-k Accuracy metrics
     if 'gloss_top1_accuracy' in overall:
@@ -512,7 +526,7 @@ def render_occlusion_analysis(results: Dict[str, Any]):
         height=400
     )
     
-    st.plotly_chart(fig, width='stretch')
+    st.plotly_chart(fig, use_container_width=True)
 
 
 
@@ -692,11 +706,7 @@ def render_detailed_predictions(results: Dict[str, Any]):
     total_samples = len(table_data)
     st.markdown(f"**Showing {len(df)} of {total_samples} predictions**")
     
-    st.dataframe(
-        df,
-        width='stretch',
-        height=400
-    )
+    st.dataframe(df, use_container_width=True, height=400)
     
     # Per-class TP/FP/TN/FN aggregated table with toggle
     st.markdown("#### TP/FP/TN/FN by Class")
@@ -738,10 +748,127 @@ def render_detailed_predictions(results: Dict[str, Any]):
         })
 
     per_class_df = pd.DataFrame(per_class_rows)
-    st.dataframe(
-        per_class_df,
-        width='stretch',
-        height=400
-    )
+    st.dataframe(per_class_df, use_container_width=True, height=400)
 
     # Note: Download button removed; users can download directly from the table UI.
+
+
+def render_ctc_validation_configuration():
+    """Render CTC validation configuration options."""
+    st.markdown("**CTC Configuration**")
+    col1, col2 = st.columns(2)
+    with col1:
+        decode_method = st.radio(
+            "Decode Method",
+            options=['greedy', 'beam_search'],
+            format_func=lambda x: 'Greedy Decoding' if x == 'greedy' else 'Beam Search',
+            help="CTC decoding method: Greedy (fast) or Beam Search (accurate)"
+        )
+    with col2:
+        if decode_method == 'beam_search':
+            beam_width = st.slider(
+                "Beam Width",
+                min_value=1,
+                max_value=20,
+                value=10,
+                help="Beam width for beam search (higher = more accurate but slower)"
+            )
+        else:
+            beam_width = 1
+            st.info("Using greedy decoding (fastest option)")
+    import torch
+    device = 'cuda' if torch.cuda.is_available() else 'cpu'
+    st.text(f"Device: {device.upper()}")
+    batch_size = 1
+    return batch_size, device, decode_method, beam_width
+
+
+def render_ctc_validation_results(results: Dict[str, Any]):
+    """Render CTC validation results with WER metrics and sequence analysis."""
+    st.markdown("---")
+    st.markdown("### CTC Validation Results")
+    summary = results.get('summary', {})
+    predictions = results.get('predictions', [])
+    st.markdown("#### Overall Metrics")
+    has_categories = summary.get('has_category_predictions', False)
+    has_gloss_acc = 'mean_gloss_accuracy' in summary
+    num_cols = 4 + (1 if has_categories else 0) + (1 if has_gloss_acc else 0)
+    cols = st.columns(num_cols)
+    col_idx = 0
+    with cols[col_idx]:
+        mean_wer = summary.get('mean_wer', 0)
+        st.metric("Mean WER", f"{mean_wer*100:.2f}%")
+    col_idx += 1
+    with cols[col_idx]:
+        seq_accuracy = summary.get('sequence_accuracy', 0)
+        st.metric("Sequence Accuracy", f"{seq_accuracy*100:.1f}%")
+    col_idx += 1
+    if has_gloss_acc:
+        with cols[col_idx]:
+            gloss_acc = summary.get('mean_gloss_accuracy', 0)
+            st.metric("Gloss Accuracy", f"{gloss_acc*100:.1f}%")
+        col_idx += 1
+    with cols[col_idx]:
+        total_sequences = summary.get('total_sequences', 0)
+        st.metric("Total Sequences", total_sequences)
+    col_idx += 1
+    if has_categories:
+        with cols[col_idx]:
+            cat_acc = summary.get('mean_category_accuracy', 0)
+            st.metric("Category Accuracy", f"{cat_acc*100:.1f}%")
+    st.markdown("---")
+    st.markdown("#### Error Breakdown")
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        st.metric("Insertions", summary.get('total_insertions', 0))
+    with col2:
+        st.metric("Deletions", summary.get('total_deletions', 0))
+    with col3:
+        st.metric("Substitutions", summary.get('total_substitutions', 0))
+    if summary.get('per_signer_wer'):
+        st.markdown("---")
+        st.markdown("#### Per-Signer WER")
+        signer_data = []
+        for signer, wer in summary['per_signer_wer'].items():
+            signer_data.append({'Signer': signer, 'WER': f"{wer*100:.2f}%"})
+        st.dataframe(signer_data, use_container_width=True)
+    if summary.get('per_strategy_wer'):
+        st.markdown("---")
+        st.markdown("#### Per-Strategy WER")
+        strategy_data = []
+        for strategy, wer in summary['per_strategy_wer'].items():
+            strategy_name = f"Strategy {strategy}"
+            strategy_data.append({'Strategy': strategy_name, 'WER': f"{wer*100:.2f}%"})
+        st.dataframe(strategy_data, use_container_width=True)
+    st.markdown("---")
+    st.markdown("#### Detailed Predictions")
+    if predictions:
+        pred_data = []
+        has_cat_acc = any('category_accuracy' in p for p in predictions)
+        for pred in predictions:
+            row = {
+                'File': pred['file_name'],
+                'GT Length': len(pred.get('ground_truth_sequence', [])),
+                'Pred Length': pred['num_predicted'],
+                'WER': f"{pred.get('wer', 0)*100:.2f}%",
+                'Correct': '✓' if pred.get('correct', False) else '✗',
+                'Insertions': pred.get('num_insertions', 0),
+                'Deletions': pred.get('num_deletions', 0),
+                'Substitutions': pred.get('num_substitutions', 0)
+            }
+            if has_cat_acc:
+                cat_acc = pred.get('category_accuracy')
+                row['Cat Acc'] = f"{cat_acc*100:.1f}%" if cat_acc is not None else 'N/A'
+            pred_data.append(row)
+        pred_df = pd.DataFrame(pred_data)
+        st.dataframe(pred_df, use_container_width=True, height=400)
+    st.markdown("---")
+    st.markdown("#### Download Results")
+    results_json = json.dumps(results, indent=2)
+    st.download_button(
+        label="📥 Download CTC Validation Results (JSON)",
+        data=results_json,
+        file_name="ctc_validation_results.json",
+        mime="application/json",
+        type="primary"
+    )
