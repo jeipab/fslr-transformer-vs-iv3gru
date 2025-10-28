@@ -134,6 +134,44 @@ Output: trained_models/transformer/greetings_ctc_v2/
   - training_*.log
   - training_*_metrics.csv
 
+Step 5c: Train Transformer CTC (Mobile Export-Ready — produces TorchScript .pt + metadata/labels)
+-------------------------------------------------------------------------------
+python -m training.train \
+    --model transformer_ctc \
+    --training-mode ctc \
+    --epochs 300 \
+    --batch-size 16 \
+    --lr 0.0001 \
+    --num-gloss 10 \
+    --num-cat 1 \
+    --alpha 0.8 \
+    --beta 0.2 \
+    --num-ctc-classes 11 \
+    --ctc-blank-id 10 \
+    --keypoints-train data/processed/greetings_train \
+    --keypoints-val data/processed/greetings_val \
+    --labels-train-csv data/processed/greetings_train.csv \
+    --labels-val-csv data/processed/greetings_val.csv \
+    --kp-key X \
+    --amp \
+    --scheduler warmup_cosine \
+    --warmup-epochs 25 \
+    --early-stop 35 \
+    --weight-decay 2.5e-4 \
+    --dropout 0.20 \
+    --label-smoothing 0.1 \
+    --output-dir trained_models/transformer/greetings_ctc_mobile \
+    --export-mobile \
+    --export-output android_artifacts/transformer_greetings_ctc \
+    --window-hint 120 \
+    --stride-hint 40
+
+Output (plus Android artifacts):
+  - android_artifacts/transformer_greetings_ctc/SignTransformerCtc_best.pt
+  - android_artifacts/transformer_greetings_ctc/SignTransformerCtc_best.model.json
+  - android_artifacts/transformer_greetings_ctc/label_mapping.json
+  - docs/export/pytorch_mobile_export_report.md
+
 ===============================================================================
 
 Step 6: Train Transformer Classification (Isolated Recognition - Keypoints Only)
@@ -328,6 +366,46 @@ Output: trained_models/mediapipe_gru/greetings_ctc_v4/
   - best_model.pth
   - training_*.log
   - training_*_metrics.csv
+
+Step 8d: Train MediaPipe-GRU CTC (Mobile Export-Ready — produces TorchScript .pt + metadata/labels)
+-------------------------------------------------------------------------------
+python -m training.train \
+    --model mediapipe_gru_ctc \
+    --training-mode ctc \
+    --epochs 300 \
+    --batch-size 16 \
+    --lr 0.0001 \
+    --num-gloss 10 \
+    --num-cat 1 \
+    --alpha 0.8 \
+    --beta 0.2 \
+    --num-ctc-classes 11 \
+    --ctc-blank-id 10 \
+    --keypoints-train data/processed/greetings_train \
+    --keypoints-val data/processed/greetings_val \
+    --labels-train-csv data/processed/greetings_train.csv \
+    --labels-val-csv data/processed/greetings_val.csv \
+    --kp-key X \
+    --hidden1 30 \
+    --hidden2 22 \
+    --amp \
+    --scheduler warmup_cosine \
+    --warmup-epochs 25 \
+    --early-stop 35 \
+    --weight-decay 2.5e-4 \
+    --dropout 0.20 \
+    --label-smoothing 0.1 \
+    --output-dir trained_models/mediapipe_gru/greetings_ctc_mobile \
+    --export-mobile \
+    --export-output android_artifacts/mediapipe_greetings_ctc \
+    --window-hint 120 \
+    --stride-hint 40
+
+Output (plus Android artifacts):
+  - android_artifacts/mediapipe_greetings_ctc/MediaPipeGRUCtc_best.pt
+  - android_artifacts/mediapipe_greetings_ctc/MediaPipeGRUCtc_best.model.json
+  - android_artifacts/mediapipe_greetings_ctc/label_mapping.json
+  - docs/export/pytorch_mobile_export_report.md
 
 ===============================================================================
 

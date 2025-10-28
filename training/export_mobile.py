@@ -5,12 +5,18 @@ from typing import Tuple, Optional
 
 import torch
 
+# Ensure project root is on sys.path when running as a script
+import sys as _sys
+_ROOT = Path(__file__).resolve().parents[1]
+if str(_ROOT) not in _sys.path:
+    _sys.path.insert(0, str(_ROOT))
+
 # Models
 from models.transformer import SignTransformerCtc
 from models.mediapipe_gru import MediaPipeGRUCtc
 
 # Labels / metadata
-from data.labels.label_mapping import load_label_mappings, get_ctc_config
+from data.labels.label_mapping import load_label_mappings
 
 
 class MobileWrapper(torch.nn.Module):
@@ -40,11 +46,29 @@ class MobileWrapper(torch.nn.Module):
         return ctc_log_probs, category_logits
 
 
-def _build_model(model_name: str, input_dim: int, num_ctc_classes: int, num_cat: int) -> torch.nn.Module:
+def _build_model(
+    model_name: str,
+    input_dim: int,
+    num_ctc_classes: int,
+    num_cat: int,
+    hidden1: Optional[int] = None,
+    hidden2: Optional[int] = None,
+    projection_dim: Optional[int] = None,
+) -> torch.nn.Module:
     if model_name == 'transformer_ctc':
         return SignTransformerCtc(input_dim=input_dim, num_ctc_classes=num_ctc_classes, num_cat=num_cat)
     elif model_name == 'mediapipe_gru_ctc':
-        return MediaPipeGRUCtc(input_dim=input_dim, num_ctc_classes=num_ctc_classes, num_cat=num_cat)
+        kwargs = {
+            'input_dim': input_dim,
+            'num_ctc_classes': num_ctc_classes,
+            'num_cat': num_cat,
+            'projection_dim': projection_dim,
+        }
+        if hidden1 is not None:
+            kwargs['hidden1'] = hidden1
+        if hidden2 is not None:
+            kwargs['hidden2'] = hidden2
+        return MediaPipeGRUCtc(**kwargs)
     else:
         raise ValueError(f"Unsupported model for mobile export: {model_name}")
 
@@ -68,25 +92,81 @@ def _load_state_dict(model: torch.nn.Module, checkpoint_path: str) -> None:
     raise ValueError(f"Unrecognized checkpoint format: {checkpoint_path}")
 
 
+def _find_param_by_suffix(state_dict: dict, suffix: str):
+    # Try exact key
+    if suffix in state_dict:
+        return state_dict[suffix]
+    # Try with common prefixes (e.g., DataParallel 'module.')
+    for k, v in state_dict.items():
+        if k.endswith(suffix):
+            return v
+    return None
+
+
+def _extract_state_dict_from_checkpoint(checkpoint_path: str) -> dict:
+    ckpt = torch.load(checkpoint_path, map_location='cpu')
+    if isinstance(ckpt, dict):
+        if isinstance(ckpt.get('model'), dict):
+            return ckpt['model']
+        if isinstance(ckpt.get('model_state_dict'), dict):
+            return ckpt['model_state_dict']
+    if isinstance(ckpt, dict):
+        # Heuristic: looks like a raw state_dict
+        return ckpt
+    raise ValueError(f"Unrecognized checkpoint content at {checkpoint_path}")
+
+
+def _infer_ctc_and_cat_dims(state_dict: dict) -> Tuple[Optional[int], Optional[int]]:
+    ctc_w = _find_param_by_suffix(state_dict, 'ctc_head.weight')
+    cat_w = _find_param_by_suffix(state_dict, 'category_head.weight')
+    num_ctc = int(ctc_w.shape[0]) if ctc_w is not None else None
+    num_cat = int(cat_w.shape[0]) if cat_w is not None else None
+    return num_ctc, num_cat
+
+
+def _infer_mediapipe_hidden_sizes(state_dict: dict) -> Tuple[Optional[int], Optional[int], Optional[int]]:
+    """Infer hidden1, hidden2, projection_dim from GRU and projection weights.
+
+    Returns (hidden1, hidden2, projection_dim)
+    """
+    h1 = None
+    h2 = None
+    proj = None
+    w_ih1 = _find_param_by_suffix(state_dict, 'gru1.weight_ih_l0')
+    if w_ih1 is not None and w_ih1.dim() == 2:
+        # GRU: weight_ih shape = (3*hidden_size, input_size)
+        h1 = int(w_ih1.shape[0] // 3)
+    w_ih2 = _find_param_by_suffix(state_dict, 'gru2.weight_ih_l0')
+    if w_ih2 is not None and w_ih2.dim() == 2:
+        h2 = int(w_ih2.shape[0] // 3)
+    proj_w = _find_param_by_suffix(state_dict, 'input_projection.weight')
+    if proj_w is not None and proj_w.dim() == 2:
+        # Linear weight shape = (out_features, in_features)
+        proj = int(proj_w.shape[0])
+    return h1, h2, proj
+
+
 def _save_metadata_and_labels(
     output_dir: Path,
     model_filename_stem: str,
     input_dim: int,
+    num_gloss: int,
+    num_ctc: int,
+    blank_id: int,
     num_cat: int,
     window_hint: int,
     stride_hint: int,
 ) -> Tuple[Path, Path]:
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    # Labels and CTC config
+    # Labels
     gloss_mapping, category_mapping = load_label_mappings()
-    ctc_conf = get_ctc_config()  # {'num_gloss', 'num_ctc_classes', 'blank_id'}
 
     meta = {
         'input_dim': input_dim,
-        'num_gloss': ctc_conf['num_gloss'],
-        'blank_id': ctc_conf['blank_id'],
-        'num_ctc': ctc_conf['num_ctc_classes'],
+        'num_gloss': num_gloss,
+        'blank_id': blank_id,
+        'num_ctc': num_ctc,
         'num_cat': num_cat,
         'window_size_hint': window_hint,
         'stride_hint': stride_hint,
@@ -127,11 +207,29 @@ def export_model_for_android(
 
     Returns path to the saved .pt file.
     """
-    # Resolve class counts from labels
-    ctc_conf = get_ctc_config()
-    num_ctc_classes = ctc_conf['num_ctc_classes']
+    # Infer class counts (and mediapipe hparams) from checkpoint to avoid mismatches
+    state_dict = _extract_state_dict_from_checkpoint(checkpoint_path)
+    inferred_num_ctc, inferred_num_cat = _infer_ctc_and_cat_dims(state_dict)
+    if inferred_num_ctc is None:
+        raise ValueError("Could not infer num_ctc_classes from checkpoint (missing ctc_head).")
+    num_ctc_classes = inferred_num_ctc
+    # Prefer explicit num_cat from args; fallback to checkpoint inference if provided
+    effective_num_cat = int(num_cat if num_cat is not None else (inferred_num_cat or 1))
 
-    model = _build_model(model_name, input_dim=input_dim, num_ctc_classes=num_ctc_classes, num_cat=num_cat)
+    hidden1 = hidden2 = projection_dim = None
+    if model_name == 'mediapipe_gru_ctc':
+        hidden1, hidden2, projection_dim = _infer_mediapipe_hidden_sizes(state_dict)
+
+    model = _build_model(
+        model_name,
+        input_dim=input_dim,
+        num_ctc_classes=num_ctc_classes,
+        num_cat=effective_num_cat,
+        hidden1=hidden1,
+        hidden2=hidden2,
+        projection_dim=projection_dim,
+    )
+    # Load weights (strict=False handled inside)
     _load_state_dict(model, checkpoint_path)
     model.eval()
 
@@ -163,7 +261,20 @@ def export_model_for_android(
     print(f"Saved TorchScript model: {model_pt_path}")
 
     # Write metadata and labels
-    meta_path, labels_path = _save_metadata_and_labels(out_dir, filename_stem, input_dim, num_cat, window_hint, stride_hint)
+    # Derive num_gloss/blank_id from inferred num_ctc (assumes blank_id = num_gloss)
+    num_gloss = int(num_ctc_classes - 1)
+    blank_id = num_gloss
+    meta_path, labels_path = _save_metadata_and_labels(
+        out_dir,
+        filename_stem,
+        input_dim,
+        num_gloss,
+        num_ctc_classes,
+        blank_id,
+        effective_num_cat,
+        window_hint,
+        stride_hint,
+    )
     print(f"Wrote metadata: {meta_path}")
     print(f"Wrote labels:   {labels_path}")
 

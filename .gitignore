@@ -80,3 +80,15 @@ android/
 # Exception: Allow shared directory
 !shared/
 !shared/**
+
+# Allow sharing specific processed/raw continuous sequence samples
+!data/processed/continuous_sequences_sample/
+!data/processed/continuous_sequences_sample/**
+!data/processed/continuous_sequences_sample/**/*.npz
+!data/processed/continuous_sequences_sample/**/*.json
+
+!data/raw/continuous_sequences/
+!data/raw/continuous_sequences/**
+!data/raw/continuous_sequences/**/*.json
+!data/raw/continuous_sequences/**/*.mov
+!data/raw/continuous_sequences/**/*.MOV
