@@ -3082,6 +3082,13 @@ Examples:
     # EMA (Exponential Moving Average)
     parser.add_argument("--ema-decay", type=float, default=0.999, help="EMA decay rate (0.0-1.0)")
     parser.add_argument("--use-ema", action="store_true", help="Enable Exponential Moving Average")
+    # Export for Android (Full Runtime .pt)
+    parser.add_argument("--export-mobile", action="store_true", help="Export TorchScript .pt for Android after training")
+    parser.add_argument("--export-only", action="store_true", help="Skip training and only export using --resume checkpoint or best in output-dir")
+    parser.add_argument("--export-output", type=str, default="android_artifacts", help="Directory to write exported artifacts")
+    parser.add_argument("--export-example-T", type=int, default=120, help="Representative T if tracing is required during export")
+    parser.add_argument("--window-hint", type=int, default=120, help="Metadata: window size hint for Android")
+    parser.add_argument("--stride-hint", type=int, default=40, help="Metadata: stride hint for Android")
     return parser.parse_args()
 
 if __name__ == "__main__":
@@ -3172,6 +3179,46 @@ if __name__ == "__main__":
             _ = model.load_state_dict(torch.load(ckpt, map_location=device))
             print(f"✓ Transformer smoke test passed. Saved and loaded: {ckpt}")
             exit(0)
+
+    # Export-only quick path
+    if args.export_only:
+        from training.export_mobile import export_model_for_android
+        ckpt_path = args.resume or None
+        if ckpt_path is None:
+            # Guess best from output-dir based on model name
+            def _guess_best(output_dir: str, model_name: str) -> str:
+                mapping = {
+                    'transformer_ctc': 'SignTransformerCtc',
+                    'mediapipe_gru_ctc': 'MediaPipeGRUCtc',
+                }
+                stem = mapping.get(model_name)
+                if not stem:
+                    return ''
+                candidate = os.path.join(output_dir, f"{stem}_best.pt")
+                return candidate if os.path.exists(candidate) else ''
+            guessed = _guess_best(args.output_dir, args.model)
+            if not guessed:
+                raise FileNotFoundError("--export-only requires --resume or an existing *_best.pt in --output-dir")
+            ckpt_path = guessed
+        export_model_for_android(
+            model_name=args.model,
+            checkpoint_path=ckpt_path,
+            output_dir=args.export_output,
+            input_dim=178 if args.kp_key != 'X2048' else 2048,
+            num_cat=args.num_cat,
+            window_hint=args.window_hint,
+            stride_hint=args.stride_hint,
+            example_T=args.export_example_T,
+        )
+        # Close logger before exiting
+        if args.log_file and original_stdout is not None:
+            print(f"\n{'='*60}")
+            print(f"Export completed - {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+            print(f"Log saved to: {args.log_file}")
+            print(f"{'='*60}")
+            sys.stdout.close()
+            sys.stdout = original_stdout
+        exit(0)
 
     # Data loading
     print("\n" + "="*60)
@@ -3614,12 +3661,54 @@ if __name__ == "__main__":
                 use_ema=args.use_ema,
                 ema_decay=args.ema_decay,
             )
-    finally:
-        # Restore stdout and close log file if it was opened
+    except Exception as e:
+        print(f"Training failed: {e}")
+        raise
+    
+    # Post-training export hook
+    if args.export_mobile:
+        try:
+            from training.export_mobile import export_model_for_android
+            # Determine best checkpoint path
+            mapping = {
+                'transformer_ctc': 'SignTransformerCtc',
+                'mediapipe_gru_ctc': 'MediaPipeGRUCtc',
+            }
+            stem = mapping.get(args.model)
+            if stem is None:
+                print(f"Export skipped: --export-mobile supports only transformer_ctc and mediapipe_gru_ctc")
+            else:
+                best_ckpt = os.path.join(args.output_dir, f"{stem}_best.pt")
+                if not os.path.exists(best_ckpt):
+                    print(f"Export skipped: best checkpoint not found at {best_ckpt}")
+                else:
+                    export_model_for_android(
+                        model_name=args.model,
+                        checkpoint_path=best_ckpt,
+                        output_dir=args.export_output,
+                        input_dim=178 if args.kp_key != 'X2048' else 2048,
+                        num_cat=args.num_cat,
+                        window_hint=args.window_hint,
+                        stride_hint=args.stride_hint,
+                        example_T=args.export_example_T,
+                    )
+        except Exception as e:
+            print(f"Export failed: {e}")
+        finally:
+            # Restore stdout and close log file if it was opened
+            if args.log_file and original_stdout is not None:
+                print(f"\n{'='*60}")
+                print(f"Training completed - {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+                print(f"Log saved to: {args.log_file}")
+                print(f"{'='*60}")
+                sys.stdout.close()  # Close the TeeLogger
+                sys.stdout = original_stdout  # Restore original stdout
+    else:
+        # Ensure logger cleanup even when not exporting
         if args.log_file and original_stdout is not None:
             print(f"\n{'='*60}")
             print(f"Training completed - {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
             print(f"Log saved to: {args.log_file}")
             print(f"{'='*60}")
-            sys.stdout.close()  # Close the TeeLogger
-            sys.stdout = original_stdout  # Restore original stdout
+            sys.stdout.close()
+            sys.stdout = original_stdout
