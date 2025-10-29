@@ -141,7 +141,7 @@ python -m training.train \
     --training-mode ctc \
     --epochs 300 \
     --batch-size 16 \
-    --lr 0.0001 \
+    --lr 0.0002 \
     --num-gloss 10 \
     --num-cat 1 \
     --alpha 0.8 \
@@ -153,12 +153,17 @@ python -m training.train \
     --labels-train-csv data/processed/greetings_train.csv \
     --labels-val-csv data/processed/greetings_val.csv \
     --kp-key X \
+    --dropout 0.05 \
     --amp \
+    --augment \
+    --augment-noise-std 0.002 \
+    --augment-mask-prob 0.03 \
+    --augment-mask-ratio 0.03 \
     --scheduler warmup_cosine \
-    --warmup-epochs 25 \
+    --warmup-epochs 40 \
     --early-stop 35 \
     --weight-decay 2.5e-4 \
-    --dropout 0.20 \
+    --grad-clip 1.0 \
     --label-smoothing 0.1 \
     --output-dir trained_models/transformer/greetings_ctc_mobile \
     --export-mobile \
@@ -377,8 +382,8 @@ python -m training.train \
     --lr 0.0001 \
     --num-gloss 10 \
     --num-cat 1 \
-    --alpha 0.8 \
-    --beta 0.2 \
+    --alpha 0.7 \
+    --beta 0.3 \
     --num-ctc-classes 11 \
     --ctc-blank-id 10 \
     --keypoints-train data/processed/greetings_train \
@@ -386,15 +391,19 @@ python -m training.train \
     --labels-train-csv data/processed/greetings_train.csv \
     --labels-val-csv data/processed/greetings_val.csv \
     --kp-key X \
-    --hidden1 30 \
-    --hidden2 22 \
+    --hidden1 512 \
+    --hidden2 512 \
+    --dropout 0.2 \
     --amp \
+    --augment \
+    --augment-noise-std 0.001 \
+    --augment-mask-prob 0.02 \
+    --augment-mask-ratio 0.02 \
     --scheduler warmup_cosine \
-    --warmup-epochs 25 \
-    --early-stop 35 \
-    --weight-decay 2.5e-4 \
-    --dropout 0.20 \
-    --label-smoothing 0.1 \
+    --warmup-epochs 30 \
+    --early-stop 50 \
+    --weight-decay 1e-4 \
+    --grad-clip 1.0 \
     --output-dir trained_models/mediapipe_gru/greetings_ctc_mobile \
     --export-mobile \
     --export-output android_artifacts/mediapipe_greetings_ctc \

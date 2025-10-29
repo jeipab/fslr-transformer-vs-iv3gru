@@ -98,11 +98,11 @@ android/
 
 # Track only specific best model checkpoints
 !trained_models/transformer/greetings_classification/SignTransformer_best.pt
-!trained_models/transformer/greetings_ctc_v2/SignTransformerCtc_best.pt
+!trained_models/transformer/greetings_ctc_mobile/SignTransformerCtc_best.pt
 !trained_models/iv3_gru/greetings_classification/InceptionV3GRU_best.pt
 !trained_models/iv3_gru/greetings_ctc_v2/InceptionV3GRUCtc_best.pt
 !trained_models/mediapipe_gru/greetings_classification/MediaPipeGRU_best.pt
-!trained_models/mediapipe_gru/greetings_ctc_v4/MediaPipeGRUCtc_best.pt
+!trained_models/mediapipe_gru/greetings_ctc_mobile/MediaPipeGRUCtc_best.pt
 
 # ======================================================
 # 🤝 Shared Resources

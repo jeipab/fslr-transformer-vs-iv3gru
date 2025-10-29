@@ -1,0 +1,14 @@
+{
+  "input_dim": 178,
+  "num_gloss": 10,
+  "blank_id": 10,
+  "num_ctc": 11,
+  "num_cat": 1,
+  "window_size_hint": 120,
+  "stride_hint": 40,
+  "decode_default": "greedy",
+  "model_type": "mediapipe_gru_ctc",
+  "labels_file": "label_mapping.json",
+  "version": "1.0.0",
+  "labels_checksum": null
+}
