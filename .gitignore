@@ -62,12 +62,16 @@ data/*
 data/processed/*
 !data/processed/pro_continuous_sequences/
 !data/processed/pro_continuous_sequences/**
+!data/processed/pro_isolated/
+!data/processed/pro_isolated/**
 
 # Raw data: only track "raw_continuous_sequences"
 !data/raw/
 data/raw/*
 !data/raw/raw_continuous_sequences/
 !data/raw/raw_continuous_sequences/**
+!data/raw/raw_isolated/
+!data/raw/raw_isolated/**
 
 # ------------------------------
 # Exclude caches inside allowed data dirs
