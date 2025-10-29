@@ -205,7 +205,7 @@ def export_model_for_android(
     """
     Export a TorchScript .pt for Android (Full runtime) with tuple output contract.
 
-    Returns path to the saved .pt file.
+    Returns path to the saved .ptl file.
     """
     # Infer class counts (and mediapipe hparams) from checkpoint to avoid mismatches
     state_dict = _extract_state_dict_from_checkpoint(checkpoint_path)
@@ -251,14 +251,27 @@ def export_model_for_android(
         ctc_lp, cat = scripted(test_in)
         print(f"ctc_log_probs shape: {tuple(ctc_lp.shape)}  category_logits shape: {tuple(cat.shape)}")
 
-    # Save TorchScript .pt (Full runtime)
+    # Import mobile optimizer
+    from torch.utils.mobile_optimizer import optimize_for_mobile
+    
+    # Optimize for mobile
+    print("Optimizing model for mobile...")
+    optimized_model = optimize_for_mobile(scripted)
+    
+    # Validate optimized model
+    with torch.no_grad():
+        ctc_lp_opt, cat_opt = optimized_model(test_in)
+        print(f"Optimized model outputs - ctc: {tuple(ctc_lp_opt.shape)}, cat: {tuple(cat_opt.shape)}")
+
+    # Save for Mobile
     model_class_name = model.__class__.__name__
     filename_stem = f"{model_class_name}_best"
     out_dir = Path(output_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
-    model_pt_path = out_dir / f"{filename_stem}.pt"
-    torch.jit.save(scripted, str(model_pt_path))
-    print(f"Saved TorchScript model: {model_pt_path}")
+    
+    model_ptl_path = out_dir / f"{filename_stem}.ptl"
+    optimized_model._save_for_lite_interpreter(str(model_ptl_path))
+    print(f"Saved optimized mobile model: {model_ptl_path}")
 
     # Write metadata and labels
     # Derive num_gloss/blank_id from inferred num_ctc (assumes blank_id = num_gloss)
@@ -286,7 +299,7 @@ def export_model_for_android(
         with report_path.open('w', encoding='utf-8') as f:
             f.write('# PyTorch Mobile Export Verification Report\n\n')
             f.write('## 1. Model Export Summary\n')
-            f.write(f"- Exported File: {model_pt_path.name}\n")
+            f.write(f"- Exported File: {model_ptl_path.name}\n")
             f.write(f"- Input Shape: [1, {example_T}, {input_dim}]\n")
             f.write('- Output Shapes:\n')
             f.write(f"  - CTC Log Probs: {list(ctc_lp.shape)}\n")
@@ -303,7 +316,7 @@ def export_model_for_android(
     except Exception as e:
         print(f"Warning: failed to write export report: {e}")
 
-    return model_pt_path
+    return model_ptl_path
 
 
 def _guess_best_checkpoint(output_dir: str, model_name: str) -> Optional[str]:
