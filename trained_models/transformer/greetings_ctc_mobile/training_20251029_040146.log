@@ -1,0 +1,354 @@
+============================================================
+TRAINING LOG - 2025-10-29 04:01:46
+============================================================
+Console output will be saved to: trained_models/transformer/greetings_ctc_mobile/training_20251029_040146.log
+Metrics CSV will be saved to: trained_models/transformer/greetings_ctc_mobile/training_20251029_040146_metrics.csv
+
+Using device: cuda
+CUDA device: NVIDIA GeForce RTX 4060 Ti
+CUDA memory: 16.7 GB
+CUDA compute capability: 8.9
+CUDA multiprocessors: 34
+CUDA memory allocated: 0.00 GB
+CUDA memory cached: 0.00 GB
+
+============================================================
+DATA LOADING
+============================================================
+✓ Loaded data successfully
+  - Dataset type: TRANSFORMER-CTC Keypoints
+  - Training folder: data/processed/greetings_train
+  - Validation folder: data/processed/greetings_val
+  - Keypoint key: X
+  - Gloss classes: 10
+  - Category classes: 1
+
+============================================================
+DATASET PREPARATION
+============================================================
+✓ CTC Mode: blank_id=10, num_ctc_classes=11
+⚠️  Training on subset: 10/105 glosses (subset training enabled)
+✓ Created datasets and data loaders
+  - Batch size: 16
+  - Training batches: 61
+  - Validation batches: 16
+  - Data augmentation: Enabled (noise_std=0.002, mask_prob=0.03)
+  - Training dataset size: 970 samples
+  - Validation dataset size: 246 samples
+  - Data format: [T, 178] keypoints
+
+============================================================
+MODEL SELECTION
+============================================================
+Available models:
+Classification models (isolated signs):
+  - transformer: Multi-head attention transformer (keypoints)
+  - mediapipe_gru: Lightweight GRU (keypoints, mobile-friendly)
+  - iv3_gru: InceptionV3 + GRU hybrid (features, offline baseline)
+CTC models (continuous recognition):
+  - transformer_ctc: Transformer with CTC (keypoints)
+  - mediapipe_gru_ctc: Lightweight GRU with CTC (keypoints)
+  - iv3_gru_ctc: InceptionV3 + GRU with CTC (features, offline baseline)
+✓ Using SignTransformerCtc model (input_dim=178, num_ctc_classes=11, num_cat=1)
+
+================================================================================
+COMPREHENSIVE TRAINING CONFIGURATION
+================================================================================
+Session Information:
+  - Start time: 2025-10-29 04:01:47
+  - Working directory: /workspace/fslr-transformer-vs-iv3gru
+  - Command: /workspace/fslr-transformer-vs-iv3gru/training/train.py --model transformer_ctc --training-mode ctc --epochs 300 --batch-size 16 --lr 0.0002 --num-gloss 10 --num-cat 1 --alpha 0.8 --beta 0.2 --num-ctc-classes 11 --ctc-blank-id 10 --keypoints-train data/processed/greetings_train --keypoints-val data/processed/greetings_val --labels-train-csv data/processed/greetings_train.csv --labels-val-csv data/processed/greetings_val.csv --kp-key X --dropout 0.05 --amp --augment --augment-noise-std 0.002 --augment-mask-prob 0.03 --augment-mask-ratio 0.03 --scheduler warmup_cosine --warmup-epochs 40 --early-stop 35 --weight-decay 2.5e-4 --grad-clip 1.0 --label-smoothing 0.1 --output-dir trained_models/transformer/greetings_ctc_mobile --export-mobile --export-output android_artifacts/transformer_greetings_ctc --window-hint 120 --stride-hint 40
+
+System Information:
+  - Platform: Linux-5.15.0-160-generic-x86_64-with-glibc2.39
+  - Python version: 3.12.11 | packaged by conda-forge | (main, Jun  4 2025, 14:45:31) [GCC 13.3.0]
+  - PyTorch version: 2.9.0+cu128
+  - CUDA version: 12.8
+  - cuDNN version: 91002
+  - NumPy version: 2.2.6
+
+Core Training Parameters:
+  - Model: transformer_ctc
+  - Epochs: 300
+  - Batch size: 16
+  - Learning rate: 0.0002
+  - Weight decay: 0.00025
+  - Gradient clipping: 1.0
+  - Loss weights - Alpha: 0.8, Beta: 0.2
+
+Curriculum Training: Disabled
+
+Loss Weighting Parameters:
+  - Strategy: static
+  - Alpha: 0.8
+  - Beta: 0.2
+
+Data Configuration:
+  - Gloss classes: 10
+  - Category classes: 1
+  - Data source: Real data files
+  - Training folder: data/processed/greetings_train
+  - Validation folder: data/processed/greetings_val
+  - Keypoint key: X
+
+Training Control:
+  - Scheduler: warmup_cosine
+  - Scheduler patience: 5
+  - Early stopping: 35
+  - Resume from: None
+
+Performance Settings:
+  - AMP (Mixed Precision): True
+  - Model compilation: False
+  - Gradient accumulation steps: 1
+  - DataLoader workers: 0
+  - Auto workers: False
+  - Pin memory: False
+  - Prefetch factor: None
+
+Reproducibility:
+  - Random seed: 42
+  - Deterministic mode: False
+
+Output Configuration:
+  - Checkpoint directory: trained_models/transformer/greetings_ctc_mobile
+  - CSV log file: trained_models/transformer/greetings_ctc_mobile/training_20251029_040146_metrics.csv
+
+Model Information:
+  - Model type: SignTransformerCtc
+  - Total parameters: 19,014,156
+  - Trainable parameters: 19,014,156
+  - Model size: 72.5 MB
+================================================================================
+
+============================================================
+TRAINING START
+============================================================
+Training mode: CTC (Continuous Sign Language Recognition)
+
+================================================================================
+CTC TRAINING CONFIGURATION
+================================================================================
+Training Mode: Continuous Sign Language Recognition (CTC)
+Model: SignTransformerCtc
+Blank Token ID: 10
+Epochs: 300
+Learning Rate: 0.0002
+Batch Size: 16
+Gradient Accumulation: 1
+AMP Enabled: True
+================================================================================
+
+✓ Using CTCLoss (blank=10, zero_infinity=True)
+✓ Optimizer: Adam (lr=0.0002, weight_decay=0.00025)
+✓ AMP enabled: True
+✓ Scheduler: WarmupCosineScheduler (warmup=40)
+✓ Logging metrics to: trained_models/transformer/greetings_ctc_mobile/training_20251029_040146_metrics.csv
+
+================================================================================
+STARTING CTC TRAINING - 300 epochs
+================================================================================
+
+Epoch   1/300 | Train Loss: 57.5769 | Val Loss: 2.6360 | Val Cat Acc: 1.000 | Time: 5.8s
+  GPU Memory: 0.25GB allocated, 0.45GB reserved
+  ✓ New best validation loss: 2.6360
+Epoch   2/300 | Train Loss: 2.5463 | Val Loss: 2.3180 | Val Cat Acc: 1.000 | Time: 5.2s
+  GPU Memory: 0.25GB allocated, 0.45GB reserved
+  ✓ New best validation loss: 2.3180
+Epoch   3/300 | Train Loss: 2.2638 | Val Loss: 2.1221 | Val Cat Acc: 1.000 | Time: 5.1s
+  GPU Memory: 0.25GB allocated, 0.45GB reserved
+  ✓ New best validation loss: 2.1221
+Epoch   4/300 | Train Loss: 2.1799 | Val Loss: 2.1264 | Val Cat Acc: 1.000 | Time: 5.0s
+  GPU Memory: 0.25GB allocated, 0.45GB reserved
+Epoch   5/300 | Train Loss: 2.0818 | Val Loss: 2.0994 | Val Cat Acc: 1.000 | Time: 5.0s
+  GPU Memory: 0.25GB allocated, 0.45GB reserved
+  ✓ New best validation loss: 2.0994
+Epoch   6/300 | Train Loss: 2.0010 | Val Loss: 1.7567 | Val Cat Acc: 1.000 | Time: 5.0s
+  GPU Memory: 0.25GB allocated, 0.45GB reserved
+  ✓ New best validation loss: 1.7567
+Epoch   7/300 | Train Loss: 1.5965 | Val Loss: 1.1501 | Val Cat Acc: 1.000 | Time: 5.0s
+  GPU Memory: 0.25GB allocated, 0.45GB reserved
+  ✓ New best validation loss: 1.1501
+Epoch   8/300 | Train Loss: 1.1219 | Val Loss: 0.9227 | Val Cat Acc: 1.000 | Time: 5.0s
+  GPU Memory: 0.25GB allocated, 0.45GB reserved
+  ✓ New best validation loss: 0.9227
+Epoch   9/300 | Train Loss: 1.0029 | Val Loss: 0.8278 | Val Cat Acc: 1.000 | Time: 5.0s
+  GPU Memory: 0.25GB allocated, 0.46GB reserved
+  ✓ New best validation loss: 0.8278
+Epoch  10/300 | Train Loss: 0.8750 | Val Loss: 0.8995 | Val Cat Acc: 1.000 | Time: 5.0s
+  GPU Memory: 0.25GB allocated, 0.45GB reserved
+Epoch  11/300 | Train Loss: 0.8071 | Val Loss: 0.9219 | Val Cat Acc: 1.000 | Time: 5.0s
+  GPU Memory: 0.25GB allocated, 0.45GB reserved
+Epoch  12/300 | Train Loss: 0.7800 | Val Loss: 0.7741 | Val Cat Acc: 1.000 | Time: 5.1s
+  GPU Memory: 0.25GB allocated, 0.45GB reserved
+  ✓ New best validation loss: 0.7741
+Epoch  13/300 | Train Loss: 0.6936 | Val Loss: 1.0675 | Val Cat Acc: 1.000 | Time: 5.0s
+  GPU Memory: 0.25GB allocated, 0.46GB reserved
+Epoch  14/300 | Train Loss: 0.7347 | Val Loss: 0.7359 | Val Cat Acc: 1.000 | Time: 5.0s
+  GPU Memory: 0.25GB allocated, 0.45GB reserved
+  ✓ New best validation loss: 0.7359
+Epoch  15/300 | Train Loss: 0.6878 | Val Loss: 0.9200 | Val Cat Acc: 1.000 | Time: 5.0s
+  GPU Memory: 0.25GB allocated, 0.45GB reserved
+Epoch  16/300 | Train Loss: 0.7882 | Val Loss: 0.6760 | Val Cat Acc: 1.000 | Time: 4.9s
+  GPU Memory: 0.25GB allocated, 0.45GB reserved
+  ✓ New best validation loss: 0.6760
+Epoch  17/300 | Train Loss: 0.6362 | Val Loss: 0.6631 | Val Cat Acc: 1.000 | Time: 5.2s
+  GPU Memory: 0.25GB allocated, 0.45GB reserved
+  ✓ New best validation loss: 0.6631
+Epoch  18/300 | Train Loss: 0.6286 | Val Loss: 0.6965 | Val Cat Acc: 1.000 | Time: 4.8s
+  GPU Memory: 0.25GB allocated, 0.45GB reserved
+Epoch  19/300 | Train Loss: 0.6908 | Val Loss: 0.6071 | Val Cat Acc: 1.000 | Time: 4.9s
+  GPU Memory: 0.25GB allocated, 0.45GB reserved
+  ✓ New best validation loss: 0.6071
+Epoch  20/300 | Train Loss: 0.5790 | Val Loss: 0.5233 | Val Cat Acc: 1.000 | Time: 4.9s
+  GPU Memory: 0.25GB allocated, 0.45GB reserved
+  ✓ New best validation loss: 0.5233
+Epoch  21/300 | Train Loss: 0.6922 | Val Loss: 0.8771 | Val Cat Acc: 1.000 | Time: 4.8s
+  GPU Memory: 0.25GB allocated, 0.45GB reserved
+Epoch  22/300 | Train Loss: 0.5310 | Val Loss: 0.8220 | Val Cat Acc: 1.000 | Time: 4.8s
+  GPU Memory: 0.25GB allocated, 0.45GB reserved
+Epoch  23/300 | Train Loss: 0.5475 | Val Loss: 0.5266 | Val Cat Acc: 1.000 | Time: 5.1s
+  GPU Memory: 0.25GB allocated, 0.46GB reserved
+Epoch  24/300 | Train Loss: 0.5520 | Val Loss: 0.6706 | Val Cat Acc: 1.000 | Time: 5.5s
+  GPU Memory: 0.25GB allocated, 0.45GB reserved
+Epoch  25/300 | Train Loss: 0.4684 | Val Loss: 0.4850 | Val Cat Acc: 1.000 | Time: 5.3s
+  GPU Memory: 0.25GB allocated, 0.46GB reserved
+  ✓ New best validation loss: 0.4850
+Epoch  26/300 | Train Loss: 0.4259 | Val Loss: 0.5029 | Val Cat Acc: 1.000 | Time: 5.2s
+  GPU Memory: 0.25GB allocated, 0.45GB reserved
+Epoch  27/300 | Train Loss: 0.3556 | Val Loss: 0.4918 | Val Cat Acc: 1.000 | Time: 5.1s
+  GPU Memory: 0.25GB allocated, 0.45GB reserved
+Epoch  28/300 | Train Loss: 0.4268 | Val Loss: 0.4651 | Val Cat Acc: 1.000 | Time: 5.2s
+  GPU Memory: 0.25GB allocated, 0.45GB reserved
+  ✓ New best validation loss: 0.4651
+Epoch  29/300 | Train Loss: 0.4675 | Val Loss: 0.5883 | Val Cat Acc: 1.000 | Time: 5.2s
+  GPU Memory: 0.25GB allocated, 0.45GB reserved
+Epoch  30/300 | Train Loss: 0.3651 | Val Loss: 0.5462 | Val Cat Acc: 1.000 | Time: 5.1s
+  GPU Memory: 0.25GB allocated, 0.46GB reserved
+Epoch  31/300 | Train Loss: 0.3211 | Val Loss: 0.4126 | Val Cat Acc: 1.000 | Time: 5.1s
+  GPU Memory: 0.25GB allocated, 0.45GB reserved
+  ✓ New best validation loss: 0.4126
+Epoch  32/300 | Train Loss: 0.2517 | Val Loss: 0.4451 | Val Cat Acc: 1.000 | Time: 5.3s
+  GPU Memory: 0.25GB allocated, 0.45GB reserved
+Epoch  33/300 | Train Loss: 0.2709 | Val Loss: 0.3457 | Val Cat Acc: 1.000 | Time: 5.4s
+  GPU Memory: 0.25GB allocated, 0.45GB reserved
+  ✓ New best validation loss: 0.3457
+Epoch  34/300 | Train Loss: 0.2578 | Val Loss: 0.5400 | Val Cat Acc: 1.000 | Time: 5.3s
+  GPU Memory: 0.25GB allocated, 0.46GB reserved
+Epoch  35/300 | Train Loss: 0.2069 | Val Loss: 0.4892 | Val Cat Acc: 1.000 | Time: 4.3s
+  GPU Memory: 0.25GB allocated, 0.45GB reserved
+Epoch  36/300 | Train Loss: 0.3263 | Val Loss: 0.4620 | Val Cat Acc: 1.000 | Time: 4.3s
+  GPU Memory: 0.25GB allocated, 0.45GB reserved
+Epoch  37/300 | Train Loss: 0.2393 | Val Loss: 0.2895 | Val Cat Acc: 1.000 | Time: 5.3s
+  GPU Memory: 0.25GB allocated, 0.45GB reserved
+  ✓ New best validation loss: 0.2895
+Epoch  38/300 | Train Loss: 0.2136 | Val Loss: 0.3505 | Val Cat Acc: 1.000 | Time: 5.1s
+  GPU Memory: 0.25GB allocated, 0.46GB reserved
+Epoch  39/300 | Train Loss: 0.1893 | Val Loss: 0.2844 | Val Cat Acc: 1.000 | Time: 5.0s
+  GPU Memory: 0.25GB allocated, 0.45GB reserved
+  ✓ New best validation loss: 0.2844
+Epoch  40/300 | Train Loss: 0.2183 | Val Loss: 0.2501 | Val Cat Acc: 1.000 | Time: 5.0s
+  GPU Memory: 0.25GB allocated, 0.45GB reserved
+  ✓ New best validation loss: 0.2501
+Epoch  41/300 | Train Loss: 0.2010 | Val Loss: 0.2444 | Val Cat Acc: 1.000 | Time: 5.0s
+  GPU Memory: 0.25GB allocated, 0.45GB reserved
+  ✓ New best validation loss: 0.2444
+Epoch  42/300 | Train Loss: 0.1863 | Val Loss: 0.4050 | Val Cat Acc: 1.000 | Time: 5.0s
+  GPU Memory: 0.25GB allocated, 0.45GB reserved
+Epoch  43/300 | Train Loss: 0.1531 | Val Loss: 0.4811 | Val Cat Acc: 1.000 | Time: 5.0s
+  GPU Memory: 0.25GB allocated, 0.46GB reserved
+Epoch  44/300 | Train Loss: 0.2125 | Val Loss: 0.3979 | Val Cat Acc: 1.000 | Time: 5.0s
+  GPU Memory: 0.25GB allocated, 0.46GB reserved
+Epoch  45/300 | Train Loss: 0.1721 | Val Loss: 0.2025 | Val Cat Acc: 1.000 | Time: 4.9s
+  GPU Memory: 0.25GB allocated, 0.45GB reserved
+  ✓ New best validation loss: 0.2025
+Epoch  46/300 | Train Loss: 0.1412 | Val Loss: 0.3220 | Val Cat Acc: 1.000 | Time: 5.0s
+  GPU Memory: 0.25GB allocated, 0.45GB reserved
+Epoch  47/300 | Train Loss: 0.1600 | Val Loss: 0.3577 | Val Cat Acc: 1.000 | Time: 5.0s
+  GPU Memory: 0.25GB allocated, 0.45GB reserved
+Epoch  48/300 | Train Loss: 0.1523 | Val Loss: 0.2894 | Val Cat Acc: 1.000 | Time: 4.9s
+  GPU Memory: 0.25GB allocated, 0.45GB reserved
+Epoch  49/300 | Train Loss: 0.1667 | Val Loss: 0.5996 | Val Cat Acc: 1.000 | Time: 4.9s
+  GPU Memory: 0.25GB allocated, 0.45GB reserved
+Epoch  50/300 | Train Loss: 0.1579 | Val Loss: 0.2342 | Val Cat Acc: 1.000 | Time: 4.9s
+  GPU Memory: 0.25GB allocated, 0.46GB reserved
+Epoch  51/300 | Train Loss: 0.1319 | Val Loss: 0.3441 | Val Cat Acc: 1.000 | Time: 4.9s
+  GPU Memory: 0.25GB allocated, 0.45GB reserved
+Epoch  52/300 | Train Loss: 0.1254 | Val Loss: 0.2587 | Val Cat Acc: 1.000 | Time: 4.9s
+  GPU Memory: 0.25GB allocated, 0.45GB reserved
+Epoch  53/300 | Train Loss: 0.1070 | Val Loss: 0.2741 | Val Cat Acc: 1.000 | Time: 4.9s
+  GPU Memory: 0.25GB allocated, 0.45GB reserved
+Epoch  54/300 | Train Loss: 0.1144 | Val Loss: 0.3280 | Val Cat Acc: 1.000 | Time: 5.1s
+  GPU Memory: 0.25GB allocated, 0.45GB reserved
+Epoch  55/300 | Train Loss: 0.1045 | Val Loss: 0.3018 | Val Cat Acc: 1.000 | Time: 5.0s
+  GPU Memory: 0.25GB allocated, 0.45GB reserved
+Epoch  56/300 | Train Loss: 0.1282 | Val Loss: 0.3259 | Val Cat Acc: 1.000 | Time: 5.0s
+  GPU Memory: 0.25GB allocated, 0.45GB reserved
+Epoch  57/300 | Train Loss: 0.0997 | Val Loss: 0.3588 | Val Cat Acc: 1.000 | Time: 5.0s
+  GPU Memory: 0.25GB allocated, 0.45GB reserved
+Epoch  58/300 | Train Loss: 0.0897 | Val Loss: 0.2790 | Val Cat Acc: 1.000 | Time: 5.0s
+  GPU Memory: 0.25GB allocated, 0.46GB reserved
+Epoch  59/300 | Train Loss: 0.1271 | Val Loss: 0.4378 | Val Cat Acc: 1.000 | Time: 5.0s
+  GPU Memory: 0.25GB allocated, 0.45GB reserved
+Epoch  60/300 | Train Loss: 0.1170 | Val Loss: 0.2172 | Val Cat Acc: 1.000 | Time: 5.0s
+  GPU Memory: 0.25GB allocated, 0.46GB reserved
+Epoch  61/300 | Train Loss: 0.0925 | Val Loss: 0.3401 | Val Cat Acc: 1.000 | Time: 5.0s
+  GPU Memory: 0.25GB allocated, 0.45GB reserved
+Epoch  62/300 | Train Loss: 0.1093 | Val Loss: 0.3638 | Val Cat Acc: 1.000 | Time: 5.0s
+  GPU Memory: 0.25GB allocated, 0.45GB reserved
+Epoch  63/300 | Train Loss: 0.0772 | Val Loss: 0.2826 | Val Cat Acc: 1.000 | Time: 4.9s
+  GPU Memory: 0.25GB allocated, 0.46GB reserved
+Epoch  64/300 | Train Loss: 0.0882 | Val Loss: 0.2796 | Val Cat Acc: 1.000 | Time: 4.8s
+  GPU Memory: 0.25GB allocated, 0.45GB reserved
+Epoch  65/300 | Train Loss: 0.0829 | Val Loss: 0.3714 | Val Cat Acc: 1.000 | Time: 4.9s
+  GPU Memory: 0.25GB allocated, 0.45GB reserved
+Epoch  66/300 | Train Loss: 0.0718 | Val Loss: 0.3506 | Val Cat Acc: 1.000 | Time: 4.8s
+  GPU Memory: 0.25GB allocated, 0.46GB reserved
+Epoch  67/300 | Train Loss: 0.0651 | Val Loss: 0.3210 | Val Cat Acc: 1.000 | Time: 4.9s
+  GPU Memory: 0.25GB allocated, 0.45GB reserved
+Epoch  68/300 | Train Loss: 0.0760 | Val Loss: 0.3868 | Val Cat Acc: 1.000 | Time: 4.9s
+  GPU Memory: 0.25GB allocated, 0.45GB reserved
+Epoch  69/300 | Train Loss: 0.0678 | Val Loss: 0.2737 | Val Cat Acc: 1.000 | Time: 4.9s
+  GPU Memory: 0.25GB allocated, 0.45GB reserved
+Epoch  70/300 | Train Loss: 0.0488 | Val Loss: 0.3016 | Val Cat Acc: 1.000 | Time: 4.9s
+  GPU Memory: 0.25GB allocated, 0.45GB reserved
+Epoch  71/300 | Train Loss: 0.0959 | Val Loss: 0.3181 | Val Cat Acc: 1.000 | Time: 4.9s
+  GPU Memory: 0.25GB allocated, 0.45GB reserved
+Epoch  72/300 | Train Loss: 0.1010 | Val Loss: 0.4142 | Val Cat Acc: 1.000 | Time: 4.9s
+  GPU Memory: 0.25GB allocated, 0.45GB reserved
+Epoch  73/300 | Train Loss: 0.0618 | Val Loss: 0.2405 | Val Cat Acc: 1.000 | Time: 4.9s
+  GPU Memory: 0.25GB allocated, 0.46GB reserved
+Epoch  74/300 | Train Loss: 0.0651 | Val Loss: 0.3522 | Val Cat Acc: 1.000 | Time: 4.8s
+  GPU Memory: 0.25GB allocated, 0.45GB reserved
+Epoch  75/300 | Train Loss: 0.0702 | Val Loss: 0.2758 | Val Cat Acc: 1.000 | Time: 4.9s
+  GPU Memory: 0.25GB allocated, 0.45GB reserved
+Epoch  76/300 | Train Loss: 0.0512 | Val Loss: 0.3115 | Val Cat Acc: 1.000 | Time: 4.9s
+  GPU Memory: 0.25GB allocated, 0.45GB reserved
+Epoch  77/300 | Train Loss: 0.0568 | Val Loss: 0.4150 | Val Cat Acc: 1.000 | Time: 4.9s
+  GPU Memory: 0.25GB allocated, 0.45GB reserved
+Epoch  78/300 | Train Loss: 0.0630 | Val Loss: 0.4363 | Val Cat Acc: 1.000 | Time: 4.9s
+  GPU Memory: 0.25GB allocated, 0.45GB reserved
+Epoch  79/300 | Train Loss: 0.0771 | Val Loss: 0.3780 | Val Cat Acc: 1.000 | Time: 4.9s
+  GPU Memory: 0.25GB allocated, 0.45GB reserved
+Epoch  80/300 | Train Loss: 0.0494 | Val Loss: 0.2992 | Val Cat Acc: 1.000 | Time: 4.9s
+  GPU Memory: 0.25GB allocated, 0.46GB reserved
+
+Early stopping triggered after 80 epochs.
+Best validation loss: 0.2025
+
+================================================================================
+CTC TRAINING COMPLETED!
+Best validation loss: 0.2025
+Checkpoints saved to: trained_models/transformer/greetings_ctc_mobile
+================================================================================
+
+ctc_log_probs shape: (1, 120, 11)  category_logits shape: (1, 120, 1)
+Saved TorchScript model: android_artifacts/transformer_greetings_ctc/SignTransformerCtc_best.pt
+Wrote metadata: android_artifacts/transformer_greetings_ctc/SignTransformerCtc_best.model.json
+Wrote labels:   android_artifacts/transformer_greetings_ctc/label_mapping.json
+Wrote report: docs/export/pytorch_mobile_export_report.md
+
+============================================================
+Training completed - 2025-10-29 04:09:13
+Log saved to: trained_models/transformer/greetings_ctc_mobile/training_20251029_040146.log
+============================================================
