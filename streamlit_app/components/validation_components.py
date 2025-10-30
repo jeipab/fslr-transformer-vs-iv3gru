@@ -798,7 +798,50 @@ def render_ctc_validation_results(results: Dict[str, Any]):
     ])
 
     with tab1:
-        st.markdown("")
+        # Overall Performance (no accuracy)
+        st.markdown("#### Detailed Metrics")
+        gloss_mean_p = overall_metrics.get('mean_precision', overall_metrics.get('overall_precision', 0.0))
+        gloss_mean_r = overall_metrics.get('mean_recall', overall_metrics.get('overall_recall', 0.0))
+        gloss_mean_f = overall_metrics.get('mean_f1_score', overall_metrics.get('overall_f1_score', 0.0))
+
+        has_cat = summary.get('has_category_predictions', False)
+        cat_mean_p = overall_metrics.get('category_mean_precision', overall_metrics.get('category_overall_precision', 0.0)) if has_cat else 0.0
+        cat_mean_r = overall_metrics.get('category_mean_recall', overall_metrics.get('category_overall_recall', 0.0)) if has_cat else 0.0
+        cat_mean_f = overall_metrics.get('category_mean_f1_score', overall_metrics.get('category_overall_f1_score', 0.0)) if has_cat else 0.0
+
+        metrics_data = {
+            'Metric': ['Precision', 'Recall', 'F1-Score'],
+            'Gloss': [gloss_mean_p, gloss_mean_r, gloss_mean_f],
+        }
+        if has_cat:
+            metrics_data['Category'] = [cat_mean_p, cat_mean_r, cat_mean_f]
+
+        df = pd.DataFrame(metrics_data)
+        st.dataframe(df, width='stretch', hide_index=True)
+
+        # Performance Metrics Comparison chart
+        fig = go.Figure()
+        fig.add_trace(go.Bar(
+            name='Gloss',
+            x=df['Metric'],
+            y=df['Gloss'],
+            marker_color='lightblue'
+        ))
+        if has_cat:
+            fig.add_trace(go.Bar(
+                name='Category',
+                x=df['Metric'],
+                y=df['Category'],
+                marker_color='lightgreen'
+            ))
+        fig.update_layout(
+            title="Performance Metrics Comparison",
+            xaxis_title="Metrics",
+            yaxis_title="Score",
+            barmode='group',
+            height=400
+        )
+        st.plotly_chart(fig, use_container_width=True)
 
     with tab2:
         # Per-Class Analysis for CTC using confusion matrices
