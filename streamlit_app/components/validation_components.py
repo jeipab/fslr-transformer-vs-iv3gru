@@ -792,7 +792,7 @@ def render_ctc_validation_results(results: Dict[str, Any]):
     # Summary metrics
     st.markdown("#### Overall Metrics")
     has_categories = summary.get('has_category_predictions', False) and 'category_overall_f1_score' in overall_metrics
-    num_cols = 5 + (1 if has_categories else 0)
+    num_cols = 4 + (1 if has_categories else 0)
     cols = st.columns(num_cols)
     
     col_idx = 0
@@ -809,11 +809,6 @@ def render_ctc_validation_results(results: Dict[str, Any]):
     with cols[col_idx]:
         overall_f1 = overall_metrics.get('overall_f1_score', 0)
         st.metric("Overall F1-Score", f"{overall_f1*100:.2f}%")
-    col_idx += 1
-    
-    with cols[col_idx]:
-        mean_iou = overall_metrics.get('mean_iou_all_tp', 0)
-        st.metric("Mean IoU (TP)", f"{mean_iou*100:.2f}%")
     col_idx += 1
     
     with cols[col_idx]:
@@ -844,38 +839,7 @@ def render_ctc_validation_results(results: Dict[str, Any]):
         total_gt = overall_metrics.get('total_gt_instances', 0)
         st.metric("Total GT Instances", total_gt)
     
-    # Per-signer metrics
-    if summary.get('per_signer_metrics'):
-        st.markdown("---")
-        st.markdown("#### Per-Signer Detection Metrics")
-        signer_data = []
-        for signer, metrics in summary['per_signer_metrics'].items():
-            signer_data.append({
-                'Signer': signer,
-                'Precision': f"{metrics['precision']*100:.2f}%",
-                'Recall': f"{metrics['recall']*100:.2f}%",
-                'F1-Score': f"{metrics['f1_score']*100:.2f}%",
-                'Num Sequences': metrics['num_sequences']
-            })
-        signer_df = pd.DataFrame(signer_data)
-        st.dataframe(signer_df, width='stretch')
-    
-    # Per-strategy metrics
-    if summary.get('per_strategy_metrics'):
-        st.markdown("---")
-        st.markdown("#### Per-Strategy Detection Metrics")
-        strategy_data = []
-        for strategy, metrics in summary['per_strategy_metrics'].items():
-            strategy_name = f"Strategy {strategy}"
-            strategy_data.append({
-                'Strategy': strategy_name,
-                'Precision': f"{metrics['precision']*100:.2f}%",
-                'Recall': f"{metrics['recall']*100:.2f}%",
-                'F1-Score': f"{metrics['f1_score']*100:.2f}%",
-                'Num Sequences': metrics['num_sequences']
-            })
-        strategy_df = pd.DataFrame(strategy_data)
-        st.dataframe(strategy_df, width='stretch')
+    # Per-signer and Per-strategy metrics intentionally omitted
     
     # Detailed predictions table
     st.markdown("---")
@@ -897,8 +861,7 @@ def render_ctc_validation_results(results: Dict[str, Any]):
                     'F1-Score': f"{pred.get('f1_score', 0)*100:.2f}%",
                     'TP': pred.get('num_tp', 0),
                     'FP': pred.get('num_fp', 0),
-                    'FN': pred.get('num_fn', 0),
-                    'Mean IoU': f"{pred.get('mean_iou', 0)*100:.2f}%" if pred.get('mean_iou', 0) > 0 else 'N/A'
+                    'FN': pred.get('num_fn', 0)
                 }
                 
                 # Add category F1 if available
@@ -917,8 +880,7 @@ def render_ctc_validation_results(results: Dict[str, Any]):
                     'F1-Score': 'N/A',
                     'TP': 'N/A',
                     'FP': 'N/A',
-                    'FN': 'N/A',
-                    'Mean IoU': 'N/A'
+                    'FN': 'N/A'
                 }
                 pred_data.append(row)
         
@@ -932,7 +894,7 @@ def render_ctc_validation_results(results: Dict[str, Any]):
     
     results_json = json.dumps(results, indent=2)
     st.download_button(
-        label="📥 Download CTC Validation Results (JSON)",
+        label="Download Result",
         data=results_json,
         file_name="ctc_validation_results.json",
         mime="application/json",

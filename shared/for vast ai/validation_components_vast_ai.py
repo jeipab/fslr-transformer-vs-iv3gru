@@ -760,84 +760,76 @@ def render_ctc_validation_results(results: Dict[str, Any]):
     st.markdown("### CTC Validation Results")
     summary = results.get('summary', {})
     predictions = results.get('predictions', [])
+    overall_metrics = summary.get('overall_metrics', {})
     st.markdown("#### Overall Metrics")
-    has_categories = summary.get('has_category_predictions', False)
-    has_gloss_acc = 'mean_gloss_accuracy' in summary
-    num_cols = 4 + (1 if has_categories else 0) + (1 if has_gloss_acc else 0)
+    has_categories = summary.get('has_category_predictions', False) and 'category_overall_f1_score' in overall_metrics
+    num_cols = 4 + (1 if has_categories else 0)
     cols = st.columns(num_cols)
     col_idx = 0
     with cols[col_idx]:
-        mean_wer = summary.get('mean_wer', 0)
-        st.metric("Mean WER", f"{mean_wer*100:.2f}%")
+        overall_precision = overall_metrics.get('overall_precision', 0)
+        st.metric("Overall Precision", f"{overall_precision*100:.2f}%")
     col_idx += 1
     with cols[col_idx]:
-        seq_accuracy = summary.get('sequence_accuracy', 0)
-        st.metric("Sequence Accuracy", f"{seq_accuracy*100:.1f}%")
+        overall_recall = overall_metrics.get('overall_recall', 0)
+        st.metric("Overall Recall", f"{overall_recall*100:.2f}%")
     col_idx += 1
-    if has_gloss_acc:
-        with cols[col_idx]:
-            gloss_acc = summary.get('mean_gloss_accuracy', 0)
-            st.metric("Gloss Accuracy", f"{gloss_acc*100:.1f}%")
-        col_idx += 1
+    with cols[col_idx]:
+        overall_f1 = overall_metrics.get('overall_f1_score', 0)
+        st.metric("Overall F1-Score", f"{overall_f1*100:.2f}%")
+    col_idx += 1
     with cols[col_idx]:
         total_sequences = summary.get('total_sequences', 0)
         st.metric("Total Sequences", total_sequences)
     col_idx += 1
     if has_categories:
         with cols[col_idx]:
-            cat_acc = summary.get('mean_category_accuracy', 0)
-            st.metric("Category Accuracy", f"{cat_acc*100:.1f}%")
-    st.markdown("---")
-    st.markdown("#### Error Breakdown")
-    col1, col2, col3 = st.columns(3)
-    with col1:
-        st.metric("Insertions", summary.get('total_insertions', 0))
-    with col2:
-        st.metric("Deletions", summary.get('total_deletions', 0))
-    with col3:
-        st.metric("Substitutions", summary.get('total_substitutions', 0))
-    if summary.get('per_signer_wer'):
-        st.markdown("---")
-        st.markdown("#### Per-Signer WER")
-        signer_data = []
-        for signer, wer in summary['per_signer_wer'].items():
-            signer_data.append({'Signer': signer, 'WER': f"{wer*100:.2f}%"})
-        st.dataframe(signer_data, use_container_width=True)
-    if summary.get('per_strategy_wer'):
-        st.markdown("---")
-        st.markdown("#### Per-Strategy WER")
-        strategy_data = []
-        for strategy, wer in summary['per_strategy_wer'].items():
-            strategy_name = f"Strategy {strategy}"
-            strategy_data.append({'Strategy': strategy_name, 'WER': f"{wer*100:.2f}%"})
-        st.dataframe(strategy_data, use_container_width=True)
+            cat_f1 = overall_metrics.get('category_overall_f1_score', 0)
+            st.metric("Category F1-Score", f"{cat_f1*100:.2f}%")
+    # Error breakdown omitted
+    # Per-signer and Per-strategy breakdowns intentionally omitted
     st.markdown("---")
     st.markdown("#### Detailed Predictions")
     if predictions:
         pred_data = []
-        has_cat_acc = any('category_accuracy' in p for p in predictions)
+        has_cat_metrics = any('category_f1_score' in p for p in predictions)
         for pred in predictions:
-            row = {
-                'File': pred['file_name'],
-                'GT Length': len(pred.get('ground_truth_sequence', [])),
-                'Pred Length': pred['num_predicted'],
-                'WER': f"{pred.get('wer', 0)*100:.2f}%",
-                'Correct': '✓' if pred.get('correct', False) else '✗',
-                'Insertions': pred.get('num_insertions', 0),
-                'Deletions': pred.get('num_deletions', 0),
-                'Substitutions': pred.get('num_substitutions', 0)
-            }
-            if has_cat_acc:
-                cat_acc = pred.get('category_accuracy')
-                row['Cat Acc'] = f"{cat_acc*100:.1f}%" if cat_acc is not None else 'N/A'
-            pred_data.append(row)
-        pred_df = pd.DataFrame(pred_data)
-        st.dataframe(pred_df, use_container_width=True, height=400)
+            if 'f1_score' in pred:
+                row = {
+                    'File': pred['file_name'],
+                    'GT Length': len(pred.get('ground_truth_sequence', [])),
+                    'Pred Length': pred['num_predicted'],
+                    'Precision': f"{pred.get('precision', 0)*100:.2f}%",
+                    'Recall': f"{pred.get('recall', 0)*100:.2f}%",
+                    'F1-Score': f"{pred.get('f1_score', 0)*100:.2f}%",
+                    'TP': pred.get('num_tp', 0),
+                    'FP': pred.get('num_fp', 0),
+                    'FN': pred.get('num_fn', 0)
+                }
+                if has_cat_metrics and 'category_f1_score' in pred:
+                    row['Cat F1'] = f"{pred['category_f1_score']*100:.2f}%"
+                pred_data.append(row)
+            else:
+                row = {
+                    'File': pred['file_name'],
+                    'GT Length': len(pred.get('ground_truth_sequence', [])),
+                    'Pred Length': pred['num_predicted'],
+                    'Precision': 'N/A',
+                    'Recall': 'N/A',
+                    'F1-Score': 'N/A',
+                    'TP': 'N/A',
+                    'FP': 'N/A',
+                    'FN': 'N/A'
+                }
+                pred_data.append(row)
+        if pred_data:
+            pred_df = pd.DataFrame(pred_data)
+            st.dataframe(pred_df, use_container_width=True, height=400)
     st.markdown("---")
     st.markdown("#### Download Results")
     results_json = json.dumps(results, indent=2)
     st.download_button(
-        label="📥 Download CTC Validation Results (JSON)",
+        label="Download Result",
         data=results_json,
         file_name="ctc_validation_results.json",
         mime="application/json",
