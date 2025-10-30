@@ -21,7 +21,7 @@ project_root = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(project_root))
 
 from models import SignTransformerCtc, MediaPipeGRUCtc, InceptionV3GRUCtc
-from evaluation.ctc_utils import greedy_ctc_decoder, beam_search_ctc_decoder, calculate_wer
+from evaluation.ctc_utils import greedy_ctc_decoder, beam_search_ctc_decoder
 from streamlit_app.core.config import CTC_CONFIG, CTC_CONFIG_SUBSET, MODEL_CONFIG
 from data.labels.label_mapping import load_label_mappings
 
@@ -30,75 +30,6 @@ def load_ground_truth_json(json_path: Path) -> Dict:
     """Load ground truth from JSON file."""
     with open(json_path, 'r', encoding='utf-8') as f:
         return json.load(f)
-
-
-def calculate_wer_with_details(reference: List[int], hypothesis: List[int]) -> Tuple[float, int, int, int]:
-    """
-    Calculate WER with detailed error breakdown.
-    
-    Returns:
-        Tuple of (wer, num_insertions, num_deletions, num_substitutions)
-    """
-    if len(reference) == 0:
-        return (0.0 if len(hypothesis) == 0 else float('inf'), 0, 0, len(hypothesis))
-    
-    ref_len = len(reference)
-    hyp_len = len(hypothesis)
-    
-    dp = [[0] * (hyp_len + 1) for _ in range(ref_len + 1)]
-    ops = [[None] * (hyp_len + 1) for _ in range(ref_len + 1)]
-    
-    for i in range(ref_len + 1):
-        dp[i][0] = i
-        ops[i][0] = 'D'
-    for j in range(hyp_len + 1):
-        dp[0][j] = j
-        ops[0][j] = 'I'
-    ops[0][0] = None
-    
-    for i in range(1, ref_len + 1):
-        for j in range(1, hyp_len + 1):
-            if reference[i-1] == hypothesis[j-1]:
-                dp[i][j] = dp[i-1][j-1]
-                ops[i][j] = 'M'
-            else:
-                sub_cost = dp[i-1][j-1] + 1
-                del_cost = dp[i-1][j] + 1
-                ins_cost = dp[i][j-1] + 1
-                
-                min_cost = min(sub_cost, del_cost, ins_cost)
-                dp[i][j] = min_cost
-                
-                if min_cost == sub_cost:
-                    ops[i][j] = 'S'
-                elif min_cost == del_cost:
-                    ops[i][j] = 'D'
-                else:
-                    ops[i][j] = 'I'
-    
-    i, j = ref_len, hyp_len
-    insertions = deletions = substitutions = 0
-    
-    while i > 0 or j > 0:
-        op = ops[i][j]
-        if op == 'M':
-            i -= 1
-            j -= 1
-        elif op == 'S':
-            substitutions += 1
-            i -= 1
-            j -= 1
-        elif op == 'D':
-            deletions += 1
-            i -= 1
-        elif op == 'I':
-            insertions += 1
-            j -= 1
-        else:
-            break
-    
-    wer = dp[ref_len][hyp_len] / ref_len
-    return wer, insertions, deletions, substitutions
 
 
 def estimate_timestamps(predicted_sequence: List[int], total_frames: int, fps: int = 30) -> List[Dict]:
@@ -151,6 +82,214 @@ def calculate_temporal_alignment_accuracy(
                 break
     
     return aligned / len(gt_timestamps)
+
+
+def calculate_temporal_iou(pred_start: float, pred_end: float, gt_start: float, gt_end: float) -> float:
+    """
+    Calculate temporal IoU (Intersection over Union) between two time intervals.
+    
+    Args:
+        pred_start: Prediction start time (ms)
+        pred_end: Prediction end time (ms)
+        gt_start: Ground truth start time (ms)
+        gt_end: Ground truth end time (ms)
+    
+    Returns:
+        IoU value between 0.0 and 1.0
+    """
+    # Calculate intersection
+    overlap_start = max(pred_start, gt_start)
+    overlap_end = min(pred_end, gt_end)
+    overlap_duration = max(0.0, overlap_end - overlap_start)
+    
+    # Calculate union
+    union_start = min(pred_start, gt_start)
+    union_end = max(pred_end, gt_end)
+    union_duration = union_end - union_start
+    
+    if union_duration == 0:
+        return 0.0
+    
+    return overlap_duration / union_duration
+
+
+def match_predictions_to_ground_truth(
+    pred_glosses: List[int],
+    pred_timestamps: List[Dict],
+    gt_glosses: List[int],
+    gt_timestamps: List[Dict],
+    iou_threshold: float = 0.5
+) -> Tuple[List[int], List[int], List[int], List[Dict], float]:
+    """
+    Match predictions to ground truth using temporal IoU.
+    
+    Args:
+        pred_glosses: List of predicted gloss IDs
+        pred_timestamps: List of timestamp dicts with 'start_ms' and 'end_ms'
+        gt_glosses: List of ground truth gloss IDs
+        gt_timestamps: List of timestamp dicts with 'start_ms' and 'end_ms'
+        iou_threshold: Minimum IoU required for a match (default: 0.5)
+    
+    Returns:
+        Tuple of:
+        - tp_indices: Indices of true positive predictions (prediction index)
+        - fp_indices: Indices of false positive predictions (prediction index)
+        - fn_indices: Indices of false negative ground truths (ground truth index)
+        - matched_pairs: List of match info dicts with keys: pred_idx, gt_idx, iou, gloss
+        - mean_iou: Average IoU for all TP matches
+    """
+    if len(pred_timestamps) != len(pred_glosses):
+        raise ValueError(f"Mismatch: {len(pred_timestamps)} timestamps for {len(pred_glosses)} predictions")
+    if len(gt_timestamps) != len(gt_glosses):
+        raise ValueError(f"Mismatch: {len(gt_timestamps)} timestamps for {len(gt_glosses)} ground truth")
+    
+    num_pred = len(pred_glosses)
+    num_gt = len(gt_glosses)
+    
+    # Edge cases
+    if num_pred == 0:
+        return [], [], list(range(num_gt)), [], 0.0
+    if num_gt == 0:
+        return [], list(range(num_pred)), [], [], 0.0
+    
+    # Calculate IoU matrix (num_pred x num_gt)
+    iou_matrix = np.zeros((num_pred, num_gt))
+    for i, pred_ts in enumerate(pred_timestamps):
+        for j, gt_ts in enumerate(gt_timestamps):
+            iou = calculate_temporal_iou(
+                pred_ts['start_ms'], pred_ts['end_ms'],
+                gt_ts['start_ms'], gt_ts['end_ms']
+            )
+            iou_matrix[i, j] = iou
+    
+    # Match predictions to ground truth (one-to-one matching)
+    # Strategy: Greedy matching - match highest IoU first, but only if:
+    #   1. IoU >= threshold
+    #   2. Gloss IDs match
+    #   3. Not already matched
+    
+    matched_pairs = []
+    pred_matched = [False] * num_pred
+    gt_matched = [False] * num_gt
+    
+    # Create list of candidate matches (pred_idx, gt_idx, iou)
+    candidates = []
+    for i in range(num_pred):
+        for j in range(num_gt):
+            if pred_glosses[i] == gt_glosses[j] and iou_matrix[i, j] >= iou_threshold:
+                candidates.append((i, j, iou_matrix[i, j]))
+    
+    # Sort by IoU (highest first)
+    candidates.sort(key=lambda x: x[2], reverse=True)
+    
+    # Greedy matching
+    for pred_idx, gt_idx, iou in candidates:
+        if not pred_matched[pred_idx] and not gt_matched[gt_idx]:
+            matched_pairs.append({
+                'pred_idx': pred_idx,
+                'gt_idx': gt_idx,
+                'iou': float(iou),
+                'gloss': pred_glosses[pred_idx]
+            })
+            pred_matched[pred_idx] = True
+            gt_matched[gt_idx] = True
+    
+    # Classify predictions and ground truth
+    tp_indices = [pair['pred_idx'] for pair in matched_pairs]
+    fp_indices = [i for i in range(num_pred) if not pred_matched[i]]
+    fn_indices = [j for j in range(num_gt) if not gt_matched[j]]
+    
+    # Calculate mean IoU for TP matches
+    mean_iou = float(np.mean([pair['iou'] for pair in matched_pairs])) if matched_pairs else 0.0
+    
+    return tp_indices, fp_indices, fn_indices, matched_pairs, mean_iou
+
+
+def calculate_detection_metrics(
+    num_tp: int, num_fp: int, num_fn: int
+) -> Tuple[float, float, float]:
+    """
+    Calculate precision, recall, and F1-score from TP/FP/FN counts.
+    
+    Args:
+        num_tp: Number of true positives
+        num_fp: Number of false positives
+        num_fn: Number of false negatives
+    
+    Returns:
+        Tuple of (precision, recall, f1_score)
+    """
+    precision = num_tp / (num_tp + num_fp) if (num_tp + num_fp) > 0 else 0.0
+    recall = num_tp / (num_tp + num_fn) if (num_tp + num_fn) > 0 else 0.0
+    f1_score = 2 * precision * recall / (precision + recall) if (precision + recall) > 0 else 0.0
+    
+    return precision, recall, f1_score
+
+
+def smooth_sequence(
+    sequence: List[int],
+    confidences: Optional[List[float]] = None,
+    categories: Optional[List[int]] = None,
+    category_confidences: Optional[List[float]] = None
+) -> Tuple[List[int], List[float], List[int], List[float]]:
+    """
+    Remove consecutive duplicate glosses from a sequence, keeping only the first occurrence.
+    
+    This helps reduce repeated predictions that occur due to sliding window overlap.
+    For example: [good, morning, good, morning] -> [good, morning]
+    
+    Args:
+        sequence: List of gloss IDs
+        confidences: Optional list of confidence scores (take max for consecutive duplicates)
+        categories: Optional list of category IDs (keep first occurrence)
+        category_confidences: Optional list of category confidence scores (take max for consecutive duplicates)
+    
+    Returns:
+        Tuple of (smoothed_sequence, smoothed_confidences, smoothed_categories, smoothed_category_confidences)
+    """
+    if not sequence:
+        return [], [], [], []
+    
+    smoothed_seq = []
+    smoothed_conf = []
+    smoothed_cats = []
+    smoothed_cat_conf = []
+    
+    prev_gloss = None
+    
+    for i, gloss in enumerate(sequence):
+        if gloss != prev_gloss:
+            # New gloss, add it
+            smoothed_seq.append(gloss)
+            
+            if confidences and i < len(confidences):
+                smoothed_conf.append(confidences[i])
+            else:
+                smoothed_conf.append(1.0)
+            
+            if categories and i < len(categories):
+                smoothed_cats.append(categories[i])
+            else:
+                smoothed_cats.append(0)
+            
+            if category_confidences and i < len(category_confidences):
+                smoothed_cat_conf.append(category_confidences[i])
+            else:
+                smoothed_cat_conf.append(0.0)
+            
+            prev_gloss = gloss
+        else:
+            # Consecutive duplicate - merge confidences (take max)
+            if confidences and i < len(confidences):
+                if smoothed_conf:
+                    smoothed_conf[-1] = max(smoothed_conf[-1], confidences[i])
+            
+            # Merge category confidences (take max)
+            if category_confidences and i < len(category_confidences):
+                if smoothed_cat_conf:
+                    smoothed_cat_conf[-1] = max(smoothed_cat_conf[-1], category_confidences[i])
+    
+    return smoothed_seq, smoothed_conf, smoothed_cats, smoothed_cat_conf
 
 
 class CTCPredictor:
@@ -356,7 +495,8 @@ class CTCPredictor:
         decode_method: str = 'greedy',
         beam_width: int = 10,
         fps: int = 30,
-        temporal_tolerance: int = 500
+        temporal_tolerance: int = 500,
+        iou_threshold: float = 0.5
     ) -> Dict:
         """Predict single continuous sequence with full metrics."""
         data = np.load(npz_path)
@@ -449,6 +589,14 @@ class CTCPredictor:
                         predicted_categories.append(0)  # Default to GREETING
                         category_confidences.append(0.5)  # Lower confidence for unknown
         
+        # Smooth sequence by removing consecutive duplicates
+        predicted_sequence, confidence_scores, predicted_categories, category_confidences = smooth_sequence(
+            predicted_sequence,
+            confidence_scores,
+            predicted_categories,
+            category_confidences
+        )
+        
         predicted_labels = [self.gloss_mapping.get(g, f"GLOSS_{g}") for g in predicted_sequence]
         predicted_timestamps = estimate_timestamps(predicted_sequence, X.shape[1], fps)
         
@@ -468,47 +616,102 @@ class CTCPredictor:
             result['strategy'] = ground_truth['strategy']
             result['ground_truth_sequence'] = ground_truth['ground_truth_sequence']
             result['ground_truth_labels'] = ground_truth['ground_truth_labels']
+            result['ground_truth_timestamps'] = ground_truth.get('ground_truth_timestamps', [])
             
             # Ground truth categories if available
             if 'ground_truth_categories' in ground_truth:
                 result['ground_truth_categories'] = ground_truth['ground_truth_categories']
             
-            wer, insertions, deletions, substitutions = calculate_wer_with_details(
-                ground_truth['ground_truth_sequence'],
-                predicted_sequence
-            )
+            # Calculate detection metrics using temporal IoU matching
+            gt_timestamps = ground_truth.get('ground_truth_timestamps', [])
             
-            result['wer'] = float(wer)
-            result['cer'] = float(wer)
-            result['correct'] = wer == 0.0
-            result['num_insertions'] = insertions
-            result['num_deletions'] = deletions
-            result['num_substitutions'] = substitutions
-            
-            # Category accuracy (if both predicted and ground truth available)
-            if predicted_categories and 'ground_truth_categories' in ground_truth:
-                gt_cats = ground_truth['ground_truth_categories']
-                if len(predicted_categories) == len(gt_cats):
-                    correct_cats = sum(1 for p, g in zip(predicted_categories, gt_cats) if p == g)
-                    result['category_accuracy'] = correct_cats / len(gt_cats)
+            try:
+                if gt_timestamps and len(gt_timestamps) > 0:
+                    tp_indices, fp_indices, fn_indices, matched_pairs, mean_iou = match_predictions_to_ground_truth(
+                        pred_glosses=predicted_sequence,
+                        pred_timestamps=predicted_timestamps,
+                        gt_glosses=ground_truth['ground_truth_sequence'],
+                        gt_timestamps=gt_timestamps,
+                        iou_threshold=iou_threshold
+                    )
+                    
+                    num_tp = len(tp_indices)
+                    num_fp = len(fp_indices)
+                    num_fn = len(fn_indices)
+                    num_gt = len(ground_truth['ground_truth_sequence'])
+                    
+                    precision, recall, f1_score = calculate_detection_metrics(num_tp, num_fp, num_fn)
+                    
+                    # Store detection metrics
+                    result['num_tp'] = num_tp
+                    result['num_fp'] = num_fp
+                    result['num_fn'] = num_fn
+                    result['num_gt'] = num_gt
+                    result['precision'] = float(precision)
+                    result['recall'] = float(recall)
+                    result['f1_score'] = float(f1_score)
+                    result['mean_iou'] = mean_iou
+                    result['iou_threshold'] = iou_threshold
+                    result['matched_pairs'] = matched_pairs
+                    result['unmatched_predictions'] = fp_indices
+                    result['unmatched_ground_truth'] = fn_indices
+                    
+                    # Category-level detection metrics (if categories available)
+                    if predicted_categories and 'ground_truth_categories' in ground_truth:
+                        gt_cats = ground_truth['ground_truth_categories']
+                        if len(predicted_categories) == len(predicted_sequence) and len(gt_cats) == len(ground_truth['ground_truth_sequence']):
+                            cat_tp = 0
+                            cat_fp = 0
+                            cat_fn = 0
+                            
+                            for pair in matched_pairs:
+                                pred_idx = pair['pred_idx']
+                                gt_idx = pair['gt_idx']
+                                if pred_idx < len(predicted_categories) and gt_idx < len(gt_cats):
+                                    if predicted_categories[pred_idx] == gt_cats[gt_idx]:
+                                        cat_tp += 1
+                                    else:
+                                        cat_fp += 1
+                                        cat_fn += 1
+                            
+                            cat_fp += len(fp_indices)
+                            cat_fn += len(fn_indices)
+                            
+                            cat_precision, cat_recall, cat_f1 = calculate_detection_metrics(cat_tp, cat_fp, cat_fn)
+                            
+                            result['category_num_tp'] = cat_tp
+                            result['category_num_fp'] = cat_fp
+                            result['category_num_fn'] = cat_fn
+                            result['category_precision'] = float(cat_precision)
+                            result['category_recall'] = float(cat_recall)
+                            result['category_f1_score'] = float(cat_f1)
                 else:
-                    result['category_accuracy'] = 0.0
-            
-            if wer == 0.0:
-                result['temporal_alignment_accuracy'] = calculate_temporal_alignment_accuracy(
-                    predicted_timestamps,
-                    ground_truth['ground_truth_timestamps'],
-                    temporal_tolerance
-                )
-            else:
-                result['temporal_alignment_accuracy'] = 0.0
+                    # No timestamps available - cannot calculate detection metrics
+                    raise ValueError("Ground truth timestamps are missing or empty. Detection metrics require timestamps.")
+                    
+            except Exception as e:
+                # Set default values if matching fails
+                result['num_tp'] = 0
+                result['num_fp'] = len(predicted_sequence)
+                result['num_fn'] = len(ground_truth['ground_truth_sequence'])
+                result['num_gt'] = len(ground_truth['ground_truth_sequence'])
+                result['precision'] = 0.0
+                result['recall'] = 0.0
+                result['f1_score'] = 0.0
+                result['mean_iou'] = 0.0
+                result['iou_threshold'] = iou_threshold
+                result['matched_pairs'] = []
+                result['unmatched_predictions'] = list(range(len(predicted_sequence)))
+                result['unmatched_ground_truth'] = list(range(len(ground_truth['ground_truth_sequence'])))
+                print(f"Warning: Detection metrics calculation failed: {str(e)}")
         
         return result
     
     def predict_sequence_sliding_window(self, npz_path: Path, ground_truth: Optional[Dict] = None,
                                       window_size: int = 150, stride: int = 50, 
                                       decode_method: str = 'greedy', beam_width: int = 10, 
-                                      fps: int = 30, temporal_tolerance: int = 500) -> Dict:
+                                      fps: int = 30, temporal_tolerance: int = 500,
+                                      iou_threshold: float = 0.5) -> Dict:
         """
         Predict continuous sequence using sliding window approach.
         
@@ -708,6 +911,14 @@ class CTCPredictor:
             final_categories = []
             final_category_confidences = []
         
+        # Smooth sequence by removing consecutive duplicates
+        final_sequence, final_confidences, final_categories, final_category_confidences = smooth_sequence(
+            final_sequence,
+            final_confidences,
+            final_categories,
+            final_category_confidences
+        )
+        
         # Convert to labels
         predicted_labels = [self.gloss_mapping.get(g, f"GLOSS_{g}") for g in final_sequence]
         predicted_timestamps = estimate_timestamps(final_sequence, seq_len, fps)
@@ -755,18 +966,88 @@ class CTCPredictor:
             result['signer'] = ground_truth.get('signer')
             result['strategy'] = ground_truth.get('strategy', ground_truth.get('strategy_name'))
             
-            # Calculate WER and error metrics
-            wer, insertions, deletions, substitutions = calculate_wer_with_details(
-                gt_gloss_ids,
-                final_sequence
-            )
-            
-            result['wer'] = float(wer)
-            result['cer'] = float(wer)
-            result['correct'] = wer == 0.0
-            result['num_insertions'] = insertions
-            result['num_deletions'] = deletions
-            result['num_substitutions'] = substitutions
+            # Calculate detection metrics using temporal IoU matching
+            try:
+                tp_indices, fp_indices, fn_indices, matched_pairs, mean_iou = match_predictions_to_ground_truth(
+                    pred_glosses=final_sequence,
+                    pred_timestamps=predicted_timestamps,
+                    gt_glosses=gt_gloss_ids,
+                    gt_timestamps=gt_timestamps,
+                    iou_threshold=iou_threshold
+                )
+                
+                num_tp = len(tp_indices)
+                num_fp = len(fp_indices)
+                num_fn = len(fn_indices)
+                num_gt = len(gt_gloss_ids)
+                
+                precision, recall, f1_score = calculate_detection_metrics(num_tp, num_fp, num_fn)
+                
+                # Store detection metrics
+                result['num_tp'] = num_tp
+                result['num_fp'] = num_fp
+                result['num_fn'] = num_fn
+                result['num_gt'] = num_gt
+                result['precision'] = float(precision)
+                result['recall'] = float(recall)
+                result['f1_score'] = float(f1_score)
+                result['mean_iou'] = mean_iou
+                result['iou_threshold'] = iou_threshold
+                result['matched_pairs'] = matched_pairs
+                result['unmatched_predictions'] = fp_indices
+                result['unmatched_ground_truth'] = fn_indices
+                
+                # Category-level detection metrics (if categories available)
+                if final_categories and 'ground_truth_categories' in ground_truth:
+                    gt_categories = ground_truth['ground_truth_categories']
+                    if len(final_categories) == len(final_sequence) and len(gt_categories) == len(gt_gloss_ids):
+                        # Match categories based on TP matches from gloss-level matching
+                        cat_tp = 0
+                        cat_fp = 0
+                        cat_fn = 0
+                        
+                        # Count TP categories (matched pairs with same category)
+                        for pair in matched_pairs:
+                            pred_idx = pair['pred_idx']
+                            gt_idx = pair['gt_idx']
+                            if pred_idx < len(final_categories) and gt_idx < len(gt_categories):
+                                if final_categories[pred_idx] == gt_categories[gt_idx]:
+                                    cat_tp += 1
+                                else:
+                                    # Wrong category, count as FP for pred and FN for GT
+                                    cat_fp += 1
+                                    cat_fn += 1
+                        
+                        # Count FP categories (unmatched predictions)
+                        cat_fp += len(fp_indices)
+                        
+                        # Count FN categories (unmatched ground truth)
+                        cat_fn += len(fn_indices)
+                        
+                        cat_precision, cat_recall, cat_f1 = calculate_detection_metrics(cat_tp, cat_fp, cat_fn)
+                        
+                        result['category_num_tp'] = cat_tp
+                        result['category_num_fp'] = cat_fp
+                        result['category_num_fn'] = cat_fn
+                        result['category_precision'] = float(cat_precision)
+                        result['category_recall'] = float(cat_recall)
+                        result['category_f1_score'] = float(cat_f1)
+                
+            except Exception as e:
+                # Fallback: set default values if matching fails
+                result['num_tp'] = 0
+                result['num_fp'] = len(final_sequence)
+                result['num_fn'] = len(gt_gloss_ids)
+                result['num_gt'] = len(gt_gloss_ids)
+                result['precision'] = 0.0
+                result['recall'] = 0.0
+                result['f1_score'] = 0.0
+                result['mean_iou'] = 0.0
+                result['iou_threshold'] = iou_threshold
+                result['matched_pairs'] = []
+                result['unmatched_predictions'] = list(range(len(final_sequence)))
+                result['unmatched_ground_truth'] = list(range(len(gt_gloss_ids)))
+                print(f"Warning: Detection metrics calculation failed for {result.get('file_name', 'unknown')}: {str(e)}")
         
         return result
     
@@ -831,55 +1112,118 @@ class CTCPredictor:
         }
     
     def _generate_summary(self, predictions: List[Dict]) -> Dict:
-        """Generate summary statistics."""
+        """Generate summary statistics using instance-level detection metrics."""
         if not predictions:
             return {'total_sequences': 0}
         
-        has_gt = 'wer' in predictions[0]
-        has_categories = 'predicted_categories' in predictions[0] and len(predictions[0]['predicted_categories']) > 0
+        # Filter predictions with ground truth (detection metrics required)
+        predictions_with_gt = [p for p in predictions if 'f1_score' in p]
+        has_gt = len(predictions_with_gt) > 0
+        has_categories = 'predicted_categories' in predictions[0] and len(predictions[0].get('predicted_categories', [])) > 0
         
         summary = {
             'total_sequences': len(predictions),
+            'total_sequences_with_gt': len(predictions_with_gt),
             'model_type': self.model_type,
-            'decode_method': predictions[0].get('wer') is not None,
             'has_category_predictions': has_categories
         }
         
         if has_gt:
-            wers = [p['wer'] for p in predictions]
-            correct = sum(1 for p in predictions if p['correct'])
+            # Aggregate detection metrics (micro-averaged)
+            total_tp = sum(p.get('num_tp', 0) for p in predictions_with_gt)
+            total_fp = sum(p.get('num_fp', 0) for p in predictions_with_gt)
+            total_fn = sum(p.get('num_fn', 0) for p in predictions_with_gt)
+            total_gt_instances = sum(p.get('num_gt', 0) for p in predictions_with_gt)
             
-            summary['mean_wer'] = float(np.mean(wers))
-            summary['mean_cer'] = summary['mean_wer']
-            summary['sequence_accuracy'] = correct / len(predictions)
-            summary['mean_temporal_alignment'] = float(np.mean([p.get('temporal_alignment_accuracy', 0.0) for p in predictions]))
+            # Overall metrics (micro-averaged)
+            overall_precision, overall_recall, overall_f1 = calculate_detection_metrics(total_tp, total_fp, total_fn)
             
-            # Category accuracy statistics
+            # Mean per-sequence metrics (macro-averaged)
+            precisions = [p.get('precision', 0.0) for p in predictions_with_gt]
+            recalls = [p.get('recall', 0.0) for p in predictions_with_gt]
+            f1_scores = [p.get('f1_score', 0.0) for p in predictions_with_gt]
+            mean_iou_all_tp = []
+            
+            for p in predictions_with_gt:
+                if 'mean_iou' in p and p['num_tp'] > 0:
+                    mean_iou_all_tp.append(p['mean_iou'])
+            
+            summary['overall_metrics'] = {
+                'total_sequences': len(predictions_with_gt),
+                'total_tp': int(total_tp),
+                'total_fp': int(total_fp),
+                'total_fn': int(total_fn),
+                'total_gt_instances': int(total_gt_instances),
+                'overall_precision': float(overall_precision),
+                'overall_recall': float(overall_recall),
+                'overall_f1_score': float(overall_f1),
+                'mean_precision': float(np.mean(precisions)) if precisions else 0.0,
+                'mean_recall': float(np.mean(recalls)) if recalls else 0.0,
+                'mean_f1_score': float(np.mean(f1_scores)) if f1_scores else 0.0,
+                'median_f1_score': float(np.median(f1_scores)) if f1_scores else 0.0,
+                'mean_iou_all_tp': float(np.mean(mean_iou_all_tp)) if mean_iou_all_tp else 0.0,
+            }
+            
+            # Per-signer metrics
+            per_signer_metrics = defaultdict(lambda: {'tp': 0, 'fp': 0, 'fn': 0, 'sequences': []})
+            for p in predictions_with_gt:
+                signer = p.get('signer')
+                if signer:
+                    per_signer_metrics[signer]['tp'] += p.get('num_tp', 0)
+                    per_signer_metrics[signer]['fp'] += p.get('num_fp', 0)
+                    per_signer_metrics[signer]['fn'] += p.get('num_fn', 0)
+                    per_signer_metrics[signer]['sequences'].append(p.get('f1_score', 0.0))
+            
+            summary['per_signer_metrics'] = {}
+            for signer, data in per_signer_metrics.items():
+                sig_precision, sig_recall, sig_f1 = calculate_detection_metrics(
+                    data['tp'], data['fp'], data['fn']
+                )
+                summary['per_signer_metrics'][signer] = {
+                    'precision': float(sig_precision),
+                    'recall': float(sig_recall),
+                    'f1_score': float(sig_f1),
+                    'num_sequences': len(data['sequences'])
+                }
+            
+            # Per-strategy metrics
+            per_strategy_metrics = defaultdict(lambda: {'tp': 0, 'fp': 0, 'fn': 0, 'sequences': []})
+            for p in predictions_with_gt:
+                strategy = p.get('strategy')
+                if strategy:
+                    per_strategy_metrics[strategy]['tp'] += p.get('num_tp', 0)
+                    per_strategy_metrics[strategy]['fp'] += p.get('num_fp', 0)
+                    per_strategy_metrics[strategy]['fn'] += p.get('num_fn', 0)
+                    per_strategy_metrics[strategy]['sequences'].append(p.get('f1_score', 0.0))
+            
+            summary['per_strategy_metrics'] = {}
+            for strategy, data in per_strategy_metrics.items():
+                strat_precision, strat_recall, strat_f1 = calculate_detection_metrics(
+                    data['tp'], data['fp'], data['fn']
+                )
+                summary['per_strategy_metrics'][strategy] = {
+                    'precision': float(strat_precision),
+                    'recall': float(strat_recall),
+                    'f1_score': float(strat_f1),
+                    'num_sequences': len(data['sequences'])
+                }
+            
+            # Category-level metrics (if available)
             if has_categories:
-                cat_accs = [p['category_accuracy'] for p in predictions if 'category_accuracy' in p]
-                if cat_accs:
-                    summary['mean_category_accuracy'] = float(np.mean(cat_accs))
-                    summary['median_category_accuracy'] = float(np.median(cat_accs))
-            
-            per_signer = defaultdict(list)
-            per_strategy = defaultdict(list)
-            
-            for p in predictions:
-                if 'signer' in p:
-                    per_signer[p['signer']].append(p['wer'])
-                if 'strategy' in p:
-                    per_strategy[p['strategy']].append(p['wer'])
-            
-            summary['per_signer_wer'] = {s: float(np.mean(wers)) for s, wers in per_signer.items()}
-            summary['per_strategy_wer'] = {s: float(np.mean(wers)) for s, wers in per_strategy.items()}
-            
-            total_ins = sum(p['num_insertions'] for p in predictions)
-            total_del = sum(p['num_deletions'] for p in predictions)
-            total_sub = sum(p['num_substitutions'] for p in predictions)
-            
-            summary['total_insertions'] = total_ins
-            summary['total_deletions'] = total_del
-            summary['total_substitutions'] = total_sub
+                cat_tp_total = sum(p.get('category_num_tp', 0) for p in predictions_with_gt if 'category_num_tp' in p)
+                cat_fp_total = sum(p.get('category_num_fp', 0) for p in predictions_with_gt if 'category_num_fp' in p)
+                cat_fn_total = sum(p.get('category_num_fn', 0) for p in predictions_with_gt if 'category_num_fn' in p)
+                
+                if cat_tp_total + cat_fp_total + cat_fn_total > 0:
+                    cat_precision, cat_recall, cat_f1 = calculate_detection_metrics(
+                        cat_tp_total, cat_fp_total, cat_fn_total
+                    )
+                    summary['overall_metrics']['category_total_tp'] = int(cat_tp_total)
+                    summary['overall_metrics']['category_total_fp'] = int(cat_fp_total)
+                    summary['overall_metrics']['category_total_fn'] = int(cat_fn_total)
+                    summary['overall_metrics']['category_overall_precision'] = float(cat_precision)
+                    summary['overall_metrics']['category_overall_recall'] = float(cat_recall)
+                    summary['overall_metrics']['category_overall_f1_score'] = float(cat_f1)
         
         return summary
     
@@ -985,24 +1329,27 @@ def main():
     print("=" * 80)
     print(f"Total sequences:    {summary['total_sequences']}")
     
-    if 'mean_wer' in summary:
-        print(f"Mean WER:           {summary['mean_wer']:.4f} ({summary['mean_wer']*100:.2f}%)")
-        print(f"Sequence accuracy:  {summary['sequence_accuracy']:.4f} ({summary['sequence_accuracy']*100:.2f}%)")
-        print(f"Temporal alignment: {summary['mean_temporal_alignment']:.4f}")
-        print(f"\nError breakdown:")
-        print(f"  Insertions:       {summary['total_insertions']}")
-        print(f"  Deletions:        {summary['total_deletions']}")
-        print(f"  Substitutions:    {summary['total_substitutions']}")
+    # Print detection metrics summary
+    if 'overall_metrics' in summary:
+        om = summary['overall_metrics']
+        print(f"\n=== Detection Metrics Summary ===")
+        print(f"Overall Precision:  {om['overall_precision']:.4f} ({om['overall_precision']*100:.2f}%)")
+        print(f"Overall Recall:     {om['overall_recall']:.4f} ({om['overall_recall']*100:.2f}%)")
+        print(f"Overall F1-Score:   {om['overall_f1_score']:.4f} ({om['overall_f1_score']*100:.2f}%)")
+        print(f"Total TP:           {om['total_tp']}")
+        print(f"Total FP:           {om['total_fp']}")
+        print(f"Total FN:           {om['total_fn']}")
+        print(f"Mean IoU (TP):      {om['mean_iou_all_tp']:.4f}")
         
-        if summary.get('per_signer_wer'):
-            print(f"\nPer-signer WER:")
-            for signer, wer in sorted(summary['per_signer_wer'].items()):
-                print(f"  {signer}: {wer:.4f}")
+        if summary.get('per_signer_metrics'):
+            print(f"\nPer-signer F1-Score:")
+            for signer, metrics in sorted(summary['per_signer_metrics'].items()):
+                print(f"  {signer}: {metrics['f1_score']:.4f} (P:{metrics['precision']:.3f}, R:{metrics['recall']:.3f})")
         
-        if summary.get('per_strategy_wer'):
-            print(f"\nPer-strategy WER:")
-            for strategy, wer in sorted(summary['per_strategy_wer'].items()):
-                print(f"  {strategy}: {wer:.4f}")
+        if summary.get('per_strategy_metrics'):
+            print(f"\nPer-strategy F1-Score:")
+            for strategy, metrics in sorted(summary['per_strategy_metrics'].items()):
+                print(f"  {strategy}: {metrics['f1_score']:.4f} (P:{metrics['precision']:.3f}, R:{metrics['recall']:.3f})")
     
     print(f"\nOutput saved to: {args.output_dir}")
     print("=" * 80)

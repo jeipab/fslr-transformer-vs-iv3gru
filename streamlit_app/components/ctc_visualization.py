@@ -583,14 +583,16 @@ def render_ctc_batch_summary(predictions: List[Dict]):
         row = {
             'File': pred['file_name'],
             'Length': pred['num_predicted'],
-            'WER': f"{pred.get('wer', 0)*100:.1f}%" if 'wer' in pred else 'N/A',
-            'Correct': '✓' if pred.get('correct', False) else '✗' if 'correct' in pred else '—',
+            'Precision': f"{pred.get('precision', 0)*100:.1f}%" if 'precision' in pred else 'N/A',
+            'Recall': f"{pred.get('recall', 0)*100:.1f}%" if 'recall' in pred else 'N/A',
+            'F1-Score': f"{pred.get('f1_score', 0)*100:.1f}%" if 'f1_score' in pred else 'N/A',
+            'TP/FP/FN': f"{pred.get('num_tp', 0)}/{pred.get('num_fp', 0)}/{pred.get('num_fn', 0)}" if 'num_tp' in pred else 'N/A',
             'Avg Confidence': f"{np.mean(pred.get('confidence_scores', [0]))*100:.1f}%" if pred.get('confidence_scores') else 'N/A'
         }
         
-        # Add category accuracy if available
-        if has_categories and 'category_accuracy' in pred:
-            row['Cat Acc'] = f"{pred['category_accuracy']*100:.1f}%"
+        # Add category F1 if available
+        if has_categories and 'category_f1_score' in pred:
+            row['Cat F1'] = f"{pred['category_f1_score']*100:.1f}%"
         
         summary_data.append(row)
     
@@ -600,28 +602,28 @@ def render_ctc_batch_summary(predictions: List[Dict]):
     st.dataframe(df, width='stretch', height=400)
     
     # Overall statistics if ground truth available
-    if any('wer' in pred for pred in predictions):
+    if any('f1_score' in pred for pred in predictions):
         st.markdown("---")
         st.markdown("#### Overall Statistics")
         
-        wers = [pred['wer'] for pred in predictions if 'wer' in pred]
-        correct_count = sum(1 for pred in predictions if pred.get('correct', False))
+        f1_scores = [pred['f1_score'] for pred in predictions if 'f1_score' in pred]
+        precisions = [pred['precision'] for pred in predictions if 'precision' in pred]
+        recalls = [pred['recall'] for pred in predictions if 'recall' in pred]
         
         cols = st.columns(4 if has_categories else 3)
         
         with cols[0]:
-            st.metric("Mean WER", f"{np.mean(wers)*100:.1f}%")
+            st.metric("Mean Precision", f"{np.mean(precisions)*100:.1f}%")
         
         with cols[1]:
-            st.metric("Median WER", f"{np.median(wers)*100:.1f}%")
+            st.metric("Mean Recall", f"{np.mean(recalls)*100:.1f}%")
         
         with cols[2]:
-            seq_accuracy = correct_count / len(predictions) * 100 if predictions else 0
-            st.metric("Sequence Accuracy", f"{seq_accuracy:.1f}%")
+            st.metric("Mean F1-Score", f"{np.mean(f1_scores)*100:.1f}%")
         
         if has_categories and len(cols) > 3:
-            cat_accs = [pred['category_accuracy'] for pred in predictions if 'category_accuracy' in pred]
-            if cat_accs:
+            cat_f1s = [pred['category_f1_score'] for pred in predictions if 'category_f1_score' in pred]
+            if cat_f1s:
                 with cols[3]:
-                    st.metric("Mean Category Acc", f"{np.mean(cat_accs)*100:.1f}%")
+                    st.metric("Mean Cat F1", f"{np.mean(cat_f1s)*100:.1f}%")
 

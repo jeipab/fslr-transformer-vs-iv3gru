@@ -808,36 +808,44 @@ def render_detailed_predictions(results: Dict[str, Any]):
 
 
 def render_ctc_validation_results(results: Dict[str, Any]):
-    """Render CTC validation results with WER metrics and sequence analysis."""
+    """Render CTC validation results with detection metrics (TP/FP/FN, Precision/Recall/F1)."""
     st.markdown("---")
     st.markdown("### CTC Validation Results")
     
     summary = results.get('summary', {})
     predictions = results.get('predictions', [])
+    overall_metrics = summary.get('overall_metrics', {})
+    
+    if not overall_metrics:
+        st.warning("No detection metrics available. Please ensure ground truth timestamps are provided.")
+        return
     
     # Summary metrics
     st.markdown("#### Overall Metrics")
-    has_categories = summary.get('has_category_predictions', False)
-    has_gloss_acc = 'mean_gloss_accuracy' in summary
-    num_cols = 4 + (1 if has_categories else 0) + (1 if has_gloss_acc else 0)
+    has_categories = summary.get('has_category_predictions', False) and 'category_overall_f1_score' in overall_metrics
+    num_cols = 5 + (1 if has_categories else 0)
     cols = st.columns(num_cols)
     
     col_idx = 0
     with cols[col_idx]:
-        mean_wer = summary.get('mean_wer', 0)
-        st.metric("Mean WER", f"{mean_wer*100:.2f}%")
+        overall_precision = overall_metrics.get('overall_precision', 0)
+        st.metric("Overall Precision", f"{overall_precision*100:.2f}%")
     col_idx += 1
     
     with cols[col_idx]:
-        seq_accuracy = summary.get('sequence_accuracy', 0)
-        st.metric("Sequence Accuracy", f"{seq_accuracy*100:.1f}%")
+        overall_recall = overall_metrics.get('overall_recall', 0)
+        st.metric("Overall Recall", f"{overall_recall*100:.2f}%")
     col_idx += 1
     
-    if has_gloss_acc:
-        with cols[col_idx]:
-            gloss_acc = summary.get('mean_gloss_accuracy', 0)
-            st.metric("Gloss Accuracy", f"{gloss_acc*100:.1f}%")
-        col_idx += 1
+    with cols[col_idx]:
+        overall_f1 = overall_metrics.get('overall_f1_score', 0)
+        st.metric("Overall F1-Score", f"{overall_f1*100:.2f}%")
+    col_idx += 1
+    
+    with cols[col_idx]:
+        mean_iou = overall_metrics.get('mean_iou_all_tp', 0)
+        st.metric("Mean IoU (TP)", f"{mean_iou*100:.2f}%")
+    col_idx += 1
     
     with cols[col_idx]:
         total_sequences = summary.get('total_sequences', 0)
@@ -846,39 +854,59 @@ def render_ctc_validation_results(results: Dict[str, Any]):
     
     if has_categories:
         with cols[col_idx]:
-            cat_acc = summary.get('mean_category_accuracy', 0)
-            st.metric("Category Accuracy", f"{cat_acc*100:.1f}%")
+            cat_f1 = overall_metrics.get('category_overall_f1_score', 0)
+            st.metric("Category F1-Score", f"{cat_f1*100:.2f}%")
     
-    # Error breakdown
+    # Detection counts breakdown
     st.markdown("---")
-    st.markdown("#### Error Breakdown")
-    col1, col2, col3 = st.columns(3)
+    st.markdown("#### Detection Counts")
+    col1, col2, col3, col4 = st.columns(4)
     
     with col1:
-        st.metric("Insertions", summary.get('total_insertions', 0))
+        total_tp = overall_metrics.get('total_tp', 0)
+        st.metric("True Positives (TP)", total_tp)
     with col2:
-        st.metric("Deletions", summary.get('total_deletions', 0))
+        total_fp = overall_metrics.get('total_fp', 0)
+        st.metric("False Positives (FP)", total_fp)
     with col3:
-        st.metric("Substitutions", summary.get('total_substitutions', 0))
+        total_fn = overall_metrics.get('total_fn', 0)
+        st.metric("False Negatives (FN)", total_fn)
+    with col4:
+        total_gt = overall_metrics.get('total_gt_instances', 0)
+        st.metric("Total GT Instances", total_gt)
     
     # Per-signer metrics
-    if summary.get('per_signer_wer'):
+    if summary.get('per_signer_metrics'):
         st.markdown("---")
-        st.markdown("#### Per-Signer WER")
+        st.markdown("#### Per-Signer Detection Metrics")
         signer_data = []
-        for signer, wer in summary['per_signer_wer'].items():
-            signer_data.append({'Signer': signer, 'WER': f"{wer*100:.2f}%"})
-        st.dataframe(signer_data, width='stretch')
+        for signer, metrics in summary['per_signer_metrics'].items():
+            signer_data.append({
+                'Signer': signer,
+                'Precision': f"{metrics['precision']*100:.2f}%",
+                'Recall': f"{metrics['recall']*100:.2f}%",
+                'F1-Score': f"{metrics['f1_score']*100:.2f}%",
+                'Num Sequences': metrics['num_sequences']
+            })
+        signer_df = pd.DataFrame(signer_data)
+        st.dataframe(signer_df, width='stretch')
     
     # Per-strategy metrics
-    if summary.get('per_strategy_wer'):
+    if summary.get('per_strategy_metrics'):
         st.markdown("---")
-        st.markdown("#### Per-Strategy WER")
+        st.markdown("#### Per-Strategy Detection Metrics")
         strategy_data = []
-        for strategy, wer in summary['per_strategy_wer'].items():
+        for strategy, metrics in summary['per_strategy_metrics'].items():
             strategy_name = f"Strategy {strategy}"
-            strategy_data.append({'Strategy': strategy_name, 'WER': f"{wer*100:.2f}%"})
-        st.dataframe(strategy_data, width='stretch')
+            strategy_data.append({
+                'Strategy': strategy_name,
+                'Precision': f"{metrics['precision']*100:.2f}%",
+                'Recall': f"{metrics['recall']*100:.2f}%",
+                'F1-Score': f"{metrics['f1_score']*100:.2f}%",
+                'Num Sequences': metrics['num_sequences']
+            })
+        strategy_df = pd.DataFrame(strategy_data)
+        st.dataframe(strategy_df, width='stretch')
     
     # Detailed predictions table
     st.markdown("---")
@@ -886,29 +914,48 @@ def render_ctc_validation_results(results: Dict[str, Any]):
     
     if predictions:
         pred_data = []
-        has_cat_acc = any('category_accuracy' in p for p in predictions)
+        has_cat_metrics = any('category_f1_score' in p for p in predictions)
         
         for pred in predictions:
-            row = {
-                'File': pred['file_name'],
-                'GT Length': len(pred.get('ground_truth_sequence', [])),
-                'Pred Length': pred['num_predicted'],
-                'WER': f"{pred.get('wer', 0)*100:.2f}%",
-                'Correct': '✓' if pred.get('correct', False) else '✗',
-                'Insertions': pred.get('num_insertions', 0),
-                'Deletions': pred.get('num_deletions', 0),
-                'Substitutions': pred.get('num_substitutions', 0)
-            }
-            
-            # Add category accuracy if available
-            if has_cat_acc:
-                cat_acc = pred.get('category_accuracy')
-                row['Cat Acc'] = f"{cat_acc*100:.1f}%" if cat_acc is not None else 'N/A'
-            
-            pred_data.append(row)
+            # Check if prediction has detection metrics
+            if 'f1_score' in pred:
+                row = {
+                    'File': pred['file_name'],
+                    'GT Length': len(pred.get('ground_truth_sequence', [])),
+                    'Pred Length': pred['num_predicted'],
+                    'Precision': f"{pred.get('precision', 0)*100:.2f}%",
+                    'Recall': f"{pred.get('recall', 0)*100:.2f}%",
+                    'F1-Score': f"{pred.get('f1_score', 0)*100:.2f}%",
+                    'TP': pred.get('num_tp', 0),
+                    'FP': pred.get('num_fp', 0),
+                    'FN': pred.get('num_fn', 0),
+                    'Mean IoU': f"{pred.get('mean_iou', 0)*100:.2f}%" if pred.get('mean_iou', 0) > 0 else 'N/A'
+                }
+                
+                # Add category F1 if available
+                if has_cat_metrics and 'category_f1_score' in pred:
+                    row['Cat F1'] = f"{pred['category_f1_score']*100:.2f}%"
+                
+                pred_data.append(row)
+            else:
+                # Fallback for predictions without detection metrics
+                row = {
+                    'File': pred['file_name'],
+                    'GT Length': len(pred.get('ground_truth_sequence', [])),
+                    'Pred Length': pred['num_predicted'],
+                    'Precision': 'N/A',
+                    'Recall': 'N/A',
+                    'F1-Score': 'N/A',
+                    'TP': 'N/A',
+                    'FP': 'N/A',
+                    'FN': 'N/A',
+                    'Mean IoU': 'N/A'
+                }
+                pred_data.append(row)
         
-        pred_df = pd.DataFrame(pred_data)
-        st.dataframe(pred_df, width='stretch', height=400)
+        if pred_data:
+            pred_df = pd.DataFrame(pred_data)
+            st.dataframe(pred_df, width='stretch', height=400)
     
     # Download results
     st.markdown("---")
