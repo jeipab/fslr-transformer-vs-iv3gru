@@ -147,14 +147,11 @@ def render_validation_results(results: Dict[str, Any]):
         st.error("No validation results to display.")
         return
     
-    st.markdown("### Validation Results")
+    # Model info (kept for potential future use)
+    # model_info = results['model_info']
+    # dataset_info = results['dataset_info']
     
-    # Model info
-    model_info = results['model_info']
-    dataset_info = results['dataset_info']
-    
-    # Summary metrics
-    render_summary_metrics(results)
+    # Summary metrics section removed to reduce redundancy with VALIDATION SUMMARY
     
     # Detailed analysis tabs
     tab1, tab2, tab3, tab4, tab5 = st.tabs(["📊 Overall Performance", "🎯 Per-Class Analysis", "🔍 Confusion Matrices", "📈 Occlusion Analysis", "📋 Detailed Predictions"])
@@ -232,15 +229,13 @@ def render_overall_performance(results: Dict[str, Any]):
     
     # Performance metrics comparison
     metrics_data = {
-        'Metric': ['Accuracy', 'Precision', 'Recall', 'F1-Score'],
+        'Metric': ['Precision', 'Recall', 'F1-Score'],
         'Gloss': [
-            overall.get('gloss_accuracy', 0.0) if 'error' not in overall else 0.0,
             overall.get('gloss_precision', 0.0) if 'error' not in overall else 0.0,
             overall.get('gloss_recall', 0.0) if 'error' not in overall else 0.0,
             overall.get('gloss_f1_score', 0.0) if 'error' not in overall else 0.0
         ],
         'Category': [
-            overall.get('category_accuracy', 0.0) if 'error' not in overall else 0.0,
             overall.get('category_precision', 0.0) if 'error' not in overall else 0.0,
             overall.get('category_recall', 0.0) if 'error' not in overall else 0.0,
             overall.get('category_f1_score', 0.0) if 'error' not in overall else 0.0
@@ -451,17 +446,15 @@ def render_occlusion_analysis(results: Dict[str, Any]):
     occluded = results['occluded_results']
     non_occluded = results['non_occluded_results']
     
-    # Occlusion comparison metrics
+    # Occlusion comparison metrics (no accuracy)
     comparison_data = {
-        'Metric': ['Accuracy', 'Precision', 'Recall', 'F1-Score'],
+        'Metric': ['Precision', 'Recall', 'F1-Score'],
         'Occluded': [
-            occluded.get('gloss_accuracy', 0.0) if 'error' not in occluded else 0.0,
             occluded.get('gloss_precision', 0.0) if 'error' not in occluded else 0.0,
             occluded.get('gloss_recall', 0.0) if 'error' not in occluded else 0.0,
             occluded.get('gloss_f1_score', 0.0) if 'error' not in occluded else 0.0
         ],
         'Non-Occluded': [
-            non_occluded.get('gloss_accuracy', 0.0) if 'error' not in non_occluded else 0.0,
             non_occluded.get('gloss_precision', 0.0) if 'error' not in non_occluded else 0.0,
             non_occluded.get('gloss_recall', 0.0) if 'error' not in non_occluded else 0.0,
             non_occluded.get('gloss_f1_score', 0.0) if 'error' not in non_occluded else 0.0
@@ -473,19 +466,13 @@ def render_occlusion_analysis(results: Dict[str, Any]):
     # Performance analysis table
     st.markdown("#### Performance Analysis")
 
-    metrics_index = ['Accuracy', 'Precision', 'Recall', 'F1-Score']
+    metrics_index = ['Precision', 'Recall', 'F1-Score']
 
     # Safely extract metrics
     def safe_get(d: Dict[str, Any], key: str) -> float:
         return d.get(key, 0.0) if 'error' not in d else 0.0
 
     table_values = [
-        [
-            safe_get(non_occluded, 'gloss_accuracy'),
-            safe_get(non_occluded, 'category_accuracy'),
-            safe_get(occluded, 'gloss_accuracy'),
-            safe_get(occluded, 'category_accuracy'),
-        ],
         [
             safe_get(non_occluded, 'gloss_precision'),
             safe_get(non_occluded, 'category_precision'),
@@ -554,19 +541,16 @@ def render_validation_summary(results: Dict[str, Any]):
     overall = results['overall_results']
     
     # Key metrics
-    col1, col2, col3, col4, col5 = st.columns(5)
+    col1, col2, col3 = st.columns(3)
     
     with col1:
         st.metric("Model", model_info['model_type'].upper())
     
     with col2:
-        st.metric("Gloss Accuracy", f"{overall.get('gloss_accuracy', 0.0):.3f}" if 'error' not in overall else "N/A")
+        st.metric("Validation Time", model_info['timestamp'])
     
     with col3:
-        st.metric("Category Accuracy", f"{overall.get('category_accuracy', 0.0):.3f}" if 'error' not in overall else "N/A")
-    
-    with col4:
-        st.metric("Validation Time", model_info['timestamp'])
+        st.metric("Total Samples", f"{overall.get('num_samples', 0):,}")
     
 
 
