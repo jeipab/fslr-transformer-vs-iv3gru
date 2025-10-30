@@ -103,56 +103,25 @@ def render_ctc_dataset_upload():
 
 def render_validation_configuration():
     """Render validation configuration options."""
-    st.markdown("**Configuration**")
-    
+    # Auto-detect device and use maximum batch size
+    import torch
+    device = 'cuda' if torch.cuda.is_available() else 'cpu'
+    batch_size = 64
     col1, col2 = st.columns(2)
-    
     with col1:
-        batch_size = st.slider(
-            "Batch Size",
-            min_value=1,
-            max_value=64,
-            value=32,
-            help="Batch size for validation (larger = faster, more memory)"
-        )
-    
+        st.text(f"Device: {device.upper()}")
     with col2:
-        device = st.selectbox(
-            "Device",
-            ["auto", "cpu", "cuda"],
-            index=0,
-            help="Device to use for validation"
-        )
-    
+        st.text("Batch Size: 64 (max)")
     return batch_size, device
 
 
 def render_ctc_validation_configuration():
     """Render CTC validation configuration options."""
-    st.markdown("**CTC Configuration**")
+    # Header removed per request
     
-    col1, col2 = st.columns(2)
-    
-    with col1:
-        decode_method = st.radio(
-            "Decode Method",
-            options=['greedy', 'beam_search'],
-            format_func=lambda x: 'Greedy Decoding' if x == 'greedy' else 'Beam Search',
-            help="CTC decoding method: Greedy (fast) or Beam Search (accurate)"
-        )
-    
-    with col2:
-        if decode_method == 'beam_search':
-            beam_width = st.slider(
-                "Beam Width",
-                min_value=1,
-                max_value=20,
-                value=10,
-                help="Beam width for beam search (higher = more accurate but slower)"
-            )
-        else:
-            beam_width = 1
-            st.info("Using greedy decoding (fastest option)")
+    # Always use greedy decoding; hide decode method and beam width controls
+    decode_method = 'greedy'
+    beam_width = 1
     
     # Device selection (auto-detect)
     import torch

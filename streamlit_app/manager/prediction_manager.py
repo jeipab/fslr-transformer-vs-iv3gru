@@ -975,7 +975,7 @@ def render_continuous_sequence_predictions(filename: str, npz_data: Dict, metada
     
     # Continuous sequence info moved to file details row; hide here
     
-    # CTC Configuration
+    # CTC Configuration section for predictions UI
     st.markdown("---")
     st.markdown("#### CTC Configuration")
     
