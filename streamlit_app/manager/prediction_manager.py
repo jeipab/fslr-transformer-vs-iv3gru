@@ -179,26 +179,6 @@ def render_ground_truth_preview(ground_truth: Dict):
     Args:
         ground_truth: Ground truth dictionary
     """
-    st.markdown("**Ground Truth Information:**")
-    
-    # Basic info
-    col1, col2, col3 = st.columns(3)
-    with col1:
-        st.metric("File", ground_truth.get('file_name', 'N/A'))
-    with col2:
-        st.metric("Signer", ground_truth.get('signer', 'N/A'))
-    with col3:
-        st.metric("Strategy", ground_truth.get('strategy', 'N/A'))
-    
-    # Sequence info
-    col1, col2 = st.columns(2)
-    with col1:
-        sequence_length = len(ground_truth.get('ground_truth_sequence', []))
-        st.metric("Sequence Length", sequence_length)
-    with col2:
-        duration = ground_truth.get('total_duration_sec', 0)
-        st.metric("Duration", f"{duration:.1f}s")
-    
     # Show sequence as chips
     st.markdown("**Ground Truth Sequence:**")
     labels = ground_truth.get('ground_truth_labels', [])
@@ -826,7 +806,7 @@ def render_visualization_tabs(cfg: Dict):
     if continuous_files and isolated_files:
         st.markdown(f"<div class='main-section-header'>RESULTS ({len(isolated_files)} Isolated, {len(continuous_files)} Continuous)</div>", unsafe_allow_html=True)
     elif continuous_files:
-        st.markdown("<div class='main-section-header'>RESULTS (Continuous Sequences)</div>", unsafe_allow_html=True)
+        st.markdown("<div class='main-section-header'>RESULTS</div>", unsafe_allow_html=True)
     else:
         st.markdown("<div class='main-section-header'>RESULTS</div>", unsafe_allow_html=True)
     
@@ -851,8 +831,12 @@ def render_visualization_tabs(cfg: Dict):
         file_options.append(display_name)
         file_mapping[display_name] = uploaded_file
     
-    # Add summary option
-    file_options.append("Summary")
+    # Determine if we're in continuous-only mode
+    continuous_only_mode = bool(continuous_files) and not bool(isolated_files)
+
+    # Add summary option only if not continuous-only mode
+    if not continuous_only_mode:
+        file_options.append("Summary")
     
     # Handle programmatic file switching before creating selectbox
     if st.session_state.current_tab:
@@ -865,9 +849,14 @@ def render_visualization_tabs(cfg: Dict):
         # Clear the current_tab after switching
         st.session_state.current_tab = None
     
-    # Initialize file_selector in session state if not present
+    # Initialize or sanitize file_selector in session state
     if "file_selector" not in st.session_state:
-        st.session_state.file_selector = "Summary"
+        # Default to first file if continuous-only, otherwise Summary
+        st.session_state.file_selector = file_options[0] if continuous_only_mode and file_options else "Summary"
+    else:
+        # If previous selection no longer exists (e.g., Summary removed), fallback to first option
+        if st.session_state.file_selector not in file_options and file_options:
+            st.session_state.file_selector = file_options[0]
     
     # Combined Results and File Details in same row
     col_left, col_right = st.columns([1, 3])
@@ -914,11 +903,7 @@ def render_visualization_tabs(cfg: Dict):
                 st.rerun()
     
     # Render selected file or summary content
-    if selected_file == "Summary":
-        # For Summary, show the statistics in the right column (already rendered above)
-        # Also render the important summary sections like batch download and predictions table
-        render_batch_summary_tab(cfg)
-    else:
+    if selected_file != "Summary":
         # Find the selected file
         selected_uploaded_file = file_mapping.get(selected_file)
         if selected_uploaded_file:
@@ -954,7 +939,7 @@ def render_visualization_tabs(cfg: Dict):
                     with viz_col2:
                         render_feature_charts(X_pad, mask if mask.size > 0 else None, key_suffix=unique_key_suffix)
                     
-                    st.markdown('</div>', unsafe_allow_html=True)
+                st.markdown('</div>', unsafe_allow_html=True)
                 
                 # Download button (for both types)
                 st.markdown("### Download")
@@ -970,6 +955,9 @@ def render_visualization_tabs(cfg: Dict):
                 
             except Exception as e:
                 st.toast(f"Visualization error: {str(e)}", icon="⚠️", duration=5000)
+    else:
+        # Legacy summary branch (won't be hit in continuous-only mode)
+        render_batch_summary_tab(cfg)
 
 
 def render_continuous_sequence_predictions(filename: str, npz_data: Dict, metadata: Dict, cfg: Dict, unique_key_suffix: str):
@@ -985,17 +973,7 @@ def render_continuous_sequence_predictions(filename: str, npz_data: Dict, metada
     """
     st.markdown("### Continuous Sequence Recognition")
     
-    # Show continuous sequence info
-    continuous_meta = metadata.get('continuous_metadata', {})
-    if continuous_meta:
-        col1, col2, col3 = st.columns(3)
-        with col1:
-            st.metric("Segments", continuous_meta.get('num_segments', 'N/A'))
-        with col2:
-            st.metric("Duration", f"{continuous_meta.get('total_duration_sec', 0):.1f}s")
-        with col3:
-            strategy_name = continuous_meta.get('strategy', 'N/A')
-            st.metric("Strategy", strategy_name)
+    # Continuous sequence info moved to file details row; hide here
     
     # CTC Configuration
     st.markdown("---")
@@ -1030,32 +1008,9 @@ def render_continuous_sequence_predictions(filename: str, npz_data: Dict, metada
             st.session_state[f'previous_ctc_model_{unique_key_suffix}'] = ctc_model
     
     with col2:
-        # Decode method
-        decode_method = st.radio(
-            "Decode Method",
-            options=['greedy', 'beam_search'],
-            format_func=lambda x: 'Greedy' if x == 'greedy' else 'Beam Search',
-            key=f"decode_method_{unique_key_suffix}"
-        )
-        
-        # Clear results if decode method changed
-        if ctc_key in st.session_state:
-            # Check if this is a new decode method selection (not initial load)
-            if f'previous_decode_method_{unique_key_suffix}' in st.session_state:
-                if st.session_state[f'previous_decode_method_{unique_key_suffix}'] != decode_method:
-                    del st.session_state[ctc_key]
-            st.session_state[f'previous_decode_method_{unique_key_suffix}'] = decode_method
-        
-        if decode_method == 'beam_search':
-            beam_width = st.slider(
-                "Beam Width",
-                min_value=1,
-                max_value=20,
-                value=10,
-                key=f"beam_width_{unique_key_suffix}"
-            )
-        else:
-            beam_width = 1
+        # Always use greedy decoding; hide decode method controls
+        decode_method = 'greedy'
+        beam_width = 1
     
     # Ground truth upload (optional)
     st.markdown("---")

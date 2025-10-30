@@ -117,9 +117,15 @@ def render_file_details_horizontal(filename: str, npz_data: Dict, metadata: Dict
                 meta_parsed = None
         except:
             meta_parsed = None
-    
-    # Horizontal layout: Frames, Keypoints, Features, Occluded
-    detail_col1, detail_col2, detail_col3, detail_col4 = st.columns(4)
+
+    # Determine layout: add a leading spacer column for left gap, then metrics
+    is_continuous_global = metadata.get('is_continuous', False)
+    if is_continuous_global:
+        # Spacer, Frames, Keypoints, Features, Segments, Duration
+        spacer_col, detail_col1, detail_col2, detail_col3, detail_col4, detail_col5 = st.columns([0.4, 1, 1, 1, 1, 1])
+    else:
+        # Spacer, Frames, Keypoints, Features, Occluded
+        spacer_col, detail_col1, detail_col2, detail_col3, detail_col4 = st.columns([0.4, 1, 1, 1, 1])
     
     with detail_col1:
         st.markdown("<div style='text-align: center;'>", unsafe_allow_html=True)
@@ -155,14 +161,27 @@ def render_file_details_horizontal(filename: str, npz_data: Dict, metadata: Dict
             st.markdown("<span class='status-warning'>⚠ Transformer only</span>", unsafe_allow_html=True)
         st.markdown("</div>", unsafe_allow_html=True)
     
-    with detail_col4:
-        st.markdown("<div style='text-align: center;'>", unsafe_allow_html=True)
-        # Extract and display occlusion status
-        from .utils import extract_occlusion_flag, interpret_occlusion_flag
-        occlusion_flag = extract_occlusion_flag(npz_data)
-        occlusion_status = interpret_occlusion_flag(occlusion_flag)
-        st.metric("Occluded", occlusion_status)
-        st.markdown("</div>", unsafe_allow_html=True)
+    if is_continuous_global:
+        # Continuous: render Segments and Duration in their own equal-width columns
+        with detail_col4:
+            continuous_meta = metadata.get('continuous_metadata', {})
+            st.markdown("<div style='text-align: center;'>", unsafe_allow_html=True)
+            st.metric("Segments", continuous_meta.get('num_segments', 'N/A'))
+            st.markdown("</div>", unsafe_allow_html=True)
+        with detail_col5:
+            continuous_meta = metadata.get('continuous_metadata', {})
+            st.markdown("<div style='text-align: center;'>", unsafe_allow_html=True)
+            st.metric("Duration", f"{continuous_meta.get('total_duration_sec', 0):.1f}s")
+            st.markdown("</div>", unsafe_allow_html=True)
+    else:
+        with detail_col4:
+            st.markdown("<div style='text-align: center;'>", unsafe_allow_html=True)
+            # Extract and display occlusion status
+            from .utils import extract_occlusion_flag, interpret_occlusion_flag
+            occlusion_flag = extract_occlusion_flag(npz_data)
+            occlusion_status = interpret_occlusion_flag(occlusion_flag)
+            st.metric("Occluded", occlusion_status)
+            st.markdown("</div>", unsafe_allow_html=True)
 
 
 def render_consolidated_file_info(filename: str, npz_data: Dict, metadata: Dict, sequence_length: int) -> Tuple[np.ndarray, np.ndarray, Dict]:
