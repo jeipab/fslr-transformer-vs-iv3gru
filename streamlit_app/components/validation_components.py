@@ -804,7 +804,78 @@ def render_ctc_validation_results(results: Dict[str, Any]):
         st.markdown("")
 
     with tab3:
-        st.markdown("")
+        # Confusion Matrices for CTC (aggregate across sequences)
+        st.markdown("#### Confusion Matrices")
+
+        # Build gloss confusion matrix
+        all_gt_gloss = []
+        all_pred_gloss = []
+        for p in predictions:
+            if 'ground_truth_sequence' in p and 'predicted_sequence' in p:
+                gt_seq = p.get('ground_truth_sequence', [])
+                pr_seq = p.get('predicted_sequence', [])
+                for gt_id, pr_id in zip(gt_seq, pr_seq):
+                    all_gt_gloss.append(int(gt_id))
+                    all_pred_gloss.append(int(pr_id))
+
+        if all_gt_gloss and all_pred_gloss:
+            num_gloss_classes = max(max(all_gt_gloss, default=0), max(all_pred_gloss, default=0)) + 1
+            gloss_cm = np.zeros((num_gloss_classes, num_gloss_classes), dtype=int)
+            for gt, pr in zip(all_gt_gloss, all_pred_gloss):
+                if 0 <= gt < num_gloss_classes and 0 <= pr < num_gloss_classes:
+                    gloss_cm[gt, pr] += 1
+        else:
+            gloss_cm = np.zeros((1, 1), dtype=int)
+
+        # Build category confusion matrix if available
+        all_gt_cat = []
+        all_pred_cat = []
+        for p in predictions:
+            gt_cats = p.get('ground_truth_categories')
+            pr_cats = p.get('predicted_categories')
+            if gt_cats and pr_cats:
+                for gc, pc in zip(gt_cats, pr_cats):
+                    all_gt_cat.append(int(gc))
+                    all_pred_cat.append(int(pc))
+
+        if all_gt_cat and all_pred_cat:
+            num_cat_classes = max(max(all_gt_cat, default=0), max(all_pred_cat, default=0)) + 1
+            cat_cm = np.zeros((num_cat_classes, num_cat_classes), dtype=int)
+            for gt, pr in zip(all_gt_cat, all_pred_cat):
+                if 0 <= gt < num_cat_classes and 0 <= pr < num_cat_classes:
+                    cat_cm[gt, pr] += 1
+        else:
+            cat_cm = np.zeros((1, 1), dtype=int)
+
+        # Statistics and plots in two columns
+        col_left, col_right = st.columns(2)
+        with col_left:
+            st.markdown("#### Gloss Confusion Matrix Statistics")
+            gloss_total = np.sum(gloss_cm)
+            gloss_diag_acc = (np.trace(gloss_cm) / gloss_total) if gloss_total > 0 else 0.0
+            st.metric("Diagonal Accuracy", f"{gloss_diag_acc:.4f}")
+            st.metric("Matrix Shape", f"{gloss_cm.shape[0]} × {gloss_cm.shape[1]}")
+
+            fig_g, ax_g = plt.subplots(1, 1, figsize=(7, 6))
+            sns.heatmap(gloss_cm, annot=False, fmt='d', cmap='Blues', ax=ax_g)
+            ax_g.set_title('Gloss Recognition Confusion Matrix')
+            ax_g.set_xlabel('Predicted Class')
+            ax_g.set_ylabel('True Class')
+            st.pyplot(fig_g)
+
+        with col_right:
+            st.markdown("#### Category Confusion Matrix Statistics")
+            cat_total = np.sum(cat_cm)
+            cat_diag_acc = (np.trace(cat_cm) / cat_total) if cat_total > 0 else 0.0
+            st.metric("Diagonal Accuracy", f"{cat_diag_acc:.4f}")
+            st.metric("Matrix Shape", f"{cat_cm.shape[0]} × {cat_cm.shape[1]}")
+
+            fig_c, ax_c = plt.subplots(1, 1, figsize=(7, 6))
+            sns.heatmap(cat_cm, annot=True, fmt='d', cmap='Greens', ax=ax_c)
+            ax_c.set_title('Category Classification Confusion Matrix')
+            ax_c.set_xlabel('Predicted Class')
+            ax_c.set_ylabel('True Class')
+            st.pyplot(fig_c)
 
     with tab4:
         # Occlusion Analysis for CTC
