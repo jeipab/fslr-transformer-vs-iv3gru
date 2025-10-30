@@ -816,12 +816,14 @@ def run_ctc_validation_with_sliding_window(
         }
         
         # Add model info
+        from datetime import datetime
         results['model_info'] = {
             'model_type': model_type,
             'checkpoint_path': config['checkpoint_path'],
             'device': str(device),
             'decode_method': decode_method,
-            'beam_width': beam_width
+            'beam_width': beam_width,
+            'timestamp': datetime.now().strftime('%Y-%m-%d %H:%M:%S')
         }
         
         return results

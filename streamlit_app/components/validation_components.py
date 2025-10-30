@@ -554,7 +554,7 @@ def render_validation_summary(results: Dict[str, Any]):
     overall = results['overall_results']
     
     # Key metrics
-    col1, col2, col3, col4 = st.columns(4)
+    col1, col2, col3, col4, col5 = st.columns(5)
     
     with col1:
         st.metric("Model", model_info['model_type'].upper())
@@ -707,7 +707,7 @@ def render_detailed_predictions(results: Dict[str, Any]):
     correct_cat_filtered = len(df[df['Category Status'] == "Correct"])
     both_correct_filtered = len(df[(df['Gloss Status'] == "Correct") & (df['Category Status'] == "Correct")])
     
-    col1, col2, col3, col4 = st.columns(4)
+    col1, col2, col3, col4, col5 = st.columns(5)
     with col1:
         st.metric("Total Samples", filtered_samples)
     with col2:
@@ -778,12 +778,40 @@ def render_detailed_predictions(results: Dict[str, Any]):
 
 def render_ctc_validation_results(results: Dict[str, Any]):
     """Render CTC validation results with detection metrics (TP/FP/FN, Precision/Recall/F1)."""
-    st.markdown("---")
-    st.markdown("### CTC Validation Results")
+    
     
     summary = results.get('summary', {})
     predictions = results.get('predictions', [])
     overall_metrics = summary.get('overall_metrics', {})
+    model_info = results.get('model_info', {})
+    
+    # Validation Summary (CTC)
+    st.markdown("---")
+    st.markdown("<div class='main-section-header'>VALIDATION SUMMARY</div>", unsafe_allow_html=True)
+    col1, col2, col3, col4, col5 = st.columns(5)
+    with col1:
+        st.metric("Model", str(model_info.get('model_type', '')).upper())
+    with col2:
+        st.metric("Validation Time", model_info.get('timestamp', 'N/A'))
+    with col3:
+        st.metric("Total Sequences", summary.get('total_sequences', 0))
+    with col4:
+        # Occluded signs across dataset (sum of GT occluded flags)
+        total_occ = 0
+        total_gt_signs = 0
+        for p in predictions:
+            occ = p.get('ground_truth_occluded')
+            if occ:
+                total_occ += int(np.sum(np.array(occ)))
+                total_gt_signs += len(occ)
+            else:
+                # Fallback: count by GT sequence length if occlusion flags missing
+                if 'ground_truth_sequence' in p:
+                    total_gt_signs += len(p.get('ground_truth_sequence', []))
+        st.metric("Occluded Signs", total_occ)
+    with col5:
+        total_non_occ = max(total_gt_signs - total_occ, 0)
+        st.metric("Non-Occluded Signs", total_non_occ)
     
     if not overall_metrics:
         st.warning("No detection metrics available. Please ensure ground truth timestamps are provided.")
@@ -1079,11 +1107,11 @@ def render_ctc_validation_results(results: Dict[str, Any]):
         st.plotly_chart(fig, use_container_width=True)
 
     with tab5:
-        # Summary metrics
-        st.markdown("#### Overall Metrics")
+        # Detailed predictions
+        st.markdown("#### Detailed Predictions")
         has_categories = summary.get('has_category_predictions', False)
-        # Gloss mean metrics + total sequences + optional category mean metrics (3)
-        num_cols = 4 + (3 if has_categories else 0)
+        # Gloss mean metrics + optional category mean metrics (3)
+        num_cols = 3 + (3 if has_categories else 0)
         cols = st.columns(num_cols)
 
         col_idx = 0
@@ -1102,11 +1130,6 @@ def render_ctc_validation_results(results: Dict[str, Any]):
             st.metric("Gloss Mean F1-Score", f"{mean_f1*100:.2f}%")
         col_idx += 1
 
-        with cols[col_idx]:
-            total_sequences = summary.get('total_sequences', 0)
-            st.metric("Total Sequences", total_sequences)
-        col_idx += 1
-
         if has_categories:
             with cols[col_idx]:
                 cat_mean_prec = overall_metrics.get('category_mean_precision', overall_metrics.get('category_overall_precision', 0))
@@ -1120,27 +1143,20 @@ def render_ctc_validation_results(results: Dict[str, Any]):
                 cat_mean_f1 = overall_metrics.get('category_mean_f1_score', overall_metrics.get('category_overall_f1_score', 0))
                 st.metric("Category Mean F1-Score", f"{cat_mean_f1*100:.2f}%")
 
-        # Detection counts breakdown
-        st.markdown("---")
-        st.markdown("#### Detection Counts")
+        # Integrated detection counts
         col1, col2, col3, col4 = st.columns(4)
-
         with col1:
-            total_tp = overall_metrics.get('total_tp', 0)
-            st.metric("True Positives (TP)", total_tp)
+            st.metric("True Positives (TP)", overall_metrics.get('total_tp', 0))
         with col2:
-            total_fp = overall_metrics.get('total_fp', 0)
-            st.metric("False Positives (FP)", total_fp)
+            st.metric("False Positives (FP)", overall_metrics.get('total_fp', 0))
         with col3:
-            total_fn = overall_metrics.get('total_fn', 0)
-            st.metric("False Negatives (FN)", total_fn)
+            st.metric("False Negatives (FN)", overall_metrics.get('total_fn', 0))
         with col4:
-            total_gt = overall_metrics.get('total_gt_instances', 0)
-            st.metric("Total GT Instances", total_gt)
+            st.metric("Total GT Instances", overall_metrics.get('total_gt_instances', 0))
 
         # Detailed predictions table
         st.markdown("---")
-        st.markdown("#### Detailed Predictions")
+        # Table
 
         # Load label mappings for fallback when labels missing
         try:
