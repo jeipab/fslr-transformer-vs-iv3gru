@@ -295,6 +295,162 @@ def _compute_category_metrics_balanced(
     return cat_tp, cat_fp, cat_fn
 
 
+def _max_iou_with_gt(pred_ts: Dict, gt_ts_list: List[Dict]) -> Tuple[float, int]:
+    """Return (max_iou, gt_idx) for a prediction against all GT timestamps."""
+    best_iou = 0.0
+    best_idx = -1
+    for j, gt_ts in enumerate(gt_ts_list):
+        iou = calculate_temporal_iou(
+            pred_ts['start_ms'], pred_ts['end_ms'], gt_ts['start_ms'], gt_ts['end_ms']
+        )
+        if iou > best_iou:
+            best_iou = iou
+            best_idx = j
+    return best_iou, best_idx
+
+
+def _compute_occlusion_split_metrics(
+    pred_timestamps: List[Dict],
+    gt_timestamps: List[Dict],
+    gt_occluded: Optional[List[int]],
+    matched_pairs: List[Dict],
+    fp_indices: List[int],
+    fn_indices: List[int]
+) -> Dict:
+    """
+    Compute TP/FP/FN split by occlusion (without=0, with=1).
+    FP assignment uses max IoU to nearest GT; FPs with no overlap are excluded.
+    """
+    if not gt_occluded or not gt_timestamps:
+        return {
+            'without_occlusion': {'tp': 0, 'fp': 0, 'fn': 0},
+            'with_occlusion': {'tp': 0, 'fp': 0, 'fn': 0},
+        }
+
+    # TPs by matched pair GT occlusion
+    tp_without = sum(1 for p in matched_pairs if 0 <= p['gt_idx'] < len(gt_occluded) and gt_occluded[p['gt_idx']] == 0)
+    tp_with = sum(1 for p in matched_pairs if 0 <= p['gt_idx'] < len(gt_occluded) and gt_occluded[p['gt_idx']] == 1)
+
+    matched_gt_indices = {p['gt_idx'] for p in matched_pairs if 0 <= p['gt_idx'] < len(gt_occluded)}
+
+    # FNs are unmatched GTs
+    fn_without = sum(1 for j in range(len(gt_occluded)) if gt_occluded[j] == 0 and j in fn_indices)
+    fn_with = sum(1 for j in range(len(gt_occluded)) if gt_occluded[j] == 1 and j in fn_indices)
+
+    # FPs assigned by nearest overlapping GT (if any)
+    fp_without = 0
+    fp_with = 0
+    for i in fp_indices:
+        if i < 0 or i >= len(pred_timestamps):
+            continue
+        max_iou, best_gt = _max_iou_with_gt(pred_timestamps[i], gt_timestamps)
+        if max_iou > 0 and 0 <= best_gt < len(gt_occluded):
+            if gt_occluded[best_gt] == 0:
+                fp_without += 1
+            else:
+                fp_with += 1
+        # else: ignore FP in gaps
+
+    return {
+        'without_occlusion': {'tp': tp_without, 'fp': fp_without, 'fn': fn_without},
+        'with_occlusion': {'tp': tp_with, 'fp': fp_with, 'fn': fn_with},
+    }
+
+
+def _compute_category_occlusion_split_metrics(
+    pred_categories: List[int],
+    gt_categories: List[int],
+    gt_occluded: Optional[List[int]],
+    matched_pairs: List[Dict],
+    fp_indices: List[int],
+    fn_indices: List[int],
+    pred_timestamps: List[Dict],
+    gt_timestamps: List[Dict],
+) -> Dict:
+    """
+    Category TP/FP/FN split by GT occlusion, using:
+    1) Strict gloss-matched pairs where categories match (split by GT occlusion)
+    2) Order-preserving augmentation on categories for remaining indices
+    3) FPs assigned to split by nearest overlapping GT (if any). FNs by GT flags
+    """
+    if not pred_categories or not gt_categories or not gt_occluded:
+        return {
+            'without_occlusion': {'tp': 0, 'fp': 0, 'fn': 0},
+            'with_occlusion': {'tp': 0, 'fp': 0, 'fn': 0},
+        }
+
+    n_pred = len(pred_categories)
+    n_gt = len(gt_categories)
+    pred_matched = set()
+    gt_matched = set()
+
+    tp_without = 0
+    tp_with = 0
+
+    # Step 1: gloss-matched pairs where category matches
+    for pair in matched_pairs:
+        pi = pair.get('pred_idx')
+        gi = pair.get('gt_idx')
+        if pi is None or gi is None:
+            continue
+        if 0 <= pi < n_pred and 0 <= gi < n_gt:
+            if pred_categories[pi] == gt_categories[gi]:
+                if 0 <= gi < len(gt_occluded) and gt_occluded[gi] == 1:
+                    tp_with += 1
+                else:
+                    tp_without += 1
+                pred_matched.add(pi)
+                gt_matched.add(gi)
+
+    # Step 2: order-based augmentation by category on remaining indices
+    remaining_pred = [i for i in range(n_pred) if i not in pred_matched]
+    remaining_gt = [j for j in range(n_gt) if j not in gt_matched]
+    add_pairs = _augment_matches_with_order(
+        pred_categories,
+        gt_categories,
+        remaining_pred,
+        remaining_gt,
+    )
+    for p in add_pairs:
+        gi = p['gt_idx']
+        if 0 <= gi < len(gt_occluded) and gt_occluded[gi] == 1:
+            tp_with += 1
+        else:
+            tp_without += 1
+        pred_matched.add(p['pred_idx'])
+        gt_matched.add(gi)
+
+    # Step 3: FPs assigned by nearest overlapping GT; FNs by GT occlusion
+    fp_without = 0
+    fp_with = 0
+    for i in range(n_pred):
+        if i in pred_matched:
+            continue
+        if i in fp_indices and 0 <= i < len(pred_timestamps):
+            max_iou, best_gt = _max_iou_with_gt(pred_timestamps[i], gt_timestamps)
+            if max_iou > 0 and 0 <= best_gt < len(gt_occluded):
+                if gt_occluded[best_gt] == 1:
+                    fp_with += 1
+                else:
+                    fp_without += 1
+
+    fn_without = 0
+    fn_with = 0
+    for j in range(n_gt):
+        if j in gt_matched:
+            continue
+        if j in fn_indices and 0 <= j < len(gt_occluded):
+            if gt_occluded[j] == 1:
+                fn_with += 1
+            else:
+                fn_without += 1
+
+    return {
+        'without_occlusion': {'tp': tp_without, 'fp': fp_without, 'fn': fn_without},
+        'with_occlusion': {'tp': tp_with, 'fp': fp_with, 'fn': fn_with},
+    }
+
+
 def calculate_detection_metrics(
     num_tp: int, num_fp: int, num_fn: int
 ) -> Tuple[float, float, float]:
@@ -760,6 +916,31 @@ class CTCPredictor:
                     result['matched_pairs'] = matched_pairs
                     result['unmatched_predictions'] = fp_indices
                     result['unmatched_ground_truth'] = fn_indices
+
+                    # Occlusion split metrics if occlusion flags available
+                    if 'ground_truth_occluded' in ground_truth:
+                        occ = _compute_occlusion_split_metrics(
+                            pred_timestamps=predicted_timestamps,
+                            gt_timestamps=gt_timestamps,
+                            gt_occluded=ground_truth['ground_truth_occluded'],
+                            matched_pairs=matched_pairs,
+                            fp_indices=fp_indices,
+                            fn_indices=fn_indices,
+                        )
+                        result['occlusion_metrics'] = occ
+                        # Category occlusion split (if categories available)
+                        if predicted_categories and 'ground_truth_categories' in ground_truth:
+                            occ_cat = _compute_category_occlusion_split_metrics(
+                                pred_categories=predicted_categories,
+                                gt_categories=ground_truth['ground_truth_categories'],
+                                gt_occluded=ground_truth['ground_truth_occluded'],
+                                matched_pairs=matched_pairs,
+                                fp_indices=fp_indices,
+                                fn_indices=fn_indices,
+                                pred_timestamps=predicted_timestamps,
+                                gt_timestamps=gt_timestamps,
+                            )
+                            result['occlusion_metrics_category'] = occ_cat
                     
                     # Category-level detection metrics (balanced, independent of gloss identity)
                     if predicted_categories and 'ground_truth_categories' in ground_truth:
@@ -1130,6 +1311,31 @@ class CTCPredictor:
                 result['matched_pairs'] = matched_pairs
                 result['unmatched_predictions'] = fp_indices
                 result['unmatched_ground_truth'] = fn_indices
+
+                # Occlusion split metrics if occlusion flags available
+                if 'ground_truth_occluded' in ground_truth:
+                    occ = _compute_occlusion_split_metrics(
+                        pred_timestamps=predicted_timestamps,
+                        gt_timestamps=gt_timestamps,
+                        gt_occluded=ground_truth['ground_truth_occluded'],
+                        matched_pairs=matched_pairs,
+                        fp_indices=fp_indices,
+                        fn_indices=fn_indices,
+                    )
+                    result['occlusion_metrics'] = occ
+                    # Category occlusion split (if categories available)
+                    if final_categories and 'ground_truth_categories' in ground_truth:
+                        occ_cat = _compute_category_occlusion_split_metrics(
+                            pred_categories=final_categories,
+                            gt_categories=gt_categories,
+                            gt_occluded=ground_truth['ground_truth_occluded'],
+                            matched_pairs=matched_pairs,
+                            fp_indices=fp_indices,
+                            fn_indices=fn_indices,
+                            pred_timestamps=predicted_timestamps,
+                            gt_timestamps=gt_timestamps,
+                        )
+                        result['occlusion_metrics_category'] = occ_cat
                 
                 # Category-level detection metrics (balanced, independent of gloss identity)
                 if final_categories and 'ground_truth_categories' in ground_truth:
@@ -1354,6 +1560,66 @@ class CTCPredictor:
                     summary['overall_metrics']['category_mean_recall'] = float(np.mean(cat_recalls))
                 if cat_f1s:
                     summary['overall_metrics']['category_mean_f1_score'] = float(np.mean(cat_f1s))
+
+            # Occlusion split metrics aggregation (if present on sequences)
+            occ_with = {'tp': 0, 'fp': 0, 'fn': 0}
+            occ_without = {'tp': 0, 'fp': 0, 'fn': 0}
+            occ_cat_with = {'tp': 0, 'fp': 0, 'fn': 0}
+            occ_cat_without = {'tp': 0, 'fp': 0, 'fn': 0}
+            for p in predictions_with_gt:
+                occ = p.get('occlusion_metrics')
+                if not occ:
+                    continue
+                wout = occ.get('without_occlusion') or {}
+                wth = occ.get('with_occlusion') or {}
+                occ_without['tp'] += int(wout.get('tp', 0))
+                occ_without['fp'] += int(wout.get('fp', 0))
+                occ_without['fn'] += int(wout.get('fn', 0))
+                occ_with['tp'] += int(wth.get('tp', 0))
+                occ_with['fp'] += int(wth.get('fp', 0))
+                occ_with['fn'] += int(wth.get('fn', 0))
+
+                occ_cat = p.get('occlusion_metrics_category')
+                if occ_cat:
+                    cwout = occ_cat.get('without_occlusion') or {}
+                    cwth = occ_cat.get('with_occlusion') or {}
+                    occ_cat_without['tp'] += int(cwout.get('tp', 0))
+                    occ_cat_without['fp'] += int(cwout.get('fp', 0))
+                    occ_cat_without['fn'] += int(cwout.get('fn', 0))
+                    occ_cat_with['tp'] += int(cwth.get('tp', 0))
+                    occ_cat_with['fp'] += int(cwth.get('fp', 0))
+                    occ_cat_with['fn'] += int(cwth.get('fn', 0))
+
+            def _prf(c):
+                return calculate_detection_metrics(c['tp'], c['fp'], c['fn'])
+
+            if any(v > 0 for v in occ_without.values()) or any(v > 0 for v in occ_with.values()):
+                p0, r0, f0 = _prf(occ_without)
+                p1, r1, f1 = _prf(occ_with)
+                summary['overall_metrics']['occlusion'] = {
+                    'without_occlusion': {
+                        'tp': occ_without['tp'], 'fp': occ_without['fp'], 'fn': occ_without['fn'],
+                        'precision': float(p0), 'recall': float(r0), 'f1_score': float(f0)
+                    },
+                    'with_occlusion': {
+                        'tp': occ_with['tp'], 'fp': occ_with['fp'], 'fn': occ_with['fn'],
+                        'precision': float(p1), 'recall': float(r1), 'f1_score': float(f1)
+                    }
+                }
+
+            if any(v > 0 for v in occ_cat_without.values()) or any(v > 0 for v in occ_cat_with.values()):
+                cp0, cr0, cf0 = _prf(occ_cat_without)
+                cp1, cr1, cf1 = _prf(occ_cat_with)
+                summary['overall_metrics']['occlusion_category'] = {
+                    'without_occlusion': {
+                        'tp': occ_cat_without['tp'], 'fp': occ_cat_without['fp'], 'fn': occ_cat_without['fn'],
+                        'precision': float(cp0), 'recall': float(cr0), 'f1_score': float(cf0)
+                    },
+                    'with_occlusion': {
+                        'tp': occ_cat_with['tp'], 'fp': occ_cat_with['fp'], 'fn': occ_cat_with['fn'],
+                        'precision': float(cp1), 'recall': float(cr1), 'f1_score': float(cf1)
+                    }
+                }
         
         return summary
     

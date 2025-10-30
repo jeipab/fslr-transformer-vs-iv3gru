@@ -807,7 +807,62 @@ def render_ctc_validation_results(results: Dict[str, Any]):
         st.markdown("")
 
     with tab4:
-        st.markdown("")
+        # Occlusion Analysis for CTC
+        occlusion = overall_metrics.get('occlusion') if overall_metrics else None
+        without = (occlusion or {}).get('without_occlusion', {})
+        with_occ = (occlusion or {}).get('with_occlusion', {})
+
+        # Performance Analysis (no accuracy)
+        st.markdown("#### Performance Analysis")
+        metrics_index = ['Precision', 'Recall', 'F1-Score']
+
+        def safe(d, k):
+            return d.get(k, 0.0)
+
+        # Build multi-index table with Gloss and Category under Occluded/Non-Occluded
+        occ_cat = overall_metrics.get('occlusion_category') if overall_metrics else None
+        cat_without = (occ_cat or {}).get('without_occlusion', {})
+        cat_with = (occ_cat or {}).get('with_occlusion', {})
+
+        # Columns multiindex
+        columns = pd.MultiIndex.from_tuples([
+            ('Occluded', 'Gloss Recognition'),
+            ('Occluded', 'Category Classification'),
+            ('Non-Occluded', 'Gloss Recognition'),
+            ('Non-Occluded', 'Category Classification'),
+        ])
+
+        table_values = [
+            [safe(with_occ, 'precision'), safe(cat_with, 'precision'), safe(without, 'precision'), safe(cat_without, 'precision')],
+            [safe(with_occ, 'recall'), safe(cat_with, 'recall'), safe(without, 'recall'), safe(cat_without, 'recall')],
+            [safe(with_occ, 'f1_score'), safe(cat_with, 'f1_score'), safe(without, 'f1_score'), safe(cat_without, 'f1_score')],
+        ]
+
+        perf_df = pd.DataFrame(table_values, index=metrics_index, columns=columns)
+        st.dataframe(perf_df, width='stretch')
+
+        # Bar chart: Occlusion Impact (no accuracy)
+        fig = go.Figure()
+        fig.add_trace(go.Bar(
+            name='Occluded',
+            x=metrics_index,
+            y=[safe(with_occ, 'precision'), safe(with_occ, 'recall'), safe(with_occ, 'f1_score')],
+            marker_color='lightcoral'
+        ))
+        fig.add_trace(go.Bar(
+            name='Non-Occluded',
+            x=metrics_index,
+            y=[safe(without, 'precision'), safe(without, 'recall'), safe(without, 'f1_score')],
+            marker_color='lightgreen'
+        ))
+        fig.update_layout(
+            title="Occlusion Impact on Performance",
+            xaxis_title="Metrics",
+            yaxis_title="Score",
+            barmode='group',
+            height=400
+        )
+        st.plotly_chart(fig, use_container_width=True)
 
     with tab5:
         # Summary metrics
@@ -1057,15 +1112,14 @@ def render_ctc_validation_results(results: Dict[str, Any]):
                             render_chips("Prediction Gloss", pred_gloss_labels)
                             render_chips("Prediction Categories", pred_cat_labels)
 
-        # Download results
-        st.markdown("---")
-        st.markdown("#### Download Results")
-
-        results_json = json.dumps(results, indent=2)
-        st.download_button(
-            label="Download Result",
-            data=results_json,
-            file_name="ctc_validation_results.json",
-            mime="application/json",
-            type="primary"
-        )
+    # Download results shown for all tabs
+    st.markdown("---")
+    st.markdown("#### Download Results")
+    results_json = json.dumps(results, indent=2)
+    st.download_button(
+        label="Download Result",
+        data=results_json,
+        file_name="ctc_validation_results.json",
+        mime="application/json",
+        type="primary"
+    )
