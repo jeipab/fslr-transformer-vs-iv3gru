@@ -4,17 +4,20 @@ Label assignment script for Filipino sign language recognition.
 This script creates labels.csv from NPZ files and maps gloss text labels to numeric IDs.
 
 Two modes:
-1. Auto mode: Scans NPZ directory, creates labels.csv, and assigns IDs
+1. Auto mode: Recursively scans NPZ files under a directory, creates labels.csv, and assigns IDs
 2. Labels mode: Updates existing labels.csv with IDs
 
 Usage:
-    # Auto mode - scans directory and creates/updates labels.csv
+    # Auto mode - recursively scans directory and creates/updates labels.csv
     python data/splitting/assign.py --directory data/processed/fsl-105_10-08
     
     # Labels mode - updates existing labels.csv
     python data/splitting/assign.py --labels data/processed/labels.csv
 
 Output: labels.csv with columns: file, gloss, cat, occluded, signer, duration
+Notes:
+- In auto mode, the "file" column stores the path relative to the provided directory
+  (e.g., "subdir/clip_0001_word_S1.npz").
 """
 
 import argparse
@@ -100,14 +103,14 @@ def create_labels_from_directory(directory, output_file=None):
     else:
         output_file = Path(output_file)
     
-    # Get all NPZ files
-    npz_files = sorted(directory.glob("*.npz"))
+    # Get all NPZ files recursively
+    npz_files = sorted(directory.rglob("*.npz"))
     
     if not npz_files:
         print(f"[ERROR] No NPZ files found in {directory}")
         return None
     
-    print(f"📂 Scanning directory: {directory}")
+    print(f"📂 Scanning directory (recursive): {directory}")
     print(f"📊 Found {len(npz_files)} NPZ files")
     
     # Extract metadata from each NPZ file
@@ -117,8 +120,11 @@ def create_labels_from_directory(directory, output_file=None):
             print(f"  Progress: {i}/{len(npz_files)} files...")
         
         meta = extract_metadata_from_npz(npz_path)
+        rel_path = npz_path.relative_to(directory)
+        # Normalize path separators for cross-platform consistency
+        rel_path_str = str(rel_path).replace('\\', '/')
         data.append({
-            'file': npz_path.name,
+            'file': rel_path_str,
             'occluded': meta['occluded'],
             'signer': meta['signer'],
             'duration': meta['duration']
@@ -233,6 +239,8 @@ Examples:
         Returns:
             Extracted gloss text in lowercase
         """
+        # Ensure we operate on the basename in case 'file' contains subdirectories
+        filename = Path(filename).name
         # Updated regex to handle signer suffix
         match = re.match(r'clip_\d+_(.*?)_S[0-7]\.npz', filename)
         if match:
