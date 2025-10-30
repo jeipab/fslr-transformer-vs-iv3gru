@@ -801,7 +801,107 @@ def render_ctc_validation_results(results: Dict[str, Any]):
         st.markdown("")
 
     with tab2:
-        st.markdown("")
+        # Per-Class Analysis for CTC using confusion matrices
+        # Build gloss confusion matrix
+        all_gt_gloss = []
+        all_pred_gloss = []
+        for p in predictions:
+            if 'ground_truth_sequence' in p and 'predicted_sequence' in p:
+                gt_seq = p.get('ground_truth_sequence', [])
+                pr_seq = p.get('predicted_sequence', [])
+                for gt_id, pr_id in zip(gt_seq, pr_seq):
+                    all_gt_gloss.append(int(gt_id))
+                    all_pred_gloss.append(int(pr_id))
+
+        if all_gt_gloss and all_pred_gloss:
+            num_gloss_classes = max(max(all_gt_gloss, default=0), max(all_pred_gloss, default=0)) + 1
+            gloss_cm = np.zeros((num_gloss_classes, num_gloss_classes), dtype=int)
+            for gt, pr in zip(all_gt_gloss, all_pred_gloss):
+                if 0 <= gt < num_gloss_classes and 0 <= pr < num_gloss_classes:
+                    gloss_cm[gt, pr] += 1
+        else:
+            gloss_cm = np.zeros((1, 1), dtype=int)
+
+        # Build category confusion matrix if available
+        all_gt_cat = []
+        all_pred_cat = []
+        for p in predictions:
+            gt_cats = p.get('ground_truth_categories')
+            pr_cats = p.get('predicted_categories')
+            if gt_cats and pr_cats:
+                for gc, pc in zip(gt_cats, pr_cats):
+                    all_gt_cat.append(int(gc))
+                    all_pred_cat.append(int(pc))
+
+        if all_gt_cat and all_pred_cat:
+            num_cat_classes = max(max(all_gt_cat, default=0), max(all_pred_cat, default=0)) + 1
+            cat_cm = np.zeros((num_cat_classes, num_cat_classes), dtype=int)
+            for gt, pr in zip(all_gt_cat, all_pred_cat):
+                if 0 <= gt < num_cat_classes and 0 <= pr < num_cat_classes:
+                    cat_cm[gt, pr] += 1
+        else:
+            cat_cm = np.zeros((1, 1), dtype=int)
+
+        # Load label mappings
+        try:
+            from data.labels.label_mapping import load_label_mappings
+            gloss_mapping, category_mapping = load_label_mappings()
+        except Exception:
+            gloss_mapping, category_mapping = {}, {}
+
+        # Compute per-class metrics from confusion matrices
+        def per_class_from_cm(cm: np.ndarray, label_map: Dict[int, str]):
+            per_rows = []
+            num_classes = cm.shape[0]
+            for cid in range(num_classes):
+                tp = cm[cid, cid]
+                fp = cm[:, cid].sum() - tp
+                fn = cm[cid, :].sum() - tp
+                precision = tp / (tp + fp) if (tp + fp) > 0 else 0.0
+                recall = tp / (tp + fn) if (tp + fn) > 0 else 0.0
+                f1 = (2 * precision * recall / (precision + recall)) if (precision + recall) > 0 else 0.0
+                occurrences = cm[cid, :].sum()
+                label = label_map.get(cid, f"Unknown ({cid})")
+                per_rows.append({
+                    'Class': f"{label} ({cid})",
+                    'Precision': precision,
+                    'Recall': recall,
+                    'F1-Score': f1,
+                    'Occurrences': int(occurrences),
+                })
+            return pd.DataFrame(per_rows).sort_values('F1-Score', ascending=False)
+
+        gloss_df = per_class_from_cm(gloss_cm, gloss_mapping)
+        cat_df = per_class_from_cm(cat_cm, category_mapping)
+
+        col_l, col_r = st.columns(2)
+        with col_l:
+            st.markdown("#### Top Gloss Classes (by F1-Score)")
+            st.dataframe(gloss_df, width='stretch', height=400)
+        with col_r:
+            st.markdown("#### Top Category Classes (by F1-Score)")
+            st.dataframe(cat_df, width='stretch', height=400)
+
+        # Performance Distribution
+        st.markdown("#### Performance Distribution")
+        fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(15, 6))
+        ax1.hist(gloss_df['F1-Score'], bins=20, alpha=0.7, color='lightblue', edgecolor='black')
+        ax1.set_title('Gloss F1-Score Distribution')
+        ax1.set_xlabel('F1-Score')
+        ax1.set_ylabel('Number of Classes')
+        if len(gloss_df) > 0:
+            ax1.axvline(gloss_df['F1-Score'].mean(), color='red', linestyle='--', label=f"Mean: {gloss_df['F1-Score'].mean():.3f}")
+            ax1.legend()
+
+        ax2.hist(cat_df['F1-Score'], bins=20, alpha=0.7, color='lightgreen', edgecolor='black')
+        ax2.set_title('Category F1-Score Distribution')
+        ax2.set_xlabel('F1-Score')
+        ax2.set_ylabel('Number of Classes')
+        if len(cat_df) > 0:
+            ax2.axvline(cat_df['F1-Score'].mean(), color='red', linestyle='--', label=f"Mean: {cat_df['F1-Score'].mean():.3f}")
+            ax2.legend()
+        plt.tight_layout()
+        st.pyplot(fig)
 
     with tab3:
         # Confusion Matrices for CTC (aggregate across sequences)
