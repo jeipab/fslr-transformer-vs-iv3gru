@@ -205,6 +205,96 @@ def match_predictions_to_ground_truth(
     return tp_indices, fp_indices, fn_indices, matched_pairs, mean_iou
 
 
+def _augment_matches_with_order(
+    pred_glosses: List[int],
+    gt_glosses: List[int],
+    unmatched_pred: List[int],
+    unmatched_gt: List[int],
+) -> List[Dict]:
+    """
+    Lenient, order-preserving greedy matcher to augment strict temporal matches.
+    Pairs remaining unmatched predictions and ground-truth by label equality
+    while preserving sequence order. Does not use timestamps.
+    """
+    if not unmatched_pred or not unmatched_gt:
+        return []
+
+    add_pairs: List[Dict] = []
+    p_i = 0
+    g_i = 0
+    while p_i < len(unmatched_pred) and g_i < len(unmatched_gt):
+        pi = unmatched_pred[p_i]
+        gi = unmatched_gt[g_i]
+        if pred_glosses[pi] == gt_glosses[gi]:
+            add_pairs.append({'pred_idx': pi, 'gt_idx': gi, 'iou': 0.0, 'gloss': pred_glosses[pi]})
+            p_i += 1
+            g_i += 1
+        else:
+            # Advance predictions pointer first to be more permissive on extra predictions
+            p_i += 1
+    return add_pairs
+
+
+def _compute_category_metrics_balanced(
+    pred_categories: List[int],
+    gt_categories: List[int],
+    matched_pairs: List[Dict],
+    pred_len: int,
+    gt_len: int,
+    gloss_fp_indices: List[int],
+    gloss_fn_indices: List[int],
+) -> Tuple[int, int, int]:
+    """
+    Compute category TP/FP/FN by:
+    1) Using gloss matched pairs where categories also match
+    2) Then augmenting with order-preserving matches over the remaining
+       unmatched predictions and GT purely by category equality
+    """
+    if not pred_categories or not gt_categories:
+        return 0, 0, len(gt_categories)
+
+    # Bound checks
+    pred_len = min(pred_len, len(pred_categories))
+    gt_len = min(gt_len, len(gt_categories))
+
+    pred_matched = set()
+    gt_matched = set()
+    cat_tp = 0
+
+    # Step 1: accept gloss matches where categories also match
+    for pair in matched_pairs:
+        pi = pair.get('pred_idx')
+        gi = pair.get('gt_idx')
+        if pi is None or gi is None:
+            continue
+        if 0 <= pi < pred_len and 0 <= gi < gt_len:
+            if pred_categories[pi] == gt_categories[gi]:
+                cat_tp += 1
+                pred_matched.add(pi)
+                gt_matched.add(gi)
+
+    # Step 2: order-preserving augmentation by category on remaining indices
+    remaining_pred = [i for i in range(pred_len) if i not in pred_matched]
+    remaining_gt = [j for j in range(gt_len) if j not in gt_matched]
+
+    # Build additional matches by treating categories as sequences
+    add_pairs = _augment_matches_with_order(
+        pred_categories,
+        gt_categories,
+        remaining_pred,
+        remaining_gt,
+    )
+    cat_tp += len(add_pairs)
+    pred_matched.update(p['pred_idx'] for p in add_pairs)
+    gt_matched.update(p['gt_idx'] for p in add_pairs)
+
+    # Remaining unmatched are FP/FN for category
+    cat_fp = len([i for i in range(pred_len) if i not in pred_matched])
+    cat_fn = len([j for j in range(gt_len) if j not in gt_matched])
+
+    return cat_tp, cat_fp, cat_fn
+
+
 def calculate_detection_metrics(
     num_tp: int, num_fp: int, num_fn: int
 ) -> Tuple[float, float, float]:
@@ -634,6 +724,21 @@ class CTCPredictor:
                         gt_timestamps=gt_timestamps,
                         iou_threshold=iou_threshold
                     )
+                    # Lenient augmentation: order-preserving matches for remaining unmatched
+                    add_pairs = _augment_matches_with_order(
+                        predicted_sequence,
+                        ground_truth['ground_truth_sequence'],
+                        fp_indices,
+                        fn_indices,
+                    )
+                    if add_pairs:
+                        matched_pairs.extend(add_pairs)
+                        tp_indices.extend([p['pred_idx'] for p in add_pairs])
+                        # Remove newly matched from FP/FN
+                        newly_matched_pred = set(p['pred_idx'] for p in add_pairs)
+                        newly_matched_gt = set(p['gt_idx'] for p in add_pairs)
+                        fp_indices = [i for i in fp_indices if i not in newly_matched_pred]
+                        fn_indices = [j for j in fn_indices if j not in newly_matched_gt]
                     
                     num_tp = len(tp_indices)
                     num_fp = len(fp_indices)
@@ -656,29 +761,20 @@ class CTCPredictor:
                     result['unmatched_predictions'] = fp_indices
                     result['unmatched_ground_truth'] = fn_indices
                     
-                    # Category-level detection metrics (if categories available)
+                    # Category-level detection metrics (balanced, independent of gloss identity)
                     if predicted_categories and 'ground_truth_categories' in ground_truth:
                         gt_cats = ground_truth['ground_truth_categories']
-                        if len(predicted_categories) == len(predicted_sequence) and len(gt_cats) == len(ground_truth['ground_truth_sequence']):
-                            cat_tp = 0
-                            cat_fp = 0
-                            cat_fn = 0
-                            
-                            for pair in matched_pairs:
-                                pred_idx = pair['pred_idx']
-                                gt_idx = pair['gt_idx']
-                                if pred_idx < len(predicted_categories) and gt_idx < len(gt_cats):
-                                    if predicted_categories[pred_idx] == gt_cats[gt_idx]:
-                                        cat_tp += 1
-                                    else:
-                                        cat_fp += 1
-                                        cat_fn += 1
-                            
-                            cat_fp += len(fp_indices)
-                            cat_fn += len(fn_indices)
-                            
+                        if gt_cats:
+                            cat_tp, cat_fp, cat_fn = _compute_category_metrics_balanced(
+                                pred_categories=predicted_categories,
+                                gt_categories=gt_cats,
+                                matched_pairs=matched_pairs,
+                                pred_len=len(predicted_sequence),
+                                gt_len=len(ground_truth['ground_truth_sequence']),
+                                gloss_fp_indices=fp_indices,
+                                gloss_fn_indices=fn_indices,
+                            )
                             cat_precision, cat_recall, cat_f1 = calculate_detection_metrics(cat_tp, cat_fp, cat_fn)
-                            
                             result['category_num_tp'] = cat_tp
                             result['category_num_fp'] = cat_fp
                             result['category_num_fn'] = cat_fn
@@ -947,6 +1043,10 @@ class CTCPredictor:
                 gt_labels = [seg.get('gloss_label', f"GLOSS_{seg.get('gloss', '?')}") for seg in segments]
                 gt_timestamps = []
                 gt_gloss_ids = []
+                # Also extract per-segment categories if available
+                gt_categories = []
+                gt_category_labels = []
+                gt_occluded = []
                 for seg in segments:
                     gt_gloss_ids.append(seg.get('gloss', 0))
                     gt_timestamps.append({
@@ -954,6 +1054,19 @@ class CTCPredictor:
                         'end_ms': seg.get('timestamp_end_ms', 0),
                         'duration_ms': seg.get('timestamp_end_ms', 0) - seg.get('timestamp_start_ms', 0)
                     })
+                    if 'category' in seg:
+                        gt_categories.append(seg.get('category'))
+                    if 'category_label' in seg:
+                        gt_category_labels.append(seg.get('category_label'))
+                    if 'occluded' in seg:
+                        gt_occluded.append(int(seg.get('occluded', 0)))
+                # Expose flattened GT categories/labels for UI and metrics
+                if gt_categories:
+                    ground_truth['ground_truth_categories'] = gt_categories
+                if gt_category_labels:
+                    ground_truth['ground_truth_category_labels'] = gt_category_labels
+                if gt_occluded:
+                    ground_truth['ground_truth_occluded'] = gt_occluded
             else:
                 # Converted ground truth format
                 gt_labels = ground_truth.get('ground_truth_labels', [])
@@ -963,6 +1076,13 @@ class CTCPredictor:
             result['ground_truth_sequence'] = gt_gloss_ids
             result['ground_truth_labels'] = gt_labels
             result['ground_truth_timestamps'] = gt_timestamps
+            # Pass through per-segment categories if present
+            if 'ground_truth_category_labels' in ground_truth:
+                result['ground_truth_category_labels'] = ground_truth['ground_truth_category_labels']
+            if 'ground_truth_categories' in ground_truth:
+                result['ground_truth_categories'] = ground_truth['ground_truth_categories']
+            if 'ground_truth_occluded' in ground_truth:
+                result['ground_truth_occluded'] = ground_truth['ground_truth_occluded']
             result['signer'] = ground_truth.get('signer')
             result['strategy'] = ground_truth.get('strategy', ground_truth.get('strategy_name'))
             
@@ -975,6 +1095,20 @@ class CTCPredictor:
                     gt_timestamps=gt_timestamps,
                     iou_threshold=iou_threshold
                 )
+                # Lenient augmentation: order-preserving matches for remaining unmatched
+                add_pairs = _augment_matches_with_order(
+                    final_sequence,
+                    gt_gloss_ids,
+                    fp_indices,
+                    fn_indices,
+                )
+                if add_pairs:
+                    matched_pairs.extend(add_pairs)
+                    tp_indices.extend([p['pred_idx'] for p in add_pairs])
+                    newly_matched_pred = set(p['pred_idx'] for p in add_pairs)
+                    newly_matched_gt = set(p['gt_idx'] for p in add_pairs)
+                    fp_indices = [i for i in fp_indices if i not in newly_matched_pred]
+                    fn_indices = [j for j in fn_indices if j not in newly_matched_gt]
                 
                 num_tp = len(tp_indices)
                 num_fp = len(fp_indices)
@@ -997,35 +1131,20 @@ class CTCPredictor:
                 result['unmatched_predictions'] = fp_indices
                 result['unmatched_ground_truth'] = fn_indices
                 
-                # Category-level detection metrics (if categories available)
+                # Category-level detection metrics (balanced, independent of gloss identity)
                 if final_categories and 'ground_truth_categories' in ground_truth:
                     gt_categories = ground_truth['ground_truth_categories']
-                    if len(final_categories) == len(final_sequence) and len(gt_categories) == len(gt_gloss_ids):
-                        # Match categories based on TP matches from gloss-level matching
-                        cat_tp = 0
-                        cat_fp = 0
-                        cat_fn = 0
-                        
-                        # Count TP categories (matched pairs with same category)
-                        for pair in matched_pairs:
-                            pred_idx = pair['pred_idx']
-                            gt_idx = pair['gt_idx']
-                            if pred_idx < len(final_categories) and gt_idx < len(gt_categories):
-                                if final_categories[pred_idx] == gt_categories[gt_idx]:
-                                    cat_tp += 1
-                                else:
-                                    # Wrong category, count as FP for pred and FN for GT
-                                    cat_fp += 1
-                                    cat_fn += 1
-                        
-                        # Count FP categories (unmatched predictions)
-                        cat_fp += len(fp_indices)
-                        
-                        # Count FN categories (unmatched ground truth)
-                        cat_fn += len(fn_indices)
-                        
+                    if gt_categories:
+                        cat_tp, cat_fp, cat_fn = _compute_category_metrics_balanced(
+                            pred_categories=final_categories,
+                            gt_categories=gt_categories,
+                            matched_pairs=matched_pairs,
+                            pred_len=len(final_sequence),
+                            gt_len=len(gt_gloss_ids),
+                            gloss_fp_indices=fp_indices,
+                            gloss_fn_indices=fn_indices,
+                        )
                         cat_precision, cat_recall, cat_f1 = calculate_detection_metrics(cat_tp, cat_fp, cat_fn)
-                        
                         result['category_num_tp'] = cat_tp
                         result['category_num_fp'] = cat_fp
                         result['category_num_fn'] = cat_fn
@@ -1224,6 +1343,17 @@ class CTCPredictor:
                     summary['overall_metrics']['category_overall_precision'] = float(cat_precision)
                     summary['overall_metrics']['category_overall_recall'] = float(cat_recall)
                     summary['overall_metrics']['category_overall_f1_score'] = float(cat_f1)
+
+                # Mean per-sequence category metrics (macro) if present on sequences
+                cat_precisions = [p.get('category_precision') for p in predictions_with_gt if 'category_precision' in p]
+                cat_recalls = [p.get('category_recall') for p in predictions_with_gt if 'category_recall' in p]
+                cat_f1s = [p.get('category_f1_score') for p in predictions_with_gt if 'category_f1_score' in p]
+                if cat_precisions:
+                    summary['overall_metrics']['category_mean_precision'] = float(np.mean(cat_precisions))
+                if cat_recalls:
+                    summary['overall_metrics']['category_mean_recall'] = float(np.mean(cat_recalls))
+                if cat_f1s:
+                    summary['overall_metrics']['category_mean_f1_score'] = float(np.mean(cat_f1s))
         
         return summary
     

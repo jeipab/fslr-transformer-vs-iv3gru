@@ -41,6 +41,10 @@ def transform_metadata_to_ground_truth(metadata: Dict) -> Dict:
     # Extract ground truth sequence and labels
     ground_truth_sequence = [seg['gloss'] for seg in segments]
     ground_truth_labels = [seg['gloss_label'] for seg in segments]
+
+    # Extract per-segment categories (ids and labels)
+    ground_truth_categories = [seg.get('category') for seg in segments]
+    ground_truth_category_labels = [seg.get('category_label') for seg in segments]
     
     # Transform timestamps
     ground_truth_timestamps = []
@@ -54,7 +58,7 @@ def transform_metadata_to_ground_truth(metadata: Dict) -> Dict:
             'duration_ms': seg['timestamp_end_ms'] - seg['timestamp_start_ms']
         })
     
-    # Use first segment's category (consistent for strategy 1, arbitrary for strategy 2)
+    # Sequence-level category (first segment). For strategy 2 categories can differ across segments.
     first_segment = segments[0]
     category = first_segment['category']
     category_label = first_segment['category_label']
@@ -64,6 +68,8 @@ def transform_metadata_to_ground_truth(metadata: Dict) -> Dict:
         'file_name': metadata['file_name'],
         'ground_truth_sequence': ground_truth_sequence,
         'ground_truth_labels': ground_truth_labels,
+        'ground_truth_categories': ground_truth_categories,
+        'ground_truth_category_labels': ground_truth_category_labels,
         'ground_truth_timestamps': ground_truth_timestamps,
         'signer': metadata['signer'],
         'strategy': metadata['strategy_name'],

@@ -788,115 +788,284 @@ def render_ctc_validation_results(results: Dict[str, Any]):
     if not overall_metrics:
         st.warning("No detection metrics available. Please ensure ground truth timestamps are provided.")
         return
-    
-    # Summary metrics
-    st.markdown("#### Overall Metrics")
-    has_categories = summary.get('has_category_predictions', False) and 'category_overall_f1_score' in overall_metrics
-    num_cols = 4 + (1 if has_categories else 0)
-    cols = st.columns(num_cols)
-    
-    col_idx = 0
-    with cols[col_idx]:
-        overall_precision = overall_metrics.get('overall_precision', 0)
-        st.metric("Overall Precision", f"{overall_precision*100:.2f}%")
-    col_idx += 1
-    
-    with cols[col_idx]:
-        overall_recall = overall_metrics.get('overall_recall', 0)
-        st.metric("Overall Recall", f"{overall_recall*100:.2f}%")
-    col_idx += 1
-    
-    with cols[col_idx]:
-        overall_f1 = overall_metrics.get('overall_f1_score', 0)
-        st.metric("Overall F1-Score", f"{overall_f1*100:.2f}%")
-    col_idx += 1
-    
-    with cols[col_idx]:
-        total_sequences = summary.get('total_sequences', 0)
-        st.metric("Total Sequences", total_sequences)
-    col_idx += 1
-    
-    if has_categories:
+
+    tab1, tab2, tab3, tab4, tab5 = st.tabs([
+        "📊 Overall Performance",
+        "🎯 Per-Class Analysis",
+        "🔍 Confusion Matrices",
+        "📈 Occlusion Analysis",
+        "📋 Detailed Predictions"
+    ])
+
+    with tab1:
+        st.markdown("")
+
+    with tab2:
+        st.markdown("")
+
+    with tab3:
+        st.markdown("")
+
+    with tab4:
+        st.markdown("")
+
+    with tab5:
+        # Summary metrics
+        st.markdown("#### Overall Metrics")
+        has_categories = summary.get('has_category_predictions', False)
+        # Gloss mean metrics + total sequences + optional category mean metrics (3)
+        num_cols = 4 + (3 if has_categories else 0)
+        cols = st.columns(num_cols)
+
+        col_idx = 0
         with cols[col_idx]:
-            cat_f1 = overall_metrics.get('category_overall_f1_score', 0)
-            st.metric("Category F1-Score", f"{cat_f1*100:.2f}%")
-    
-    # Detection counts breakdown
-    st.markdown("---")
-    st.markdown("#### Detection Counts")
-    col1, col2, col3, col4 = st.columns(4)
-    
-    with col1:
-        total_tp = overall_metrics.get('total_tp', 0)
-        st.metric("True Positives (TP)", total_tp)
-    with col2:
-        total_fp = overall_metrics.get('total_fp', 0)
-        st.metric("False Positives (FP)", total_fp)
-    with col3:
-        total_fn = overall_metrics.get('total_fn', 0)
-        st.metric("False Negatives (FN)", total_fn)
-    with col4:
-        total_gt = overall_metrics.get('total_gt_instances', 0)
-        st.metric("Total GT Instances", total_gt)
-    
-    # Per-signer and Per-strategy metrics intentionally omitted
-    
-    # Detailed predictions table
-    st.markdown("---")
-    st.markdown("#### Detailed Predictions")
-    
-    if predictions:
-        pred_data = []
-        has_cat_metrics = any('category_f1_score' in p for p in predictions)
-        
-        for pred in predictions:
-            # Check if prediction has detection metrics
-            if 'f1_score' in pred:
-                row = {
-                    'File': pred['file_name'],
-                    'GT Length': len(pred.get('ground_truth_sequence', [])),
-                    'Pred Length': pred['num_predicted'],
-                    'Precision': f"{pred.get('precision', 0)*100:.2f}%",
-                    'Recall': f"{pred.get('recall', 0)*100:.2f}%",
-                    'F1-Score': f"{pred.get('f1_score', 0)*100:.2f}%",
-                    'TP': pred.get('num_tp', 0),
-                    'FP': pred.get('num_fp', 0),
-                    'FN': pred.get('num_fn', 0)
+            mean_precision = overall_metrics.get('mean_precision', overall_metrics.get('overall_precision', 0))
+            st.metric("Gloss Mean Precision", f"{mean_precision*100:.2f}%")
+        col_idx += 1
+
+        with cols[col_idx]:
+            mean_recall = overall_metrics.get('mean_recall', overall_metrics.get('overall_recall', 0))
+            st.metric("Gloss Mean Recall", f"{mean_recall*100:.2f}%")
+        col_idx += 1
+
+        with cols[col_idx]:
+            mean_f1 = overall_metrics.get('mean_f1_score', overall_metrics.get('overall_f1_score', 0))
+            st.metric("Gloss Mean F1-Score", f"{mean_f1*100:.2f}%")
+        col_idx += 1
+
+        with cols[col_idx]:
+            total_sequences = summary.get('total_sequences', 0)
+            st.metric("Total Sequences", total_sequences)
+        col_idx += 1
+
+        if has_categories:
+            with cols[col_idx]:
+                cat_mean_prec = overall_metrics.get('category_mean_precision', overall_metrics.get('category_overall_precision', 0))
+                st.metric("Category Mean Precision", f"{cat_mean_prec*100:.2f}%")
+            col_idx += 1
+            with cols[col_idx]:
+                cat_mean_rec = overall_metrics.get('category_mean_recall', overall_metrics.get('category_overall_recall', 0))
+                st.metric("Category Mean Recall", f"{cat_mean_rec*100:.2f}%")
+            col_idx += 1
+            with cols[col_idx]:
+                cat_mean_f1 = overall_metrics.get('category_mean_f1_score', overall_metrics.get('category_overall_f1_score', 0))
+                st.metric("Category Mean F1-Score", f"{cat_mean_f1*100:.2f}%")
+
+        # Detection counts breakdown
+        st.markdown("---")
+        st.markdown("#### Detection Counts")
+        col1, col2, col3, col4 = st.columns(4)
+
+        with col1:
+            total_tp = overall_metrics.get('total_tp', 0)
+            st.metric("True Positives (TP)", total_tp)
+        with col2:
+            total_fp = overall_metrics.get('total_fp', 0)
+            st.metric("False Positives (FP)", total_fp)
+        with col3:
+            total_fn = overall_metrics.get('total_fn', 0)
+            st.metric("False Negatives (FN)", total_fn)
+        with col4:
+            total_gt = overall_metrics.get('total_gt_instances', 0)
+            st.metric("Total GT Instances", total_gt)
+
+        # Detailed predictions table
+        st.markdown("---")
+        st.markdown("#### Detailed Predictions")
+
+        # Load label mappings for fallback when labels missing
+        try:
+            from data.labels.label_mapping import load_label_mappings
+            gloss_mapping, category_mapping = load_label_mappings()
+        except Exception:
+            gloss_mapping, category_mapping = {}, {}
+
+        if predictions:
+            # Metrics-only compact table
+            pred_rows = []
+            has_cat_metrics = any('category_f1_score' in p for p in predictions)
+
+            for pred in predictions:
+                if 'f1_score' in pred:
+                    row = {
+                        'File': pred['file_name'],
+                        'GT Length': len(pred.get('ground_truth_sequence', [])),
+                        'Pred Length': pred.get('num_predicted', 0),
+                        'Precision': f"{pred.get('precision', 0)*100:.2f}%",
+                        'Recall': f"{pred.get('recall', 0)*100:.2f}%",
+                        'F1-Score': f"{pred.get('f1_score', 0)*100:.2f}%",
+                        'TP': pred.get('num_tp', 0),
+                        'FP': pred.get('num_fp', 0),
+                        'FN': pred.get('num_fn', 0)
+                    }
+                    if has_cat_metrics and 'category_f1_score' in pred:
+                        row['Cat F1-Score'] = f"{pred['category_f1_score']*100:.2f}%"
+                        if 'category_precision' in pred:
+                            row['Cat Precision'] = f"{pred['category_precision']*100:.2f}%"
+                        if 'category_recall' in pred:
+                            row['Cat Recall'] = f"{pred['category_recall']*100:.2f}%"
+                        if 'category_num_tp' in pred:
+                            row['Cat TP'] = pred['category_num_tp']
+                        if 'category_num_fp' in pred:
+                            row['Cat FP'] = pred['category_num_fp']
+                        if 'category_num_fn' in pred:
+                            row['Cat FN'] = pred['category_num_fn']
+                    pred_rows.append(row)
+                else:
+                    row = {
+                        'File': pred['file_name'],
+                        'GT Length': len(pred.get('ground_truth_sequence', [])),
+                        'Pred Length': pred.get('num_predicted', 0),
+                        'Precision': 'N/A',
+                        'Recall': 'N/A',
+                        'F1-Score': 'N/A',
+                        'TP': 'N/A',
+                        'FP': 'N/A',
+                        'FN': 'N/A'
+                    }
+                    if has_cat_metrics:
+                        row.update({
+                            'Cat Precision': 'N/A',
+                            'Cat Recall': 'N/A',
+                            'Cat F1-Score': 'N/A',
+                            'Cat TP': 'N/A',
+                            'Cat FP': 'N/A',
+                            'Cat FN': 'N/A',
+                        })
+                    pred_rows.append(row)
+
+            if pred_rows:
+                # Build flat dataframe with prefixed column names to simulate grouping
+                base_df = pd.DataFrame(pred_rows)
+                # Rename metrics to include group labels
+                rename_map = {
+                    'Precision': 'Gloss: Precision',
+                    'Recall': 'Gloss: Recall',
+                    'F1-Score': 'Gloss: F1-Score',
+                    'TP': 'Gloss: TP',
+                    'FP': 'Gloss: FP',
+                    'FN': 'Gloss: FN',
+                    'Cat Precision': 'Category: Precision',
+                    'Cat Recall': 'Category: Recall',
+                    'Cat F1-Score': 'Category: F1-Score',
+                    'Cat TP': 'Category: TP',
+                    'Cat FP': 'Category: FP',
+                    'Cat FN': 'Category: FN',
                 }
-                
-                # Add category F1 if available
-                if has_cat_metrics and 'category_f1_score' in pred:
-                    row['Cat F1'] = f"{pred['category_f1_score']*100:.2f}%"
-                
-                pred_data.append(row)
-            else:
-                # Fallback for predictions without detection metrics
-                row = {
-                    'File': pred['file_name'],
-                    'GT Length': len(pred.get('ground_truth_sequence', [])),
-                    'Pred Length': pred['num_predicted'],
-                    'Precision': 'N/A',
-                    'Recall': 'N/A',
-                    'F1-Score': 'N/A',
-                    'TP': 'N/A',
-                    'FP': 'N/A',
-                    'FN': 'N/A'
-                }
-                pred_data.append(row)
-        
-        if pred_data:
-            pred_df = pd.DataFrame(pred_data)
-            st.dataframe(pred_df, width='stretch', height=400)
-    
-    # Download results
-    st.markdown("---")
-    st.markdown("#### Download Results")
-    
-    results_json = json.dumps(results, indent=2)
-    st.download_button(
-        label="Download Result",
-        data=results_json,
-        file_name="ctc_validation_results.json",
-        mime="application/json",
-        type="primary"
-    )
+                for k, v in rename_map.items():
+                    if k in base_df.columns:
+                        base_df.rename(columns={k: v}, inplace=True)
+
+                # Add checkbox column for details (single-select behavior)
+                selected_file = st.session_state.get('ctc_selected_file')
+                base_df.insert(0, 'Details', base_df['File'] == selected_file)
+
+                # Define column order
+                ordered_cols = ['Details', 'File', 'GT Length', 'Pred Length',
+                                'Gloss: Precision', 'Gloss: Recall', 'Gloss: F1-Score', 'Gloss: TP', 'Gloss: FP', 'Gloss: FN']
+                cat_cols = ['Category: Precision', 'Category: Recall', 'Category: F1-Score', 'Category: TP', 'Category: FP', 'Category: FN']
+                for c in cat_cols:
+                    if c in base_df.columns:
+                        ordered_cols.append(c)
+                show_df = base_df[[c for c in ordered_cols if c in base_df.columns]].copy()
+
+                editor_key = f"ctc_pred_table_{selected_file or 'none'}"
+                edited_df = st.data_editor(
+                    show_df,
+                    width='stretch',
+                    height=360,
+                    hide_index=True,
+                    column_config={
+                        'Details': st.column_config.CheckboxColumn('', default=False, width="small")
+                    },
+                    column_order=[c for c in show_df.columns],
+                    disabled=[c for c in show_df.columns if c != 'Details'],
+                    key=editor_key
+                )
+
+                # Enforce single selection
+                checked_files = edited_df[edited_df['Details'] == True]['File'].tolist()
+                if len(checked_files) > 1:
+                    # Prefer the one different from previous selection; if none, keep the first
+                    prev = st.session_state.get('ctc_selected_file')
+                    new_sel = next((f for f in checked_files if f != prev), checked_files[0])
+                    st.session_state['ctc_selected_file'] = new_sel
+                    st.rerun()
+                elif len(checked_files) == 1:
+                    if checked_files[0] != st.session_state.get('ctc_selected_file'):
+                        st.session_state['ctc_selected_file'] = checked_files[0]
+                        st.rerun()
+                else:
+                    if st.session_state.get('ctc_selected_file') is not None:
+                        st.session_state['ctc_selected_file'] = None
+                        st.rerun()
+
+                selected_file = st.session_state.get('ctc_selected_file')
+                if selected_file:
+                    pred = next((p for p in predictions if p.get('file_name') == selected_file), None)
+                    if pred:
+                        st.markdown(
+                            f"<div style=\"display:inline-block;padding:6px 10px;border-radius:6px;border:1px solid #1f77b4;color:#1f77b4;font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace; font-weight:600; background:#0b1220;\">{selected_file}</div>",
+                            unsafe_allow_html=True
+                        )
+                        # Gloss sequences
+                        pred_gloss_labels = pred.get('predicted_labels') or [gloss_mapping.get(g, str(g)) for g in pred.get('predicted_sequence', [])]
+                        gt_gloss_labels = pred.get('ground_truth_labels') or [gloss_mapping.get(g, str(g)) for g in pred.get('ground_truth_sequence', [])]
+
+                        # Category sequences
+                        pred_cat_ids = pred.get('predicted_categories', []) or []
+                        pred_cat_labels = [category_mapping.get(c, str(c)) for c in pred_cat_ids]
+                        if 'ground_truth_category_labels' in pred and pred.get('ground_truth_category_labels'):
+                            gt_cat_labels = pred['ground_truth_category_labels']
+                        else:
+                            gt_cat_label = pred.get('category_label') or pred.get('ground_truth_category_label')
+                            if gt_cat_label:
+                                gt_cat_labels = [gt_cat_label]
+                            else:
+                                gt_cat_id = pred.get('category') or pred.get('ground_truth_category')
+                                gt_cat_labels = [category_mapping.get(gt_cat_id, str(gt_cat_id))] if gt_cat_id is not None else []
+
+                        def render_chips(title: str, items: List[str], occluded_flags: Optional[List[int]] = None):
+                            st.markdown(f"**{title}**")
+                            if not items:
+                                st.markdown("<div style='color:#999;'>N/A</div>", unsafe_allow_html=True)
+                                return
+                            chips = []
+                            for idx, t in enumerate(items):
+                                is_occ = False
+                                if occluded_flags is not None and idx < len(occluded_flags):
+                                    is_occ = int(occluded_flags[idx]) == 1
+                                if is_occ:
+                                    # Danger red like destructive buttons
+                                    chips.append(
+                                        f"<span style='display:inline-block;margin:2px;padding:4px 10px;border-radius:14px;background:#e74c3c;color:#ffffff;border:1px solid #c0392b;font-size:0.85rem;font-weight:600;'>{t}</span>"
+                                    )
+                                else:
+                                    chips.append(
+                                        f"<span style='display:inline-block;margin:2px;padding:4px 10px;border-radius:14px;background:#1f77b4;color:#ffffff;border:1px solid #1565a6;font-size:0.85rem;font-weight:600;'>{t}</span>"
+                                    )
+                            chips_html = "".join(chips)
+                            container = f"<div style='max-height:200px;overflow:auto;border:1px solid #1f2937;padding:6px;border-radius:6px;background:#ffffff10;'>{chips_html}</div>"
+                            st.markdown(container, unsafe_allow_html=True)
+
+                        cols2 = st.columns(2)
+                        with cols2[0]:
+                            gt_occ = pred.get('ground_truth_occluded')
+                            render_chips("Ground Truth Gloss", gt_gloss_labels, gt_occ)
+                            render_chips("Ground Truth Category", gt_cat_labels, gt_occ)
+                        with cols2[1]:
+                            render_chips("Prediction Gloss", pred_gloss_labels)
+                            render_chips("Prediction Categories", pred_cat_labels)
+
+        # Download results
+        st.markdown("---")
+        st.markdown("#### Download Results")
+
+        results_json = json.dumps(results, indent=2)
+        st.download_button(
+            label="Download Result",
+            data=results_json,
+            file_name="ctc_validation_results.json",
+            mime="application/json",
+            type="primary"
+        )
