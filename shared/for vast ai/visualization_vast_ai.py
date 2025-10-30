@@ -118,9 +118,15 @@ def render_file_details_horizontal(filename: str, npz_data: Dict, metadata: Dict
                 meta_parsed = None
         except:
             meta_parsed = None
-    
-    # Horizontal layout: Frames, Keypoints, Features, Occluded
-    detail_col1, detail_col2, detail_col3, detail_col4 = st.columns(4)
+
+    # Determine layout: add a leading spacer column for left gap, then metrics
+    is_continuous_global = metadata.get('is_continuous', False)
+    if is_continuous_global:
+        # Spacer, Frames, Keypoints, Features, Segments, Duration
+        spacer_col, detail_col1, detail_col2, detail_col3, detail_col4, detail_col5 = st.columns([0.4, 1, 1, 1, 1, 1])
+    else:
+        # Spacer, Frames, Keypoints, Features, Occluded
+        spacer_col, detail_col1, detail_col2, detail_col3, detail_col4 = st.columns([0.4, 1, 1, 1, 1])
     
     with detail_col1:
         st.markdown("<div style='text-align: center;'>", unsafe_allow_html=True)
@@ -156,14 +162,27 @@ def render_file_details_horizontal(filename: str, npz_data: Dict, metadata: Dict
             st.markdown("<span class='status-warning'>⚠ Transformer only</span>", unsafe_allow_html=True)
         st.markdown("</div>", unsafe_allow_html=True)
     
-    with detail_col4:
-        st.markdown("<div style='text-align: center;'>", unsafe_allow_html=True)
-        # Extract and display occlusion status
-        from .utils import extract_occlusion_flag, interpret_occlusion_flag
-        occlusion_flag = extract_occlusion_flag(npz_data)
-        occlusion_status = interpret_occlusion_flag(occlusion_flag)
-        st.metric("Occluded", occlusion_status)
-        st.markdown("</div>", unsafe_allow_html=True)
+    if is_continuous_global:
+        # Continuous: render Segments and Duration in their own equal-width columns
+        with detail_col4:
+            continuous_meta = metadata.get('continuous_metadata', {})
+            st.markdown("<div style='text-align: center;'>", unsafe_allow_html=True)
+            st.metric("Segments", continuous_meta.get('num_segments', 'N/A'))
+            st.markdown("</div>", unsafe_allow_html=True)
+        with detail_col5:
+            continuous_meta = metadata.get('continuous_metadata', {})
+            st.markdown("<div style='text-align: center;'>", unsafe_allow_html=True)
+            st.metric("Duration", f"{continuous_meta.get('total_duration_sec', 0):.1f}s")
+            st.markdown("</div>", unsafe_allow_html=True)
+    else:
+        with detail_col4:
+            st.markdown("<div style='text-align: center;'>", unsafe_allow_html=True)
+            # Extract and display occlusion status
+            from .utils import extract_occlusion_flag, interpret_occlusion_flag
+            occlusion_flag = extract_occlusion_flag(npz_data)
+            occlusion_status = interpret_occlusion_flag(occlusion_flag)
+            st.metric("Occluded", occlusion_status)
+            st.markdown("</div>", unsafe_allow_html=True)
 
 
 def render_consolidated_file_info(filename: str, npz_data: Dict, metadata: Dict, sequence_length: int) -> Tuple[np.ndarray, np.ndarray, Dict]:
@@ -371,13 +390,16 @@ def render_sequence_overview(npz_dict: Dict, sequence_length: int) -> Tuple[np.n
 def render_keypoint_video(sequence: np.ndarray, mask: Optional[np.ndarray] = None, key_suffix: str = "", show_skeleton: bool = True, fps: int = 15) -> None:
     """Generate and display a video with keypoint animation."""
     time_steps, feature_dim = sequence.shape
+    
     # Calculate number of keypoints based on feature dimension
     # Each keypoint has 2 coordinates (x, y)
     num_keypoints = feature_dim // 2
+    
     # Validate that feature_dim is divisible by 2
     if feature_dim % 2 != 0:
         st.error(f"Invalid keypoint feature dimension: {feature_dim}. Expected even number for (x,y) coordinates.")
         return
+    
     keypoints_2d = sequence.reshape(time_steps, num_keypoints, 2)
     
     # Video settings - FPS is now controlled from main controls
@@ -399,7 +421,6 @@ def render_keypoint_video(sequence: np.ndarray, mask: Optional[np.ndarray] = Non
                 filename = key_suffix
         else:
             filename = ""
-        
         if filename and filename in st.session_state.get('original_file_data', {}):
             original_data = st.session_state.original_file_data[filename]
             if original_data.get('type', '').startswith('video/'):
@@ -415,6 +436,7 @@ def render_keypoint_video(sequence: np.ndarray, mask: Optional[np.ndarray] = Non
             # Show standard size options for other backgrounds
             video_size_options = ["512x512", "768x768", "1024x1024"]
         
+        # Add right margin and remove top margin to align with background dropdown
         video_size = st.selectbox("Video Size", video_size_options, key=f"video_size_{key_suffix}")
     
     # Handle original size option
@@ -430,7 +452,7 @@ def render_keypoint_video(sequence: np.ndarray, mask: Optional[np.ndarray] = Non
         pass
     
     # Video control buttons with Download Video right-aligned to dropdown and Generate Video with gap
-    col_empty1, col_empty2, col_empty3, col_empty4, col_empty5, col_gen, col_gap, col_download = st.columns([2, 2, 1, 1, 1, 2, 0.25, 2])
+    col_empty1, col_empty2, col_empty3, col_empty4, col_empty5, col_gap, col_gen, col_download = st.columns([1.5, 1.5, 1.00, 0.75, 0.75, 1, 2.5, 2])
     
     with col_download:
         if st.button("Generate Video", key=f"generate_video_{key_suffix}"):
@@ -534,10 +556,12 @@ def render_animated_keypoints(sequence: np.ndarray, mask: Optional[np.ndarray] =
     
     # Calculate number of keypoints based on feature dimension
     num_keypoints = feature_dim // 2
+    
     # Validate that feature_dim is divisible by 2
     if feature_dim % 2 != 0:
         st.error(f"Invalid keypoint feature dimension: {feature_dim}. Expected even number for (x,y) coordinates.")
         return
+    
     # Reshape keypoints to [T, num_keypoints, 2] for easier handling
     keypoints_2d = sequence.reshape(time_steps, num_keypoints, 2)
     
@@ -598,17 +622,30 @@ def render_animated_keypoints(sequence: np.ndarray, mask: Optional[np.ndarray] =
             (0, 17), (17, 18), (18, 19), (19, 20)
         ],
         "face": [
+            # Face connections based on exact MediaPipe landmark paths
+            # Mouth: 70→67→68→69→74→73→72→71→70 (circular)
+            # Left Eyebrow: 81→82→83→81 (triangular)
+            # Right Eyebrow: 84→85→86→84 (triangular)
+            # Left Eye: 75→76→77→75 (triangular)
+            # Right Eye: 78→79→80→78 (triangular)
+            # Nose: 87→88 (vertical)
+            
             # Mouth connections - circular path: 70→67→68→69→74→73→72→71→70
             (0, 3), (1, 2), (2, 4), (3, 4), (4, 5), (5, 6), (6, 7), (7, 0),
-            # Left Eyebrow connections - triangular
+            
+            # Left Eyebrow connections - triangular: 81→82→83→81
             (8, 9), (9, 10), (10, 8),
-            # Right Eyebrow connections - triangular
+            
+            # Right Eyebrow connections - triangular: 84→85→86→84
             (11, 12), (12, 13), (13, 11),
-            # Left Eye connections - triangular
+            
+            # Left Eye connections - triangular: 75→76→77→75
             (14, 15), (15, 16), (16, 14),
-            # Right Eye connections - triangular
+            
+            # Right Eye connections - triangular: 78→79→80→78
             (17, 18), (18, 19), (19, 17),
-            # Nose connections - vertical
+            
+            # Nose connections - vertical: 87→88
             (20, 21)
         ]
     }
@@ -617,7 +654,7 @@ def render_animated_keypoints(sequence: np.ndarray, mask: Optional[np.ndarray] =
     col1, col2, col3 = st.columns([3, 1, 1])
     
     with col3:
-        use_video = st.checkbox("Generate Video", value=False, help="Create an MP4 video with keypoint animation", key=f"animated_video_{key_suffix}")
+        use_video = st.checkbox("Generate Video", value=False, help="Create an MP4 video with keypoint animation", key=f"use_video_{key_suffix}")
     
     with col1:
         if use_video:
@@ -777,6 +814,7 @@ def render_animated_keypoints(sequence: np.ndarray, mask: Optional[np.ndarray] =
             avg_x = np.mean(current_keypoints[:, 0])
             avg_y = np.mean(current_keypoints[:, 1])
             st.metric("Center", f"({avg_x:.3f}, {avg_y:.3f})")
+    
 
 
 def render_feature_charts(sequence: np.ndarray, mask: Optional[np.ndarray] = None, key_suffix: str = "") -> None:
@@ -1223,7 +1261,6 @@ def create_keypoint_animation_video(keypoints_2d: np.ndarray, mask: Optional[np.
         return None
 
 
-
 def create_video_with_keypoints(uploaded_video_file, keypoints: np.ndarray, 
                                output_filename: str = "video_with_keypoints.mp4") -> str:
     """
@@ -1266,10 +1303,12 @@ def create_video_with_keypoints(uploaded_video_file, keypoints: np.ndarray,
         # Process frames
         # Calculate number of keypoints based on feature dimension
         num_keypoints = keypoints.shape[1] // 2
+        
         # Validate that feature_dim is divisible by 2
         if keypoints.shape[1] % 2 != 0:
             st.error(f"Invalid keypoint feature dimension: {keypoints.shape[1]}. Expected even number for (x,y) coordinates.")
             return
+        
         keypoint_frames = keypoints.reshape(keypoints.shape[0], num_keypoints, 2)
         frame_idx = 0
         
