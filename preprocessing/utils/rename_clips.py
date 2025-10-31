@@ -416,58 +416,65 @@ def main():
         
         print(f"Found {len(files)} video files")
         
-        # Group files by signer and label to renumber within each group
-        # This preserves the grouping and fixes gaps within each group
+        # Group files by directory path to preserve hierarchical structure
+        # This renumbers within each directory while maintaining original order
         grouped_files = {}
         for filepath in files:
-            # Extract current number, label and signer from filename
-            # Pattern handles both with and without leading zeros
+            # Group by parent directory to preserve structure
+            directory_key = str(filepath.parent)
+            
+            if directory_key not in grouped_files:
+                grouped_files[directory_key] = []
+            
+            # Extract current number from filename
             match = re.match(r'^clip_(\d+)_(.+?)_(S\d+)\.[^.]+$', filepath.name)
             if match:
                 current_num = int(match.group(1))  # Parse as int to normalize
-                label = match.group(2)
-                signer = match.group(3)
-                key = (signer, label)  # Group by signer and label
-                
-                if key not in grouped_files:
-                    grouped_files[key] = []
-                grouped_files[key].append((current_num, filepath))
+                grouped_files[directory_key].append((current_num, filepath))
             else:
-                # Fallback: treat as ungrouped
-                key = ("ungrouped", "clip")
-                if key not in grouped_files:
-                    grouped_files[key] = []
-                grouped_files[key].append((-1, filepath))
+                # Fallback: treat as unnumbered
+                grouped_files[directory_key].append((-1, filepath))
         
-        # Build rename operations - renumber within each group
+        # Build rename operations - renumber within each directory
+        # Only renumber files that are after gaps, preserving original starting numbers
         operations = []
         
-        for (signer, label), file_list in sorted(grouped_files.items()):
-            # Sort by current number within this group
+        # Sort directories for consistent processing
+        for directory_key in sorted(grouped_files.keys()):
+            file_list = grouped_files[directory_key]
+            # Sort by current number within this directory
             file_list.sort(key=lambda x: x[0])
             
-            counter = args.start_index
+            if not file_list:
+                continue
+            
+            # Find the actual starting number (minimum number in this directory)
+            actual_start = min(num for num, _ in file_list if num >= 0)
+            counter = actual_start  # Start from the actual first number, not start_index
+            
             for current_num, filepath in file_list:
-                # Extract signer and label from filename if possible
+                # Skip files with invalid numbers (treated separately)
+                if current_num < 0:
+                    continue
+                
+                # Extract label and signer from filename if possible
                 match = re.match(r'^clip_\d+_(.+?)_(S\d+)\.[^.]+$', filepath.name)
                 if match:
                     file_label = match.group(1)
                     file_signer = match.group(2)
                 else:
-                    file_label = label if label != "clip" else "clip"
-                    file_signer = signer if signer != "ungrouped" else "S0"
+                    # Fallback: preserve what we can
+                    file_label = "clip"
+                    file_signer = "S0"
                 
-                # Always format with leading zeros to ensure consistent width
-                new_name = f"clip_{counter:0{args.digits}d}_{file_label}_{file_signer}{filepath.suffix}"
-                dest = filepath.parent / new_name
-                
-                # Add to operations if:
-                # 1. The number needs to change (to fix gaps)
-                # 2. OR the filename doesn't have the correct zero-padding
-                #    (e.g., clip_6786 should become clip_06786)
-                expected_name = f"clip_{current_num:0{args.digits}d}_{file_label}_{file_signer}{filepath.suffix}"
-                if current_num != counter or filepath.name != expected_name:
-                    operations.append((filepath, dest))
+                # Only renumber if there's a gap (current_num doesn't match expected sequential counter)
+                if current_num != counter:
+                    # This file needs to be renumbered to fill the gap
+                    new_name = f"clip_{counter:0{args.digits}d}_{file_label}_{file_signer}{filepath.suffix}"
+                    dest = filepath.parent / new_name
+                    # Only add if the destination path is different (same check as rename_npz.py)
+                    if dest != filepath:
+                        operations.append((filepath, dest))
                 
                 counter += 1
         
