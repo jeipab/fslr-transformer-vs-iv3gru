@@ -40,6 +40,13 @@ Usage:
     python preprocessing/continuous/create_continuous_signs.py \
         --val-dir data/raw/continuous_sequences \
         --strategy 1 --dry-run
+
+    # Specify a single signer only (e.g., S1) with CSV/NPZ mode
+    python preprocessing/continuous/create_continuous_signs.py \
+        --val-csv data/processed/fsl_val.csv \
+        --val-dir data/processed/fsl_val \
+        --output-dir data/processed/continuous_sequences \
+        --strategy 1 --signer S1 --sequences-per-signer 5 --min-glosses 3 --max-glosses 6
 """
 
 import argparse
@@ -992,6 +999,13 @@ Examples:
   python preprocessing/continuous/create_continuous_signs.py \\
       --val-dir data/raw/continuous_sequences \\
       --strategy 1 --dry-run
+  
+  # Single signer only
+  python preprocessing/continuous/create_continuous_signs.py \\
+      --val-csv data/processed/fsl_val.csv \\
+      --val-dir data/processed/fsl_val \\
+      --output-dir data/processed/continuous_sequences \\
+      --strategy 1 --signer S1
         """
     )
     
@@ -1011,6 +1025,8 @@ Examples:
                        help='Maximum glosses per sequence (default: 6)')
     parser.add_argument('--seed', type=int, default=42,
                        help='Random seed for reproducibility (default: 42)')
+    parser.add_argument('--signer', type=str, required=False,
+                       help='Only process this signer (e.g., S1)')
     parser.add_argument('--dry-run', action='store_true',
                        help='Preview what would be generated without creating files')
     
@@ -1054,6 +1070,14 @@ Examples:
     except Exception as e:
         print(f"\n[ERROR] Failed to load validation data: {e}")
         return 1
+    
+    # Optional: filter to a specific signer
+    if getattr(args, 'signer', None):
+        df = df[df['signer'] == args.signer]
+        if df.empty:
+            print(f"[ERROR] No samples found for signer {args.signer}")
+            return 1
+        print(f"   ✓ Filtered to signer {args.signer}: {len(df)} samples")
     
     # Group by signer
     print(f"\n📋 Grouping by signer...")
