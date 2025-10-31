@@ -107,10 +107,11 @@ cd processed
 pip install gdown
 ```
 
-**Download the preprocessed FSL-105 clips and labesl:**
+**Download the preprocessed FSL-105 clips:**
 
 ```bash
 gdown 1V-fVnDdJvrzS-3JBtt6ESqDVRng3g06t
+gdown <continuous preprocessed data>
 ```
 
 **Unzip zip file:**
@@ -127,7 +128,7 @@ rm -f *.zip
 
 ---
 
-## 5. Split Data (To update, only split signers 0-4)
+## 5. Split Data
 
 **Return to project root:**
 
@@ -160,14 +161,6 @@ if os.path.exists(labels_file):
     df = df[~df['file'].str.contains('clip_06785_daughter_S6', na=False)]
     df.to_csv(labels_file, index=False)
     print(f"Removed rows from {labels_file}")
-
-# Remove from split CSVs (if they already exist)
-for filename in ['data/processed/FSL105_train.csv', 'data/processed/FSL105_val.csv']:
-    if os.path.exists(filename):
-        df = pd.read_csv(filename)
-        df = df[~df['file'].str.contains('clip_06785_daughter_S6', na=False)]
-        df.to_csv(filename, index=False)
-        print(f"Removed rows from {filename}")
 EOF
 ```
 
@@ -185,6 +178,21 @@ python data/splitting/data_split.py \
     --val-dir FSL105_val \
     --train-csv FSL105_train.csv \
     --val-csv FSL105_val.csv
+```
+
+Only split signers S0–S3:
+
+```bash
+python data/splitting/data_split.py \
+    --processed-root data/processed/FSL-105 \
+    --labels data/processed/labels.csv \
+    --out-root data/processed \
+    --train-ratio 0.8 \
+    --train-dir FSL105_train \
+    --val-dir FSL105_val \
+    --train-csv FSL105_train.csv \
+    --val-csv FSL105_val.csv \
+    --signer-range S0-S3
 ```
 
 ---

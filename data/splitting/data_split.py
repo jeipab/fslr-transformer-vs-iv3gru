@@ -40,6 +40,7 @@ import sys
 import csv
 import random
 import hashlib
+import re
 import pandas as pd
 import numpy as np
 from sklearn.model_selection import StratifiedShuffleSplit
@@ -110,6 +111,16 @@ def _stable_h8(path: Path) -> str:
     """Generate stable 8-character hash from file path."""
     return hashlib.md5(str(path).encode("utf-8")).hexdigest()[:8]
 
+def _expand_signer_range(range_str: str):
+    """Expand a signer range like 'S0-S3' into ['S0','S1','S2','S3']."""
+    m = re.fullmatch(r"S([0-7])\-S([0-7])", str(range_str).strip())
+    if not m:
+        raise ValueError("signer-range must be in format 'Sx-Sy' with 0<=x,y<=7")
+    a = int(m.group(1))
+    b = int(m.group(2))
+    lo, hi = (a, b) if a <= b else (b, a)
+    return [f"S{i}" for i in range(lo, hi + 1)]
+
 def _move_or_copy_unique(src_npz: Path, dst_dir: Path, do_copy: bool) -> str:
     """Copy .npz file to destination directory with collision handling.
     
@@ -169,6 +180,10 @@ def main():
     ap.add_argument("--signer-split-mode", type=str, default="mixed", choices=["mixed", "independent"],
                    help="Signer splitting mode: 'mixed' (default, signers in both train/val) or "
                         "'independent' (each signer in train OR val only for generalization testing)")
+    ap.add_argument("--signers", nargs="+", default=None,
+                    help="Restrict to specific signer IDs (e.g., S0 S1 S2 S3). Applied before splitting.")
+    ap.add_argument("--signer-range", type=str, default=None,
+                    help="Restrict to a contiguous signer range (e.g., 'S0-S3'). Applied before splitting.")
     args = ap.parse_args()
 
     # Handle single or multiple input directories
@@ -226,6 +241,29 @@ def main():
     
     print(f"✓ Validation passed: {len(df)} samples with valid signer and duration")
     
+    # Optional: restrict to specific signers
+    allowed_signers = set()
+    if args.signers:
+        keep = [str(s).strip().upper() for s in args.signers]
+        invalid = [s for s in keep if not re.fullmatch(r"S[0-7]", s)]
+        if invalid:
+            print(f"ERROR: Invalid signer IDs in --signers: {invalid} (must be S0-S7)", file=sys.stderr)
+            return 2
+        allowed_signers.update(keep)
+    if args.signer_range:
+        try:
+            allowed_signers.update(_expand_signer_range(args.signer_range))
+        except ValueError as e:
+            print(f"ERROR: {e}", file=sys.stderr)
+            return 2
+    if allowed_signers:
+        before = len(df)
+        df = df[df['signer'].isin(sorted(allowed_signers))].reset_index(drop=True)
+        print(f"Using subset of signers: {sorted(allowed_signers)} (kept {len(df)}/{before} samples)")
+        if df.empty:
+            print("ERROR: No samples left after filtering by signers", file=sys.stderr)
+            return 2
+
     # Load label reference for mapping gloss/cat names to IDs (if provided)
     gloss_name_to_id, cat_name_to_id = {}, {}
     if args.label_ref is not None:
