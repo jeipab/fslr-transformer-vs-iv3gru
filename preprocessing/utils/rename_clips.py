@@ -421,9 +421,10 @@ def main():
         grouped_files = {}
         for filepath in files:
             # Extract current number, label and signer from filename
+            # Pattern handles both with and without leading zeros
             match = re.match(r'^clip_(\d+)_(.+?)_(S\d+)\.[^.]+$', filepath.name)
             if match:
-                current_num = int(match.group(1))
+                current_num = int(match.group(1))  # Parse as int to normalize
                 label = match.group(2)
                 signer = match.group(3)
                 key = (signer, label)  # Group by signer and label
@@ -456,11 +457,16 @@ def main():
                     file_label = label if label != "clip" else "clip"
                     file_signer = signer if signer != "ungrouped" else "S0"
                 
+                # Always format with leading zeros to ensure consistent width
                 new_name = f"clip_{counter:0{args.digits}d}_{file_label}_{file_signer}{filepath.suffix}"
                 dest = filepath.parent / new_name
                 
-                # Only add to operations if number needs to change
-                if current_num != counter or filepath.name != new_name:
+                # Add to operations if:
+                # 1. The number needs to change (to fix gaps)
+                # 2. OR the filename doesn't have the correct zero-padding
+                #    (e.g., clip_6786 should become clip_06786)
+                expected_name = f"clip_{current_num:0{args.digits}d}_{file_label}_{file_signer}{filepath.suffix}"
+                if current_num != counter or filepath.name != expected_name:
                     operations.append((filepath, dest))
                 
                 counter += 1
