@@ -293,9 +293,7 @@ def export_model_for_android(
 
     # Generate verification report
     try:
-        report_dir = Path('docs') / 'export'
-        report_dir.mkdir(parents=True, exist_ok=True)
-        report_path = report_dir / 'pytorch_mobile_export_report.md'
+        report_path = out_dir / 'pytorch_mobile_export_report.md'
         with report_path.open('w', encoding='utf-8') as f:
             f.write('# PyTorch Mobile Export Verification Report\n\n')
             f.write('## 1. Model Export Summary\n')
