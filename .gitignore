@@ -32,7 +32,6 @@ data/*
 
 # Allow core scripts or initialization files
 !data/__init__.py
-!data/resize_360p.py
 
 # ------------------------------
 # Allow specific subdirectories
@@ -49,30 +48,6 @@ data/*
 !data/splitting/
 !data/splitting/**
 
-# Color correction utilities
-!data/color_correction/
-!data/color_correction/**
-
-# ------------------------------
-# Selective un-ignore for processed/raw data
-# ------------------------------
-
-# Processed data: only track "pro_continuous_sequences"
-!data/processed/
-data/processed/*
-!data/processed/pro_continuous_sequences/
-!data/processed/pro_continuous_sequences/**
-!data/processed/pro_isolated/
-!data/processed/pro_isolated/**
-
-# Raw data: only track "raw_continuous_sequences"
-!data/raw/
-data/raw/*
-!data/raw/raw_continuous_sequences/
-!data/raw/raw_continuous_sequences/**
-!data/raw/raw_isolated/
-!data/raw/raw_isolated/**
-
 # ------------------------------
 # Exclude caches inside allowed data dirs
 # ------------------------------
@@ -86,6 +61,8 @@ data/splitting/**/*.pyc
 # ------------------------------
 !data/labels_reference.csv
 !data/processed/labels.csv
+!data/processed/FSL105_train.csv
+!data/processed/FSL105_val.csv
 
 # ======================================================
 # 📓 Notebooks & Tools
