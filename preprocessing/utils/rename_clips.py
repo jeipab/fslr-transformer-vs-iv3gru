@@ -472,7 +472,9 @@ def main():
                     # This file needs to be renumbered to fill the gap
                     new_name = f"clip_{counter:0{args.digits}d}_{file_label}_{file_signer}{filepath.suffix}"
                     dest = filepath.parent / new_name
-                    operations.append((filepath, dest))
+                    # Only add if the destination path is different (same check as rename_npz.py)
+                    if dest != filepath:
+                        operations.append((filepath, dest))
                 
                 counter += 1
         
