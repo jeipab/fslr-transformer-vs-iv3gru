@@ -59,6 +59,26 @@ def slugify_label(s: str) -> str:
     s = re.sub(r'_+', '_', s).strip('_')
     return s or 'uncategorized'
 
+def find_labels_file(root: Path, explicit_path: Path = None) -> Path:
+    """Finds labels_reference.csv in common locations."""
+    # If explicit path is provided, use it
+    if explicit_path and explicit_path.exists():
+        return explicit_path
+    
+    # Check common locations
+    possible_locations = [
+        root / "labels_reference.csv",
+        root / "data" / "labels_reference.csv",
+        root / "data" / "raw" / "labels_reference.csv",
+    ]
+    
+    for path in possible_locations:
+        if path.exists():
+            return path
+    
+    # If not found, return the first default location for error message
+    return explicit_path if explicit_path else (root / "data" / "labels_reference.csv")
+
 def read_labels(labels_csv: Path) -> Dict[int, Tuple[str, int]]:
     """Reads the labels_reference.csv file and returns a mapping from gloss_id to (label, cat_id)."""
     print(f"🔍 Looking for labels_reference.csv at: {labels_csv}")
@@ -247,7 +267,9 @@ def main():
     root = args.root.resolve()
 
     clips_dir = args.clips.resolve() if args.clips else (root / "data/raw/clips").resolve()
-    labels_csv = args.labels.resolve() if args.labels else (root / "data/labels_reference.csv").resolve()
+    # Use find_labels_file to search multiple locations
+    explicit_labels_path = args.labels.resolve() if args.labels is not None else None
+    labels_csv = find_labels_file(root, explicit_labels_path)
     out_dir = args.out.resolve() if args.out else (root / "data/raw").resolve()
     
     print(f"📂 Root directory: {root}")
