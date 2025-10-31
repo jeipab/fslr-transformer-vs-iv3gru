@@ -1331,7 +1331,7 @@ def render_predictions_section(cfg: Dict, npz_data: Dict = None, filename: str =
     if npz_data is not None:
         from ..manager.prediction_manager import make_real_prediction, get_model_manager
         
-        model_name = 'transformer' if cfg['model_choice'] == 'transformer' else 'iv3_gru'
+        model_name = cfg['model_choice']
         
         with st.spinner("Making prediction..."):
             prediction_results = make_real_prediction(npz_data, model_name)

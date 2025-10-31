@@ -1153,7 +1153,7 @@ def render_batch_summary_tab(cfg: Dict):
         source_type = metadata.get('source_type', 'original')
         
         # Generate real predictions for this file
-        model_name = 'transformer' if cfg['model_choice'] == 'transformer' else 'iv3_gru'
+        model_name = cfg['model_choice']
         npz_data = st.session_state.processed_data[filename]
         prediction_results = make_real_prediction(npz_data, model_name)
         

@@ -40,7 +40,6 @@ logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(levelname)s - %(message)s',
     handlers=[
-        logging.FileHandler('video_resize.log'),
         logging.StreamHandler(sys.stdout)
     ]
 )
