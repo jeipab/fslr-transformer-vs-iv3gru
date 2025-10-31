@@ -3,40 +3,46 @@ TRAINING COMMANDS - FULL DATASET (FSL-105)
 ===============================================================================
 
 -------------------------------------------------------------------------------
-Step 1: Train Transformer CTC (Continuous Recognition + Required Category Learning - Keypoints Only, Export Mobile)
+Step 1: Train Transformer CTC (Continuous Recognition + Required Category Learning - Keypoints Only)
 -------------------------------------------------------------------------------
 python -m training.train \
+  --model transformer_ctc \
+  --training-mode ctc \
+  --epochs 400 \
+  --batch-size 32 \
+  --lr 0.001 \
+  --num-gloss 105 \
+  --num-cat 10 \
+  --alpha 0.8 \
+  --beta 0.2 \
+  --num-ctc-classes 106 \
+  --ctc-blank-id 105 \
+  --keypoints-train data/processed/FSL105_train \
+  --keypoints-val data/processed/FSL105_val \
+  --labels-train-csv data/processed/FSL105_train.csv \
+  --labels-val-csv data/processed/FSL105_val.csv \
+  --kp-key X \
+  --amp \
+  --augment \
+  --augment-noise-std 0.006 \
+  --augment-mask-prob 0.10 \
+  --augment-mask-ratio 0.10 \
+  --scheduler warmup_cosine \
+  --warmup-epochs 50 \
+  --early-stop 50 \
+  --weight-decay 0.001 \
+  --dropout 0.2 \
+  --label-smoothing 0.1 \
+  --output-dir trained_models/transformer/FSL105_ctc \
+  --grad-clip 1.0
+
+Export Transformer CTC (run after training)
+-------------------------------------------------------------------------------
+python -m training.export_mobile \
     --model transformer_ctc \
-    --training-mode ctc \
-    --epochs 400 \
-    --batch-size 32 \
-    --lr 0.001 \ 
-    --num-gloss 105 \
+    --resume-path trained_models/transformer/FSL105_ctc/SignTransformerCtc_best.pt \
+    --output-dir android_artifacts/transformer_FSL105_ctc \
     --num-cat 10 \
-    --alpha 0.8 \
-    --beta 0.2 \
-    --num-ctc-classes 106 \
-    --ctc-blank-id 105 \
-    --keypoints-train data/processed/FSL105_train \
-    --keypoints-val data/processed/FSL105_val \
-    --labels-train-csv data/processed/FSL105_train.csv \
-    --labels-val-csv data/processed/FSL105_val.csv \
-    --kp-key X \
-    --amp \
-    --augment \
-    --augment-noise-std 0.006 \ 
-    --augment-mask-prob 0.10 \
-    --augment-mask-ratio 0.10 \
-    --scheduler warmup_cosine \
-    --warmup-epochs 50 \ 
-    --early-stop 50 \ 
-    --weight-decay 0.001 \ 
-    --dropout 0.2 \
-    --label-smoothing 0.1 \
-    --output-dir trained_models/transformer/FSL105_ctc \
-    --grad-clip 1.0 \
-    --export-mobile \
-    --export-output android_artifacts/transformer_FSL105_ctc \
     --window-hint 120 \
     --stride-hint 40
 
@@ -102,13 +108,13 @@ python -m training.train \
     --warmup-epochs 50 \
     --early-stop 50 \
     --weight-decay 0.001 \
-    --dropout 0.3 \  
+    --dropout 0.3 \
     --label-smoothing 0.1 \
     --output-dir trained_models/mediapipe_gru/FSL105_classification
 
 ===============================================================================
 
-Step 4: Train MediaPipe-GRU CTC (Lightweight Continuous Recognition + Required Category Learning - Keypoints Only, Export Mobile)
+Step 4: Train MediaPipe-GRU CTC (Lightweight Continuous Recognition + Required Category Learning - Keypoints Only)
 -------------------------------------------------------------------------------
 python -m training.train \
     --model mediapipe_gru_ctc \
@@ -127,12 +133,12 @@ python -m training.train \
     --labels-train-csv data/processed/FSL105_train.csv \
     --labels-val-csv data/processed/FSL105_val.csv \
     --kp-key X \
-    --hidden1 640 \ 
+    --hidden1 640 \
     --hidden2 640 \
     --dropout 0.3 \
     --amp \
     --augment \
-    --augment-noise-std 0.002 \ 
+    --augment-noise-std 0.002 \
     --augment-mask-prob 0.04 \
     --augment-mask-ratio 0.04 \
     --scheduler warmup_cosine \
@@ -140,9 +146,15 @@ python -m training.train \
     --early-stop 60 \
     --weight-decay 0.001 \
     --grad-clip 1.0 \
-    --output-dir trained_models/mediapipe_gru/FSL105_ctc \
-    --export-mobile \
-    --export-output android_artifacts/mediapipe_FSL105_ctc \
+    --output-dir trained_models/mediapipe_gru/FSL105_ctc
+
+Export MediaPipe-GRU CTC (run after training)
+-------------------------------------------------------------------------------
+python -m training.export_mobile \
+    --model mediapipe_gru_ctc \
+    --resume-path trained_models/mediapipe_gru/FSL105_ctc/MediaPipeGRUCtc_best.pt \
+    --output-dir android_artifacts/mediapipe_FSL105_ctc \
+    --num-cat 10 \
     --window-hint 120 \
     --stride-hint 40
 
