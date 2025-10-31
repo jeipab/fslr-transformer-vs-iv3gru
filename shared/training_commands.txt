@@ -1,99 +1,9 @@
 ===============================================================================
-FSLR PREPROCESSING PIPELINE - FULL DATASET (FSL-105)
+TRAINING COMMANDS - FULL DATASET (FSL-105)
 ===============================================================================
 
-Step 1: Setup Repository and Download Dataset
 -------------------------------------------------------------------------------
-git clone https://github.com/jeipab/fslr-transformer-vs-iv3gru.git
-
-gdown 1V-fVnDdJvrzS-3JBtt6ESqDVRng3g06t
-
-Output:
-  - Repository cloned to local directory
-  - Dataset downloaded and extracted to data/raw/FSL-105/
-
-
-Step 2: Preprocessing (Extract Keypoints + IV3 Features)
--------------------------------------------------------------------------------
-python -m preprocessing.core.preprocess \
-    data/raw/FSL-105 \
-    data/processed \
-    --write-keypoints \
-    --write-iv3-features \
-    --workers 4 \
-    --disable-parquet \
-    --occ-detailed \
-    --batch-size 64
-
-Output: 
-  - data/processed/FSL-105/*.npz
-
-
-Step 3: Labels Generation (Create labels.csv from NPZ metadata)
--------------------------------------------------------------------------------
-python data/splitting/assign.py \
-    --directory data/processed/FSL-105 \
-    --reference data/labels_reference.csv
-
-Output: 
-  - data/processed/FSL-105/labels.csv
-
-
-Step 4: Data Splitting (80/20 Train/Val Split per Signer)
--------------------------------------------------------------------------------
-
-4a. Clean Erroneous Data (delete problematic files before splitting)
-python3 << 'EOF'
-import pandas as pd
-import os
-from pathlib import Path
-
-# Find and delete the npz file
-file_pattern = 'clip_06785_daughter_S6.npz'
-for npz_file in Path('data/processed/FSL-105').rglob(file_pattern):
-    npz_file.unlink()
-    print(f"Deleted: {npz_file}")
-
-# Remove from labels.csv
-labels_file = 'data/processed/FSL-105/labels.csv'
-if os.path.exists(labels_file):
-    df = pd.read_csv(labels_file)
-    df = df[~df['file'].str.contains('clip_06785_daughter_S6', na=False)]
-    df.to_csv(labels_file, index=False)
-    print(f"Removed rows from {labels_file}")
-
-# Remove from split CSVs (if they already exist)
-for filename in ['data/processed/FSL105_train.csv', 'data/processed/FSL105_val.csv']:
-    if os.path.exists(filename):
-        df = pd.read_csv(filename)
-        df = df[~df['file'].str.contains('clip_06785_daughter_S6', na=False)]
-        df.to_csv(filename, index=False)
-        print(f"Removed rows from {filename}")
-EOF
-
-4b. Perform Data Split (80/20 Train/Val Split per Signer)
-python data/splitting/data_split.py \
-    --processed-root data/processed/FSL-105 \
-    --labels data/processed/FSL-105/labels.csv \
-    --out-root data/processed \
-    --train-ratio 0.8 \
-    --train-dir FSL105_train \
-    --val-dir FSL105_val \
-    --train-csv FSL105_train.csv \
-    --val-csv FSL105_val.csv
-
-4c. Clean Up (remove original FSL-105 directory)
-rm -rf data/processed/FSL-105
-
-Output: 
-  - data/processed/FSL105_train/
-  - data/processed/FSL105_val/
-  - data/processed/FSL105_train.csv
-  - data/processed/FSL105_val.csv
-
-===============================================================================
-
-Step 5: Train Transformer CTC (Continuous Recognition + Required Category Learning - Keypoints Only, Export Mobile)
+Step 1: Train Transformer CTC (Continuous Recognition + Required Category Learning - Keypoints Only, Export Mobile)
 -------------------------------------------------------------------------------
 python -m training.train \
     --model transformer_ctc \
@@ -142,7 +52,7 @@ Android Artifacts:
 
 ===============================================================================
 
-Step 6: Train Transformer Classification (Isolated Recognition - Keypoints Only)
+Step 2: Train Transformer Classification (Isolated Recognition - Keypoints Only)
 -------------------------------------------------------------------------------
 python -m training.train \
     --model transformer \
@@ -179,7 +89,7 @@ Output: trained_models/transformer/FSL105_classification/
 
 ===============================================================================
 
-Step 7: Train MediaPipe-GRU Classification (Lightweight Isolated Recognition - Keypoints Only)
+Step 3: Train MediaPipe-GRU Classification (Lightweight Isolated Recognition - Keypoints Only)
 -------------------------------------------------------------------------------
 python -m training.train \
     --model mediapipe_gru \
@@ -218,7 +128,7 @@ Output: trained_models/mediapipe_gru/FSL105_classification/
 
 ===============================================================================
 
-Step 8: Train MediaPipe-GRU CTC (Lightweight Continuous Recognition + Required Category Learning - Keypoints Only, Export Mobile)
+Step 4: Train MediaPipe-GRU CTC (Lightweight Continuous Recognition + Required Category Learning - Keypoints Only, Export Mobile)
 -------------------------------------------------------------------------------
 python -m training.train \
     --model mediapipe_gru_ctc \
@@ -228,8 +138,8 @@ python -m training.train \
     --lr 0.0001 \
     --num-gloss 105 \
     --num-cat 10 \
-    --alpha 0.7 \
-    --beta 0.3 \
+    --alpha 0.8 \
+    --beta 0.2 \
     --num-ctc-classes 106 \
     --ctc-blank-id 105 \
     --keypoints-train data/processed/FSL105_train \
@@ -268,7 +178,7 @@ Android Artifacts:
 
 ===============================================================================
 
-Step 9: Train IV3-GRU Classification (Offline Baseline - Features Only)
+Step 5: Train IV3-GRU Classification (Offline Baseline - Features Only)
 -------------------------------------------------------------------------------
 python -m training.train \
     --model iv3_gru \
@@ -308,7 +218,7 @@ Output: trained_models/iv3_gru/FSL105_classification/
 
 ===============================================================================
 
-Step 10: Train IV3-GRU CTC (Offline Baseline Continuous Recognition + Required Category Learning - Features Only)
+Step 6: Train IV3-GRU CTC (Offline Baseline Continuous Recognition + Required Category Learning - Features Only)
 -------------------------------------------------------------------------------
 python -m training.train \
     --model iv3_gru_ctc \
@@ -385,12 +295,12 @@ Optimal Hyperparameters (from optimal training logs):
   - All models: batch_size=16, AMP enabled, label smoothing=0.1
 
 Model Training Summary:
-  Step 5: Transformer CTC (continuous, keypoints, dual-head)
-  Step 6: Transformer Classification (isolated, keypoints, dual-head)
-  Step 7: MediaPipe-GRU Classification (isolated, keypoints, lightweight, dual-head)
-  Step 8: MediaPipe-GRU CTC (continuous, keypoints, lightweight, dual-head)
-  Step 9: IV3-GRU Classification (isolated, features, offline baseline, dual-head)
-  Step 10: IV3-GRU CTC (continuous, features, offline baseline, dual-head)
+  Step 1: Transformer CTC (continuous, keypoints, dual-head)
+  Step 2: Transformer Classification (isolated, keypoints, dual-head)
+  Step 3: MediaPipe-GRU Classification (isolated, keypoints, lightweight, dual-head)
+  Step 4: MediaPipe-GRU CTC (continuous, keypoints, lightweight, dual-head)
+  Step 5: IV3-GRU Classification (isolated, features, offline baseline, dual-head)
+  Step 6: IV3-GRU CTC (continuous, features, offline baseline, dual-head)
 
 Architecture Notes:
   - "dual-head" = Multi-task learning with both gloss and category outputs

@@ -91,7 +91,7 @@ pip install -r requirements.txt
 
 ---
 
-## 4. Upload and Prepare Data
+## 4. Upload and Prepare Data (On another terminal)
 
 **Navigate to the processed data directory:**
 
@@ -132,7 +132,7 @@ rm -f *.zip
 **Return to project root:**
 
 ```bash
-cd ../../../
+cd ../../
 ```
 
 **For fsl-105 data split:**
@@ -178,7 +178,7 @@ Run the data splitting script:
 ```bash
 python data/splitting/data_split.py \
     --processed-root data/processed/FSL-105 \
-    --labels data/processed/FSL-105/labels.csv \
+    --labels data/processed/labels.csv \
     --out-root data/processed \
     --train-ratio 0.8 \
     --train-dir FSL105_train \
@@ -196,7 +196,7 @@ After data splitting is complete, navigate back to the processed folder and remo
 **Remove source folders:**
 
 ```bash
-rm -rf data/processedFSL-105
+rm -rf data/processed/FSL-105
 ```
 
 ---
