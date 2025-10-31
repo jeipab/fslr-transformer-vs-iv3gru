@@ -1,7 +1,7 @@
 ===============================================================================
 TRAINING COMMANDS - FULL DATASET (FSL-105)
 ===============================================================================
-
+// Done
 -------------------------------------------------------------------------------
 Step 1: Train Transformer CTC (Continuous Recognition + Required Category Learning - Keypoints Only, Export Mobile)
 -------------------------------------------------------------------------------
@@ -40,18 +40,8 @@ python -m training.train \
     --window-hint 120 \
     --stride-hint 40
 
-Output: trained_models/transformer/FSL105_ctc/
-  - best_model.pth
-  - training_*.log
-  - training_*_metrics.csv
-
-Android Artifacts:
-  - android_artifacts/transformer_FSL105_ctc/SignTransformerCtc_best.pt
-  - android_artifacts/transformer_FSL105_ctc/SignTransformerCtc_best.model.json
-  - android_artifacts/transformer_FSL105_ctc/label_mapping.json
-
 ===============================================================================
-
+// Done
 Step 2: Train Transformer Classification (Isolated Recognition - Keypoints Only)
 -------------------------------------------------------------------------------
 python -m training.train \
@@ -82,13 +72,8 @@ python -m training.train \
     --label-smoothing 0.1 \
     --output-dir trained_models/transformer/FSL105_classification
 
-Output: trained_models/transformer/FSL105_classification/
-  - best_model.pth
-  - training_*.log
-  - training_*_metrics.csv
-
 ===============================================================================
-
+// Done
 Step 3: Train MediaPipe-GRU Classification (Lightweight Isolated Recognition - Keypoints Only)
 -------------------------------------------------------------------------------
 python -m training.train \
@@ -121,13 +106,8 @@ python -m training.train \
     --label-smoothing 0.1 \
     --output-dir trained_models/mediapipe_gru/FSL105_classification
 
-Output: trained_models/mediapipe_gru/FSL105_classification/
-  - best_model.pth
-  - training_*.log
-  - training_*_metrics.csv
-
 ===============================================================================
-
+// Done
 Step 4: Train MediaPipe-GRU CTC (Lightweight Continuous Recognition + Required Category Learning - Keypoints Only, Export Mobile)
 -------------------------------------------------------------------------------
 python -m training.train \
@@ -166,18 +146,8 @@ python -m training.train \
     --window-hint 120 \
     --stride-hint 40
 
-Output: trained_models/mediapipe_gru/FSL105_ctc/
-  - best_model.pth
-  - training_*.log
-  - training_*_metrics.csv
-
-Android Artifacts:
-  - android_artifacts/mediapipe_FSL105_ctc/MediaPipeGRUCtc_best.pt
-  - android_artifacts/mediapipe_FSL105_ctc/MediaPipeGRUCtc_best.model.json
-  - android_artifacts/mediapipe_FSL105_ctc/label_mapping.json
-
 ===============================================================================
-
+// Training time is too long.
 Step 5: Train IV3-GRU Classification (Offline Baseline - Features Only)
 -------------------------------------------------------------------------------
 python -m training.train \
@@ -211,13 +181,8 @@ python -m training.train \
     --label-smoothing 0.1 \
     --output-dir trained_models/iv3_gru/FSL105_classification
 
-Output: trained_models/iv3_gru/FSL105_classification/
-  - best_model.pth
-  - training_*.log
-  - training_*_metrics.csv
-
 ===============================================================================
-
+// Training time is too long.
 Step 6: Train IV3-GRU CTC (Offline Baseline Continuous Recognition + Required Category Learning - Features Only)
 -------------------------------------------------------------------------------
 python -m training.train \
@@ -252,70 +217,3 @@ python -m training.train \
     --weight-decay 3e-5 \
     --label-smoothing 0.1 \
     --output-dir trained_models/iv3_gru/FSL105_ctc
-
-Output: trained_models/iv3_gru/FSL105_ctc/
-  - best_model.pth
-  - training_*.log
-  - training_*_metrics.csv
-
-===============================================================================
-
-NOTES ON MODEL TRAINING
-===============================================================================
-
-Dataset Configuration (FSL-105 Full):
-  - Gloss classes: 105
-  - Category classes: 10
-  - Multi-task learning: alpha=0.8 (gloss), beta=0.2 (category)
-
-Model Types and Data Pipelines:
-  
-  1. KEYPOINT-BASED MODELS (use --kp-key X):
-     - transformer (classification & CTC)
-     - mediapipe_gru (classification & CTC)
-     - Input: [T, 178] keypoint sequences
-     - Augmentation: noise_std=0.004, mask_prob=0.07
-  
-  2. FEATURE-BASED MODELS (use --feature-key X2048):
-     - iv3_gru (classification & CTC)
-     - Input: [T, 2048] InceptionV3 features
-     - Augmentation: noise_std=0.0015, mask_prob=0.04
-
-Training Modes:
-  - Classification: Isolated sign recognition (multi-task: gloss + category)
-  - CTC: Continuous sign recognition (dual-head: CTC for gloss sequences + per-frame categories)
-    * CTC head (alpha=0.8): Per-frame gloss predictions [B, T, num_ctc_classes]
-    * Category head (beta=0.2): Per-frame category predictions [B, T, num_cat]
-    * Example: Sequence "GOOD MORNING EGG" → glosses [good morning, egg] + categories [greetings, food]
-    * Both heads are REQUIRED for multi-task learning in this project
-
-Optimal Hyperparameters (from optimal training logs):
-  - Transformer models: lr=0.0001, dropout=0.20, warmup_cosine scheduler
-  - IV3-GRU models: lr=0.0003, dropout=0.22, plateau scheduler
-  - All models: batch_size=16, AMP enabled, label smoothing=0.1
-
-Model Training Summary:
-  Step 1: Transformer CTC (continuous, keypoints, dual-head)
-  Step 2: Transformer Classification (isolated, keypoints, dual-head)
-  Step 3: MediaPipe-GRU Classification (isolated, keypoints, lightweight, dual-head)
-  Step 4: MediaPipe-GRU CTC (continuous, keypoints, lightweight, dual-head)
-  Step 5: IV3-GRU Classification (isolated, features, offline baseline, dual-head)
-  Step 6: IV3-GRU CTC (continuous, features, offline baseline, dual-head)
-
-Architecture Notes:
-  - "dual-head" = Multi-task learning with both gloss and category outputs
-  - CTC models: Per-frame predictions for both glosses and categories
-    * CTC head outputs [B, T, num_ctc_classes] for continuous gloss sequences
-    * Category head outputs [B, T, num_cat] for per-frame category classification
-    * Each frame in sequence gets both gloss and category predictions
-  - Classification models: Whole-sequence predictions
-    * Gloss head outputs [B, num_gloss]
-    * Category head outputs [B, num_cat]
-  - All models require --num-cat and --beta > 0 for category learning
-
-Future Expansion:
-  - When adding more categories, update --num-cat parameter
-  - For larger datasets, adjust --batch-size and --early-stop
-  - CTC models are designed for continuous sign language recognition
-
-
