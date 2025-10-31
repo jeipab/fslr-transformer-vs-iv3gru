@@ -2465,8 +2465,8 @@ def train_ctc(
     compile_model=False,
     use_ema=False,
     ema_decay=0.999,
-    alpha=1.0,
-    beta=0.0,
+    alpha=0.7,
+    beta=0.3,
 ):
     """
     Train a CTC model for continuous sign language recognition with optional category learning.
