@@ -79,6 +79,27 @@ def find_labels_file(root: Path, explicit_path: Path = None) -> Path:
     # If not found, return the first default location for error message
     return explicit_path if explicit_path else (root / "data" / "labels_reference.csv")
 
+def find_clips_directory(root: Path, explicit_path: Path = None) -> Path:
+    """Finds clips directory in common locations."""
+    # If explicit path is provided, use it
+    if explicit_path and explicit_path.exists():
+        return explicit_path
+    
+    # Check common locations
+    possible_locations = [
+        root / "FSL-105",
+        root / "clips",
+        root / "data" / "raw" / "clips",
+        root / "data" / "clips",
+    ]
+    
+    for path in possible_locations:
+        if path.exists() and path.is_dir():
+            return path
+    
+    # If not found, return the first default location for error message
+    return explicit_path if explicit_path else (root / "data" / "raw" / "clips")
+
 def read_labels(labels_csv: Path) -> Dict[int, Tuple[str, int]]:
     """Reads the labels_reference.csv file and returns a mapping from gloss_id to (label, cat_id)."""
     print(f"🔍 Looking for labels_reference.csv at: {labels_csv}")
@@ -266,11 +287,16 @@ def main():
 
     root = args.root.resolve()
 
-    clips_dir = args.clips.resolve() if args.clips else (root / "data/raw/clips").resolve()
+    # Use find_clips_directory to search multiple locations
+    explicit_clips_path = args.clips.resolve() if args.clips is not None else None
+    clips_dir = find_clips_directory(root, explicit_clips_path)
+    
     # Use find_labels_file to search multiple locations
     explicit_labels_path = args.labels.resolve() if args.labels is not None else None
     labels_csv = find_labels_file(root, explicit_labels_path)
-    out_dir = args.out.resolve() if args.out else (root / "data/raw").resolve()
+    
+    # Default output directory to Renamed if not specified
+    out_dir = args.out.resolve() if args.out is not None else (root / "Renamed").resolve()
     
     print(f"📂 Root directory: {root}")
     print(f"📂 clips_dir: {clips_dir}")
