@@ -81,6 +81,8 @@ python -m venv venv
 source venv/bin/activate
 ```
 
+---
+
 **Install dependencies:**
 
 ```bash
@@ -99,31 +101,25 @@ mkdir processed
 cd processed
 ```
 
-**Install gdown (if not already installed):**
+**Install gdown:**
 
 ```bash
 pip install gdown
 ```
 
-**Download the preprocessed fsl-105 clips:**
+**Download the preprocessed FSL-105 clips and labesl:**
 
 ```bash
-gdown https://drive.google.com/uc?id=1c6SP6Hecv0p5c7c4ntEy-VxZaGeg7bMD
+gdown 1V-fVnDdJvrzS-3JBtt6ESqDVRng3g06t
 ```
 
-**Download the preprocessed smp-105 clips:**
-
-```bash
-gdown https://drive.google.com/uc?id=1wKc5lu1pmonnkqDOG6p0vCjrHxQDvjqA
-```
-
-**Unzip all zip files:**
+**Unzip zip file:**
 
 ```bash
 unzip '*.zip'
 ```
 
-**Clean up zip files:**
+**Clean zip file:**
 
 ```bash
 rm -f *.zip
@@ -131,30 +127,64 @@ rm -f *.zip
 
 ---
 
-## 5. Split Data
+## 5. Split Data (To update, only split signers 0-4)
 
 **Return to project root:**
 
 ```bash
-cd ../../
+cd ../../../
 ```
 
 **For fsl-105 data split:**
 
-```bash
-python data/splitting/data_split.py --processed-root data/processed/fsl-105_10-08 --labels data/processed/fsl-105_10-08/labels.csv --out-root data/processed --copy --train-ratio 0.8 --train-dir fsl_train --val-dir fsl_val --train-csv fsl_train.csv --val-csv fsl_val.csv
+### 5.1. Clean Erroneous Data (Delete problematic files before splitting)
+
+Before splitting the data, remove any problematic files:
+
+```python
+python3 << 'EOF'
+import pandas as pd
+import os
+from pathlib import Path
+
+# Find and delete the npz file
+file_pattern = 'clip_06785_daughter_S6.npz'
+for npz_file in Path('data/processed/FSL-105').rglob(file_pattern):
+    npz_file.unlink()
+    print(f"Deleted: {npz_file}")
+
+# Remove from labels.csv
+labels_file = 'data/processed/FSL-105/labels.csv'
+if os.path.exists(labels_file):
+    df = pd.read_csv(labels_file)
+    df = df[~df['file'].str.contains('clip_06785_daughter_S6', na=False)]
+    df.to_csv(labels_file, index=False)
+    print(f"Removed rows from {labels_file}")
+
+# Remove from split CSVs (if they already exist)
+for filename in ['data/processed/FSL105_train.csv', 'data/processed/FSL105_val.csv']:
+    if os.path.exists(filename):
+        df = pd.read_csv(filename)
+        df = df[~df['file'].str.contains('clip_06785_daughter_S6', na=False)]
+        df.to_csv(filename, index=False)
+        print(f"Removed rows from {filename}")
+EOF
 ```
 
-**For sample-105 data split:**
+### 5.2. Split the Data
+
+Run the data splitting script:
 
 ```bash
-python data/splitting/data_split.py --processed-root data/processed/smp-105_10-08 --labels data/processed/smp-105_10-08/labels.csv --out-root data/processed --copy --train-ratio 0.8 --train-dir smp_train --val-dir smp_val --train-csv smp_train.csv --val-csv smp_val.csv
-```
-
-**For combined data split:**
-
-```bash
-python data/splitting/data_split.py --processed-root data/processed/fsl-105_10-08 data/processed/smp-105_10-08 --labels data/processed/fsl-105_10-08/labels.csv data/processed/smp-105_10-08/labels.csv --out-root data/processed --copy --train-ratio 0.8 --train-dir cmb_train --val-dir cmb_val --train-csv cmb_train.csv --val-csv cmb_val.csv
+python data/splitting/data_split.py \
+    --processed-root data/processed/FSL-105 \
+    --labels data/processed/FSL-105/labels.csv \
+    --out-root data/processed \
+    --train-ratio 0.8 \
+    --train-dir FSL105_train \
+    --val-dir FSL105_val \
+    --train-csv FSL105_train.csv \
+    --val-csv FSL105_val.csv
 ```
 
 ---
@@ -163,22 +193,10 @@ python data/splitting/data_split.py --processed-root data/processed/fsl-105_10-0
 
 After data splitting is complete, navigate back to the processed folder and remove the source directories:
 
-**Navigate to processed directory:**
-
-```bash
-cd data/processed
-```
-
 **Remove source folders:**
 
 ```bash
-rm -rf fsl-105_10-08 smp-105_10-08
-```
-
-**Return to project root:**
-
-```bash
-cd ../../
+rm -rf data/processedFSL-105
 ```
 
 ---
