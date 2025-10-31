@@ -85,6 +85,7 @@ data/splitting/**/*.pyc
 # Allow specific CSV reference
 # ------------------------------
 !data/labels_reference.csv
+!data/processed/labels.csv
 
 # ======================================================
 # 📓 Notebooks & Tools
