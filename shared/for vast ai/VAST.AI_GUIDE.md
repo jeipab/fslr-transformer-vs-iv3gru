@@ -83,21 +83,12 @@ source venv/bin/activate
 
 ---
 
-**Install dependencies:**
-
-```bash
-pip install -r requirements.txt
-```
-
----
-
 ## 4. Upload and Prepare Data (On another terminal)
 
 **Navigate to the processed data directory:**
 
 ```bash
 cd data
-mkdir processed
 cd processed
 ```
 
@@ -110,7 +101,7 @@ pip install gdown
 **Download the preprocessed FSL-105 clips:**
 
 ```bash
-gdown 1V-fVnDdJvrzS-3JBtt6ESqDVRng3g06t
+gdown 1KrZDCdX8GFYOqDZi66li0EXkv3p9er97
 gdown <continuous preprocessed data>
 ```
 
@@ -124,6 +115,14 @@ unzip '*.zip'
 
 ```bash
 rm -f *.zip
+```
+
+---
+
+**Install dependencies:**
+
+```bash
+pip install -r requirements.txt
 ```
 
 ---
