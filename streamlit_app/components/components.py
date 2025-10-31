@@ -2,6 +2,7 @@
 
 import streamlit as st
 from typing import Dict
+from ..core.config import MODEL_CONFIG
 
 
 def set_page() -> None:
@@ -835,7 +836,6 @@ def render_sidebar() -> Dict:
         st.sidebar.info(f"Using: **{MODEL_CONFIG[model_choice]['display_name']}**")
     elif len(available_models) == 2:
         # Create help text with model file paths
-        from ..manager.prediction_manager import MODEL_CONFIG
         help_text = f"Select model for {RECOGNITION_MODES[recognition_mode]}\n\n"
         
         for model_name in available_models:
@@ -855,7 +855,6 @@ def render_sidebar() -> Dict:
         )
     else:
         # Create help text with model file paths
-        from ..manager.prediction_manager import MODEL_CONFIG
         help_text = "Choose between available model architectures\n\n"
         
         for model_name in available_models:
@@ -896,7 +895,6 @@ def render_sidebar() -> Dict:
 def render_model_status():
     """Render model availability status in sidebar."""
     import os
-    from ..manager.prediction_manager import MODEL_CONFIG
     
     # Check model availability and file existence
     transformer_available = MODEL_CONFIG['transformer']['enabled']
