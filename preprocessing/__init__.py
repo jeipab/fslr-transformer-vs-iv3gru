@@ -81,6 +81,13 @@ except ImportError:
     RENAME_CLIPS_AVAILABLE = False
     rename_clips = None
 
+try:
+    from .utils.resize_360p import VideoResizer
+    RESIZE_360P_AVAILABLE = True
+except ImportError:
+    RESIZE_360P_AVAILABLE = False
+    VideoResizer = None
+
 # Occlusion detection
 try:
     from .core.occlusion_detection import (
@@ -117,6 +124,9 @@ if VALIDATE_NPZ_AVAILABLE:
 
 if RENAME_CLIPS_AVAILABLE:
     __all__.append('rename_clips')
+
+if RESIZE_360P_AVAILABLE:
+    __all__.append('VideoResizer')
 
 if OCCLUSION_DETECTION_AVAILABLE:
     __all__.extend([
