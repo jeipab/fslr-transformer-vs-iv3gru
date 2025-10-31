@@ -135,8 +135,8 @@ def render_validation_stage(cfg: Dict):
                         ground_truth_folder=labels_csv,  # For CTC, this is GT folder
                         decode_method=decode_method,
                         beam_width=beam_width,
-                        window_size=150,  # 5 seconds at 30fps
-                        stride=50,  # 75% overlap
+                        window_size=120,  # 4 seconds at 30fps
+                        stride=40,  # ~67% overlap
                         progress_callback=progress_callback
                     )
                 else:

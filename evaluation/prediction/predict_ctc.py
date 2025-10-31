@@ -985,7 +985,7 @@ class CTCPredictor:
         return result
     
     def predict_sequence_sliding_window(self, npz_path: Path, ground_truth: Optional[Dict] = None,
-                                      window_size: int = 150, stride: int = 50, 
+                                      window_size: int = 120, stride: int = 40, 
                                       decode_method: str = 'greedy', beam_width: int = 10, 
                                       fps: int = 30, temporal_tolerance: int = 500,
                                       iou_threshold: float = 0.5) -> Dict:

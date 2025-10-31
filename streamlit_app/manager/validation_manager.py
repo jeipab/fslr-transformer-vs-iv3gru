@@ -726,8 +726,8 @@ def run_ctc_validation_with_sliding_window(
     ground_truth_folder: str,
     decode_method: str = 'greedy',
     beam_width: int = 10,
-    window_size: int = 150,
-    stride: int = 50,
+    window_size: int = 120,
+    stride: int = 40,
     progress_callback=None
 ) -> Dict[str, Any]:
     """
