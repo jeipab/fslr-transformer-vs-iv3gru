@@ -83,13 +83,12 @@ source venv/bin/activate
 
 ---
 
-## 4. Upload and Prepare Data (On another terminal)
+## 4. Upload and Prepare Data
 
 **Navigate to the processed data directory:**
 
 ```bash
-cd data
-cd processed
+cd data/processed
 ```
 
 **Install gdown:**
@@ -101,8 +100,22 @@ pip install gdown
 **Download the preprocessed FSL-105 clips:**
 
 ```bash
-gdown 1KrZDCdX8GFYOqDZi66li0EXkv3p9er97
+# Download FSL-105
+gdown 1V-fVnDdJvrzS-3JBtt6ESqDVRng3g06t
+# Download continuous test data
 gdown <continuous preprocessed data>
+
+# Download FSL-105 per category (needs to be updated)
+gdown 1mMF2zYXetwuJE_JbrWR84lHuQZTIvk0y
+gdown 16sdR9dsZls7L2Mi93cTAcvLEfntQNZM8
+gdown 1FXfRpZoPW__XwI87YJwHS0UyWDu7MxAo
+gdown 15v0-z-Aes57cDlMwB7axXYwfE80tJd1u
+gdown 15-E3wixhr8rwgW6uo2PWZy0CTDUYUKm7
+gdown 1TgXLP14eqAPz3knYiTm_rjUsOS_EO74m
+gdown 11l9EKP66hzoUleuxY99DUPY3vnAUYZDE
+gdown 1ql2-9ZymmFmmdcdKP9y4urgji53Q4iJQ
+gdown 1kQg5H4dcOTSxslwub2lRYjQdA9wc-OS6
+gdown 1EwPm9lJa-1yMWazkPpF0sgVY6LFJNKzv
 ```
 
 **Unzip zip file:**
@@ -119,20 +132,16 @@ rm -f *.zip
 
 ---
 
-**Install dependencies:**
-
-```bash
-pip install -r requirements.txt
-```
-
----
-
 ## 5. Split Data
 
 **Return to project root:**
 
 ```bash
+
 cd ../../
+pip install pandas
+pip install scikit-learn
+
 ```
 
 **For fsl-105 data split:**
@@ -154,7 +163,7 @@ for npz_file in Path('data/processed/FSL-105').rglob(file_pattern):
     print(f"Deleted: {npz_file}")
 
 # Remove from labels.csv
-labels_file = 'data/processed/FSL-105/labels.csv'
+labels_file = 'data/processed/labels.csv'
 if os.path.exists(labels_file):
     df = pd.read_csv(labels_file)
     df = df[~df['file'].str.contains('clip_06785_daughter_S6', na=False)]
@@ -204,6 +213,14 @@ After data splitting is complete, navigate back to the processed folder and remo
 
 ```bash
 rm -rf data/processed/FSL-105
+```
+
+---
+
+**Install dependencies:**
+
+```bash
+pip install -r requirements.txt
 ```
 
 ---
