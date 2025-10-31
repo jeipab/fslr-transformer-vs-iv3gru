@@ -436,6 +436,7 @@ def main():
                 grouped_files[directory_key].append((-1, filepath))
         
         # Build rename operations - renumber within each directory
+        # Only renumber files that are after gaps, preserving original starting numbers
         operations = []
         
         # Sort directories for consistent processing
@@ -444,8 +445,18 @@ def main():
             # Sort by current number within this directory
             file_list.sort(key=lambda x: x[0])
             
-            counter = args.start_index
+            if not file_list:
+                continue
+            
+            # Find the actual starting number (minimum number in this directory)
+            actual_start = min(num for num, _ in file_list if num >= 0)
+            counter = actual_start  # Start from the actual first number, not start_index
+            
             for current_num, filepath in file_list:
+                # Skip files with invalid numbers (treated separately)
+                if current_num < 0:
+                    continue
+                
                 # Extract label and signer from filename if possible
                 match = re.match(r'^clip_\d+_(.+?)_(S\d+)\.[^.]+$', filepath.name)
                 if match:
@@ -456,16 +467,11 @@ def main():
                     file_label = "clip"
                     file_signer = "S0"
                 
-                # Always format with leading zeros to ensure consistent width
-                new_name = f"clip_{counter:0{args.digits}d}_{file_label}_{file_signer}{filepath.suffix}"
-                dest = filepath.parent / new_name
-                
-                # Add to operations if:
-                # 1. The number needs to change (to fix gaps)
-                # 2. OR the filename doesn't have the correct zero-padding
-                #    (e.g., clip_6786 should become clip_06786)
-                expected_name = f"clip_{current_num:0{args.digits}d}_{file_label}_{file_signer}{filepath.suffix}"
-                if current_num != counter or filepath.name != expected_name:
+                # Only renumber if there's a gap (current_num doesn't match expected sequential counter)
+                if current_num != counter:
+                    # This file needs to be renumbered to fill the gap
+                    new_name = f"clip_{counter:0{args.digits}d}_{file_label}_{file_signer}{filepath.suffix}"
+                    dest = filepath.parent / new_name
                     operations.append((filepath, dest))
                 
                 counter += 1
