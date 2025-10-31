@@ -37,7 +37,10 @@ Optional:
     python rename_clips.py --root . --dry-run
     python rename_clips.py --root . --validate
     python rename_clips.py --root . --summary
-Renumber (fix gaps in numbering):
+Renumber hierarchical structure (C/G/S with numbered files like 0.MOV, 1.MOV):
+    python rename_clips.py --renumber-hierarchical --clips data/raw/clips --dry-run
+    python rename_clips.py --renumber-hierarchical --clips data/raw/clips --start-index 0 --digits 4
+Renumber (fix gaps in already-renamed clip_XXXX_label_SX files):
     python rename_clips.py --renumber --clips data/raw/Greetings-Only --dry-run
     python rename_clips.py --renumber --clips data/raw/Greetings-Only --recursive --dry-run
     python rename_clips.py --renumber --clips data/raw/Greetings-Only --recursive
@@ -58,6 +61,47 @@ def slugify_label(s: str) -> str:
     s = re.sub(r'[^a-z0-9_]', '', s)
     s = re.sub(r'_+', '_', s).strip('_')
     return s or 'uncategorized'
+
+def find_labels_file(root: Path, explicit_path: Path = None) -> Path:
+    """Finds labels_reference.csv in common locations."""
+    # If explicit path is provided, use it
+    if explicit_path and explicit_path.exists():
+        return explicit_path
+    
+    # Check common locations
+    possible_locations = [
+        root / "labels_reference.csv",
+        root / "data" / "labels_reference.csv",
+        root / "data" / "raw" / "labels_reference.csv",
+    ]
+    
+    for path in possible_locations:
+        if path.exists():
+            return path
+    
+    # If not found, return the first default location for error message
+    return explicit_path if explicit_path else (root / "data" / "labels_reference.csv")
+
+def find_clips_directory(root: Path, explicit_path: Path = None) -> Path:
+    """Finds clips directory in common locations."""
+    # If explicit path is provided, use it
+    if explicit_path and explicit_path.exists():
+        return explicit_path
+    
+    # Check common locations
+    possible_locations = [
+        root / "FSL-105",
+        root / "clips",
+        root / "data" / "raw" / "clips",
+        root / "data" / "clips",
+    ]
+    
+    for path in possible_locations:
+        if path.exists() and path.is_dir():
+            return path
+    
+    # If not found, return the first default location for error message
+    return explicit_path if explicit_path else (root / "data" / "raw" / "clips")
 
 def read_labels(labels_csv: Path) -> Dict[int, Tuple[str, int]]:
     """Reads the labels_reference.csv file and returns a mapping from gloss_id to (label, cat_id)."""
@@ -98,7 +142,7 @@ def get_video_duration(video_path: Path) -> float:
 def collect_clips_hierarchical(clips_dir: Path, video_extensions=None) -> List[Dict]:
     """Collects clips from a 3-level hierarchical structure (C/G/S)."""
     if video_extensions is None:
-        video_extensions = {'.MOV', '.mov', '.mp4', '.MP4', '.avi', '.AVI'}
+        video_extensions = {'.MOV', '.mov', '.mp4', '.MP4', '.avi', '.AVI', '.npz'}
     
     items = []
     if not clips_dir.exists():
@@ -139,6 +183,58 @@ def collect_all_video_files(target_dir: Path, recursive: bool = False) -> List[P
             files.update(target_dir.glob(ext))
     
     return sorted(files)
+
+def renumber_hierarchical_structure(clips_dir: Path, video_extensions=None, digits: int = 4, start_index: int = 0) -> List[Tuple[Path, Path]]:
+    """Renumber files in hierarchical C/G/S structure.
+    
+    Files are expected to be named like: 0.MOV, 1.MOV, etc. in S0/, S1/, etc. directories.
+    They will be renumbered sequentially within each signer directory to fix gaps.
+    
+    Returns list of (source_path, destination_path) tuples for rename operations.
+    """
+    if video_extensions is None:
+        video_extensions = {'.MOV', '.mov', '.mp4', '.MP4', '.avi', '.AVI'}
+    
+    operations = []
+    
+    if not clips_dir.exists():
+        raise FileNotFoundError(f"clips directory not found at {clips_dir}")
+    
+    cat_dirs = sorted([p for p in clips_dir.iterdir() if p.is_dir() and re.match(r'^C\d+$', p.name)])
+    for cat_dir in cat_dirs:
+        gloss_dirs = sorted([p for p in cat_dir.iterdir() if p.is_dir() and re.match(r'^G\d+$', p.name)])
+        for gloss_dir in gloss_dirs:
+            signer_dirs = sorted([p for p in gloss_dir.iterdir() if p.is_dir() and re.match(r'^S\d+$', p.name)])
+            for signer_dir in signer_dirs:
+                # Find all video files in this signer directory
+                video_files = []
+                for ext in video_extensions:
+                    video_files.extend(signer_dir.glob(f"*{ext}"))
+                
+                # Filter to files that are just numbers (0.MOV, 1.MOV, etc.)
+                numbered_files = []
+                for video_file in video_files:
+                    # Check if filename is just a number followed by extension
+                    base_name = video_file.stem  # filename without extension
+                    if base_name.isdigit():
+                        numbered_files.append((int(base_name), video_file))
+                
+                # Sort by the number in the filename
+                numbered_files.sort(key=lambda x: x[0])
+                
+                # Renumber sequentially starting from start_index
+                counter = start_index
+                for original_num, video_file in numbered_files:
+                    new_name = f"{counter:0{digits}d}{video_file.suffix}"
+                    dest = signer_dir / new_name
+                    
+                    # Only add to operations if the number needs to change
+                    if video_file.name != new_name:
+                        operations.append((video_file, dest))
+                    
+                    counter += 1
+    
+    return operations
 
 def validate_structure(clips_dir: Path, labels_map: Dict[int, Tuple[str, int]]):
     """Validates the hierarchical folder structure."""
@@ -241,14 +337,22 @@ def main():
     ap.add_argument("--keep-structure", action="store_true", help="Rename files in-place, keeping the original folder structure (C/G/S)")
     ap.add_argument("--input-structure", type=str, default="hierarchical", choices=["hierarchical"], help="Input folder structure type")
     ap.add_argument("--renumber", action="store_true", help="Renumber existing clip_XXXX_label_SX files to fix gaps in numbering")
+    ap.add_argument("--renumber-hierarchical", action="store_true", help="Renumber files in C/G/S structure (0.MOV, 1.MOV format)")
     ap.add_argument("--recursive", action="store_true", help="When renumbering, search subdirectories recursively")
     args = ap.parse_args()
 
     root = args.root.resolve()
 
-    clips_dir = args.clips.resolve() if args.clips else (root / "data/raw/clips").resolve()
-    labels_csv = args.labels.resolve() if args.labels else (root / "data/labels_reference.csv").resolve()
-    out_dir = args.out.resolve() if args.out else (root / "data/raw").resolve()
+    # Use find_clips_directory to search multiple locations
+    explicit_clips_path = args.clips.resolve() if args.clips is not None else None
+    clips_dir = find_clips_directory(root, explicit_clips_path)
+    
+    # Use find_labels_file to search multiple locations
+    explicit_labels_path = args.labels.resolve() if args.labels is not None else None
+    labels_csv = find_labels_file(root, explicit_labels_path)
+    
+    # Default output directory to Renamed if not specified
+    out_dir = args.out.resolve() if args.out is not None else (root / "Renamed").resolve()
     
     print(f"📂 Root directory: {root}")
     print(f"📂 clips_dir: {clips_dir}")
@@ -256,7 +360,50 @@ def main():
     print(f"📂 out_dir: {out_dir}")
     out_dir.mkdir(parents=True, exist_ok=True)
 
-    # Handle renumbering mode
+    # Handle hierarchical renumbering mode (for C/G/S structure with numbered files)
+    if args.renumber_hierarchical:
+        print("Renumbering files in hierarchical C/G/S structure...")
+        
+        try:
+            operations = renumber_hierarchical_structure(
+                clips_dir, 
+                video_extensions={'.MOV', '.mov', '.mp4', '.MP4', '.avi', '.AVI'},
+                digits=args.digits,
+                start_index=args.start_index
+            )
+            
+            if not operations:
+                print("✅ All files already numbered correctly")
+                return
+            
+            print(f"Found {len(operations)} files to renumber")
+            
+            if args.dry_run:
+                print("\n📝 Files that would be renamed:")
+                for src, dest in operations[:20]:
+                    rel_src = src.relative_to(clips_dir)
+                    rel_dest = dest.relative_to(clips_dir)
+                    print(f"  {rel_src} -> {rel_dest}")
+                if len(operations) > 20:
+                    print(f"  ... and {len(operations) - 20} more")
+                print("\n💡 Run without --dry-run to apply changes")
+            else:
+                # Use temporary names to avoid conflicts
+                temp_renames = []
+                for i, (src, dest) in enumerate(operations):
+                    temp_name = src.parent / f"__temp_{i}{src.suffix}"
+                    src.rename(temp_name)
+                    temp_renames.append((temp_name, dest))
+                
+                for temp, dest in temp_renames:
+                    temp.rename(dest)
+                
+                print(f"✅ Renumbered {len(operations)} files")
+        except Exception as e:
+            print(f"[ERROR] ❗ Error during renumbering: {e}", file=sys.stderr)
+            return
+    
+    # Handle renumbering mode (for already renamed clip_XXXX_label_SX files)
     if args.renumber:
         print("Renumbering all video files...")
         target = args.clips if args.clips else out_dir
@@ -269,37 +416,66 @@ def main():
         
         print(f"Found {len(files)} video files")
         
-        # Build rename operations
-        operations = []
-        counter = args.start_index
-        
+        # Group files by signer and label to renumber within each group
+        # This preserves the grouping and fixes gaps within each group
+        grouped_files = {}
         for filepath in files:
             # Extract current number, label and signer from filename
+            # Pattern handles both with and without leading zeros
             match = re.match(r'^clip_(\d+)_(.+?)_(S\d+)\.[^.]+$', filepath.name)
             if match:
-                current_num = int(match.group(1))
+                current_num = int(match.group(1))  # Parse as int to normalize
                 label = match.group(2)
                 signer = match.group(3)
+                key = (signer, label)  # Group by signer and label
+                
+                if key not in grouped_files:
+                    grouped_files[key] = []
+                grouped_files[key].append((current_num, filepath))
             else:
-                # Fallback: use generic naming
-                current_num = -1
-                label = "clip"
-                signer = "S0"
+                # Fallback: treat as ungrouped
+                key = ("ungrouped", "clip")
+                if key not in grouped_files:
+                    grouped_files[key] = []
+                grouped_files[key].append((-1, filepath))
+        
+        # Build rename operations - renumber within each group
+        operations = []
+        
+        for (signer, label), file_list in sorted(grouped_files.items()):
+            # Sort by current number within this group
+            file_list.sort(key=lambda x: x[0])
             
-            new_name = f"clip_{counter:0{args.digits}d}_{label}_{signer}{filepath.suffix}"
-            dest = filepath.parent / new_name
-            
-            # Only add to operations if number needs to change
-            if current_num != counter:
-                operations.append((filepath, dest))
-            
-            counter += 1
+            counter = args.start_index
+            for current_num, filepath in file_list:
+                # Extract signer and label from filename if possible
+                match = re.match(r'^clip_\d+_(.+?)_(S\d+)\.[^.]+$', filepath.name)
+                if match:
+                    file_label = match.group(1)
+                    file_signer = match.group(2)
+                else:
+                    file_label = label if label != "clip" else "clip"
+                    file_signer = signer if signer != "ungrouped" else "S0"
+                
+                # Always format with leading zeros to ensure consistent width
+                new_name = f"clip_{counter:0{args.digits}d}_{file_label}_{file_signer}{filepath.suffix}"
+                dest = filepath.parent / new_name
+                
+                # Add to operations if:
+                # 1. The number needs to change (to fix gaps)
+                # 2. OR the filename doesn't have the correct zero-padding
+                #    (e.g., clip_6786 should become clip_06786)
+                expected_name = f"clip_{current_num:0{args.digits}d}_{file_label}_{file_signer}{filepath.suffix}"
+                if current_num != counter or filepath.name != expected_name:
+                    operations.append((filepath, dest))
+                
+                counter += 1
         
         if not operations:
-            print("All files already numbered correctly")
+            print("✅ All files already numbered correctly")
             return
         
-        print(f"Will renumber {len(operations)} files")
+        print(f"Will renumber {len(operations)} files to fix gaps")
         
         if args.dry_run:
             for src, dest in operations[:10]:
