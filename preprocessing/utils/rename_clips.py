@@ -416,10 +416,9 @@ def main():
         
         print(f"Found {len(files)} video files")
         
-        # Build rename operations
-        operations = []
-        counter = args.start_index
-        
+        # Group files by signer and label to renumber within each group
+        # This preserves the grouping and fixes gaps within each group
+        grouped_files = {}
         for filepath in files:
             # Extract current number, label and signer from filename
             match = re.match(r'^clip_(\d+)_(.+?)_(S\d+)\.[^.]+$', filepath.name)
@@ -427,26 +426,50 @@ def main():
                 current_num = int(match.group(1))
                 label = match.group(2)
                 signer = match.group(3)
+                key = (signer, label)  # Group by signer and label
+                
+                if key not in grouped_files:
+                    grouped_files[key] = []
+                grouped_files[key].append((current_num, filepath))
             else:
-                # Fallback: use generic naming
-                current_num = -1
-                label = "clip"
-                signer = "S0"
+                # Fallback: treat as ungrouped
+                key = ("ungrouped", "clip")
+                if key not in grouped_files:
+                    grouped_files[key] = []
+                grouped_files[key].append((-1, filepath))
+        
+        # Build rename operations - renumber within each group
+        operations = []
+        
+        for (signer, label), file_list in sorted(grouped_files.items()):
+            # Sort by current number within this group
+            file_list.sort(key=lambda x: x[0])
             
-            new_name = f"clip_{counter:0{args.digits}d}_{label}_{signer}{filepath.suffix}"
-            dest = filepath.parent / new_name
-            
-            # Only add to operations if number needs to change
-            if current_num != counter:
-                operations.append((filepath, dest))
-            
-            counter += 1
+            counter = args.start_index
+            for current_num, filepath in file_list:
+                # Extract signer and label from filename if possible
+                match = re.match(r'^clip_\d+_(.+?)_(S\d+)\.[^.]+$', filepath.name)
+                if match:
+                    file_label = match.group(1)
+                    file_signer = match.group(2)
+                else:
+                    file_label = label if label != "clip" else "clip"
+                    file_signer = signer if signer != "ungrouped" else "S0"
+                
+                new_name = f"clip_{counter:0{args.digits}d}_{file_label}_{file_signer}{filepath.suffix}"
+                dest = filepath.parent / new_name
+                
+                # Only add to operations if number needs to change
+                if current_num != counter or filepath.name != new_name:
+                    operations.append((filepath, dest))
+                
+                counter += 1
         
         if not operations:
-            print("All files already numbered correctly")
+            print("✅ All files already numbered correctly")
             return
         
-        print(f"Will renumber {len(operations)} files")
+        print(f"Will renumber {len(operations)} files to fix gaps")
         
         if args.dry_run:
             for src, dest in operations[:10]:
