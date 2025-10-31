@@ -139,14 +139,20 @@ def _move_or_copy_unique(src_npz: Path, dst_dir: Path, do_copy: bool) -> str:
         stem = f"{stem}-{_stable_h8(src_npz)}"
         dst_npz = dst_dir / f"{stem}.npz"
     
-    # Always copy to preserve source files
-    shutil.copy2(src_npz, dst_npz)
+    # Move or copy depending on flag
+    if do_copy:
+        shutil.copy2(src_npz, dst_npz)
+    else:
+        shutil.move(str(src_npz), str(dst_npz))
 
     # Handle optional parquet
     pq_src = src_npz.with_suffix(".parquet")
     if pq_src.exists():
         pq_dst = dst_dir / f"{stem}.parquet"
-        shutil.copy2(pq_src, pq_dst)
+        if do_copy:
+            shutil.copy2(pq_src, pq_dst)
+        else:
+            shutil.move(str(pq_src), str(pq_dst))
     return stem
 
 def _write_csv(path: Path, rows):
@@ -168,7 +174,7 @@ def main():
     ap.add_argument("--processed-root", required=True, type=Path, nargs="+", help="One or more directories containing NPZ files")
     ap.add_argument("--labels", required=True, type=Path, nargs="+", help="One or more labels CSV files (must match order of --processed-root)")
     ap.add_argument("--out-root", type=Path, default=None)
-    ap.add_argument("--copy", action="store_true")
+    ap.add_argument("--copy", action="store_true", help="Copy files instead of moving (default: move)")
     ap.add_argument("--train-ratio", type=float, default=0.8, help="Train split ratio if no split column is present")
     ap.add_argument("--cats", nargs="+",help="Restrict to specific categories (IDs or names). ",default=None)
     ap.add_argument("--gloss", nargs="+", help="Restrict to specific glosses (IDs or names). ",default=None)
