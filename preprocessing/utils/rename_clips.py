@@ -139,7 +139,7 @@ def get_video_duration(video_path: Path) -> float:
 def collect_clips_hierarchical(clips_dir: Path, video_extensions=None) -> List[Dict]:
     """Collects clips from a 3-level hierarchical structure (C/G/S)."""
     if video_extensions is None:
-        video_extensions = {'.MOV', '.mov', '.mp4', '.MP4', '.avi', '.AVI'}
+        video_extensions = {'.MOV', '.mov', '.mp4', '.MP4', '.avi', '.AVI', '.npz'}
     
     items = []
     if not clips_dir.exists():
