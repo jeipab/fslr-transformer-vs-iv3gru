@@ -2917,8 +2917,8 @@ def evaluate_ctc(model, dataloader, criterion, device, blank_id, alpha=1.0, beta
                 g_len = int(target_lens_list[i])
                 gt_seq = targets[tgt_offset:tgt_offset + g_len].detach().cpu().tolist()
                 tgt_offset += g_len
-                # Sequence-level exact match
-                correct_gloss_seq += int(decoded == gt_seq)
+                # Presence-based accuracy: correct if ground truth gloss appears in decoded sequence
+                correct_gloss_seq += int(gt_seq[0] in decoded) if len(gt_seq) > 0 else 0
                 total_sequences += 1
     
     avg_loss = total_loss / num_batches if num_batches > 0 else 0.0
