@@ -1,5 +1,21 @@
 # Vast.ai Deployment Guide for fslr-transformer-vs-iv3gru
 
+## Table of Contents
+
+- [1. Expose Required Port](#1-expose-required-port)
+- [2. Quick Start (Pre-Setup Project)](#2-quick-start-pre-setup-project)
+- [3. Set Up the Codebase](#3-set-up-the-codebase)
+- [4. Upload and Prepare Data](#4-upload-and-prepare-data)
+- [5. Split Data (skip if train/val downloaded)](#5-split-data-skip-if-trainval-downloaded)
+- [6. Clean Up Source Folders](#6-clean-up-source-folders)
+- [7. Replace Streamlit Components](#7-replace-streamlit-components)
+- [8. Configure Streamlit for Vast.AI](#8-configure-streamlit-for-vastai)
+- [9. Run the Streamlit Application](#9-run-the-streamlit-application)
+- [10. Access Your Application](#10-access-your-application)
+- [11. Video Generation Dependencies (if needed)](#11-video-generation-dependencies-if-needed)
+- [12. Optional: Test IV3-GRU Model Loading](#12-optional-test-iv3-gru-model-loading)
+- [13. Troubleshooting](#13-troubleshooting)
+
 ---
 
 ## 1. Expose Required Port
@@ -100,22 +116,30 @@ pip install gdown
 **Download the preprocessed FSL-105 clips:**
 
 ```bash
-# Download FSL-105
+# Download FSL-105_Full
 gdown 1V-fVnDdJvrzS-3JBtt6ESqDVRng3g06t
-# Download continuous test data
-gdown <continuous preprocessed data>
 
-# Download FSL-105 per category (needs to be updated)
-gdown 1mMF2zYXetwuJE_JbrWR84lHuQZTIvk0y
-gdown 16sdR9dsZls7L2Mi93cTAcvLEfntQNZM8
-gdown 1FXfRpZoPW__XwI87YJwHS0UyWDu7MxAo
-gdown 15v0-z-Aes57cDlMwB7axXYwfE80tJd1u
-gdown 15-E3wixhr8rwgW6uo2PWZy0CTDUYUKm7
-gdown 1TgXLP14eqAPz3knYiTm_rjUsOS_EO74m
-gdown 11l9EKP66hzoUleuxY99DUPY3vnAUYZDE
-gdown 1ql2-9ZymmFmmdcdKP9y4urgji53Q4iJQ
-gdown 1kQg5H4dcOTSxslwub2lRYjQdA9wc-OS6
-gdown 1EwPm9lJa-1yMWazkPpF0sgVY6LFJNKzv
+# Download FSL-105_Train
+gdown 1Qs8xUy1YjLm3-fBX18xPkE9M7eSq5lE7
+
+# Download FSL-105_Val
+gdown 1n0wUCJo6iviM7HoTHxKE-gIHpTh_PG0j
+
+# Download continuous test data
+# Different Category - VID
+gdown 17wBvsJkLkjNC5dYxqUClVWCAsWtmOr1A
+
+# Same Category - VID
+gdown 1E9sfkdRaJYwFMdOAMShAGBCxsv660XyI
+
+# Fix Occluded item in JSON for Continuous Vids
+python data/raw/fix_occlusion.py
+
+# Different Category - NPZ
+gdown 1_QfNMFIIhNxvzOEsDOqNzQP1PkXEHpMh
+
+# Same Category - NPZ
+gdown 1cM2JyRrlr45OncZLFMBEHO1rj1Lq82a_
 ```
 
 **Unzip zip file:**
@@ -132,16 +156,14 @@ rm -f *.zip
 
 ---
 
-## 5. Split Data
+## 5. Split Data (skip if train/val downloaded)
 
 **Return to project root:**
 
 ```bash
-
 cd ../../
 pip install pandas
 pip install scikit-learn
-
 ```
 
 **For fsl-105 data split:**
@@ -150,7 +172,7 @@ pip install scikit-learn
 
 Before splitting the data, remove any problematic files:
 
-```python
+```bash
 python3 << 'EOF'
 import pandas as pd
 import os
@@ -249,17 +271,17 @@ cp .streamlit/config.toml.optimized .streamlit/config.toml
 
 **What this does:**
 
-- ✅ Sets correct port (8081) for Vast.AI
-- ✅ Enables CORS for Cloudflare tunnel
-- ✅ Configures extended timeouts for mobile uploads
-- ✅ Sets maxMessageSize to 700 MB (supports Base64 encoding)
-- ✅ Optimizes WebSocket compression
+- Sets correct port (8081) for Vast.AI
+- Enables CORS for Cloudflare tunnel
+- Configures extended timeouts for mobile uploads
+- Sets maxMessageSize to 700 MB (supports Base64 encoding)
+- Optimizes WebSocket compression
 
 **What the Vast.AI config.py does:**
 
-- ✅ Enables Base64 encoding for mobile camera uploads (`use_base64_preview: True`)
-- ✅ Eliminates `MediaFileStorageError` on mobile devices
-- ✅ Improves mobile upload consistency through Cloudflare tunnel
+- Enables Base64 encoding for mobile camera uploads (`use_base64_preview: True`)
+- Eliminates `MediaFileStorageError` on mobile devices
+- Improves mobile upload consistency through Cloudflare tunnel
 
 ---
 
@@ -295,9 +317,9 @@ cloudflared tunnel --url http://localhost:8081 --protocol http2
 
 This works better on Vast.AI because:
 
-- ✅ Uses TCP instead of UDP/QUIC
-- ✅ More compatible with Vast.AI network setup
-- ✅ Bypasses UDP firewall restrictions
+- Uses TCP instead of UDP/QUIC
+- More compatible with Vast.AI network setup
+- Bypasses UDP firewall restrictions
 
 **Test locally first:**
 
