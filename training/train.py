@@ -2726,7 +2726,9 @@ def train_ctc(
         if ema is not None:
             ema.apply_shadow()
         
-        val_loss, val_cat_acc = evaluate_ctc(model, val_loader, criterion, device, alpha, beta)
+        val_loss, val_gloss_acc, val_cat_acc = evaluate_ctc(
+            model, val_loader, criterion, device, blank_id, alpha, beta
+        )
         
         # Restore original parameters
         if ema is not None:
@@ -2740,10 +2742,11 @@ def train_ctc(
         
         # Print epoch results
         avg_train_loss = total_loss / num_batches if num_batches > 0 else 0.0
+        gloss_str = f" | Val Gloss Acc: {val_gloss_acc:.3f}"
         cat_str = f" | Val Cat Acc: {val_cat_acc:.3f}" if beta > 0 else ""
         print(f"Epoch {epoch+1:3d}/{epochs} | "
               f"Train Loss: {avg_train_loss:.4f} | "
-              f"Val Loss: {val_loss:.4f}{cat_str} | "
+              f"Val Loss: {val_loss:.4f}{gloss_str}{cat_str} | "
               f"Time: {epoch_time:.1f}s")
         
         # Print GPU memory if available
@@ -2813,7 +2816,7 @@ def train_ctc(
     if csv_fh is not None:
         csv_fh.close()
 
-def evaluate_ctc(model, dataloader, criterion, device, alpha=1.0, beta=0.0):
+def evaluate_ctc(model, dataloader, criterion, device, blank_id, alpha=1.0, beta=0.0):
     """
     Evaluate a CTC model on a validation dataset.
     
@@ -2826,11 +2829,13 @@ def evaluate_ctc(model, dataloader, criterion, device, alpha=1.0, beta=0.0):
         beta: Weight for category loss (dual-task mode)
     
     Returns:
-        tuple: (avg_loss, cat_accuracy) - loss and category accuracy (1.0 if CTC-only)
+        tuple: (avg_loss, gloss_accuracy, cat_accuracy)
     """
     model.eval()
     total_loss = 0.0
     num_batches = 0
+    correct_gloss_seq = 0
+    total_sequences = 0
     correct_cat = 0
     total_samples = 0
     has_cat_head = beta > 0
@@ -2885,10 +2890,41 @@ def evaluate_ctc(model, dataloader, criterion, device, alpha=1.0, beta=0.0):
             
             total_loss += loss.item()
             num_batches += 1
+
+            # -------- Gloss sequence accuracy via greedy decoding --------
+            # Decode per sequence and compare to ground truth targets
+            T_total, B_lp, C = log_probs.shape
+            # Prepare CPU copies of lengths for safe Python iteration
+            input_lens_list = input_lengths.detach().cpu().tolist()
+            target_lens_list = target_lengths.detach().cpu().tolist()
+            # Offset into concatenated targets
+            tgt_offset = 0
+            pred_ids = log_probs.argmax(dim=2)  # [T, B]
+            for i in range(B_lp):
+                t_len = int(input_lens_list[i])
+                # Greedy decode with collapse and blank removal
+                prev_id = None
+                decoded = []
+                for t in range(t_len):
+                    idx = int(pred_ids[t, i].item())
+                    if idx == blank_id:
+                        prev_id = idx
+                        continue
+                    if prev_id is None or idx != prev_id:
+                        decoded.append(idx)
+                    prev_id = idx
+                # Ground truth slice
+                g_len = int(target_lens_list[i])
+                gt_seq = targets[tgt_offset:tgt_offset + g_len].detach().cpu().tolist()
+                tgt_offset += g_len
+                # Sequence-level exact match
+                correct_gloss_seq += int(decoded == gt_seq)
+                total_sequences += 1
     
     avg_loss = total_loss / num_batches if num_batches > 0 else 0.0
+    gloss_accuracy = correct_gloss_seq / total_sequences if total_sequences > 0 else 0.0
     cat_accuracy = correct_cat / total_samples if total_samples > 0 else 1.0
-    return avg_loss, cat_accuracy
+    return avg_loss, gloss_accuracy, cat_accuracy
 
 def load_data(n_train_samples=100, n_val_samples=20, seq_length=150, input_dim=178, num_gloss=105, num_cat=10, seed=42):
     """
