@@ -88,7 +88,7 @@ def main() -> None:
     csv_path = data_dir / "processed" / "labels.csv"
     json_dirs = [
         script_dir / "same_cat_raw-seq-400",
-        script_dir / "diff_cat_npz-seq-400",
+        script_dir / "diff_cat_raw-seq-400",
     ]
 
     if not csv_path.exists():
