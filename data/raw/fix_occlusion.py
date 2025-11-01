@@ -86,12 +86,18 @@ def main() -> None:
     script_dir = Path(__file__).resolve().parent  # data/raw
     data_dir = script_dir.parent  # data
     csv_path = data_dir / "processed" / "labels.csv"
-    json_dir = script_dir / "same_cat_raw-seq-400"
+    json_dirs = [
+        script_dir / "same_cat_raw-seq-400",
+        script_dir / "diff_cat_npz-seq-400",
+    ]
 
     if not csv_path.exists():
         raise FileNotFoundError(f"CSV not found: {csv_path}")
-    if not json_dir.exists():
-        raise FileNotFoundError(f"JSON directory not found: {json_dir}")
+    existing_json_dirs = [d for d in json_dirs if d.exists()]
+    if not existing_json_dirs:
+        raise FileNotFoundError(
+            f"No JSON directories found among: {', '.join(str(p) for p in json_dirs)}"
+        )
 
     occlusion_map = load_occlusion_mapping(csv_path)
 
@@ -99,11 +105,12 @@ def main() -> None:
     total_segments = 0
     total_updated = 0
 
-    for json_file in sorted(json_dir.glob("*.json")):
-        total_files += 1
-        seg_count, upd_count = update_json_file(json_file, occlusion_map)
-        total_segments += seg_count
-        total_updated += upd_count
+    for dir_path in existing_json_dirs:
+        for json_file in sorted(dir_path.glob("*.json")):
+            total_files += 1
+            seg_count, upd_count = update_json_file(json_file, occlusion_map)
+            total_segments += seg_count
+            total_updated += upd_count
 
     print(
         (
