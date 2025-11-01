@@ -1,11 +1,11 @@
 ===============================================================================
 TRAINING COMMANDS - FULL DATASET (FSL-105)
 ===============================================================================
-// Done w/ export
-// Keep v2
 -------------------------------------------------------------------------------
+// Keep v3
 Step 1: Train Transformer CTC (Continuous Recognition + Required Category Learning - Keypoints Only)
 -------------------------------------------------------------------------------
+// Done w/ export
 python -m training.train \
   --model transformer_ctc \
   --training-mode ctc \
@@ -37,6 +37,7 @@ python -m training.train \
   --output-dir trained_models/transformer/FSL105_ctc \
   --grad-clip 1.0
 
+// Done w/ export
 python -m training.train \
   --model transformer_ctc \
   --training-mode ctc \
@@ -67,6 +68,38 @@ python -m training.train \
   --label-smoothing 0.1 \
   --output-dir trained_models/transformer/FSL105_ctc_v2 \
   --grad-clip 1.0
+
+// Done w/ export
+python -m training.train \
+    --model transformer_ctc \
+    --training-mode ctc \
+    --epochs 450 \
+    --batch-size 64 \
+    --lr 0.0003 \
+    --num-gloss 105 \
+    --num-cat 10 \
+    --alpha 0.8 \
+    --beta 0.2 \
+    --num-ctc-classes 106 \
+    --ctc-blank-id 105 \
+    --keypoints-train data/processed/FSL105_train \
+    --keypoints-val data/processed/FSL105_val \
+    --labels-train-csv data/processed/FSL105_train.csv \
+    --labels-val-csv data/processed/FSL105_val.csv \
+    --kp-key X \
+    --amp \
+    --augment \
+    --augment-noise-std 0.0055 \
+    --augment-mask-prob 0.09 \
+    --augment-mask-ratio 0.09 \
+    --scheduler warmup_cosine \
+    --warmup-epochs 55 \
+    --early-stop 70 \
+    --weight-decay 4.5e-4 \
+    --dropout 0.14 \
+    --label-smoothing 0.1 \
+    --output-dir trained_models/transformer/FSL105_ctc_v3 \
+    --grad-clip 1.0
 
 Export Transformer CTC (run after training)
 -------------------------------------------------------------------------------
@@ -145,9 +178,10 @@ python -m training.train \
     --output-dir trained_models/mediapipe_gru/FSL105_classification
 
 ===============================================================================
-// Done w/ export
+// Keep v2
 Step 4: Train MediaPipe-GRU CTC (Continuous Recognition + Category Learning - Keypoints Only)
 -------------------------------------------------------------------------------
+// Done w/ export
 python -m training.train \
     --model mediapipe_gru_ctc \
     --training-mode ctc \
@@ -180,6 +214,39 @@ python -m training.train \
     --grad-clip 1.0 \
     --output-dir trained_models/mediapipe_gru/FSL105_ctc
 
+// Done w/ export
+python -m training.train \
+    --model mediapipe_gru_ctc \
+    --training-mode ctc \
+    --epochs 450 \
+    --batch-size 96 \
+    --lr 0.0003 \
+    --num-gloss 105 \
+    --num-cat 10 \
+    --alpha 0.8 \
+    --beta 0.2 \
+    --num-ctc-classes 106 \
+    --ctc-blank-id 105 \
+    --keypoints-train data/processed/FSL105_train \
+    --keypoints-val data/processed/FSL105_val \
+    --labels-train-csv data/processed/FSL105_train.csv \
+    --labels-val-csv data/processed/FSL105_val.csv \
+    --kp-key X \
+    --hidden1 512 \
+    --hidden2 512 \
+    --dropout 0.22 \
+    --amp \
+    --augment \
+    --augment-noise-std 0.0023 \
+    --augment-mask-prob 0.045 \
+    --augment-mask-ratio 0.045 \
+    --scheduler warmup_cosine \
+    --warmup-epochs 35 \
+    --early-stop 70 \
+    --weight-decay 1.25e-4 \
+    --grad-clip 1.0 \
+    --output-dir trained_models/mediapipe_gru/FSL105_ctc_v2
+
 Export MediaPipe-GRU CTC (run after training)
 -------------------------------------------------------------------------------
 python -m training.export_mobile \
@@ -191,7 +258,7 @@ python -m training.export_mobile \
     --stride-hint 40
 
 ===============================================================================
-// In progress
+// Done
 Step 5: Train IV3-GRU Classification (Offline Baseline - Features Only)
 -------------------------------------------------------------------------------
 python -m training.train \
@@ -226,7 +293,7 @@ python -m training.train \
     --output-dir trained_models/iv3_gru/FSL105_classification
 
 ===============================================================================
-// In progress
+// Done
 Step 6: Train IV3-GRU CTC (Offline Baseline Continuous Recognition + Required Category Learning - Features Only)
 -------------------------------------------------------------------------------
 python -m training.train \
