@@ -1,0 +1,943 @@
+============================================================
+TRAINING LOG - 2025-10-31 23:49:25
+============================================================
+Console output will be saved to: trained_models/transformer/FSL105_classification/training_20251031_234925.log
+Metrics CSV will be saved to: trained_models/transformer/FSL105_classification/training_20251031_234925_metrics.csv
+
+Using device: cuda
+CUDA device: NVIDIA GeForce RTX 5070 Ti
+CUDA memory: 16.6 GB
+CUDA compute capability: 12.0
+CUDA multiprocessors: 70
+CUDA memory allocated: 0.00 GB
+CUDA memory cached: 0.00 GB
+
+============================================================
+DATA LOADING
+============================================================
+✓ Loaded data successfully
+  - Dataset type: TRANSFORMER Keypoints
+  - Training folder: data/processed/FSL105_train
+  - Validation folder: data/processed/FSL105_val
+  - Keypoint key: X
+  - Gloss classes: 105
+  - Category classes: 10
+
+============================================================
+DATASET PREPARATION
+============================================================
+✓ Created datasets and data loaders
+  - Batch size: 64
+  - Training batches: 160
+  - Validation batches: 40
+  - Data augmentation: Enabled (noise_std=0.006, mask_prob=0.09)
+  - Training dataset size: 10192 samples
+  - Validation dataset size: 2546 samples
+  - Data format: [T, 178] keypoints
+
+============================================================
+MODEL SELECTION
+============================================================
+Available models:
+Classification models (isolated signs):
+  - transformer: Multi-head attention transformer (keypoints)
+  - mediapipe_gru: Lightweight GRU (keypoints, mobile-friendly)
+  - iv3_gru: InceptionV3 + GRU hybrid (features, offline baseline)
+CTC models (continuous recognition):
+  - transformer_ctc: Transformer with CTC (keypoints)
+  - mediapipe_gru_ctc: Lightweight GRU with CTC (keypoints)
+  - iv3_gru_ctc: InceptionV3 + GRU with CTC (features, offline baseline)
+✓ Using SignTransformer model (input_dim=178)
+
+================================================================================
+COMPREHENSIVE TRAINING CONFIGURATION
+================================================================================
+Session Information:
+  - Start time: 2025-10-31 23:49:25
+  - Working directory: /workspace/fslr-transformer-vs-iv3gru
+  - Command: /workspace/fslr-transformer-vs-iv3gru/training/train.py --model transformer --training-mode classification --epochs 400 --batch-size 64 --lr 0.0003 --num-gloss 105 --num-cat 10 --alpha 0.8 --beta 0.2 --keypoints-train data/processed/FSL105_train --keypoints-val data/processed/FSL105_val --labels-train-csv data/processed/FSL105_train.csv --labels-val-csv data/processed/FSL105_val.csv --kp-key X --amp --augment --augment-noise-std 0.006 --augment-mask-prob 0.09 --augment-mask-ratio 0.09 --scheduler warmup_cosine --warmup-epochs 50 --early-stop 60 --weight-decay 5e-4 --dropout 0.15 --label-smoothing 0.1 --output-dir trained_models/transformer/FSL105_classification
+
+System Information:
+  - Platform: Linux-6.8.0-79-generic-x86_64-with-glibc2.39
+  - Python version: 3.12.11 | packaged by conda-forge | (main, Jun  4 2025, 14:45:31) [GCC 13.3.0]
+  - PyTorch version: 2.9.0+cu128
+  - CUDA version: 12.8
+  - cuDNN version: 91002
+  - NumPy version: 2.2.6
+
+Core Training Parameters:
+  - Model: transformer
+  - Epochs: 400
+  - Batch size: 64
+  - Learning rate: 0.0003
+  - Weight decay: 0.0005
+  - Gradient clipping: None
+  - Loss weights - Alpha: 0.8, Beta: 0.2
+
+Curriculum Training: Disabled
+
+Loss Weighting Parameters:
+  - Strategy: static
+  - Alpha: 0.8
+  - Beta: 0.2
+
+Data Configuration:
+  - Gloss classes: 105
+  - Category classes: 10
+  - Data source: Real data files
+  - Training folder: data/processed/FSL105_train
+  - Validation folder: data/processed/FSL105_val
+  - Keypoint key: X
+
+Training Control:
+  - Scheduler: warmup_cosine
+  - Scheduler patience: 5
+  - Early stopping: 60
+  - Resume from: None
+
+Performance Settings:
+  - AMP (Mixed Precision): True
+  - Model compilation: False
+  - Gradient accumulation steps: 1
+  - DataLoader workers: 0
+  - Auto workers: False
+  - Pin memory: False
+  - Prefetch factor: None
+
+Reproducibility:
+  - Random seed: 42
+  - Deterministic mode: False
+
+Output Configuration:
+  - Checkpoint directory: trained_models/transformer/FSL105_classification
+  - CSV log file: trained_models/transformer/FSL105_classification/training_20251031_234925_metrics.csv
+
+Model Information:
+  - Model type: SignTransformer
+  - Total parameters: 3,286,259
+  - Trainable parameters: 3,286,259
+  - Model size: 12.5 MB
+================================================================================
+
+============================================================
+TRAINING START
+============================================================
+Training mode: Classification (Isolated Sign Recognition)
+✓ Loss weighting strategy: static
+✓ Using standard CrossEntropy Loss
+Training Configuration:
+  - Gradient accumulation steps: 1
+  - AMP enabled: True
+  - Model compiled: False
+  - CUDA memory before training: 0.01 GB
+✓ Using WarmupCosineScheduler (warmup_epochs=50)
+Training for 400 epochs...
+Loss weights - Gloss: 0.8, Category: 0.2
+------------------------------------------------------------
+Epoch  1/400 | Train Loss: 4.1721 | Val Loss: 4.1603 | Val Gloss Acc: 0.010 | Val Cat Acc: 0.212 | Time: 14.6s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch  2/400 | Train Loss: 3.8836 | Val Loss: 3.8874 | Val Gloss Acc: 0.022 | Val Cat Acc: 0.209 | Time: 15.1s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch  3/400 | Train Loss: 3.8275 | Val Loss: 3.7169 | Val Gloss Acc: 0.026 | Val Cat Acc: 0.226 | Time: 15.3s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch  4/400 | Train Loss: 3.4776 | Val Loss: 3.6154 | Val Gloss Acc: 0.042 | Val Cat Acc: 0.282 | Time: 15.6s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch  5/400 | Train Loss: 3.3603 | Val Loss: 3.4645 | Val Gloss Acc: 0.037 | Val Cat Acc: 0.304 | Time: 15.9s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch  6/400 | Train Loss: 3.5489 | Val Loss: 3.2306 | Val Gloss Acc: 0.077 | Val Cat Acc: 0.332 | Time: 15.7s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch  7/400 | Train Loss: 3.1744 | Val Loss: 3.0158 | Val Gloss Acc: 0.117 | Val Cat Acc: 0.381 | Time: 15.7s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch  8/400 | Train Loss: 2.8952 | Val Loss: 2.8837 | Val Gloss Acc: 0.141 | Val Cat Acc: 0.402 | Time: 15.3s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch  9/400 | Train Loss: 3.1900 | Val Loss: 2.8174 | Val Gloss Acc: 0.151 | Val Cat Acc: 0.418 | Time: 14.7s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 10/400 | Train Loss: 2.7559 | Val Loss: 2.6148 | Val Gloss Acc: 0.179 | Val Cat Acc: 0.435 | Time: 14.8s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 11/400 | Train Loss: 2.3811 | Val Loss: 2.5654 | Val Gloss Acc: 0.199 | Val Cat Acc: 0.461 | Time: 15.3s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 12/400 | Train Loss: 3.0707 | Val Loss: 2.4100 | Val Gloss Acc: 0.227 | Val Cat Acc: 0.473 | Time: 14.8s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 13/400 | Train Loss: 2.6589 | Val Loss: 2.3653 | Val Gloss Acc: 0.228 | Val Cat Acc: 0.502 | Time: 15.0s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 14/400 | Train Loss: 2.4682 | Val Loss: 2.2762 | Val Gloss Acc: 0.264 | Val Cat Acc: 0.509 | Time: 14.8s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 15/400 | Train Loss: 2.6305 | Val Loss: 2.1914 | Val Gloss Acc: 0.285 | Val Cat Acc: 0.527 | Time: 15.3s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 16/400 | Train Loss: 2.1888 | Val Loss: 2.1086 | Val Gloss Acc: 0.307 | Val Cat Acc: 0.539 | Time: 15.6s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 17/400 | Train Loss: 1.9635 | Val Loss: 2.0717 | Val Gloss Acc: 0.304 | Val Cat Acc: 0.538 | Time: 15.0s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 18/400 | Train Loss: 2.2762 | Val Loss: 1.9716 | Val Gloss Acc: 0.342 | Val Cat Acc: 0.554 | Time: 15.3s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 19/400 | Train Loss: 2.1051 | Val Loss: 1.8844 | Val Gloss Acc: 0.353 | Val Cat Acc: 0.555 | Time: 13.2s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 20/400 | Train Loss: 1.7008 | Val Loss: 1.9472 | Val Gloss Acc: 0.345 | Val Cat Acc: 0.566 | Time: 14.0s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 21/400 | Train Loss: 1.4356 | Val Loss: 1.9414 | Val Gloss Acc: 0.348 | Val Cat Acc: 0.553 | Time: 14.9s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 22/400 | Train Loss: 1.3169 | Val Loss: 1.6974 | Val Gloss Acc: 0.412 | Val Cat Acc: 0.612 | Time: 15.0s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 23/400 | Train Loss: 1.3966 | Val Loss: 1.6859 | Val Gloss Acc: 0.418 | Val Cat Acc: 0.624 | Time: 14.5s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 24/400 | Train Loss: 1.6323 | Val Loss: 1.5790 | Val Gloss Acc: 0.454 | Val Cat Acc: 0.646 | Time: 13.7s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 25/400 | Train Loss: 1.3977 | Val Loss: 1.4740 | Val Gloss Acc: 0.490 | Val Cat Acc: 0.656 | Time: 15.5s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 26/400 | Train Loss: 1.1559 | Val Loss: 1.3994 | Val Gloss Acc: 0.522 | Val Cat Acc: 0.676 | Time: 15.3s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 27/400 | Train Loss: 1.7916 | Val Loss: 1.3760 | Val Gloss Acc: 0.522 | Val Cat Acc: 0.687 | Time: 15.2s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 28/400 | Train Loss: 1.3371 | Val Loss: 1.3121 | Val Gloss Acc: 0.545 | Val Cat Acc: 0.692 | Time: 14.3s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 29/400 | Train Loss: 1.5914 | Val Loss: 1.2708 | Val Gloss Acc: 0.547 | Val Cat Acc: 0.709 | Time: 14.8s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 30/400 | Train Loss: 1.0297 | Val Loss: 1.3017 | Val Gloss Acc: 0.542 | Val Cat Acc: 0.720 | Time: 14.0s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 31/400 | Train Loss: 1.1202 | Val Loss: 1.2392 | Val Gloss Acc: 0.569 | Val Cat Acc: 0.720 | Time: 13.3s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 32/400 | Train Loss: 0.9472 | Val Loss: 1.1071 | Val Gloss Acc: 0.596 | Val Cat Acc: 0.768 | Time: 16.0s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 33/400 | Train Loss: 1.1838 | Val Loss: 1.1004 | Val Gloss Acc: 0.604 | Val Cat Acc: 0.751 | Time: 15.2s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 34/400 | Train Loss: 0.9305 | Val Loss: 1.0580 | Val Gloss Acc: 0.622 | Val Cat Acc: 0.770 | Time: 15.8s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 35/400 | Train Loss: 0.9156 | Val Loss: 1.0816 | Val Gloss Acc: 0.608 | Val Cat Acc: 0.774 | Time: 15.2s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 36/400 | Train Loss: 1.2549 | Val Loss: 0.9614 | Val Gloss Acc: 0.658 | Val Cat Acc: 0.800 | Time: 15.2s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 37/400 | Train Loss: 0.9025 | Val Loss: 1.0010 | Val Gloss Acc: 0.635 | Val Cat Acc: 0.787 | Time: 15.3s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 38/400 | Train Loss: 0.8370 | Val Loss: 1.0002 | Val Gloss Acc: 0.640 | Val Cat Acc: 0.813 | Time: 15.0s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 39/400 | Train Loss: 0.9388 | Val Loss: 1.2253 | Val Gloss Acc: 0.572 | Val Cat Acc: 0.739 | Time: 15.3s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 40/400 | Train Loss: 0.9491 | Val Loss: 0.9223 | Val Gloss Acc: 0.663 | Val Cat Acc: 0.817 | Time: 15.3s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 41/400 | Train Loss: 1.0334 | Val Loss: 1.3640 | Val Gloss Acc: 0.527 | Val Cat Acc: 0.734 | Time: 13.8s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 42/400 | Train Loss: 1.0318 | Val Loss: 0.8383 | Val Gloss Acc: 0.699 | Val Cat Acc: 0.838 | Time: 14.4s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 43/400 | Train Loss: 0.7501 | Val Loss: 0.9674 | Val Gloss Acc: 0.649 | Val Cat Acc: 0.806 | Time: 14.4s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 44/400 | Train Loss: 0.9397 | Val Loss: 0.8737 | Val Gloss Acc: 0.677 | Val Cat Acc: 0.839 | Time: 13.7s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 45/400 | Train Loss: 0.9365 | Val Loss: 0.8210 | Val Gloss Acc: 0.703 | Val Cat Acc: 0.853 | Time: 14.4s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 46/400 | Train Loss: 1.2176 | Val Loss: 0.8333 | Val Gloss Acc: 0.696 | Val Cat Acc: 0.841 | Time: 15.4s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 47/400 | Train Loss: 1.2452 | Val Loss: 0.9338 | Val Gloss Acc: 0.669 | Val Cat Acc: 0.827 | Time: 15.1s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 48/400 | Train Loss: 0.8986 | Val Loss: 0.8095 | Val Gloss Acc: 0.705 | Val Cat Acc: 0.852 | Time: 13.8s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 49/400 | Train Loss: 0.4149 | Val Loss: 0.6994 | Val Gloss Acc: 0.753 | Val Cat Acc: 0.880 | Time: 14.9s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 50/400 | Train Loss: 0.6969 | Val Loss: 0.7525 | Val Gloss Acc: 0.736 | Val Cat Acc: 0.863 | Time: 14.9s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 51/400 | Train Loss: 0.9564 | Val Loss: 0.8974 | Val Gloss Acc: 0.689 | Val Cat Acc: 0.827 | Time: 15.6s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 52/400 | Train Loss: 0.6409 | Val Loss: 0.7343 | Val Gloss Acc: 0.735 | Val Cat Acc: 0.879 | Time: 15.4s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 53/400 | Train Loss: 0.5073 | Val Loss: 0.6564 | Val Gloss Acc: 0.766 | Val Cat Acc: 0.886 | Time: 13.3s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 54/400 | Train Loss: 0.8316 | Val Loss: 0.7009 | Val Gloss Acc: 0.754 | Val Cat Acc: 0.884 | Time: 13.4s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 55/400 | Train Loss: 0.4740 | Val Loss: 0.6800 | Val Gloss Acc: 0.763 | Val Cat Acc: 0.884 | Time: 15.7s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 56/400 | Train Loss: 0.7258 | Val Loss: 0.6670 | Val Gloss Acc: 0.759 | Val Cat Acc: 0.885 | Time: 15.6s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 57/400 | Train Loss: 0.1635 | Val Loss: 0.5733 | Val Gloss Acc: 0.791 | Val Cat Acc: 0.908 | Time: 15.1s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 58/400 | Train Loss: 0.7358 | Val Loss: 0.6251 | Val Gloss Acc: 0.777 | Val Cat Acc: 0.896 | Time: 15.5s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 59/400 | Train Loss: 0.1963 | Val Loss: 0.6010 | Val Gloss Acc: 0.788 | Val Cat Acc: 0.904 | Time: 14.3s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 60/400 | Train Loss: 0.5247 | Val Loss: 0.6332 | Val Gloss Acc: 0.777 | Val Cat Acc: 0.885 | Time: 15.7s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 61/400 | Train Loss: 0.7109 | Val Loss: 0.6083 | Val Gloss Acc: 0.781 | Val Cat Acc: 0.893 | Time: 15.6s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 62/400 | Train Loss: 0.4728 | Val Loss: 0.6026 | Val Gloss Acc: 0.782 | Val Cat Acc: 0.910 | Time: 15.5s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 63/400 | Train Loss: 0.5109 | Val Loss: 0.5263 | Val Gloss Acc: 0.816 | Val Cat Acc: 0.918 | Time: 15.3s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 64/400 | Train Loss: 0.6004 | Val Loss: 0.5434 | Val Gloss Acc: 0.807 | Val Cat Acc: 0.910 | Time: 15.0s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 65/400 | Train Loss: 0.1286 | Val Loss: 0.5800 | Val Gloss Acc: 0.806 | Val Cat Acc: 0.899 | Time: 15.7s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 66/400 | Train Loss: 0.3872 | Val Loss: 0.5647 | Val Gloss Acc: 0.804 | Val Cat Acc: 0.899 | Time: 15.6s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 67/400 | Train Loss: 0.5399 | Val Loss: 0.5326 | Val Gloss Acc: 0.818 | Val Cat Acc: 0.912 | Time: 15.6s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 68/400 | Train Loss: 0.5378 | Val Loss: 0.5186 | Val Gloss Acc: 0.825 | Val Cat Acc: 0.919 | Time: 16.0s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 69/400 | Train Loss: 0.7929 | Val Loss: 0.5641 | Val Gloss Acc: 0.811 | Val Cat Acc: 0.908 | Time: 15.6s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 70/400 | Train Loss: 0.6766 | Val Loss: 0.5081 | Val Gloss Acc: 0.826 | Val Cat Acc: 0.925 | Time: 15.1s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 71/400 | Train Loss: 0.3006 | Val Loss: 0.7079 | Val Gloss Acc: 0.759 | Val Cat Acc: 0.883 | Time: 15.7s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 72/400 | Train Loss: 0.3538 | Val Loss: 0.4774 | Val Gloss Acc: 0.841 | Val Cat Acc: 0.917 | Time: 15.0s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 73/400 | Train Loss: 0.1776 | Val Loss: 0.5368 | Val Gloss Acc: 0.818 | Val Cat Acc: 0.920 | Time: 14.9s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 74/400 | Train Loss: 0.3078 | Val Loss: 0.5273 | Val Gloss Acc: 0.833 | Val Cat Acc: 0.921 | Time: 14.8s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 75/400 | Train Loss: 0.2252 | Val Loss: 0.4680 | Val Gloss Acc: 0.842 | Val Cat Acc: 0.926 | Time: 15.0s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 76/400 | Train Loss: 0.2064 | Val Loss: 0.4526 | Val Gloss Acc: 0.848 | Val Cat Acc: 0.937 | Time: 15.1s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 77/400 | Train Loss: 0.1368 | Val Loss: 0.4866 | Val Gloss Acc: 0.828 | Val Cat Acc: 0.925 | Time: 13.8s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 78/400 | Train Loss: 0.2901 | Val Loss: 0.4476 | Val Gloss Acc: 0.841 | Val Cat Acc: 0.932 | Time: 15.5s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 79/400 | Train Loss: 0.1490 | Val Loss: 0.5752 | Val Gloss Acc: 0.813 | Val Cat Acc: 0.908 | Time: 15.7s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 80/400 | Train Loss: 0.4769 | Val Loss: 0.5661 | Val Gloss Acc: 0.807 | Val Cat Acc: 0.899 | Time: 15.0s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 81/400 | Train Loss: 0.1771 | Val Loss: 0.4254 | Val Gloss Acc: 0.861 | Val Cat Acc: 0.934 | Time: 14.8s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 82/400 | Train Loss: 0.4646 | Val Loss: 0.4639 | Val Gloss Acc: 0.843 | Val Cat Acc: 0.914 | Time: 15.1s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 83/400 | Train Loss: 0.3673 | Val Loss: 0.4360 | Val Gloss Acc: 0.859 | Val Cat Acc: 0.925 | Time: 15.3s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 84/400 | Train Loss: 0.5348 | Val Loss: 0.4309 | Val Gloss Acc: 0.861 | Val Cat Acc: 0.925 | Time: 15.4s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 85/400 | Train Loss: 0.1871 | Val Loss: 0.4698 | Val Gloss Acc: 0.841 | Val Cat Acc: 0.915 | Time: 15.4s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 86/400 | Train Loss: 0.4046 | Val Loss: 0.4175 | Val Gloss Acc: 0.868 | Val Cat Acc: 0.932 | Time: 15.7s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 87/400 | Train Loss: 0.1348 | Val Loss: 0.4172 | Val Gloss Acc: 0.871 | Val Cat Acc: 0.941 | Time: 15.1s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 88/400 | Train Loss: 0.2952 | Val Loss: 0.5356 | Val Gloss Acc: 0.828 | Val Cat Acc: 0.916 | Time: 15.2s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 89/400 | Train Loss: 0.2675 | Val Loss: 0.6126 | Val Gloss Acc: 0.808 | Val Cat Acc: 0.901 | Time: 14.6s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 90/400 | Train Loss: 0.3733 | Val Loss: 0.4381 | Val Gloss Acc: 0.861 | Val Cat Acc: 0.943 | Time: 14.2s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 91/400 | Train Loss: 0.2510 | Val Loss: 0.4721 | Val Gloss Acc: 0.848 | Val Cat Acc: 0.918 | Time: 15.6s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 92/400 | Train Loss: 0.1757 | Val Loss: 0.4254 | Val Gloss Acc: 0.862 | Val Cat Acc: 0.939 | Time: 15.1s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 93/400 | Train Loss: 0.3539 | Val Loss: 0.3955 | Val Gloss Acc: 0.865 | Val Cat Acc: 0.935 | Time: 14.4s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 94/400 | Train Loss: 0.1598 | Val Loss: 0.3974 | Val Gloss Acc: 0.871 | Val Cat Acc: 0.936 | Time: 15.5s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 95/400 | Train Loss: 0.1964 | Val Loss: 0.4655 | Val Gloss Acc: 0.843 | Val Cat Acc: 0.938 | Time: 15.3s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 96/400 | Train Loss: 0.1566 | Val Loss: 0.3946 | Val Gloss Acc: 0.877 | Val Cat Acc: 0.936 | Time: 15.3s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 97/400 | Train Loss: 0.1154 | Val Loss: 0.4465 | Val Gloss Acc: 0.858 | Val Cat Acc: 0.926 | Time: 14.8s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 98/400 | Train Loss: 0.6485 | Val Loss: 0.4549 | Val Gloss Acc: 0.859 | Val Cat Acc: 0.919 | Time: 15.5s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 99/400 | Train Loss: 0.0696 | Val Loss: 0.3276 | Val Gloss Acc: 0.898 | Val Cat Acc: 0.944 | Time: 15.3s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 100/400 | Train Loss: 0.0963 | Val Loss: 0.3915 | Val Gloss Acc: 0.880 | Val Cat Acc: 0.945 | Time: 15.7s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 101/400 | Train Loss: 0.0880 | Val Loss: 0.5660 | Val Gloss Acc: 0.823 | Val Cat Acc: 0.905 | Time: 15.3s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 102/400 | Train Loss: 0.4711 | Val Loss: 0.3910 | Val Gloss Acc: 0.879 | Val Cat Acc: 0.932 | Time: 14.8s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 103/400 | Train Loss: 0.0954 | Val Loss: 0.3318 | Val Gloss Acc: 0.897 | Val Cat Acc: 0.949 | Time: 15.5s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 104/400 | Train Loss: 0.4150 | Val Loss: 0.3622 | Val Gloss Acc: 0.888 | Val Cat Acc: 0.945 | Time: 15.7s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 105/400 | Train Loss: 0.2411 | Val Loss: 0.3684 | Val Gloss Acc: 0.884 | Val Cat Acc: 0.943 | Time: 14.8s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 106/400 | Train Loss: 0.0737 | Val Loss: 0.3097 | Val Gloss Acc: 0.901 | Val Cat Acc: 0.958 | Time: 14.9s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 107/400 | Train Loss: 0.1934 | Val Loss: 0.3977 | Val Gloss Acc: 0.876 | Val Cat Acc: 0.935 | Time: 15.4s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 108/400 | Train Loss: 0.0514 | Val Loss: 0.4137 | Val Gloss Acc: 0.872 | Val Cat Acc: 0.940 | Time: 14.2s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 109/400 | Train Loss: 0.3766 | Val Loss: 0.4218 | Val Gloss Acc: 0.858 | Val Cat Acc: 0.927 | Time: 13.2s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 110/400 | Train Loss: 0.1602 | Val Loss: 0.3335 | Val Gloss Acc: 0.889 | Val Cat Acc: 0.947 | Time: 15.0s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 111/400 | Train Loss: 0.0190 | Val Loss: 0.3777 | Val Gloss Acc: 0.883 | Val Cat Acc: 0.952 | Time: 15.8s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 112/400 | Train Loss: 0.1279 | Val Loss: 0.3296 | Val Gloss Acc: 0.907 | Val Cat Acc: 0.942 | Time: 15.4s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 113/400 | Train Loss: 0.1385 | Val Loss: 0.5190 | Val Gloss Acc: 0.843 | Val Cat Acc: 0.927 | Time: 14.6s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 114/400 | Train Loss: 0.2117 | Val Loss: 0.3536 | Val Gloss Acc: 0.890 | Val Cat Acc: 0.950 | Time: 15.2s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 115/400 | Train Loss: 0.3994 | Val Loss: 0.3669 | Val Gloss Acc: 0.890 | Val Cat Acc: 0.947 | Time: 13.9s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 116/400 | Train Loss: 0.0354 | Val Loss: 0.3615 | Val Gloss Acc: 0.890 | Val Cat Acc: 0.954 | Time: 13.8s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 117/400 | Train Loss: 0.0792 | Val Loss: 0.4037 | Val Gloss Acc: 0.869 | Val Cat Acc: 0.938 | Time: 15.5s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 118/400 | Train Loss: 0.1727 | Val Loss: 0.3204 | Val Gloss Acc: 0.914 | Val Cat Acc: 0.954 | Time: 14.2s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 119/400 | Train Loss: 0.1232 | Val Loss: 0.3887 | Val Gloss Acc: 0.885 | Val Cat Acc: 0.951 | Time: 14.9s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 120/400 | Train Loss: 0.0826 | Val Loss: 0.3369 | Val Gloss Acc: 0.903 | Val Cat Acc: 0.948 | Time: 15.1s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 121/400 | Train Loss: 0.2899 | Val Loss: 0.4065 | Val Gloss Acc: 0.878 | Val Cat Acc: 0.941 | Time: 15.5s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 122/400 | Train Loss: 0.0700 | Val Loss: 0.3630 | Val Gloss Acc: 0.885 | Val Cat Acc: 0.950 | Time: 14.7s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 123/400 | Train Loss: 0.2471 | Val Loss: 0.3094 | Val Gloss Acc: 0.910 | Val Cat Acc: 0.952 | Time: 15.7s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 124/400 | Train Loss: 0.0789 | Val Loss: 0.3743 | Val Gloss Acc: 0.887 | Val Cat Acc: 0.935 | Time: 15.2s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 125/400 | Train Loss: 0.1222 | Val Loss: 0.3804 | Val Gloss Acc: 0.885 | Val Cat Acc: 0.938 | Time: 15.6s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 126/400 | Train Loss: 0.0378 | Val Loss: 0.3573 | Val Gloss Acc: 0.898 | Val Cat Acc: 0.947 | Time: 15.2s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 127/400 | Train Loss: 0.2451 | Val Loss: 0.3130 | Val Gloss Acc: 0.913 | Val Cat Acc: 0.956 | Time: 15.5s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 128/400 | Train Loss: 0.0293 | Val Loss: 0.4206 | Val Gloss Acc: 0.874 | Val Cat Acc: 0.932 | Time: 14.8s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 129/400 | Train Loss: 0.1468 | Val Loss: 0.3651 | Val Gloss Acc: 0.897 | Val Cat Acc: 0.944 | Time: 15.4s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 130/400 | Train Loss: 0.0388 | Val Loss: 0.3237 | Val Gloss Acc: 0.906 | Val Cat Acc: 0.955 | Time: 14.8s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 131/400 | Train Loss: 0.0309 | Val Loss: 0.4030 | Val Gloss Acc: 0.879 | Val Cat Acc: 0.939 | Time: 13.3s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 132/400 | Train Loss: 0.3165 | Val Loss: 0.3245 | Val Gloss Acc: 0.896 | Val Cat Acc: 0.958 | Time: 13.3s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 133/400 | Train Loss: 0.0699 | Val Loss: 0.3134 | Val Gloss Acc: 0.897 | Val Cat Acc: 0.957 | Time: 13.2s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 134/400 | Train Loss: 0.1443 | Val Loss: 0.2934 | Val Gloss Acc: 0.912 | Val Cat Acc: 0.962 | Time: 13.3s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 135/400 | Train Loss: 0.2494 | Val Loss: 0.3049 | Val Gloss Acc: 0.915 | Val Cat Acc: 0.952 | Time: 14.6s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 136/400 | Train Loss: 0.1415 | Val Loss: 0.2732 | Val Gloss Acc: 0.927 | Val Cat Acc: 0.965 | Time: 15.4s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 137/400 | Train Loss: 0.1166 | Val Loss: 0.2656 | Val Gloss Acc: 0.927 | Val Cat Acc: 0.965 | Time: 15.4s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 138/400 | Train Loss: 0.1694 | Val Loss: 0.3758 | Val Gloss Acc: 0.886 | Val Cat Acc: 0.941 | Time: 14.5s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 139/400 | Train Loss: 0.1103 | Val Loss: 0.2929 | Val Gloss Acc: 0.918 | Val Cat Acc: 0.953 | Time: 15.4s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 140/400 | Train Loss: 0.0486 | Val Loss: 0.3192 | Val Gloss Acc: 0.909 | Val Cat Acc: 0.955 | Time: 15.7s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 141/400 | Train Loss: 0.0948 | Val Loss: 0.3049 | Val Gloss Acc: 0.906 | Val Cat Acc: 0.953 | Time: 15.6s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 142/400 | Train Loss: 0.0313 | Val Loss: 0.3116 | Val Gloss Acc: 0.910 | Val Cat Acc: 0.958 | Time: 15.9s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 143/400 | Train Loss: 0.0716 | Val Loss: 0.3299 | Val Gloss Acc: 0.904 | Val Cat Acc: 0.956 | Time: 15.0s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 144/400 | Train Loss: 0.0936 | Val Loss: 0.2614 | Val Gloss Acc: 0.930 | Val Cat Acc: 0.969 | Time: 15.6s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 145/400 | Train Loss: 0.1311 | Val Loss: 0.2507 | Val Gloss Acc: 0.929 | Val Cat Acc: 0.962 | Time: 15.8s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 146/400 | Train Loss: 0.0490 | Val Loss: 0.2497 | Val Gloss Acc: 0.931 | Val Cat Acc: 0.967 | Time: 15.7s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 147/400 | Train Loss: 0.0670 | Val Loss: 0.3304 | Val Gloss Acc: 0.913 | Val Cat Acc: 0.949 | Time: 14.0s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 148/400 | Train Loss: 0.0130 | Val Loss: 0.2512 | Val Gloss Acc: 0.939 | Val Cat Acc: 0.958 | Time: 15.8s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 149/400 | Train Loss: 0.2390 | Val Loss: 0.2673 | Val Gloss Acc: 0.923 | Val Cat Acc: 0.961 | Time: 14.7s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 150/400 | Train Loss: 0.0186 | Val Loss: 0.3497 | Val Gloss Acc: 0.900 | Val Cat Acc: 0.949 | Time: 15.6s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 151/400 | Train Loss: 0.0207 | Val Loss: 0.2805 | Val Gloss Acc: 0.927 | Val Cat Acc: 0.962 | Time: 15.4s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 152/400 | Train Loss: 0.0379 | Val Loss: 0.2652 | Val Gloss Acc: 0.925 | Val Cat Acc: 0.966 | Time: 15.5s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 153/400 | Train Loss: 0.1555 | Val Loss: 0.2702 | Val Gloss Acc: 0.924 | Val Cat Acc: 0.971 | Time: 14.8s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 154/400 | Train Loss: 0.0279 | Val Loss: 0.3044 | Val Gloss Acc: 0.911 | Val Cat Acc: 0.962 | Time: 15.2s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 155/400 | Train Loss: 0.1484 | Val Loss: 0.2754 | Val Gloss Acc: 0.922 | Val Cat Acc: 0.959 | Time: 13.9s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 156/400 | Train Loss: 0.0571 | Val Loss: 0.2532 | Val Gloss Acc: 0.936 | Val Cat Acc: 0.963 | Time: 13.2s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 157/400 | Train Loss: 0.0193 | Val Loss: 0.3345 | Val Gloss Acc: 0.906 | Val Cat Acc: 0.951 | Time: 15.4s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 158/400 | Train Loss: 0.0248 | Val Loss: 0.2538 | Val Gloss Acc: 0.930 | Val Cat Acc: 0.961 | Time: 13.6s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 159/400 | Train Loss: 0.0803 | Val Loss: 0.3245 | Val Gloss Acc: 0.899 | Val Cat Acc: 0.958 | Time: 15.7s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 160/400 | Train Loss: 0.0588 | Val Loss: 0.3027 | Val Gloss Acc: 0.916 | Val Cat Acc: 0.954 | Time: 15.4s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 161/400 | Train Loss: 0.1163 | Val Loss: 0.2710 | Val Gloss Acc: 0.928 | Val Cat Acc: 0.962 | Time: 16.0s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 162/400 | Train Loss: 0.2046 | Val Loss: 0.2447 | Val Gloss Acc: 0.935 | Val Cat Acc: 0.969 | Time: 15.3s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 163/400 | Train Loss: 0.1118 | Val Loss: 0.2398 | Val Gloss Acc: 0.927 | Val Cat Acc: 0.968 | Time: 15.6s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 164/400 | Train Loss: 0.0739 | Val Loss: 0.2581 | Val Gloss Acc: 0.930 | Val Cat Acc: 0.967 | Time: 15.6s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 165/400 | Train Loss: 0.0353 | Val Loss: 0.2388 | Val Gloss Acc: 0.929 | Val Cat Acc: 0.969 | Time: 15.5s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 166/400 | Train Loss: 0.1556 | Val Loss: 0.2566 | Val Gloss Acc: 0.921 | Val Cat Acc: 0.951 | Time: 14.8s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 167/400 | Train Loss: 0.1949 | Val Loss: 0.3143 | Val Gloss Acc: 0.912 | Val Cat Acc: 0.943 | Time: 15.4s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 168/400 | Train Loss: 0.3716 | Val Loss: 0.2605 | Val Gloss Acc: 0.929 | Val Cat Acc: 0.959 | Time: 13.4s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 169/400 | Train Loss: 0.0537 | Val Loss: 0.2353 | Val Gloss Acc: 0.938 | Val Cat Acc: 0.970 | Time: 13.7s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 170/400 | Train Loss: 0.0781 | Val Loss: 0.2832 | Val Gloss Acc: 0.924 | Val Cat Acc: 0.962 | Time: 15.8s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 171/400 | Train Loss: 0.2987 | Val Loss: 0.3108 | Val Gloss Acc: 0.899 | Val Cat Acc: 0.952 | Time: 15.4s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 172/400 | Train Loss: 0.0192 | Val Loss: 0.2816 | Val Gloss Acc: 0.918 | Val Cat Acc: 0.965 | Time: 14.7s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 173/400 | Train Loss: 0.0230 | Val Loss: 0.2292 | Val Gloss Acc: 0.936 | Val Cat Acc: 0.967 | Time: 15.4s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 174/400 | Train Loss: 0.0236 | Val Loss: 0.2699 | Val Gloss Acc: 0.927 | Val Cat Acc: 0.962 | Time: 14.4s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 175/400 | Train Loss: 0.1414 | Val Loss: 0.2469 | Val Gloss Acc: 0.925 | Val Cat Acc: 0.966 | Time: 13.2s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 176/400 | Train Loss: 0.0230 | Val Loss: 0.2249 | Val Gloss Acc: 0.941 | Val Cat Acc: 0.974 | Time: 13.2s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 177/400 | Train Loss: 0.1604 | Val Loss: 0.3143 | Val Gloss Acc: 0.913 | Val Cat Acc: 0.962 | Time: 13.9s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 178/400 | Train Loss: 0.0901 | Val Loss: 0.3224 | Val Gloss Acc: 0.900 | Val Cat Acc: 0.953 | Time: 13.4s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 179/400 | Train Loss: 0.2690 | Val Loss: 0.2856 | Val Gloss Acc: 0.925 | Val Cat Acc: 0.956 | Time: 15.4s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 180/400 | Train Loss: 0.0315 | Val Loss: 0.2831 | Val Gloss Acc: 0.924 | Val Cat Acc: 0.954 | Time: 15.2s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 181/400 | Train Loss: 0.0602 | Val Loss: 0.2303 | Val Gloss Acc: 0.938 | Val Cat Acc: 0.966 | Time: 15.4s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 182/400 | Train Loss: 0.0386 | Val Loss: 0.2459 | Val Gloss Acc: 0.934 | Val Cat Acc: 0.961 | Time: 15.5s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 183/400 | Train Loss: 0.3135 | Val Loss: 0.2577 | Val Gloss Acc: 0.933 | Val Cat Acc: 0.964 | Time: 15.4s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 184/400 | Train Loss: 0.0273 | Val Loss: 0.2389 | Val Gloss Acc: 0.938 | Val Cat Acc: 0.971 | Time: 13.9s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 185/400 | Train Loss: 0.1311 | Val Loss: 0.2199 | Val Gloss Acc: 0.945 | Val Cat Acc: 0.974 | Time: 14.8s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 186/400 | Train Loss: 0.0433 | Val Loss: 0.2563 | Val Gloss Acc: 0.934 | Val Cat Acc: 0.974 | Time: 14.7s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 187/400 | Train Loss: 0.0869 | Val Loss: 0.2608 | Val Gloss Acc: 0.930 | Val Cat Acc: 0.965 | Time: 14.6s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 188/400 | Train Loss: 0.0780 | Val Loss: 0.2409 | Val Gloss Acc: 0.933 | Val Cat Acc: 0.969 | Time: 15.5s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 189/400 | Train Loss: 0.0125 | Val Loss: 0.2432 | Val Gloss Acc: 0.938 | Val Cat Acc: 0.964 | Time: 15.7s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 190/400 | Train Loss: 0.0160 | Val Loss: 0.2779 | Val Gloss Acc: 0.922 | Val Cat Acc: 0.963 | Time: 15.5s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 191/400 | Train Loss: 0.0730 | Val Loss: 0.2318 | Val Gloss Acc: 0.941 | Val Cat Acc: 0.961 | Time: 15.6s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 192/400 | Train Loss: 0.0871 | Val Loss: 0.3280 | Val Gloss Acc: 0.901 | Val Cat Acc: 0.960 | Time: 15.6s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 193/400 | Train Loss: 0.0554 | Val Loss: 0.2528 | Val Gloss Acc: 0.929 | Val Cat Acc: 0.964 | Time: 14.4s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 194/400 | Train Loss: 0.4647 | Val Loss: 0.2342 | Val Gloss Acc: 0.937 | Val Cat Acc: 0.964 | Time: 15.1s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 195/400 | Train Loss: 0.0394 | Val Loss: 0.2606 | Val Gloss Acc: 0.932 | Val Cat Acc: 0.970 | Time: 15.7s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 196/400 | Train Loss: 0.1046 | Val Loss: 0.2530 | Val Gloss Acc: 0.929 | Val Cat Acc: 0.964 | Time: 16.0s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 197/400 | Train Loss: 0.1171 | Val Loss: 0.2233 | Val Gloss Acc: 0.938 | Val Cat Acc: 0.974 | Time: 15.4s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 198/400 | Train Loss: 0.0827 | Val Loss: 0.2033 | Val Gloss Acc: 0.949 | Val Cat Acc: 0.970 | Time: 15.4s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 199/400 | Train Loss: 0.0170 | Val Loss: 0.1976 | Val Gloss Acc: 0.946 | Val Cat Acc: 0.975 | Time: 15.2s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 200/400 | Train Loss: 0.0688 | Val Loss: 0.2213 | Val Gloss Acc: 0.941 | Val Cat Acc: 0.973 | Time: 15.0s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 201/400 | Train Loss: 0.0132 | Val Loss: 0.1990 | Val Gloss Acc: 0.954 | Val Cat Acc: 0.968 | Time: 14.9s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 202/400 | Train Loss: 0.0569 | Val Loss: 0.2482 | Val Gloss Acc: 0.930 | Val Cat Acc: 0.965 | Time: 14.3s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 203/400 | Train Loss: 0.0811 | Val Loss: 0.2998 | Val Gloss Acc: 0.911 | Val Cat Acc: 0.958 | Time: 13.0s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 204/400 | Train Loss: 0.2513 | Val Loss: 0.2404 | Val Gloss Acc: 0.934 | Val Cat Acc: 0.967 | Time: 13.3s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 205/400 | Train Loss: 0.0237 | Val Loss: 0.2250 | Val Gloss Acc: 0.941 | Val Cat Acc: 0.972 | Time: 14.4s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 206/400 | Train Loss: 0.1379 | Val Loss: 0.2199 | Val Gloss Acc: 0.947 | Val Cat Acc: 0.969 | Time: 14.3s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 207/400 | Train Loss: 0.0289 | Val Loss: 0.2370 | Val Gloss Acc: 0.938 | Val Cat Acc: 0.964 | Time: 15.5s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 208/400 | Train Loss: 0.0522 | Val Loss: 0.2104 | Val Gloss Acc: 0.947 | Val Cat Acc: 0.973 | Time: 15.2s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 209/400 | Train Loss: 0.0220 | Val Loss: 0.2811 | Val Gloss Acc: 0.923 | Val Cat Acc: 0.961 | Time: 15.2s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 210/400 | Train Loss: 0.0761 | Val Loss: 0.2084 | Val Gloss Acc: 0.949 | Val Cat Acc: 0.972 | Time: 14.5s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 211/400 | Train Loss: 0.0253 | Val Loss: 0.2157 | Val Gloss Acc: 0.943 | Val Cat Acc: 0.966 | Time: 15.6s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 212/400 | Train Loss: 0.0863 | Val Loss: 0.1885 | Val Gloss Acc: 0.954 | Val Cat Acc: 0.974 | Time: 15.7s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 213/400 | Train Loss: 0.0176 | Val Loss: 0.1966 | Val Gloss Acc: 0.947 | Val Cat Acc: 0.976 | Time: 15.6s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 214/400 | Train Loss: 0.0509 | Val Loss: 0.2411 | Val Gloss Acc: 0.936 | Val Cat Acc: 0.969 | Time: 15.8s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 215/400 | Train Loss: 0.0703 | Val Loss: 0.2478 | Val Gloss Acc: 0.937 | Val Cat Acc: 0.967 | Time: 15.2s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 216/400 | Train Loss: 0.0361 | Val Loss: 0.2520 | Val Gloss Acc: 0.929 | Val Cat Acc: 0.972 | Time: 14.6s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 217/400 | Train Loss: 0.0178 | Val Loss: 0.1877 | Val Gloss Acc: 0.952 | Val Cat Acc: 0.973 | Time: 14.3s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 218/400 | Train Loss: 0.0263 | Val Loss: 0.2760 | Val Gloss Acc: 0.921 | Val Cat Acc: 0.961 | Time: 14.5s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 219/400 | Train Loss: 0.1857 | Val Loss: 0.2740 | Val Gloss Acc: 0.921 | Val Cat Acc: 0.966 | Time: 13.1s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 220/400 | Train Loss: 0.0584 | Val Loss: 0.2530 | Val Gloss Acc: 0.930 | Val Cat Acc: 0.963 | Time: 13.1s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 221/400 | Train Loss: 0.0177 | Val Loss: 0.2343 | Val Gloss Acc: 0.938 | Val Cat Acc: 0.966 | Time: 13.1s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 222/400 | Train Loss: 0.0050 | Val Loss: 0.1825 | Val Gloss Acc: 0.954 | Val Cat Acc: 0.977 | Time: 13.2s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 223/400 | Train Loss: 0.0968 | Val Loss: 0.1731 | Val Gloss Acc: 0.955 | Val Cat Acc: 0.974 | Time: 14.9s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 224/400 | Train Loss: 0.0754 | Val Loss: 0.1842 | Val Gloss Acc: 0.947 | Val Cat Acc: 0.976 | Time: 15.3s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 225/400 | Train Loss: 0.0694 | Val Loss: 0.1946 | Val Gloss Acc: 0.949 | Val Cat Acc: 0.974 | Time: 15.8s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 226/400 | Train Loss: 0.0625 | Val Loss: 0.2081 | Val Gloss Acc: 0.941 | Val Cat Acc: 0.976 | Time: 15.7s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 227/400 | Train Loss: 0.0278 | Val Loss: 0.1784 | Val Gloss Acc: 0.956 | Val Cat Acc: 0.978 | Time: 15.6s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 228/400 | Train Loss: 0.0061 | Val Loss: 0.2173 | Val Gloss Acc: 0.947 | Val Cat Acc: 0.966 | Time: 15.4s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 229/400 | Train Loss: 0.0143 | Val Loss: 0.2184 | Val Gloss Acc: 0.937 | Val Cat Acc: 0.971 | Time: 15.4s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 230/400 | Train Loss: 0.1012 | Val Loss: 0.2236 | Val Gloss Acc: 0.940 | Val Cat Acc: 0.967 | Time: 15.3s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 231/400 | Train Loss: 0.1938 | Val Loss: 0.2113 | Val Gloss Acc: 0.945 | Val Cat Acc: 0.975 | Time: 14.6s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 232/400 | Train Loss: 0.1365 | Val Loss: 0.1900 | Val Gloss Acc: 0.950 | Val Cat Acc: 0.974 | Time: 14.8s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 233/400 | Train Loss: 0.0585 | Val Loss: 0.2358 | Val Gloss Acc: 0.936 | Val Cat Acc: 0.965 | Time: 14.4s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 234/400 | Train Loss: 0.0285 | Val Loss: 0.1943 | Val Gloss Acc: 0.951 | Val Cat Acc: 0.973 | Time: 13.1s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 235/400 | Train Loss: 0.0058 | Val Loss: 0.1942 | Val Gloss Acc: 0.948 | Val Cat Acc: 0.975 | Time: 14.5s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 236/400 | Train Loss: 0.0897 | Val Loss: 0.2041 | Val Gloss Acc: 0.948 | Val Cat Acc: 0.971 | Time: 15.4s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 237/400 | Train Loss: 0.0109 | Val Loss: 0.1701 | Val Gloss Acc: 0.958 | Val Cat Acc: 0.978 | Time: 14.9s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 238/400 | Train Loss: 0.0037 | Val Loss: 0.1923 | Val Gloss Acc: 0.956 | Val Cat Acc: 0.973 | Time: 15.5s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 239/400 | Train Loss: 0.0064 | Val Loss: 0.1898 | Val Gloss Acc: 0.951 | Val Cat Acc: 0.976 | Time: 15.1s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 240/400 | Train Loss: 0.0212 | Val Loss: 0.2725 | Val Gloss Acc: 0.925 | Val Cat Acc: 0.968 | Time: 15.1s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 241/400 | Train Loss: 0.0208 | Val Loss: 0.2391 | Val Gloss Acc: 0.934 | Val Cat Acc: 0.966 | Time: 14.3s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 242/400 | Train Loss: 0.0317 | Val Loss: 0.1817 | Val Gloss Acc: 0.955 | Val Cat Acc: 0.977 | Time: 15.1s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 243/400 | Train Loss: 0.1142 | Val Loss: 0.2080 | Val Gloss Acc: 0.947 | Val Cat Acc: 0.970 | Time: 15.3s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 244/400 | Train Loss: 0.0618 | Val Loss: 0.1646 | Val Gloss Acc: 0.959 | Val Cat Acc: 0.977 | Time: 14.5s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 245/400 | Train Loss: 0.0791 | Val Loss: 0.2002 | Val Gloss Acc: 0.942 | Val Cat Acc: 0.968 | Time: 15.2s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 246/400 | Train Loss: 0.0273 | Val Loss: 0.2074 | Val Gloss Acc: 0.945 | Val Cat Acc: 0.967 | Time: 15.6s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 247/400 | Train Loss: 0.0508 | Val Loss: 0.2190 | Val Gloss Acc: 0.945 | Val Cat Acc: 0.968 | Time: 15.5s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 248/400 | Train Loss: 0.0232 | Val Loss: 0.2360 | Val Gloss Acc: 0.941 | Val Cat Acc: 0.971 | Time: 15.6s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 249/400 | Train Loss: 0.0051 | Val Loss: 0.2036 | Val Gloss Acc: 0.953 | Val Cat Acc: 0.971 | Time: 15.2s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 250/400 | Train Loss: 0.0085 | Val Loss: 0.1889 | Val Gloss Acc: 0.958 | Val Cat Acc: 0.975 | Time: 15.0s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 251/400 | Train Loss: 0.0077 | Val Loss: 0.2098 | Val Gloss Acc: 0.950 | Val Cat Acc: 0.970 | Time: 15.5s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 252/400 | Train Loss: 0.0065 | Val Loss: 0.2084 | Val Gloss Acc: 0.950 | Val Cat Acc: 0.972 | Time: 15.6s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 253/400 | Train Loss: 0.0213 | Val Loss: 0.1699 | Val Gloss Acc: 0.961 | Val Cat Acc: 0.979 | Time: 15.7s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 254/400 | Train Loss: 0.0280 | Val Loss: 0.1761 | Val Gloss Acc: 0.956 | Val Cat Acc: 0.978 | Time: 15.8s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 255/400 | Train Loss: 0.0099 | Val Loss: 0.1762 | Val Gloss Acc: 0.959 | Val Cat Acc: 0.981 | Time: 15.7s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 256/400 | Train Loss: 0.0144 | Val Loss: 0.2005 | Val Gloss Acc: 0.953 | Val Cat Acc: 0.973 | Time: 15.4s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 257/400 | Train Loss: 0.0638 | Val Loss: 0.1845 | Val Gloss Acc: 0.957 | Val Cat Acc: 0.975 | Time: 14.2s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 258/400 | Train Loss: 0.0527 | Val Loss: 0.2095 | Val Gloss Acc: 0.944 | Val Cat Acc: 0.978 | Time: 14.5s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 259/400 | Train Loss: 0.0021 | Val Loss: 0.1850 | Val Gloss Acc: 0.954 | Val Cat Acc: 0.973 | Time: 13.7s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 260/400 | Train Loss: 0.0147 | Val Loss: 0.1655 | Val Gloss Acc: 0.961 | Val Cat Acc: 0.979 | Time: 14.0s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 261/400 | Train Loss: 0.0082 | Val Loss: 0.1985 | Val Gloss Acc: 0.952 | Val Cat Acc: 0.974 | Time: 15.7s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 262/400 | Train Loss: 0.0171 | Val Loss: 0.1771 | Val Gloss Acc: 0.957 | Val Cat Acc: 0.977 | Time: 15.5s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 263/400 | Train Loss: 0.0109 | Val Loss: 0.1803 | Val Gloss Acc: 0.955 | Val Cat Acc: 0.975 | Time: 15.2s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 264/400 | Train Loss: 0.0500 | Val Loss: 0.1941 | Val Gloss Acc: 0.954 | Val Cat Acc: 0.978 | Time: 15.5s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 265/400 | Train Loss: 0.0061 | Val Loss: 0.1711 | Val Gloss Acc: 0.962 | Val Cat Acc: 0.981 | Time: 13.3s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 266/400 | Train Loss: 0.0030 | Val Loss: 0.1840 | Val Gloss Acc: 0.954 | Val Cat Acc: 0.982 | Time: 14.8s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 267/400 | Train Loss: 0.1930 | Val Loss: 0.1880 | Val Gloss Acc: 0.951 | Val Cat Acc: 0.976 | Time: 14.3s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 268/400 | Train Loss: 0.1272 | Val Loss: 0.1814 | Val Gloss Acc: 0.952 | Val Cat Acc: 0.975 | Time: 15.6s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 269/400 | Train Loss: 0.0342 | Val Loss: 0.1799 | Val Gloss Acc: 0.958 | Val Cat Acc: 0.978 | Time: 15.4s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 270/400 | Train Loss: 0.0160 | Val Loss: 0.1788 | Val Gloss Acc: 0.951 | Val Cat Acc: 0.976 | Time: 15.1s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 271/400 | Train Loss: 0.0143 | Val Loss: 0.1762 | Val Gloss Acc: 0.956 | Val Cat Acc: 0.977 | Time: 15.6s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 272/400 | Train Loss: 0.0608 | Val Loss: 0.1635 | Val Gloss Acc: 0.960 | Val Cat Acc: 0.979 | Time: 15.8s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 273/400 | Train Loss: 0.0103 | Val Loss: 0.1840 | Val Gloss Acc: 0.952 | Val Cat Acc: 0.978 | Time: 15.5s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 274/400 | Train Loss: 0.0206 | Val Loss: 0.1771 | Val Gloss Acc: 0.952 | Val Cat Acc: 0.978 | Time: 15.6s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 275/400 | Train Loss: 0.0048 | Val Loss: 0.1680 | Val Gloss Acc: 0.959 | Val Cat Acc: 0.980 | Time: 15.1s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 276/400 | Train Loss: 0.0097 | Val Loss: 0.1937 | Val Gloss Acc: 0.945 | Val Cat Acc: 0.974 | Time: 14.9s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 277/400 | Train Loss: 0.0139 | Val Loss: 0.1998 | Val Gloss Acc: 0.946 | Val Cat Acc: 0.976 | Time: 14.5s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 278/400 | Train Loss: 0.0071 | Val Loss: 0.1687 | Val Gloss Acc: 0.962 | Val Cat Acc: 0.981 | Time: 15.4s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 279/400 | Train Loss: 0.0145 | Val Loss: 0.1610 | Val Gloss Acc: 0.959 | Val Cat Acc: 0.977 | Time: 15.6s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 280/400 | Train Loss: 0.0030 | Val Loss: 0.1673 | Val Gloss Acc: 0.955 | Val Cat Acc: 0.976 | Time: 15.5s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 281/400 | Train Loss: 0.0047 | Val Loss: 0.1976 | Val Gloss Acc: 0.949 | Val Cat Acc: 0.976 | Time: 13.5s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 282/400 | Train Loss: 0.0009 | Val Loss: 0.1542 | Val Gloss Acc: 0.961 | Val Cat Acc: 0.981 | Time: 14.8s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 283/400 | Train Loss: 0.0211 | Val Loss: 0.1640 | Val Gloss Acc: 0.956 | Val Cat Acc: 0.978 | Time: 15.1s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 284/400 | Train Loss: 0.0070 | Val Loss: 0.1832 | Val Gloss Acc: 0.954 | Val Cat Acc: 0.976 | Time: 15.2s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 285/400 | Train Loss: 0.0108 | Val Loss: 0.1897 | Val Gloss Acc: 0.949 | Val Cat Acc: 0.972 | Time: 14.6s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 286/400 | Train Loss: 0.0095 | Val Loss: 0.1574 | Val Gloss Acc: 0.958 | Val Cat Acc: 0.980 | Time: 15.5s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 287/400 | Train Loss: 0.0327 | Val Loss: 0.1599 | Val Gloss Acc: 0.963 | Val Cat Acc: 0.982 | Time: 14.6s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 288/400 | Train Loss: 0.0044 | Val Loss: 0.1666 | Val Gloss Acc: 0.959 | Val Cat Acc: 0.980 | Time: 13.7s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 289/400 | Train Loss: 0.0095 | Val Loss: 0.1598 | Val Gloss Acc: 0.960 | Val Cat Acc: 0.979 | Time: 15.1s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 290/400 | Train Loss: 0.0739 | Val Loss: 0.1702 | Val Gloss Acc: 0.960 | Val Cat Acc: 0.981 | Time: 15.5s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 291/400 | Train Loss: 0.0307 | Val Loss: 0.1629 | Val Gloss Acc: 0.961 | Val Cat Acc: 0.981 | Time: 15.0s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 292/400 | Train Loss: 0.0095 | Val Loss: 0.1488 | Val Gloss Acc: 0.965 | Val Cat Acc: 0.983 | Time: 15.4s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 293/400 | Train Loss: 0.0186 | Val Loss: 0.1701 | Val Gloss Acc: 0.959 | Val Cat Acc: 0.980 | Time: 14.5s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 294/400 | Train Loss: 0.0175 | Val Loss: 0.1640 | Val Gloss Acc: 0.963 | Val Cat Acc: 0.982 | Time: 15.7s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 295/400 | Train Loss: 0.0052 | Val Loss: 0.1531 | Val Gloss Acc: 0.961 | Val Cat Acc: 0.980 | Time: 14.9s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 296/400 | Train Loss: 0.0057 | Val Loss: 0.1558 | Val Gloss Acc: 0.963 | Val Cat Acc: 0.983 | Time: 13.3s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 297/400 | Train Loss: 0.0045 | Val Loss: 0.1675 | Val Gloss Acc: 0.961 | Val Cat Acc: 0.980 | Time: 14.3s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 298/400 | Train Loss: 0.0642 | Val Loss: 0.1619 | Val Gloss Acc: 0.958 | Val Cat Acc: 0.984 | Time: 15.6s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 299/400 | Train Loss: 0.0046 | Val Loss: 0.1554 | Val Gloss Acc: 0.963 | Val Cat Acc: 0.983 | Time: 15.2s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 300/400 | Train Loss: 0.0089 | Val Loss: 0.1626 | Val Gloss Acc: 0.962 | Val Cat Acc: 0.981 | Time: 15.0s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 301/400 | Train Loss: 0.0346 | Val Loss: 0.1506 | Val Gloss Acc: 0.963 | Val Cat Acc: 0.984 | Time: 14.9s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 302/400 | Train Loss: 0.0668 | Val Loss: 0.1469 | Val Gloss Acc: 0.962 | Val Cat Acc: 0.983 | Time: 14.4s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 303/400 | Train Loss: 0.0113 | Val Loss: 0.1619 | Val Gloss Acc: 0.960 | Val Cat Acc: 0.981 | Time: 14.3s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 304/400 | Train Loss: 0.0093 | Val Loss: 0.1559 | Val Gloss Acc: 0.961 | Val Cat Acc: 0.983 | Time: 13.5s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 305/400 | Train Loss: 0.0228 | Val Loss: 0.1717 | Val Gloss Acc: 0.959 | Val Cat Acc: 0.981 | Time: 13.9s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 306/400 | Train Loss: 0.0071 | Val Loss: 0.1574 | Val Gloss Acc: 0.963 | Val Cat Acc: 0.980 | Time: 15.1s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 307/400 | Train Loss: 0.0018 | Val Loss: 0.1405 | Val Gloss Acc: 0.968 | Val Cat Acc: 0.980 | Time: 15.4s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 308/400 | Train Loss: 0.0027 | Val Loss: 0.1483 | Val Gloss Acc: 0.964 | Val Cat Acc: 0.983 | Time: 14.9s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 309/400 | Train Loss: 0.0510 | Val Loss: 0.1474 | Val Gloss Acc: 0.963 | Val Cat Acc: 0.982 | Time: 14.8s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 310/400 | Train Loss: 0.0181 | Val Loss: 0.1517 | Val Gloss Acc: 0.963 | Val Cat Acc: 0.982 | Time: 13.5s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 311/400 | Train Loss: 0.0522 | Val Loss: 0.1635 | Val Gloss Acc: 0.959 | Val Cat Acc: 0.981 | Time: 13.7s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 312/400 | Train Loss: 0.0167 | Val Loss: 0.1517 | Val Gloss Acc: 0.963 | Val Cat Acc: 0.982 | Time: 15.4s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 313/400 | Train Loss: 0.0193 | Val Loss: 0.1480 | Val Gloss Acc: 0.963 | Val Cat Acc: 0.983 | Time: 14.7s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 314/400 | Train Loss: 0.0179 | Val Loss: 0.1402 | Val Gloss Acc: 0.966 | Val Cat Acc: 0.984 | Time: 14.7s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 315/400 | Train Loss: 0.0126 | Val Loss: 0.1612 | Val Gloss Acc: 0.958 | Val Cat Acc: 0.982 | Time: 14.5s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 316/400 | Train Loss: 0.0047 | Val Loss: 0.1565 | Val Gloss Acc: 0.961 | Val Cat Acc: 0.981 | Time: 14.9s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 317/400 | Train Loss: 0.0051 | Val Loss: 0.1555 | Val Gloss Acc: 0.962 | Val Cat Acc: 0.982 | Time: 14.8s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 318/400 | Train Loss: 0.0048 | Val Loss: 0.1500 | Val Gloss Acc: 0.964 | Val Cat Acc: 0.981 | Time: 13.5s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 319/400 | Train Loss: 0.0318 | Val Loss: 0.1415 | Val Gloss Acc: 0.964 | Val Cat Acc: 0.982 | Time: 13.1s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 320/400 | Train Loss: 0.0110 | Val Loss: 0.1535 | Val Gloss Acc: 0.960 | Val Cat Acc: 0.981 | Time: 14.6s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 321/400 | Train Loss: 0.0201 | Val Loss: 0.1292 | Val Gloss Acc: 0.965 | Val Cat Acc: 0.985 | Time: 15.6s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 322/400 | Train Loss: 0.0169 | Val Loss: 0.1406 | Val Gloss Acc: 0.967 | Val Cat Acc: 0.985 | Time: 13.6s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 323/400 | Train Loss: 0.0231 | Val Loss: 0.1515 | Val Gloss Acc: 0.959 | Val Cat Acc: 0.984 | Time: 14.7s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 324/400 | Train Loss: 0.0596 | Val Loss: 0.1457 | Val Gloss Acc: 0.960 | Val Cat Acc: 0.982 | Time: 15.0s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 325/400 | Train Loss: 0.0532 | Val Loss: 0.1344 | Val Gloss Acc: 0.964 | Val Cat Acc: 0.984 | Time: 15.3s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 326/400 | Train Loss: 0.0254 | Val Loss: 0.1729 | Val Gloss Acc: 0.952 | Val Cat Acc: 0.980 | Time: 15.7s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 327/400 | Train Loss: 0.0046 | Val Loss: 0.1464 | Val Gloss Acc: 0.963 | Val Cat Acc: 0.982 | Time: 13.8s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 328/400 | Train Loss: 0.0251 | Val Loss: 0.1450 | Val Gloss Acc: 0.965 | Val Cat Acc: 0.982 | Time: 15.8s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 329/400 | Train Loss: 0.0110 | Val Loss: 0.1503 | Val Gloss Acc: 0.962 | Val Cat Acc: 0.980 | Time: 13.4s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 330/400 | Train Loss: 0.0066 | Val Loss: 0.1342 | Val Gloss Acc: 0.968 | Val Cat Acc: 0.985 | Time: 15.1s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 331/400 | Train Loss: 0.0140 | Val Loss: 0.1456 | Val Gloss Acc: 0.964 | Val Cat Acc: 0.984 | Time: 15.1s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 332/400 | Train Loss: 0.0187 | Val Loss: 0.1486 | Val Gloss Acc: 0.963 | Val Cat Acc: 0.982 | Time: 15.4s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 333/400 | Train Loss: 0.0059 | Val Loss: 0.1532 | Val Gloss Acc: 0.961 | Val Cat Acc: 0.984 | Time: 14.7s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 334/400 | Train Loss: 0.0192 | Val Loss: 0.1375 | Val Gloss Acc: 0.964 | Val Cat Acc: 0.984 | Time: 15.6s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 335/400 | Train Loss: 0.0491 | Val Loss: 0.1485 | Val Gloss Acc: 0.961 | Val Cat Acc: 0.983 | Time: 15.5s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 336/400 | Train Loss: 0.0498 | Val Loss: 0.1443 | Val Gloss Acc: 0.965 | Val Cat Acc: 0.983 | Time: 15.6s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 337/400 | Train Loss: 0.0499 | Val Loss: 0.1347 | Val Gloss Acc: 0.968 | Val Cat Acc: 0.986 | Time: 15.4s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 338/400 | Train Loss: 0.0094 | Val Loss: 0.1458 | Val Gloss Acc: 0.963 | Val Cat Acc: 0.983 | Time: 15.5s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 339/400 | Train Loss: 0.0224 | Val Loss: 0.1481 | Val Gloss Acc: 0.961 | Val Cat Acc: 0.983 | Time: 14.8s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 340/400 | Train Loss: 0.0132 | Val Loss: 0.1405 | Val Gloss Acc: 0.965 | Val Cat Acc: 0.985 | Time: 15.3s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 341/400 | Train Loss: 0.0090 | Val Loss: 0.1296 | Val Gloss Acc: 0.968 | Val Cat Acc: 0.985 | Time: 15.3s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 342/400 | Train Loss: 0.0050 | Val Loss: 0.1370 | Val Gloss Acc: 0.967 | Val Cat Acc: 0.985 | Time: 13.1s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 343/400 | Train Loss: 0.0043 | Val Loss: 0.1338 | Val Gloss Acc: 0.965 | Val Cat Acc: 0.984 | Time: 15.2s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 344/400 | Train Loss: 0.0337 | Val Loss: 0.1562 | Val Gloss Acc: 0.964 | Val Cat Acc: 0.984 | Time: 15.4s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 345/400 | Train Loss: 0.0036 | Val Loss: 0.1279 | Val Gloss Acc: 0.971 | Val Cat Acc: 0.985 | Time: 15.3s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 346/400 | Train Loss: 0.0200 | Val Loss: 0.1292 | Val Gloss Acc: 0.968 | Val Cat Acc: 0.986 | Time: 15.4s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 347/400 | Train Loss: 0.0028 | Val Loss: 0.1284 | Val Gloss Acc: 0.970 | Val Cat Acc: 0.986 | Time: 15.4s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 348/400 | Train Loss: 0.0079 | Val Loss: 0.1317 | Val Gloss Acc: 0.970 | Val Cat Acc: 0.985 | Time: 15.0s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 349/400 | Train Loss: 0.0162 | Val Loss: 0.1346 | Val Gloss Acc: 0.968 | Val Cat Acc: 0.985 | Time: 15.4s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 350/400 | Train Loss: 0.0040 | Val Loss: 0.1338 | Val Gloss Acc: 0.965 | Val Cat Acc: 0.986 | Time: 15.6s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 351/400 | Train Loss: 0.0030 | Val Loss: 0.1276 | Val Gloss Acc: 0.970 | Val Cat Acc: 0.985 | Time: 15.2s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 352/400 | Train Loss: 0.0110 | Val Loss: 0.1348 | Val Gloss Acc: 0.967 | Val Cat Acc: 0.983 | Time: 14.6s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 353/400 | Train Loss: 0.0071 | Val Loss: 0.1334 | Val Gloss Acc: 0.969 | Val Cat Acc: 0.985 | Time: 15.7s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 354/400 | Train Loss: 0.0248 | Val Loss: 0.1458 | Val Gloss Acc: 0.965 | Val Cat Acc: 0.984 | Time: 15.3s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 355/400 | Train Loss: 0.0072 | Val Loss: 0.1335 | Val Gloss Acc: 0.971 | Val Cat Acc: 0.985 | Time: 15.2s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 356/400 | Train Loss: 0.0036 | Val Loss: 0.1360 | Val Gloss Acc: 0.968 | Val Cat Acc: 0.985 | Time: 14.8s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 357/400 | Train Loss: 0.0056 | Val Loss: 0.1376 | Val Gloss Acc: 0.967 | Val Cat Acc: 0.983 | Time: 15.7s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 358/400 | Train Loss: 0.0149 | Val Loss: 0.1364 | Val Gloss Acc: 0.970 | Val Cat Acc: 0.983 | Time: 14.7s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 359/400 | Train Loss: 0.0133 | Val Loss: 0.1435 | Val Gloss Acc: 0.965 | Val Cat Acc: 0.983 | Time: 14.8s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 360/400 | Train Loss: 0.0065 | Val Loss: 0.1332 | Val Gloss Acc: 0.967 | Val Cat Acc: 0.985 | Time: 15.5s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 361/400 | Train Loss: 0.0179 | Val Loss: 0.1319 | Val Gloss Acc: 0.967 | Val Cat Acc: 0.983 | Time: 15.3s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 362/400 | Train Loss: 0.0050 | Val Loss: 0.1322 | Val Gloss Acc: 0.967 | Val Cat Acc: 0.985 | Time: 15.3s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 363/400 | Train Loss: 0.0021 | Val Loss: 0.1334 | Val Gloss Acc: 0.967 | Val Cat Acc: 0.985 | Time: 15.3s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 364/400 | Train Loss: 0.0051 | Val Loss: 0.1307 | Val Gloss Acc: 0.968 | Val Cat Acc: 0.984 | Time: 15.3s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 365/400 | Train Loss: 0.0019 | Val Loss: 0.1344 | Val Gloss Acc: 0.967 | Val Cat Acc: 0.984 | Time: 14.0s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 366/400 | Train Loss: 0.0105 | Val Loss: 0.1362 | Val Gloss Acc: 0.969 | Val Cat Acc: 0.984 | Time: 15.5s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 367/400 | Train Loss: 0.0014 | Val Loss: 0.1290 | Val Gloss Acc: 0.970 | Val Cat Acc: 0.984 | Time: 15.7s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 368/400 | Train Loss: 0.0100 | Val Loss: 0.1334 | Val Gloss Acc: 0.968 | Val Cat Acc: 0.984 | Time: 15.6s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 369/400 | Train Loss: 0.0053 | Val Loss: 0.1328 | Val Gloss Acc: 0.967 | Val Cat Acc: 0.984 | Time: 15.4s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 370/400 | Train Loss: 0.0115 | Val Loss: 0.1269 | Val Gloss Acc: 0.969 | Val Cat Acc: 0.984 | Time: 15.5s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 371/400 | Train Loss: 0.0071 | Val Loss: 0.1285 | Val Gloss Acc: 0.970 | Val Cat Acc: 0.985 | Time: 15.5s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 372/400 | Train Loss: 0.0020 | Val Loss: 0.1318 | Val Gloss Acc: 0.967 | Val Cat Acc: 0.985 | Time: 14.8s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 373/400 | Train Loss: 0.0134 | Val Loss: 0.1264 | Val Gloss Acc: 0.969 | Val Cat Acc: 0.987 | Time: 13.9s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 374/400 | Train Loss: 0.0519 | Val Loss: 0.1281 | Val Gloss Acc: 0.969 | Val Cat Acc: 0.984 | Time: 13.7s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 375/400 | Train Loss: 0.0027 | Val Loss: 0.1281 | Val Gloss Acc: 0.967 | Val Cat Acc: 0.985 | Time: 14.9s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 376/400 | Train Loss: 0.0080 | Val Loss: 0.1308 | Val Gloss Acc: 0.967 | Val Cat Acc: 0.985 | Time: 15.2s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 377/400 | Train Loss: 0.0100 | Val Loss: 0.1269 | Val Gloss Acc: 0.969 | Val Cat Acc: 0.984 | Time: 14.7s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 378/400 | Train Loss: 0.0044 | Val Loss: 0.1290 | Val Gloss Acc: 0.967 | Val Cat Acc: 0.984 | Time: 15.2s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 379/400 | Train Loss: 0.0225 | Val Loss: 0.1309 | Val Gloss Acc: 0.968 | Val Cat Acc: 0.985 | Time: 15.3s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 380/400 | Train Loss: 0.0062 | Val Loss: 0.1271 | Val Gloss Acc: 0.971 | Val Cat Acc: 0.985 | Time: 13.8s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 381/400 | Train Loss: 0.0072 | Val Loss: 0.1316 | Val Gloss Acc: 0.969 | Val Cat Acc: 0.984 | Time: 15.3s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 382/400 | Train Loss: 0.0067 | Val Loss: 0.1294 | Val Gloss Acc: 0.969 | Val Cat Acc: 0.983 | Time: 14.9s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 383/400 | Train Loss: 0.0095 | Val Loss: 0.1321 | Val Gloss Acc: 0.969 | Val Cat Acc: 0.985 | Time: 15.0s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 384/400 | Train Loss: 0.0021 | Val Loss: 0.1290 | Val Gloss Acc: 0.968 | Val Cat Acc: 0.984 | Time: 15.3s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 385/400 | Train Loss: 0.0079 | Val Loss: 0.1278 | Val Gloss Acc: 0.971 | Val Cat Acc: 0.984 | Time: 15.4s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 386/400 | Train Loss: 0.0101 | Val Loss: 0.1283 | Val Gloss Acc: 0.971 | Val Cat Acc: 0.984 | Time: 15.3s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 387/400 | Train Loss: 0.0058 | Val Loss: 0.1282 | Val Gloss Acc: 0.968 | Val Cat Acc: 0.983 | Time: 15.4s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 388/400 | Train Loss: 0.0513 | Val Loss: 0.1279 | Val Gloss Acc: 0.969 | Val Cat Acc: 0.984 | Time: 15.6s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 389/400 | Train Loss: 0.0085 | Val Loss: 0.1260 | Val Gloss Acc: 0.969 | Val Cat Acc: 0.984 | Time: 15.1s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 390/400 | Train Loss: 0.0055 | Val Loss: 0.1265 | Val Gloss Acc: 0.969 | Val Cat Acc: 0.983 | Time: 15.5s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 391/400 | Train Loss: 0.0020 | Val Loss: 0.1331 | Val Gloss Acc: 0.969 | Val Cat Acc: 0.985 | Time: 15.6s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 392/400 | Train Loss: 0.0130 | Val Loss: 0.1280 | Val Gloss Acc: 0.969 | Val Cat Acc: 0.984 | Time: 15.1s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 393/400 | Train Loss: 0.0184 | Val Loss: 0.1259 | Val Gloss Acc: 0.969 | Val Cat Acc: 0.985 | Time: 15.3s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 394/400 | Train Loss: 0.0029 | Val Loss: 0.1264 | Val Gloss Acc: 0.968 | Val Cat Acc: 0.985 | Time: 15.2s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 395/400 | Train Loss: 0.0103 | Val Loss: 0.1263 | Val Gloss Acc: 0.970 | Val Cat Acc: 0.985 | Time: 15.7s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 396/400 | Train Loss: 0.0021 | Val Loss: 0.1266 | Val Gloss Acc: 0.969 | Val Cat Acc: 0.985 | Time: 14.9s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 397/400 | Train Loss: 0.0098 | Val Loss: 0.1288 | Val Gloss Acc: 0.968 | Val Cat Acc: 0.984 | Time: 14.8s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 398/400 | Train Loss: 0.0046 | Val Loss: 0.1263 | Val Gloss Acc: 0.968 | Val Cat Acc: 0.985 | Time: 13.1s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 399/400 | Train Loss: 0.0064 | Val Loss: 0.1252 | Val Gloss Acc: 0.971 | Val Cat Acc: 0.984 | Time: 14.8s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+Epoch 400/400 | Train Loss: 0.0028 | Val Loss: 0.1268 | Val Gloss Acc: 0.970 | Val Cat Acc: 0.985 | Time: 15.0s
+  GPU Memory: 0.06GB allocated, 0.70GB reserved
+------------------------------------------------------------
+Training completed!
+
+============================================================
+Training completed - 2025-11-01 01:29:36
+Log saved to: trained_models/transformer/FSL105_classification/training_20251031_234925.log
+============================================================
