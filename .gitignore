@@ -64,6 +64,13 @@ data/splitting/**/*.pyc
 !data/processed/FSL105_train.csv
 !data/processed/FSL105_val.csv
 
+# ------------------------------
+# Allow raw fix script only
+# ------------------------------
+!data/raw/
+data/raw/**
+!data/raw/fix_occlusion.py
+
 # ======================================================
 # 📓 Notebooks & Tools
 # ======================================================
