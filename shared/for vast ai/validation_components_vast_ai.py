@@ -1,4 +1,4 @@
-"""Validation components for the Streamlit app - Vast AI compatible version."""
+"""Validation components for the Streamlit app."""
 
 import streamlit as st
 import pandas as pd
@@ -11,17 +11,18 @@ import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 import json
 
-from ..core.config import MODEL_CONFIG
-import os
+from ..core.config import MODEL_CONFIG, is_ctc_model, get_models_by_mode
 
 
 def render_model_selection():
     """Render model selection interface."""
-    # List all enabled models regardless of checkpoint presence (per directive)
+    import os
+    
+    # Get all enabled models (both classification and CTC)
     available_models = []
     for model_name, config in MODEL_CONFIG.items():
-        if config.get('enabled', False):
-            available_models.append((model_name, config.get('display_name', model_name)))
+        if config['enabled'] and os.path.exists(config['checkpoint_path']):
+            available_models.append((model_name, config['display_name']))
     
     if not available_models:
         st.error("No models are available for validation.")
@@ -33,7 +34,7 @@ def render_model_selection():
     selected_option = st.selectbox(
         "Select model architecture",
         model_options,
-        help="Select the model architecture for validation",
+        help="Select the model architecture for validation (includes both classification and CTC models)",
         key="model_selection_selectbox"
     )
     
