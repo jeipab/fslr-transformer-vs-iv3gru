@@ -954,7 +954,7 @@ class ModelValidator:
             
             # Save to file
             output_file = pred_dir / f"{pred['file']}_validation.json"
-            with open(output_file, 'w') as f:
+            with open(output_file, 'w', encoding='utf-8') as f:
                 json.dump(formatted_pred, f, indent=2)
         
         print(f"✓ Saved {len(predictions)} individual predictions to {pred_dir}")
@@ -1036,12 +1036,12 @@ def save_results(results: Dict[str, Any], output_dir: str):
     
     for filename, data in files_to_save:
         filepath = output_path / filename
-        with open(filepath, 'w') as f:
+        with open(filepath, 'w', encoding='utf-8') as f:
             json.dump(data, f, indent=2)
     
     # Save complete results
     complete_filepath = output_path / 'complete_validation_results.json'
-    with open(complete_filepath, 'w') as f:
+    with open(complete_filepath, 'w', encoding='utf-8') as f:
         json.dump(results, f, indent=2)
     
     print(f"✓ Results saved to {output_path}")

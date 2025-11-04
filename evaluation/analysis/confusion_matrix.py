@@ -296,7 +296,7 @@ def main():
     # Load data
     input_path = Path(args.input)
     if input_path.suffix == '.json':
-        with open(input_path, 'r') as f:
+        with open(input_path, 'r', encoding='utf-8') as f:
             data = json.load(f)
         df = pd.DataFrame(data)
         # For isolated predictions, true/pred are direct columns

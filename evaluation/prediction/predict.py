@@ -374,7 +374,7 @@ def main():
     # Save results to JSON
     output_path = Path(args.output)
     output_path.parent.mkdir(parents=True, exist_ok=True)
-    with open(output_path, 'w') as f:
+    with open(output_path, 'w', encoding='utf-8') as f:
         json.dump(all_predictions, f, indent=2)
     print(f"\nPredictions saved to: {output_path}")
 

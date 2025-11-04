@@ -1642,7 +1642,7 @@ class CTCPredictor:
                 global_cm[gt, pred] += 1
         
         cm_path = output_dir / 'confusion_matrix_global.json'
-        with open(cm_path, 'w') as f:
+        with open(cm_path, 'w', encoding='utf-8') as f:
             json.dump(global_cm.tolist(), f)
         
         per_signer_cm = defaultdict(lambda: np.zeros((num_classes, num_classes), dtype=int))
@@ -1661,12 +1661,12 @@ class CTCPredictor:
         
         if per_signer_cm:
             signer_cm_data = {s: cm.tolist() for s, cm in per_signer_cm.items()}
-            with open(output_dir / 'confusion_matrix_per_signer.json', 'w') as f:
+            with open(output_dir / 'confusion_matrix_per_signer.json', 'w', encoding='utf-8') as f:
                 json.dump(signer_cm_data, f)
         
         if per_strategy_cm:
             strategy_cm_data = {s: cm.tolist() for s, cm in per_strategy_cm.items()}
-            with open(output_dir / 'confusion_matrix_per_strategy.json', 'w') as f:
+            with open(output_dir / 'confusion_matrix_per_strategy.json', 'w', encoding='utf-8') as f:
                 json.dump(strategy_cm_data, f)
 
 

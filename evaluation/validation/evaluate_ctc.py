@@ -67,7 +67,7 @@ class ContinuousSignDataset(Dataset):
 
     def __getitem__(self, idx):
         json_path = self.ground_truth_files[idx]
-        with open(json_path, 'r') as f:
+        with open(json_path, 'r', encoding='utf-8') as f:
             meta = json.load(f)
 
         npz_path = self.npz_dir / meta['file_name']
