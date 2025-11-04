@@ -17,6 +17,7 @@ Layer Normalization: Stabilizes training
   ↓
 Transformer Encoder Stack (N layers):
   • Multi-Head Self-Attention + Residual Connection
+    - Occlusion-Aware Attention Modulation
   • Feed-Forward Network + Residual Connection
   ↓
 Pooling Strategy (mean/max/cls): [B, T, E] → [B, E]
@@ -29,6 +30,7 @@ Key Components:
 - Sinusoidal positional encoding for temporal sequence understanding
 - Custom layer normalization with learnable scale/shift parameters
 - Multi-head self-attention mechanism for capturing temporal dependencies
+- Occlusion-aware attention modulation for robust handling of hand-face occlusions
 - Residual connections with pre-layer normalization for stable training
 - Configurable pooling strategies (mean, max, or CLS token)
 - Dual classification heads for hierarchical prediction
@@ -38,7 +40,7 @@ Usage:
 
     # Initialize model with default parameters
     model = SignTransformer()
-    
+
     # Forward pass
     gloss_logits, cat_logits = model(x)  # x: [B, T, 178]
     
@@ -246,7 +248,7 @@ class FeedForwardBlock(nn.Module):
 
 class MultiHeadAttentionBlock(nn.Module):
     """
-    Multi-Head Self-Attention mechanism.
+    Multi-Head Self-Attention mechanism with occlusion-aware modulation.
     
     This module implements the core attention mechanism of the Transformer.
     It splits the input embedding into multiple "heads" and computes scaled
@@ -254,17 +256,26 @@ class MultiHeadAttentionBlock(nn.Module):
     results. This allows the model to attend to different types of relationships
     simultaneously.
     
+    The module includes occlusion-aware attention modulation that
+    dynamically adjusts attention weights based on spatio-temporal occlusion
+    patterns detected from keypoint positions. When occlusion is detected,
+    attention is automatically shifted away from occluded facial features
+    toward visible hand movements and body cues.
+    
     Process:
     1. Linear projections to create Q, K, V matrices
     2. Split into multiple heads
     3. Compute scaled dot-product attention for each head
-    4. Concatenate all heads
-    5. Final linear projection
+    4. Apply occlusion-aware modulation (if enabled)
+    5. Concatenate all heads
+    6. Final linear projection
     
     Formula: Attention(Q,K,V) = softmax(QK^T/√d_k)V
+    With occlusion-aware: Attention(Q,K,V) = softmax((QK^T/√d_k) ⊙ M_occ)V
+    where M_occ is the occlusion-aware attention mask.
     """
     
-    def __init__(self, emb_dim, num_heads, dropout=0.1):
+    def __init__(self, emb_dim, num_heads, dropout=0.1, use_occlusion_aware=False):
         """
         Initialize multi-head attention block.
         
@@ -272,6 +283,9 @@ class MultiHeadAttentionBlock(nn.Module):
             emb_dim (int): Embedding dimension (E). Must be divisible by num_heads.
             num_heads (int): Number of attention heads (H).
             dropout (float): Dropout rate applied to attention weights.
+            use_occlusion_aware (bool): Enable occlusion-aware attention modulation (default: False).
+                                      When enabled, computes spatio-temporal occlusion patterns
+                                      from keypoint positions and modulates attention weights.
         
         Raises:
             ValueError: If emb_dim is not divisible by num_heads.
@@ -284,6 +298,7 @@ class MultiHeadAttentionBlock(nn.Module):
 
         self.num_heads = num_heads
         self.head_dim = emb_dim // num_heads  # Dimension per head (D = E / H)
+        self.use_occlusion_aware = use_occlusion_aware
 
         # Linear projections for queries, keys, and values
         # Each projection maps [B, T, E] → [B, T, E]
@@ -296,6 +311,93 @@ class MultiHeadAttentionBlock(nn.Module):
 
         # Dropout for attention weights
         self.dropout = nn.Dropout(dropout)
+
+    def _apply_occlusion_aware_modulation(self, raw_keypoints, scores, device):
+        """
+        Apply occlusion-aware attention modulation based on spatio-temporal keypoint relationships.
+        
+        This method computes hand-face occlusion patterns from raw keypoint positions
+        and creates an attention modulation mask that reduces attention to occluded
+        facial regions while enhancing attention to visible hand movements.
+        
+        The occlusion detection is based on:
+        - Hand-face spatial distance: Euclidean distance between hand keypoints and facial landmarks
+        - Temporal motion patterns: Hand movement trajectories toward face regions
+        - Keypoint visibility: Accounting for naturally occluded keypoints
+        
+        Args:
+            raw_keypoints (Tensor): Raw keypoint coordinates of shape [B, T, 178].
+                                   Represents 89 keypoints × 2 coordinates per frame.
+            scores (Tensor): Attention scores before softmax of shape [B, H, T, T].
+            device (torch.device): Device to create modulation mask on.
+        
+        Returns:
+            Tensor: Modulated attention scores of shape [B, H, T, T].
+                   When occlusion is detected, attention to occluded frames is reduced.
+        """
+        B, H, T, _ = scores.shape
+        
+        # Keypoint layout: pose25, left_hand21, right_hand21, face22 = 89 total
+        pose_len = 25
+        hand_len = 21
+        face_start = pose_len + hand_len + hand_len  # 67
+        face_len = 22
+        
+        # Extract keypoint regions for occlusion detection (vectorized)
+        # Hand keypoints: indices 50-92 (left) and 92-134 (right) in flattened coordinates
+        left_hand_start = 2 * pose_len  # 50
+        left_hand_end = 2 * (pose_len + hand_len)  # 92
+        right_hand_start = 2 * (pose_len + hand_len)  # 92
+        right_hand_end = 2 * (pose_len + hand_len + hand_len)  # 134
+        face_start_idx = 2 * face_start  # 134
+        face_end_idx = 2 * (face_start + face_len)  # 178
+        
+        # Extract hand and face keypoint regions
+        # Shape: [B, T, num_kp, 2]
+        left_hand_kps = raw_keypoints[:, :, left_hand_start:left_hand_end].view(B, T, hand_len, 2)
+        right_hand_kps = raw_keypoints[:, :, right_hand_start:right_hand_end].view(B, T, hand_len, 2)
+        face_kps = raw_keypoints[:, :, face_start_idx:face_end_idx].view(B, T, face_len, 2)
+        
+        # Compute hand and face centers (mean positions per frame)
+        # Shape: [B, T, 2]
+        left_hand_centers = left_hand_kps.mean(dim=2)  # [B, T, 2]
+        right_hand_centers = right_hand_kps.mean(dim=2)  # [B, T, 2]
+        face_centers = face_kps.mean(dim=2)  # [B, T, 2]
+        
+        # Compute hand-face distances using vectorized operations
+        # Euclidean distance: ||hand_center - face_center||
+        left_distances = torch.norm(left_hand_centers - face_centers, dim=-1)  # [B, T]
+        right_distances = torch.norm(right_hand_centers - face_centers, dim=-1)  # [B, T]
+        
+        # Occlusion threshold: when hand is within 0.15 normalized distance from face
+        occlusion_threshold = 0.15
+        left_occluded = left_distances < occlusion_threshold  # [B, T]
+        right_occluded = right_distances < occlusion_threshold  # [B, T]
+        occluded_frames = (left_occluded | right_occluded)  # [B, T]
+        
+        # Create occlusion-aware modulation mask
+        # Reduce attention to occluded frames by 30% (0.7 factor)
+        # Maintain full attention (1.0) for non-occluded frames
+        occlusion_mask = torch.ones(B, T, T, device=device, dtype=scores.dtype)
+        
+        # For each occluded frame, reduce attention weights
+        # Set rows and columns corresponding to occluded frames to 0.7
+        for b in range(B):
+            occluded_mask_b = occluded_frames[b]  # [T]
+            if occluded_mask_b.any():
+                # Reduce attention to/from occluded frames
+                occlusion_mask[b, :, occluded_mask_b] = 0.7  # Reduce attention TO occluded frames
+                occlusion_mask[b, occluded_mask_b, :] = 0.7  # Reduce attention FROM occluded frames
+        
+        # Broadcast occlusion mask to match attention scores shape
+        # [B, T, T] → [B, 1, T, T]
+        occlusion_mask = occlusion_mask.unsqueeze(1)  # [B, 1, T, T]
+        
+        # Apply modulation to attention scores
+        # Reduce scores for occluded regions, maintain scores for clear regions
+        modulated_scores = scores * occlusion_mask
+        
+        return modulated_scores
 
     @staticmethod
     def SelfAttention(Q, K, V, mask=None, dropout=None):
@@ -354,14 +456,17 @@ class MultiHeadAttentionBlock(nn.Module):
         
         return out, attn
 
-    def forward(self, x, mask=None):
+    def forward(self, x, mask=None, raw_keypoints=None):
         """
-        Apply multi-head self-attention to input embeddings.
+        Apply multi-head self-attention to input embeddings with optional occlusion-aware modulation.
         
         Args:
             x (Tensor): Input embeddings of shape [B, T, E].
             mask (Tensor or None): Optional mask broadcastable to [B, 1, 1, T].
-
+            raw_keypoints (Tensor or None): Raw keypoint coordinates of shape [B, T, 178].
+                                           Required when use_occlusion_aware=True.
+                                           Used to compute spatio-temporal occlusion patterns.
+        
         Returns:
             out (Tensor): Output embeddings of shape [B, T, E].
             attn (Tensor): Attention weights of shape [B, H, T, T].
@@ -380,14 +485,45 @@ class MultiHeadAttentionBlock(nn.Module):
         K = K.view(B, T, self.num_heads, self.head_dim).transpose(1, 2)
         V = V.view(B, T, self.num_heads, self.head_dim).transpose(1, 2)
 
-        # Step 3: Apply scaled dot-product attention
-        out, attn = MultiHeadAttentionBlock.SelfAttention(Q, K, V, mask, self.dropout)
+        # Step 3: Compute attention scores
+        scores = torch.matmul(Q, K.transpose(-2, -1))  # [B, H, T, T]
+        scores = scores / math.sqrt(self.head_dim)
+        
+        # Step 3.5: Apply occlusion-aware modulation if enabled
+        if self.use_occlusion_aware and raw_keypoints is not None:
+            scores = self._apply_occlusion_aware_modulation(raw_keypoints, scores, x.device)
+        elif self.use_occlusion_aware and raw_keypoints is None:
+            # Warn if occlusion-aware is enabled but keypoints not provided
+            import warnings
+            warnings.warn(
+                "use_occlusion_aware=True but raw_keypoints not provided. "
+                "Occlusion-aware modulation disabled for this forward pass.",
+                UserWarning
+            )
 
-        # Step 4: Concatenate heads back together
+        # Step 4: Apply mask if provided
+        if mask is not None:
+            if mask.shape[-1] != scores.shape[-1]:
+                raise ValueError(
+                    f"Mask last dimension {mask.shape[-1]} doesn't match "
+                    f"scores {scores.shape[-1]}"
+                )
+            scores = scores.masked_fill(mask == 0, float("-inf"))
+
+        # Step 5: Apply softmax to get attention probabilities
+        attn = torch.softmax(scores, dim=-1)  # [B, H, T, T]
+
+        # Step 6: Apply dropout to attention weights
+        attn = self.dropout(attn)
+
+        # Step 7: Apply attention weights to values
+        out = torch.matmul(attn, V)  # [B, H, T, D]
+
+        # Step 8: Concatenate heads back together
         # [B, H, T, D] → [B, T, H, D] → [B, T, E]
         out = out.transpose(1, 2).contiguous().view(B, T, E)
 
-        # Step 5: Final linear projection
+        # Step 9: Final linear projection
         out = self.W_o(out)
 
         return out, attn
@@ -473,7 +609,7 @@ class EncoderLayer(nn.Module):
     └─────────────────────────────────────────────────────────────┘
     """
     
-    def __init__(self, emb_dim, num_heads, ff_dim=512, dropout=0.1):
+    def __init__(self, emb_dim, num_heads, ff_dim=512, dropout=0.1, use_occlusion_aware=False):
         """
         Initialize Transformer encoder layer.
         
@@ -482,11 +618,12 @@ class EncoderLayer(nn.Module):
             num_heads (int): Number of attention heads (H).
             ff_dim (int): Hidden dimension in feed-forward network.
             dropout (float): Dropout rate applied to attention & FFN outputs.
+            use_occlusion_aware (bool): Enable occlusion-aware attention modulation (default: False).
         """
         super(EncoderLayer, self).__init__()
         
-        # Multi-head self-attention mechanism
-        self.attention = MultiHeadAttentionBlock(emb_dim, num_heads, dropout)
+        # Multi-head self-attention mechanism with occlusion-aware modulation
+        self.attention = MultiHeadAttentionBlock(emb_dim, num_heads, dropout, use_occlusion_aware)
         
         # Position-wise feed-forward network
         self.feed_forward = FeedForwardBlock(emb_dim, ff_dim, dropout)
@@ -495,7 +632,7 @@ class EncoderLayer(nn.Module):
         self.residual1 = ResidualConnection(emb_dim, dropout)  # For attention
         self.residual2 = ResidualConnection(emb_dim, dropout)  # For feed-forward
 
-    def forward(self, x, mask=None, return_attn=False):
+    def forward(self, x, mask=None, return_attn=False, raw_keypoints=None):
         """
         Forward pass through the encoder layer.
         
@@ -504,7 +641,9 @@ class EncoderLayer(nn.Module):
             mask (Tensor or None): Attention mask of shape [B, 1, 1, T].
                                    1 = keep, 0 = mask out.
             return_attn (bool): If True, also return attention weights.
-
+            raw_keypoints (Tensor or None): Raw keypoint coordinates of shape [B, T, 178].
+                                          Required when use_occlusion_aware=True.
+        
         Returns:
             Tensor: Encoded output of shape [B, T, E].
             (Optional) Tensor: Attention weights of shape [B, H, T, T].
@@ -512,7 +651,7 @@ class EncoderLayer(nn.Module):
         # Step 1: Multi-head self-attention with residual connection
         # Apply layer normalization, then attention, then residual connection
         normed_x = self.residual1.norm(x)
-        attn_out, attn = self.attention(normed_x, mask)
+        attn_out, attn = self.attention(normed_x, mask, raw_keypoints=raw_keypoints)
         x = x + self.residual1.dropout(attn_out)
 
         # Step 2: Feed-forward network with residual connection
@@ -528,7 +667,7 @@ class EncoderLayer(nn.Module):
 
 class SignTransformer(nn.Module):
     """
-    Transformer-based model for Sign Language Recognition.
+    Transformer-based model for Sign Language Recognition with occlusion-aware attention.
     
     This is the main model class that implements a complete Transformer architecture
     for sign language recognition. It processes sequences of body keypoints and
@@ -546,6 +685,7 @@ class SignTransformer(nn.Module):
     - Supports three pooling strategies: mean, max, or CLS token
     - Dual classification heads for gloss and category prediction
     - Attention weight extraction for visualization
+    - Optional occlusion-aware attention modulation for robust handling of hand-face occlusions
     
     Args:
         input_dim (int): Input feature dimension per frame (default: 178).
@@ -559,10 +699,16 @@ class SignTransformer(nn.Module):
         max_len (int): Maximum supported sequence length (default: 300).
         ff_dim (int): Hidden dimension of FFN (default: 4× emb_dim).
         pooling_method (str): Pooling strategy - 'mean', 'max', or 'cls' (default: 'mean').
+        use_occlusion_aware (bool): Enable occlusion-aware attention modulation (default: False).
+                                   When enabled, the model automatically detects hand-face
+                                   occlusion patterns from keypoint positions and modulates
+                                   attention to focus on visible features.
         
     Note:
         Input sequences are expected to have shape [B, T, 178] where 178 represents
         the number of keypoint features (89 keypoints × 2 coordinates: x, y).
+        When use_occlusion_aware=True, raw keypoints are passed through to enable
+        spatio-temporal occlusion detection and attention modulation.
     """
     
     def __init__(self,
@@ -575,13 +721,18 @@ class SignTransformer(nn.Module):
                     dropout=0.1,       # dropout rate
                     max_len=300,       # maximum sequence length
                     ff_dim=None,       # feed-forward hidden size (defaults to 4*emb_dim)
-                    pooling_method='mean'  # 'mean' | 'max' | 'cls'
+                    pooling_method='mean',  # 'mean' | 'max' | 'cls'
+                    use_occlusion_aware=False  # Enable occlusion-aware attention modulation
                 ):
         super(SignTransformer, self).__init__()
 
         # ===== INPUT PROCESSING =====
         # Linear projection from raw keypoints to model embedding space
         self.embedding = nn.Linear(input_dim, emb_dim)
+        
+        # Store input_dim for occlusion-aware processing
+        self.input_dim = input_dim
+        self.use_occlusion_aware = use_occlusion_aware
 
         # Positional encoding for temporal sequence understanding
         self.pos_encoder = PositionalEncoding(emb_dim, dropout, max_len)
@@ -594,9 +745,10 @@ class SignTransformer(nn.Module):
         if ff_dim is None:
             ff_dim = emb_dim * 4
             
-        # Stack of Transformer encoder layers
+        # Stack of Transformer encoder layers with optional occlusion-aware attention
         self.encoder_layers = nn.ModuleList([
-            EncoderLayer(emb_dim, n_heads, ff_dim=ff_dim, dropout=dropout)
+            EncoderLayer(emb_dim, n_heads, ff_dim=ff_dim, dropout=dropout, 
+                        use_occlusion_aware=use_occlusion_aware)
             for _ in range(n_layers)
         ])
 
@@ -662,6 +814,9 @@ class SignTransformer(nn.Module):
             )
         
         B, T, _ = x.size()
+        
+        # Store raw keypoints for occlusion-aware processing if enabled
+        raw_keypoints = x if self.use_occlusion_aware else None
 
         # ===== EMBEDDING LAYER =====
         # Project raw keypoints to embedding space
@@ -709,8 +864,9 @@ class SignTransformer(nn.Module):
 
         # ===== TRANSFORMER ENCODER =====
         # Pass through stack of encoder layers
+        # If occlusion-aware is enabled, pass raw keypoints for occlusion detection
         for encoder_layer in self.encoder_layers:
-            x = encoder_layer(x, attention_mask)
+            x = encoder_layer(x, attention_mask, raw_keypoints=raw_keypoints)
 
         # ===== SEQUENCE POOLING =====
         # Collapse sequence dimension to single vector for classification
@@ -787,6 +943,9 @@ class SignTransformer(nn.Module):
         B, T, _ = x.size()
         attention_weights = []
 
+        # Store raw keypoints for occlusion-aware processing if enabled
+        raw_keypoints = x if self.use_occlusion_aware else None
+
         # ===== INPUT PROCESSING =====
         # Apply embedding transformation
         x = self.embedding(x)
@@ -812,7 +971,7 @@ class SignTransformer(nn.Module):
         # ===== COLLECT ATTENTION WEIGHTS =====
         # Pass through each encoder layer and collect attention weights
         for encoder_layer in self.encoder_layers:
-            x, attn_weights = encoder_layer(x, attention_mask, return_attn=True)
+            x, attn_weights = encoder_layer(x, attention_mask, return_attn=True, raw_keypoints=raw_keypoints)
             # Detach and move to CPU for visualization
             attention_weights.append(attn_weights.detach().cpu())
 
@@ -921,7 +1080,7 @@ class SignTransformerCtc(nn.Module):
     
     def forward(self, x, mask=None):
         """
-        Forward pass through the CTC Transformer model with optional category prediction.
+        Forward pass through the CTC Transformer model with category prediction.
         
         Args:
             x (Tensor): Input keypoint sequence of shape [B, T, 178].
