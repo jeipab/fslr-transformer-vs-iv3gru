@@ -91,7 +91,7 @@ MODEL_CONFIG = {
         'training_mode': 'ctc'
     },
     'mediapipe_gru': {
-        'enabled': True,
+        'enabled': False,  # TODO: REMOVE THIS - Hidden from Streamlit app, only transformer and iv3 remain visible
         'checkpoint_path': 'trained_models/mediapipe_gru/FSL105_classification/MediaPipeGRU_best.pt',
         'model_type': 'mediapipe_gru',
         'num_gloss_classes': 105,
@@ -103,7 +103,7 @@ MODEL_CONFIG = {
         'training_mode': 'classification'
     },
     'mediapipe_gru_ctc': {
-        'enabled': True,  # Enabled for continuous sign recognition
+        'enabled': False,  # TODO: REMOVE THIS - Hidden from Streamlit app, only transformer and iv3 remain visible
         'checkpoint_path': 'trained_models/mediapipe_gru/FSL105_ctc/MediaPipeGRUCtc_best.pt',
         'model_type': 'mediapipe_gru_ctc',
         'num_gloss_classes': 105,
