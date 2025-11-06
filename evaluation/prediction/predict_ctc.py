@@ -1482,9 +1482,9 @@ class CTCPredictor:
                 'overall_precision': float(overall_precision),
                 'overall_recall': float(overall_recall),
                 'overall_f1_score': float(overall_f1),
-                'mean_precision': (float(np.mean(precisions)) * 0.85) if (precisions and self.model_type == 'iv3_gru_ctc') else (float(np.mean(precisions)) if precisions else 0.0),  # TODO: REMOVE THIS - Remove * 0.85 for iv3_gru_ctc
-                'mean_recall': (float(np.mean(recalls)) * 0.85) if (recalls and self.model_type == 'iv3_gru_ctc') else (float(np.mean(recalls)) if recalls else 0.0),  # TODO: REMOVE THIS - Remove * 0.85 for iv3_gru_ctc
-                'mean_f1_score': (float(np.mean(f1_scores)) * 0.85) if (f1_scores and self.model_type == 'iv3_gru_ctc') else (float(np.mean(f1_scores)) if f1_scores else 0.0),  # TODO: REMOVE THIS - Remove * 0.85 for iv3_gru_ctc
+                'mean_precision': float(np.mean(precisions)) if precisions else 0.0,
+                'mean_recall': float(np.mean(recalls)) if recalls else 0.0,
+                'mean_f1_score': float(np.mean(f1_scores)) if f1_scores else 0.0,
                 'median_f1_score': float(np.median(f1_scores)) if f1_scores else 0.0,
                 'mean_iou_all_tp': float(np.mean(mean_iou_all_tp)) if mean_iou_all_tp else 0.0,
             }
