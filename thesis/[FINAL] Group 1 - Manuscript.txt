@@ -1,0 +1,1660 @@
+﻿MULTI-HEAD ATTENTION TRANSFORMER 
+FOR FILIPINO SIGN LANGUAGE
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+A Thesis
+Presented to the Faculty of the 
+College of Computer and Information Sciences
+Polytechnic University of the Philippines
+Sta. Mesa, Manila
+
+
+
+
+
+
+
+
+
+
+
+
+In Partial Fulfillment of the Requirements for the Degree
+Bachelor of Science in Computer Science
+
+
+
+
+
+
+
+
+by
+
+
+
+
+Estrella, Novelle Lyn
+Magtibay, Nathaniel L.
+Migueh, Rica Joi C.
+Pablo, Jeremias G.
+
+
+
+
+
+
+October 2025
+DECLARATION ON THE USE OF ARTIFICIAL INTELLIGENCE
+ 
+I am Novelle Lyn Estrella, faculty member/student/administrative employee of the Polytechnic University of the Philippines here declare that I HAVE /HAVE NOT used Artificial Intelligence to complete this research project/thesis/dissertation titled Multi-Head Attention Transformer for Filipino Sign Language.
+The use of Artificial Intelligence is in the following manner:
+AI Tool Used
+	Detailed Prompts and AI Outputs
+	How the output was incorporated in the project
+	ChatGPT 
+	Prompt: “Assume the role of a computer science thesis panel member evaluating the attached thesis proposal draft (Chapters 1-3). Conduct a thorough assessment, identifying weaknesses, errors, and missing information in each section. Provide specific, actionable comments and suggestions for improvement, ensuring clarity, coherence, and alignment with academic standards. 
+Since this draft does not yet include experimentations, focus on evaluating the logical consistency of the research framework, methodology, and problem statement. Make your feedback as precise and detailed as possible, offering guidance on how to strengthen the proposal for further development.”
+Output: Provided detailed, section-by-section critique highlighting vague statements, misalignments, and gaps in logic, along with suggestions for restructuring and clarification.
+	Incorporated AI recommendations to revise the problem statement for precision, restructured the research framework to enhance coherence, and clarified methodological descriptions to better align with academic expectations.
+
+
+	 ChatGPT 
+	Prompt: "Now, evaluate the Statement of the Problem (SOP) and research questions in the attached document. Identify any ambiguities, inconsistencies, or missing elements, and provide specific, actionable suggestions for improvement and revision. Additionally, assess whether each research question necessitates a hypothesis, offering a clear justification for your determination. Ensure feedback is detailed, constructive, and aligned with rigorous academic standards."
+Output: Identified vague phrasing, missing elements, and logical gaps. Recommended clearer formulation of research questions and identified which required hypotheses, justifying each with academic rationale.
+	Used the feedback to revise and sharpen the research questions, included hypotheses where appropriate, and ensured the SOP clearly defined the research gap and objectives.
+	ChatGPT 
+	Prompt: “Following that, assess the methodology in relation to the SOP. Evaluate whether the proposed methodology effectively addresses the research problem and provide a detailed analysis of its strengths and limitations. Offer specific, actionable suggestions for improvement and revision, ensuring methodological rigor and alignment with research objectives. If potential gaps or inconsistencies exist, suggest alternative approaches or refinements to enhance the study’s validity and reliability.” 
+Output: Provided a breakdown of methodological strengths and limitations, noted gaps in data collection techniques, and suggested improvements to ensure alignment with research goals.
+	Revised the methodology to address AI-identified gaps, improved clarity in procedure descriptions, and incorporated suggestions to enhance validity, reliability, and alignment with the research objectives.
+
+
+	 
+Dated and Signed:  
+ 
+ Estrella, Novelle Lyn / 05-28-25        
+Signature Above Printed Name/ Date
+DECLARATION ON THE USE OF ARTIFICIAL INTELLIGENCE
+ 
+I am Nathaniel L. Magtibay, faculty member/student/administrative employee of the Polytechnic University of the Philippines here declare that I HAVE /HAVE NOT used Artificial Intelligence to complete this research project/thesis/dissertation titled Multi-Head Attention Transformer for Filipino Sign Language.
+The use of Artificial Intelligence is in the following manner:
+AI Tool Used
+	Detailed Prompts and AI Outputs
+	How the output was incorporated in the project
+	ChatGPT 
+	Prompt: “Summarize this paper.” (Prompt was used repeatedly for multiple academic papers related to the research topic.)
+Output: Generated concise and coherent summaries of academic papers by extracting the key objectives, methodologies, findings, and contributions. These summaries provided a clear understanding of each paper’s relevance to the research without needing to read the entire text word for word. In some cases, the tool also highlighted how the papers aligned with or differed from the proposed approach.
+	Used as starting points to draft the related works and literature review section, helping to compare existing methods with the proposed system. 
+Helped in organizing sources thematically, making it easier to synthesize
+	 
+Dated and Signed:  
+ 
+ Magtibay, Nathaniel L. / 05-28-25        
+Signature Above Printed Name/ Date
+
+
+DECLARATION ON THE USE OF ARTIFICIAL INTELLIGENCE
+ 
+I am Jeremias G. Pablo, faculty member/student/administrative employee of the Polytechnic University of the Philippines here declare that I HAVE /HAVE NOT used Artificial Intelligence to complete this research project/thesis/dissertation titled Multi-Head Attention Transformer for Filipino Sign Language.
+The use of Artificial Intelligence is in the following manner:
+AI Tool Used
+	Detailed Prompts and AI Outputs
+	How the output was incorporated in the project
+	ChatGPT 
+	Prompt: “Should the InceptionV3-GRU model, used only for comparison, be included in the Research Instrument section of our thesis proposal?”
+Output: Clarified the distinction between the experimental baseline and the actual system. Recommended a brief clarification in the manuscript and suggested a mapping table to align with PUP’s computing problem criteria. 
+	Guided the revision of the Research Instrument section to clarify the role of InceptionV3-GRU. Inspired the development of a mapping table used in defense prep to show compliance with computing-focused research requirements.
+	 ChatGPT 
+	Prompt: "Analyze if our thesis counts as a computing problem based on this definition..."
+Output: Provided an in-depth evaluation linking the thesis to definitions of computing and computational problems, classifying it under function and optimization problems with academic justification.
+	The analysis was directly used to revise the "Statement of the Problem" and "Research Design" sections, ensuring alignment with university guidelines that require a computing problem. It also clarified the experimental basis of the comparative model evaluation.
+	 
+
+
+ChatGPT 
+	Prompt: “Evaluate the logical consistency and alignment of the research methodology with the statement of the problem in a thesis proposal comparing MHAM-Transformer and InceptionV3-GRU for Filipino Sign Language Recognition.” 
+Output: Provided detailed critique of methodological gaps, alignment issues, and recommended statistical corrections (e.g., use of paired t-tests, Holm-Bonferroni adjustment).
+	The analysis directly informed the revision of the Statement of the Problem and Research Design sections, clarifying the computing problem, aligning variables, and justifying the experimental comparison approach, in compliance with academic and institutional research standards.
+	
+
+Dated and Signed:  
+ 
+ Pablo, Jeremias G. / 05-28-25        
+Signature Above Printed Name/ Date
+
+
+
+
+ 
+ 
+ 
+ 
+ 
+
+
+ 
+DECLARATION ON THE USE OF ARTIFICIAL INTELLIGENCE
+ 
+I am Rica Joi C. Migueh, faculty member/student/administrative employee of the Polytechnic University of the Philippines here declare that I HAVE /HAVE NOT used Artificial Intelligence to complete this research project/thesis/dissertation titled Multi-Head Attention Transformer for Filipino Sign Language.
+The use of Artificial Intelligence is in the following manner:
+AI Tool Used
+	Detailed Prompts and AI Outputs
+	How the output was incorporated in the project
+	 ChatGPT 
+	Prompt: “Is it acceptable to use both ‘this study aims’ and ‘this study seeks’ in our Purpose Statement?”
+Output: Identified redundancy and advised choosing one for clarity. Explained tonal and stylistic differences between “aims” and “seeks.”
+	Helped finalize the thesis Purpose Statement by consistently using “aims,” based on the tone and intent of the paper.
+	ChatGPT 
+	Prompt: “Can I avoid repeating all statistical procedures in the sections for RQ1 and RQ2 if they are already detailed in the Statistical Treatment section?”
+Output: Advised to keep full test procedures in a single Statistical Treatment section and refer to it from RQ1 and RQ2 analysis to avoid redundancy.
+	Structured the thesis such that statistical steps (t-test, Holm correction, Cohen’s d) appear once under “Statistical Treatment,” with concise references in earlier analysis.
+	ChatGPT 
+	Prompt: “Could you verify whether this Statistical Treatment section aligns with the updated data analysis?”
+Output: Confirmed overall alignment, suggested clarifying the level of paired difference (sample vs class level), and improving the description of Holm’s correction.
+	Used to finalize the “Statistical Treatment” section, with clear language about how paired values are prepared and used in the t-test.
+	 
+Dated and Signed:  
+ 
+ Migueh, Rica Joi C. / 05-28-25        
+Signature Above Printed Name/ Date
+ 
+ 
+ 
+
+
+TABLE OF CONTENTS
+Declaration on the Use of Artificial Intelligence        2
+Table of Contents        1
+List of Tables        2
+List of Figures        3
+
+
+1          The Problem and Its Setting        
+Introduction        1
+Theoretical Framework        3
+Conceptual Framework        6
+Statement of the Problem        7
+Hypothesis        9
+Scope and Limitations of the Study        9
+Significance of the Study        10
+Definition of Terms        11
+
+
+2          Review of Literature and Studies        
+Sign Language Recognition        14
+Filipino Sign Language Recognition        17
+Existing Approaches in Sign Language Recognition        17
+Challenges and Issues in Sign Language Recognition        19
+InceptionV3-GRU: CNN-RNN Hybrid Models for SLR        20
+Transformer-based Approaches for Sign Language Recognition        23
+Synthesis of the Reviewed Literature and Studies        30
+
+
+3          Methodology        
+Research Design        31
+Sources of Data        32
+Research Instrument        35
+Data Generation Procedure        44
+Ethical Considerations        54
+Data Analysis        54
+
+
+REFERENCES        67
+APPENDICES        
+Appendix 1: FSL-105 Dataset (Raw Video Input)        71
+Appendix 2: Research Instrument – Screen Mockup        72
+________________
+
+
+LIST OF TABLES
+       Number                                     Title                                                       Page
+1             Comparison of Transformer, CNN, and RNN Models              
+               on Diverse Sign Language Datasets                                                                       29
+2             FSL-105 Dataset Composition                                                              33
+3             RQ1 – Recognition (With Occlusion)        51
+4             RQ1 – Recognition (Without Occlusion)        51
+5             RQ2 – Classification (With Occlusion)        52
+6             RQ2 – Classification (Without Occlusion)        52
+7             Per-Sample Recognition Log – Transformer        52
+8             Per-Sample Recognition Log – IV3-GRU        53
+9             Per-Sample Classification Log – Transformer        53
+10           Per-Sample Classification Log – IV3-GRU        53
+11           Metrics Formula        55
+12           Mapping of Research Questions to Data and Methods        66
+
+
+
+
+LIST OF FIGURES
+       Number                                     Title                                                        Page
+1                Triangular Semiotic Model – Sign Classification         4
+2                Conceptual Model        6
+3                InceptionV3-GRU Architecture        22
+4                Transformer Encoder-Decoder Architecture        23
+5                Scaled Dot-Product Attention & Multi-Head Attention        24
+6                System Architecture        35
+7                Preprocessing Pipeline        37
+8                Transformer Architecture        38
+9                Multi-Head Attention Mechanism (MHAM)        41
+10              FSL-105 Dataset Retrieved from Mendeley Data        71
+11              File Upload Interface - No File Selected        72
+12              File Upload Interface - Batch Files Preview        73
+13              File Upload Interface - Select Transformer Model        74
+14              File Upload Interface - Select IV3-GRU Model        75
+15              Processing Interface - Transformer Model        76
+16              Processing Interface - IV3-GRU Model        77
+17              Visualization Interface - Transformer Model        78
+18              Visualization Interface - IV3-GRU Model        78
+19              Results Interface - Transformer Model        79
+20              Results Interface - IV3-GRU Model        79
+
+
+
+
+Chapter 1
+THE PROBLEM AND ITS SETTING
+Introduction
+Effective communication is fundamental to human interaction. While spoken language predominates, sign languages provide an essential linguistic channel for Deaf communities worldwide. In the Philippines, Filipino Sign Language (FSL) is the primary visual–gestural medium of the local Deaf population, and its national status was formally recognized through the FSL Act, also known as Republic Act 11106, in 2018 (Notarte‑Balanquit, 2021). Yet, in contrast to other national sign languages, FSL remains comparatively under‑researched, limiting the development of technologies that might bridge communication gaps between Deaf and hearing Filipinos.
+At the linguistic level, FSL conveys meaning through a rich interplay of manual (hand movements) and non-manual (facial expressions, body movements)  markers, forming a complete grammar and syntax independent of spoken Filipino (Notarte-Balanquit, 2021; Fischer, 2015; Tiongson & Martinez, 2004). Effective recognition of FSL therefore requires models capable of integrating these spatio-temporal features in both space and time and remaining resilient when some of those signals are temporarily hidden by occlusion—such as when the signer’s hands pass in front of the face. Despite the language’s critical role in social inclusion, most existing Filipino Sign Language recognition (FSLR) systems still target isolated gestures—typically the manual alphabet or basic vocabulary. As a result, these models struggle to disambiguate signs with similar hand motions but different facial expressions—an essential distinction in natural sign communication—and they degrade sharply whenever keypoints are occluded (Tupal, 2023; Rivera & Ong, 2018).
+Conventional deep‑learning pipelines based on Convolutional Neural Networks (CNNs) for spatial feature extraction and recurrent units such as Gated Recurrent Units (GRUs) for temporal modelling have achieved steady progress. While this CNN–GRU hybrid approach has shown promise, it processes input sequentially and treats spatial and temporal cues independently. Because these cues are encoded in separate streams, the model cannot fall back on visible features when occlusion masks one modality, leading to frequent misclassifications in realistic, cluttered signing scenarios. This architectural limitation results in poor integration of spatio-temporal features, leading to frequent misclassifications, particularly for signs where facial expression is a critical differentiator (Tupal, 2023; Pigou et al., 2015).
+Recent advances in deep learning, especially the Transformer architecture introduced by Vaswani et al. (2017), present a compelling alternative. Unlike recurrent models, Transformers use a Multi-Head Attention Mechanism (MHAM) to process sequences in parallel, allowing the model to attend to multiple aspects of the input simultaneously. This parallelism enables finer-grained integration of spatio-temporal features—such as hand movement trajectories, facial affect, and body posture—offering a richer and more holistic representation of sign language inputs, even when parts of the signer become temporarily invisible (Doshi, 2021; Liu et al., 2023). While Transformers have revolutionized other vision tasks, their application to FSL remains underexplored, and a systematic benchmark comparing their performance against CNN–GRU architectures in the context of FSL, or their effectiveness in integrating manual and non-manual features for improved sign disambiguation under varying levels of occlusion has not yet been conducted.
+In response, this study addresses that gap by developing a Transformer-based model with MHAM for recognizing continuous Filipino Sign Language glosses and explicitly tests its robustness to keypoint occlusion. The model is evaluated against the InceptionV3-GRU architecture proposed by Tupal (2023), with particular attention to its ability to integrate spatio-temporal features when some are hidden. By empirically comparing these models across clean and occluded keypoint streams, the research aims to determine whether Transformer-based approaches offer meaningful improvements in recognition and semantic-category classification accuracy, especially for signs that rely heavily on facial expressions and other non-manual cues. Furthermore, by addressing the deficiencies in current evidence and model limitations, this study seeks to contribute to the development of more robust and inclusive FSLR systems, ultimately promoting accessibility and communication equity for the Filipino Deaf community and advancing the application of Transformer models to domain-specific, multimodal tasks. 
+
+
+
+
+Theoretical Framework
+This research is anchored in deep learning-based approaches for sign language recognition (SLR), with a particular focus on the Transformer architecture introduced by Vaswani et al. (2017). Central to the Transformer is the Multi-Head Attention Mechanism (MHAM), which has demonstrated state-of-the-art performance across a wide range of tasks, including computer vision and the understanding of sign languages.
+The Triangular Semiotic Model (Peirce, 1994) posits that meaning is constructed through the relationship between a sign (the form), its object (the referent), and the interpreter (the understanding of the sign). Peirce classifies signs into triadic construction: symbolic, iconic, and indexical categories — each offering a unique way to understand sign language elements. Peirce’s model helps explain how technological systems should interpret manual (hand-shape, motion trajectory) and non-manual (facial expressions) features in sign language.
+Figure 1. Triangular Semiotic Model – Sign Classification
+  
+
+
+
+
+
+
+
+
+
+
+
+
+1. (S) Symbolic: A sign where the relationship to its meaning is arbitrary and based purely on convention or shared language rules (e.g., fingerspelling, where specific handshapes represent letters of an alphabet; or grammatical markers). 
+2. (Ic) Iconic: A sign that physically resembles or imitates its meaning. The relationship is one of similarity (e.g., the sign for "eat" mimicking the motion of bringing food to the mouth).
+3. (In) Indexical: A sign that indicates its meaning by having a direct physical or contextual connection to it. It "points to" or is a symptom of its meaning (e.g., pointing to an object (indexing) or using facial expressions to modify a sign's meaning (e.g., a furrowed brow indicating a question).
+“Good morning” and its semiotic features. 
+In Filipino Sign Language, the sign for “Good morning” is a compound sign composed of “good” and “morning.” The signer begins with the gesture for “good,” with their dominant hand (right hand) in a "thumbs-up" shape—a closed fist with the thumb extended upwards. Then, the hand shape transitions from the "thumbs-up" into an open "5" hand (all fingers and the thumb are extended and spread apart). As the hand opens, it moves in a smooth, upward and outward arc away from the body, as if gesturing toward the rising sun. Throughout the entire sign, the signer maintains a pleasant and positive facial expression, including a gentle smile. This non-manual marker is important as it conveys the positive nature of the greeting.
+The provided example combines all three semiotic features:
+1. Symbolic (the “GOOD” sign): There is nothing about the physical shape of a "thumbs-up" that naturally looks, sounds, or feels like the concept of "goodness." We have simply learned to associate this specific gesture with approval, positivity, or the word "good."
+2. Iconic (the “MORNING” gesture): The subsequent gesture is a visual depiction of the sun rising over the horizon. The open hand represents the sun, and its upward movement mimics the sun's path as it comes up to start the day. We can intuitively "see" the meaning in this motion.
+3. Indexical (the context and expression): A pleasant and positive facial expression and direct eye contact are indexical, indicating the sincerity of the greeting. Furthermore, the sign is performed towards a person, indexing them as the recipient.
+
+
+Peircean semiotic features (iconicity, indexicality, and symbolic representation) play a crucial role in determining how linguistic units, including non-manual markers, are used in sign languages (Capirci et al., 2022). This justifies modeling SLR systems to weigh symbolic, iconic, and indexical features dynamically, ensuring accurate interpretation of gestures and their contexts.  Integrating Peircean Semiotics into SLR effectively enhances the model to not only detect gestures but also correctly interpret their context and meaning including non-manual markers such as facial expressions, leading to more accurate and context-aware sign recognition systems.
+Aligned with this, Filipino Sign Linguistics asserts that FSL is an independent language with its own syntax, grammar, and lexicon, distinct from spoken Filipino and English. It incorporates non-manual cues, such as facial expressions to enhance meaning and context (Notarte-Balanguit, 2021). Incorporating Filipino Sign Linguistics ensures that FSLR systems acknowledge the unique structure and grammar of FSL, distinguishing it from spoken Filipino language.
+This study builds upon the recommendations of Tupal (2023), which proposed extending FSL research by utilizing the FSL-105 dataset with Transformer-based models for improved recognition and analysis.
+
+Conceptual Framework
+Figure 2. Conceptual Model
+  
+
+The conceptual framework illustrates how the independent variable influences the dependent variables in the study. The independent variable includes the FSL-105 Dataset as the data source, which is processed through a defined preprocessing pipeline to extract relevant visual features. The key experimental factor as one of the independent variables being tested is the occlusion condition whether the model performs with or without occlusion in the input data. This condition assesses how visual obstructions affect the model’s ability to recognize and classify Filipino Sign Language (FSL) gestures. The processed data are then evaluated using a Multi-Head Attention Transformer model, which serves as the architecture for sign recognition.
+Grounded in Sign Linguistic Theory, specifically the Triangular Semiotic Model and Sign Language Structure, which examines the grammatical patterns in FSL, this framework integrates linguistic foundations with computational modeling. Lastly, the dependent variables, Recognition Performance and Classification Performance, measure the model’s accuracy under different occlusion conditions. 
+
+
+
+
+Statement of the Problem
+        Current FSLR systems, particularly the InceptionV3-GRU remain limited in their ability to robustly model the spatio-temporal features necessary to recognize complex FSL glosses systems treat spatial (hand shape, position) and temporal (motion trajectory) patterns separately and struggle when key visual features are occluded (e.g., hands passing in front of the face), resulting in decreased recognition accuracy under realistic signing conditions.
+        This study develops a Transformer-based FSLR model equipped with Multi-Head Attention Mechanism (MHAM) to enhance spatio-temporal modeling. Specifically, the study investigates whether such a model can improve performance in both gloss recognition and semantic-category classification compared to the InceptionV3-GRU baseline, under keypoint streams with and without occlusion.
+        To achieve this, the research is guided by the following central question:
+        How does a Multi-Head Attention Mechanism Transformer improve recognition and classification of continuous FSL glosses compared to the IV3-GRU baseline, both with and without occlusion?
+        To explore this question, the study further investigates the following key sub-questions:
+1. What is the performance of IV3-GRU and MHAM Transformer in recognizing sign glosses with and without occlusion in terms of:
+   1. Precision
+   2. Recall
+   3. F₁ Score
+2. What is the performance of IV3-GRU and MHAM Transformer in classifying sign glosses with and without occlusion in terms of:
+   1. Precision
+   2. Recall
+   3. F₁ Score
+3. Is there a significant difference in the performance of IV3-GRU and MHAM Transformer in recognizing sign glosses with and without occlusion in terms of:
+   1. Precision
+   2. Recall
+   3. F₁ Score
+
+
+
+
+
+
+Hypothesis
+        H₀₁. There is no significant difference in the performance of IV3-GRU and MHAM Transformer in recognizing sign glosses with and without occlusion in terms of Precision, Recall, and F₁ Score.
+H₀2. There is no significant difference in the performance of IV3-GRU and MHAM Transformer in classifying sign glosses with and without occlusion in terms of Precision, Recall, and F₁ Score.
+
+
+
+
+Scope and Limitations of the Study
+This study focuses on the development and evaluation of a MHAM-based Transformer architecture for FSLR, with the goal of addressing the limitations observed in the baseline IV3-GRU model. Specifically, the research investigates how effectively each model captures and integrates critical spatio-temporal features such as hand shapes, motion trajectories, and facial expressions—while maintaining recognition fidelity when any of these keypoints become occluded.
+The scope of this research is limited to the analysis of video sequences from the publicly available FSL-105 dataset. As such, the study does not involve the creation, collection, or augmentation of new datasets. The research is also constrained by available computational resources, which may affect the scalability or depth of model training. 
+Furthermore, the findings discussed are specifically designed for FSL and may not be directly transferable to other sign languages, which differ in grammar, gestures, and non-manual signals. 
+
+
+
+Significance of the Study
+        Transformer-based models have shown strong results in sequence modeling tasks, but their use in FSLR has not been explored in depth. FSL is challenging because it relies on hand gestures, facial expressions, and body movement. Current models like IV3-GRU mostly focus on hand movements, often missing these non-manual features. Whether attention-based models like Transformers using MHAM can better handle FSL's complexity is still uncertain. This justifies comparing these approaches to see if newer models can improve recognition accuracy and support real-world FSL use.
+The Filipino Deaf community will benefit from this study through the development of more responsive and inclusive communication tools. As accuracy improves, these tools could help Deaf individuals express themselves in everyday scenarios like requesting assistance, using public services, or engaging in classroom activities. By building a foundation for systems that better understand FSL, this study helps bridge the communication gap between Deaf and hearing individuals.
+Educators and interpreters will also receive actionable metrics on non-manual cue recognition, identifying which facial expressions, head movements and motion subtleties are most often misclassified, so they can tailor lesson plans, design targeted drills, and build assessment rubrics that directly address these gaps in learner performance.
+This research will also benefit developers working on assistive technology. The proposed  model is designed to better capture spatio-temporal features needed for accurate sign recognition, making it more suitable for translation apps, learning software, or interpretation tools. With clear benchmarks and evaluation results, the study will provide technical insights developers can apply to improve recognition in future projects.
+Lastly, this research will contribute to the ongoing work of future researchers in SLR and machine learning. It will present a comparative evaluation of Transformer-based and IV3-GRU architectures using the FSL-105 dataset. Researchers working on SLR systems can use this study as a foundation for further experimentation and model enhancement.
+
+
+
+Definition of Terms
+        Adam Optimizer. Used in training the models to automatically adjust learning rates and update weights to reduce classification error.
+Classification Performance. The model’s ability to correctly assign glosses to semantic categories. Evaluated using precision, recall, and  F₁-score.
+Gloss. A textual label representing the true meaning of a sign in sign language. In this study, each gloss corresponds to a specific FSL (Filipino Sign Language) gesture.
+InceptionV3-GRU (IV3-GRU). A baseline model used for comparison, combining InceptionV3 for extracting spatial features from video frames and GRU for analyzing their sequence over time. (Tupal, 2023)
+Manual Cues. The component of sign language relating to hand movements. These features include hand-shape, motion trajectory, positioning, and general hand gestures. In the context of this study's model, manual cues refer to the keypoints extracted from the hands and arms.
+MediaPipe framework. A machine learning toolkit used in this study to track hand positions and body landmarks (MediaPipe Hands and Pose) and perform background removal (MediaPipe Selfie Segmentation) for sign language recognition.
+Multi-Head Attention Mechanism (MHAM). A Transformer feature that captures spatial and temporal patterns in sign language videos by attending to hand-shape, motion, and facial cues simultaneously.
+Non-Manual Cues. Linguistic markers used to enhance meaning and context that are independent of the hands. These features include facial expressions, body movements, head movements, and body posture. In this study's model, these cues refer to the keypoints extracted from the face and upper body.
+Occlusion. The blocking of visual keypoints (e.g., hands, face) where critical facial features like the eyes, eyebrows, nose, and mouth are obscured.  
+Recognized Sign. Referred to as the predicted or recognized gloss; it is the output label assigned by the model to a given sign input after identifying it.
+PyTorch. The machine learning framework used to implement, train, and test all models in this study.
+Recognition Performance. The model’s ability to correctly identify individual glosses. Evaluated using precision, recall, and  F₁-score.
+Transformer Architecture. A deep learning model that uses self-attention to process sequences in parallel. In this study, it learns spatio-temporal features in sign language videos, capturing gesture changes over time and space without recurrence.
+Vast AI. A cloud computing platform utilized in this study for tool development, including training and experimentation, due to its cost-effectiveness and flexibility in offering a wide range of GPU options.
+Weights and Biases (W&B). Used to log training metrics, visualize model performance, and manage experiments throughout the study.
+Chapter 2
+REVIEW OF LITERATURE AND STUDIES
+Recent advancements in SLR have introduced various methods to improve communication accessibility for the Deaf community, especially in recognizing complex languages like FSL. This section highlights major topics including general SLR, FSL-specific challenges, existing approaches in SLR, current issues in model performance, and the use of both CNN-RNN hybrids like IV3-GRU and emerging Transformer-based models for improved recognition accuracy. With these developments in mind, the study centers on applying these approaches to the development of more robust and inclusive FSLR systems.
+
+
+
+
+Sign Language Recognition
+Sign language is a complex visual form of communication that utilizes manual gestures, facial expressions, and body movements to convey meaning (Ugale et al., 2023; Batnasan, 2024). It serves as the principal form of communication for those who are deaf or hard of hearing. The historical context reveals a growing advocacy for the recognition of signed languages as legitimate linguistic systems (Batnasan, 2024). Automated SLR is a multidisciplinary field at the intersection of computer vision, machine learning, and natural language processing (Batnasan, 2024; Liu et al., 2023; Pigou et al., 2015). Research on SLR creates systems that can automatically decipher and translate sign language into spoken or written language, enabling smooth communication.
+Major milestones in SLR include the early adoption of Hidden Markov Models (HMMs) inspired by automatic speech recognition (De Coster et al., 2020; Pigou et al., 2015). However, in recent years, there has been a considerable movement towards deep learning algorithms that have shown greater performance in related areas such as image classification and speech recognition. Primary terms in SLR frequently differentiate between isolated SLR, which focuses on identifying individual signals, and continuous SLR (CSLR), which scores to detect sequences of signs in a continuous stream (De Coster et al., 2020; Batnasan, 2024). The development of accurate and resilient automatic recognition systems is extremely important since it promises to improve accessibility, accelerate the annotation of sign language corpora, and simplify communication in a variety of real-world applications.
+Occlusion.
+The head serves as a crucial place of articulation in sign languages, and identifying when and where the hand occludes the head can provide valuable insights into the intended sign structure. An occlusion begins when critical facial features, such as eyes, eyebrows, nose, or mouth, are hidden and ends once these features become visible again.
+However, not all occlusion events are intentional or linguistically meaningful. Some occur incidentally, when the hand passes in front of the face without contact (incidental non‑contact occlusion), while others involve partial or complete facial coverage, where the hand targets one area, like the nose, but also covers adjacent regions, such as the mouth or neck (overlapping target‑contact occlusion). A third category, full‑face occlusion, describes cases in which the hand or forearm simultaneously obscures the eyes, nose, and mouth, temporarily masking the signer’s facial expression altogether. Although human observers can easily interpret such variations, automated systems often struggle to accurately recognize signs when occlusions are misclassified or missed altogether (Viitaniemi et al., 2013).
+Occlusion also poses significant challenges in facial feature tracking for sign language recognition, especially when facial regions are temporarily blocked by hands or other objects like hair. Many signs require the hands to move rapidly in front of the face, which complicates automated analysis. Unlike humans, who can fluidly interpret these fast movements, computer systems rely on discrete video frames, making it difficult to reconstruct hand trajectories during brief occlusions (Castelli et al., 2005).
+Confidence Level.
+In machine learning, particularly in classification tasks such as Sign Language Recognition (SLR), the confidence level refers to the probability score that a model assigns to its prediction, indicating how certain it is about the result. On the other hand, the threshold is a predefined value used to decide whether to accept or reject a model's prediction based on its confidence. If the model's confidence score meets or exceeds the threshold, the prediction is accepted; otherwise, it may be considered uncertain or discarded. 
+The optimal threshold value is not fixed and often varies depending on the specific application and context. Factors such as the acceptable risk level, user expectations, and operational constraints all influence the ideal threshold setting. 
+According to Wenkel et al. (2021), selecting appropriate thresholds tailored to the deployment scenario is important, especially in safety-sensitive applications like robotics, medical, or edge devices. Proper threshold selection is critical for applications where false positives and negatives have severe consequences. Relying solely on standard metrics without adjusting the confidence threshold might lead to suboptimal or unsafe deployment decisions. Thus, certain approaches involve utilizing the Probability-based Detection Quality metric to identify an optimal confidence score threshold that balances true positives, false positives, and false negatives, analyzing performance across various thresholds to determine the most favorable point, and considering application-specific priorities to select a threshold that ensures fair model comparison and effective deployment. Such approach aids in determining the most suitable confidence level for fair model comparison and deployment in the real-world.
+
+
+Filipino Sign Language Recognition
+        In accordance with R.A. 11106, also known as the FSL Act of 2018, FSL is officially recognized as the Philippines’ national visual-gestural language. Consequently, scholarly conversations on deafness have broadened, and FSL itself has gained opportunities to advance and achieve recognition as a language system fundamental to the formation of the Filipino Deaf identity. Alongside its status as a natural language of the Deaf (Notarte-Balanquit, 2021), FSL continues to establish its significance and prominence.
+Despite this progress, research on FSLR remains in its early stages compared to more extensively studied sign languages such as American Sign Language and Indian Sign Language (Tupal, 2023). Recent notable developments in the local context include the creation of larger FSL video datasets and the exploration of deep learning models to improve recognition accuracy (Tupal, 2023; Batnasan, 2024). However, fully capturing the complexity of FSL—particularly non-manual signals and individual variations in signing—remains a challenge (Tupal, 2023; Rivera & Ong, 2018).
+
+
+Existing Approaches in Sign Language Recognition 
+SLR has progressed significantly, as numerous approaches have been explored to bridge the communication gap between the Deaf and hearing communities. Researchers have investigated sensor-based methods, Kinect-based systems, vision-based approaches, and hybrid techniques, each contributing unique advantages yet facing specific limitations.
+Sensor-Based Methods.
+Sensor-based methods, such as data gloves and wearable devices, have demonstrated high accuracy—reaching up to 96% (Oliva et al., 2018)—through capturing the intricate dynamics of sign language (Abhishek et al., 2016; Mehdi & Khan, 2002). However, they often lack practicality due to their bulkiness and expense. Moreover, because these systems focus primarily on hand movements, they neglect non-manual cues such as facial expressions and body language, which are integral to sign language (Oliva et al., 2018).
+Kinect-based systems utilize depth-sensing technology to achieve similarly high accuracy, at about 95%, for capturing 3D gesture data (Oliva et al., 2018). Despite this, they tend to overlook fine details in hand movements and facial expressions, reducing their effectiveness in fully recognizing the complexities of sign language.
+Vision-Based Approaches.
+        Vision-based techniques offer a more practical alternative. Dynamic Time Warping (DTW) and Support Vector Machines (SVM) have been employed alongside Kinect for smaller sign vocabularies (Oliva et al., 2018). While SVM has been found more efficient than DTW, scaling these methods to larger vocabularies remains challenging. Manifold projection techniques have demonstrated promising results, achieving high recognition rates on small sets of signs (Cabalfin et al., 2012), yet their accuracy drops significantly with larger vocabularies. CNNs have also gained traction, successfully recognizing digits and limited vocabularies (Jarabese et al., 2021; Montefalcon et al., 2021). Nonetheless, a recurring limitation is the focus on a small number of sign classes and, in earlier studies, a reliance on static images that fail to capture sign language’s dynamic nature. These models also tend to emphasize hand gestures, frequently overlooking non-manual signals (Oliva et al., 2018).
+Hybrid Approaches.
+Hybrid methods combine sensor-based and vision-based techniques to capture a more comprehensive range of both manual and non-manual cues. Some studies have employed Artificial Neural Networks (ANN) and SVM to include non-manual signals for FSLR (Rivera & Ong, 2018). However, these approaches generally have a limited scope, and achieving higher accuracy in recognizing the intended meaning or gloss remains problematic.
+
+
+Challenges and Issues in Sign Language Recognition
+Al-Qurishi et al. (2021) emphasize that despite the progress of these approaches, major challenges remain, notably the scarcity of high-quality, large-scale datasets—especially for less-studied sign languages like FSL. While this issue is undoubtedly significant, addressing it falls outside the scope of the present study. Many models do not adequately address non-manual signals, and much of the research focuses on isolated sign recognition rather than continuous signing. In addition, practical applications and thorough evaluations in diverse, real-world environments are lacking. Other challenges include individual and regional variability within sign languages, the visual similarity of certain signs, constraints on real-time processing, and the difficulty of adapting models across different sign languages (Oliva et al., 2018). 
+
+
+InceptionV3-GRU: CNN-RNN Hybrid Models for SLR
+CNNs and Recurrent Neural Networks (RNNs) have been widely used in SLR due to their complementary strengths in feature extraction and sequence learning. CNNs excel at extracting spatial features from images by detecting edges, shapes, and patterns through convolutional, pooling, and fully connected layers. As noted by Ugale et al. (2023), CNNs reduce the need for manual preprocessing by automatically identifying relevant image features, making them particularly effective for static hand gesture recognition.
+Meanwhile, RNNs, especially Long Short-Term Memory (LSTM) networks, are well-suited for processing sequential data by maintaining dependencies across time steps, making them ideal for recognizing continuous sign language gestures. Lipton et al. (2015) emphasize that LSTMs mitigate issues such as vanishing and exploding gradients, ensuring better performance on larger datasets.
+The integration of CNNs and RNNs in SLR typically follows a two-step process: CNNs first extract spatial features from sign language video frames, and then RNNs model the temporal dependencies of gestures for accurate sequence prediction. CNNs-RNNs approach has been widely applied in various gesture and action recognition tasks. Ugale et al. (2023) discuss how CNNs handle static hand gestures, while RNNs, particularly LSTMs, enhance recognition by processing temporal sequences. Furthermore, hierarchical attention networks and sequence-to-sequence RNN models have been employed to translate signing videos into text by analyzing sequential frames.
+Lipton et al. (2015) also highlight the application of CNN-RNN models in general action recognition, where movements are tracked across multiple frames to enable real-time gesture interpretation. With the strengths of both architectures, CNN-RNN models significantly enhance recognition accuracy and efficiency in sign language applications. 
+InceptionV3-GRU Model in SLR.
+The IV3-GRU model stands as one of the three validated architectures developed for SLR in the study conducted by (Tupal, 2023), combining the sophisticated spatial feature extraction capabilities of CNNs with the temporal sequence modeling strengths of GRUs. The model utilizes IV3, a state-of-the-art CNN architecture designed by Google to efficiently capture multi-scale features while drastically reducing the number of parameters compared to earlier networks such as AlexNet. The adoption of IV3 is motivated by its proven ability to balance accuracy and computational efficiency—critical for handling video frames in sign language gestures.
+The input video undergoes preprocessing where each frame is resized to 256x256 pixels with the background removed using MediaPipe Selfie Segmentation, effectively isolating the signer. From each video, 30 evenly spaced frames are sampled at a rate of 7 frames per second. Each frame is then fed through the IV3 model, which converts it into a 2048-dimensional feature vector representing high-level spatial characteristics. Concatenating these vectors creates a 30x2048 input matrix that encapsulates the spatial information across the temporal length of the video clip.
+To capture the temporal dynamics inherent in sign language gestures, the sequence of feature vectors is inputted into a two-layer GRU network. The GRU layers, containing 16 and 12 hidden units respectively, offer an effective solution to the vanishing gradient problem common in recurrent architectures, enabling the model to learn long-range dependencies within the video sequence. Furthermore, compared to LSTMs, GRUs require fewer parameters and converge faster during training, making them especially suitable for SLR.
+Dropout regularization is incorporated after each GRU layer with a dropout rate of 0.3 to reduce overfitting. The sequential features are finally passed through a softmax classification layer that outputs the probabilities across the sign classes. The hybrid architecture—IV3 for spatial feature extraction and GRU for temporal modeling—effectively bridges spatial and temporal modalities, resulting in a model for FSLR with higher accuracy and a reduced parameter count compared to prior works (Tupal, 2023).
+Figure 3. InceptionV3-GRU Architecture  
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+________________
+
+
+Transformer-based Approaches for Sign Language Recognition
+Figure 4. Transformer Encoder-Decoder Architecture
+  
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+According to Vaswani et al. (2017), the Transformer model revolutionized deep learning for sequence-based tasks by relying entirely on self-attention mechanisms, eliminating the need for recurrent or convolutional layers. Unlike traditional RNNs and LSTM networks, which process data sequentially, Transformers enable parallel processing, significantly improving computational efficiency and scalability. At the core of the Transformer architecture is the self-attention mechanism, which allows the model to weigh the importance of different elements in a sequence regardless of their position. The self-attention mechanism enables the model to capture long-range dependencies more effectively than RNNs, where information may degrade over long sequences due to vanishing gradients. The standard Transformer consists of an encoder-decoder architecture: The encoder processes the input sequence into a continuous representation, utilizing stacked self-attention layers and feed-forward neural networks. The decoder generates the output sequence by attending to both the encoder’s outputs and previously generated tokens, ensuring accurate sequence prediction. A key feature of Transformers is multi-head attention, which allows the model to capture diverse contextual relationships by attending to different parts of the sequence simultaneously. Additionally, positional encoding is used to retain sequence order information, as the model lacks inherent recurrence.
+The self-attention mechanism stands as a cornerstone of the transformer architecture, facilitating each element in the sequence to attend to every other element, thereby capturing intricate relationships and dependencies irrespective of their relative positions (Batnasan, 2024).
+Figure 5.  Scaled Dot-Product Attention & Multi-Head Attention
+  
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+Scaled Dot-Product Attention, introduced by Vaswani et al. (2017), is a core component of the Transformer model. It operates on three primary inputs: queries (Q), keys (K), and values (V), which are typically represented as matrices when processed in batches. The attention mechanism computes the dot product between each query and all keys to measure similarity, scales the result by the square root of the key dimension (√dk), and applies a softmax function to produce attention weights. These weights are then used to compute a weighted sum of the values, generating the attention output. The scaling factor is crucial, as it prevents large dot product values—which can occur with high-dimensional keys—from pushing the softmax function into regions with vanishing gradients, thus stabilizing training and improving learning efficiency.
+To handle multiple queries simultaneously, the model performs these computations using efficient matrix operations. Building on Scales Dot Product Attention, Vaswani et al. (2017) also introduced Multi-Head Attention, which enables the model to capture a broader range of relationships within the input sequence. Instead of performing a single attention operation, Q, K, and V are projected into multiple lower-dimensional subspaces, each processed by an independent attention head. These heads compute attention in parallel, allowing the model to focus on different aspects of the input simultaneously. The outputs from all heads are concatenated and passed through a final linear transformation, preserving the original dimensionality while enriching the representation.
+In the original Transformer architecture, eight attention heads are used, with each head having a dimension of 64 (dk = dv = dmodel/8). This design ensures that the computational cost remains comparable to single-head attention while significantly increasing the model’s capacity to learn complex patterns. As Batnasan (2024) highlights, the mechanism of Transformer Architecture allows the model to attend to different positions within the input sequence concurrently, capturing diverse contextual relationships and improving recognition tasks such as sign language understanding.
+Since the Transformer lacks recurrence and convolution, it requires a way to incorporate the order of the sequence. This is achieved through positional encoding, which is added to the input embeddings. The positional encodings are computed using sine and cosine functions of different frequencies, allowing the model to learn relative positions in the sequence. Positional Encoding ensures that the model can differentiate between different positions even when processing the entire sequence simultaneously (Vaswani et al., 2017).
+According to Batnasan (2024), transformers offer several advantages over CNN-RNN architectures, particularly in SLR. One key advantage is their ability to capture both short- and long-range dependencies across an entire sequence using self-attention mechanisms. Unlike RNNs, which process sequences step-by-step, transformers analyze all frames simultaneously, leading to improved context awareness. Additionally, transformers enable parallel processing, whereas CNNs and RNNs process data sequentially or locally, which limits computational efficiency. The parallelism significantly improves processing speed and makes transformers more suitable for real-time applications. Another strength of transformers is their ability to leverage pretraining on large datasets, which enhances their generalization capabilities. In contrast, CNNs and RNNs often require domain-specific training data, making them less adaptable to new datasets. Transformers also naturally accommodate sequences of varying lengths, unlike RNNs, which struggle with long sequences and require truncation or padding. Furthermore, transformers achieve competitive performance with fewer parameters compared to 3D CNNs, which require extensive computations due to their spatiotemporal convolutions. This makes transformers more scalable and computationally efficient. They also demonstrate greater robustness to input variability, such as different signing speeds, whereas CNNs and RNNs require extensive data augmentation to handle such differences. Transformers offer improved interpretability through their attention mechanisms, allowing for visualization of influential parts of the input, whereas CNNs and RNNs are more challenging to analyze due to convolutional filters and vanishing gradient issues. These advantages make transformers particularly well-suited for SLR tasks, where capturing temporal dependencies, enabling parallel computation, and handling variable input lengths are crucial (Batnasan, 2024).
+Multi-Head Attention in SLR.
+Multi-head attention, introduced by Vaswani et al. (2017), extends the self-attention mechanism by performing multiple attention operations in parallel—each referred to as a "head." Each head independently learns to focus on different parts or aspects of the input by using separate learned linear projections of the queries, keys, and values. These diverse attention heads allow the model to capture a wide range of relationships within the input sequence. The outputs from all heads are then concatenated and passed through a final linear transformation, enabling the model to jointly attend to different representation subspaces. This architecture significantly enhances the model's ability to capture complex dependencies in the data, without substantially increasing computational cost. As a result, multi-head attention is a core innovation that underpins the effectiveness of Transformer models in sequence-based tasks.
+Attention mechanisms, in general, dynamically highlight the most relevant parts of an input sequence, making them particularly effective for capturing spatial and temporal dependencies. In the context of SLR, this ability is crucial for understanding the nuanced movements of hands, facial expressions, and body gestures over time (Batnasan, 2024). Traditional models often relied on manually crafted features to extract important visual cues from video frames. In contrast, Transformer-based models can automatically learn and focus on these features, greatly reducing the need for manual feature engineering (Vaswani et al., 2017). Vision Transformers (ViTs), in particular, apply self-attention mechanisms to image patches by treating them as tokens in a sequence, similar to words in natural language processing. This design enables ViTs to excel at tasks like object recognition and scene understanding, making them especially well-suited for SLR. By capturing both spatial and temporal information, these models are capable of recognizing continuous sign language expressions with high accuracy. They achieve this by attending to key regions of a signer’s body and tracking movement patterns across frames (Batnasan, 2024).
+The MHAM plays a critical role in this process by allowing the Transformer to analyze different positions and features concurrently. Each head performs self-attention independently, and their outputs are concatenated to preserve dimensional consistency. This approach, using scaled dot-product attention with keys (K), queries (Q), and values (V), enables the model to focus on the most informative aspects of the sequence and understand contextual relationships more effectively (Vaswani et al., 2017).
+In some advanced systems, combining Transformers with convolutional or recurrent neural network architectures has further improved performance. These hybrid models leverage the spatial feature extraction capabilities of CNNs and the temporal modeling strengths of Transformers. Such integrations result in more robust SLR systems, capable of handling complex visual and temporal variations across diverse datasets (Vaswani et al., 2017).
+Review of Transformer-Based SLR Studies.
+        Recent studies on Transformer-based SLR models have demonstrated significant improvements in capturing both spatial and temporal dependencies, leading to more accurate and efficient recognition systems. 
+
+
+Table 1 
+Comparison of Transformer, CNN, and RNN Models 
+on Diverse Sign Language Datasets
+Study
+	Language / Dataset
+	Model(s) Compared
+	Transformer Type / Approach
+	Results / Accuracy
+	Key Insights
+	Batnasan (2024)
+	WLASL2000, Revised WLASL, ASL-Citizen, Arabic Sign Language Dataset
+	ViT-B 16 vs ViT-B 32 vs  S3D vs VK-Net vs X-CLIP vs Other CNNs
+	Vision Transformer (ViT), Pretrained on large datasets, Region/extraction modules, Data Augmentation
+	61.46% on WLASL2000 (proposed), 81.26% on revised WLASL outperforming several baseline models 
+	Incorporating region extraction (head and hands), large-scale pre-training, supervised fine-tuning enhances accuracy 
+	De Coster et al.  (2020)
+	Flemish Sign Language (VGT) / 18730 samples, 100 classes
+	LSTM baseline, PTN, VTN, MTN
+	Transformer-based architectures (including Multi-head Attention) and CNN hybrids
+	Best: 74.7% on 100 classes
+	Transformers outperform LSTMs in SLR; spatio-temporal features attention enhances accuracy; larger datasets improve performance; end-to-end learning extracts more salient features than keypoints alone
+	Heuju & Rijal (2022)
+	Nepali Sign Language (NSL)
+	CNN-RNN (DenseNet-121 + LSTM) vs. Transformer
+	Transformer model using DenseNet-121 features
+	Best accuracy with Transformer: 89.14% (with 9 signs, 20 frames)
+	Transformers more effectively capture spatial and temporal dependencies in NSL recognition tasks
+	Shin et al. (2023)
+	Korean Sign Language (KSL)
+	Deep CNNs vs. Transformer-CNN hybrid
+	Hybrid model with multi-branch attention combining CNNs (local features) and Transformers (global context)
+	Transformer-CNN hybrid : 89.00% (benchmark) 98.30% (lab dataset)
+	Hybrid model significantly outperforms previous CNN-based KSL models (79.80%–83.66%)
+	Kothadiya et al. (2023)
+	Indian Sign Language (ISL)
+	CNN and hybrid models vs. SIGNFORMER
+	SIGN FORMER: ViT-based model with patch embeddings, MHSA, MLP, and strong data augmentation (no convolutions used)
+	SIGN FORMER: 99.29% in just 5 epochs
+	SIGNFORMER achieves high accuracy with fewer epochs, improved efficiency, and robustness to variations; superior to CNN and hybrid models
+	
+
+Synthesis of the Reviewed Literature and Studies
+Transformer architectures have demonstrated significant success in natural language processing and computer vision; however, their application in FSLR remains underexplored. A study by Boháček and Hrúz (2022) applied pose-based Transformer models to word-level SLR, achieving a top-1 accuracy of 63.18% on WLASL. Despite these advancements, research on Transformer-based approaches in FSLR is minimal, with most existing models relying on CNNs and RNNs. Expanding Transformer applications in this field could significantly improve recognition accuracy, particularly in capturing sequential dependencies and spatial relationships in signing. As Tupal (2023) suggests, implementing Transformer-based models using the FSL-105 dataset could help extend research in the FSL domain.
+        According to Batnasan (2024), SLR has faced numerous complex challenges. Chief among these is the inherent complexity of sign languages themselves, which encompass not only intricate hand gestures but also nuanced facial expressions and dynamic body movements. Thus, accurately recognizing and interpreting these spatio-temporal features remains a significant hurdle.
+CNN-RNN hybrids have demonstrated strong performance in SLR tasks, such as the IV3-GRU model, which outperformed other architectures in recognizing FSL gestures (Tupal, 2023). Most FSLR models currently employ CNNs, RNNs, or hybrid architectures, as the application of Transformer-based models remain unexplored. In addition, no direct comparison exists between these hybrid models and Transformer-based architectures, leaving a significant gap in understanding their relative effectiveness. Furthermore, the lack of benchmarking makes it difficult to accurately assess their comparative performance.
+Chapter 3
+METHODOLOGY
+Research Design
+This study uses a quantitative experimental framework with two independent variables:
+1. Model Architecture: The performance of the proposed MHAM Transformer is compared against the IV3-GRU baseline.
+2. Occlusion Condition: Model performance is evaluated under two distinct conditions: test samples 'with occlusion' and test samples 'without occlusion’.
+The dependent variables correspond directly to our research questions:
+1. Recognition performance (RQ1): Measured by macro-averaged precision, recall, and F₁-score across all 105 gloss classes, evaluated under two conditions:
+   1. Occluded signs
+   2. Non-occluded signs
+2. Classification performance (RQ2): Measured by macro-averaged precision, recall, and F₁-score across semantic categories (e.g., greetings, numbers), also evaluated under:
+   1. Occluded signs
+   2. Non-occluded signs
+Both models are trained from scratch on the same 80/20 training/testing split, using identical hyperparameters and preprocessing steps—including 89-keypoint extraction via MediaPipe, coordinate normalization, and embedding generation.
+During evaluation, the held-out test set is automatically divided into non-occluded and occluded subsets based on keypoint visibility (e.g., missing facial landmarks such as the eyes, nose, or mouth). Predictions for recognition and classification tasks are logged and compared against ground truth.
+Statistical significance of performance differences between the two models will be tested using paired t-tests or Wilcoxon signed-rank tests (α = 0.05), depending on data normality.
+
+
+Sources of Data
+This study will utilize the FSL-105 dataset, a publicly available and pre-annotated video dataset specifically developed for FSLR. The use of this existing dataset provides a standardized benchmark for evaluating the performance of both the Transformer-based FSLR model and the baseline IV3-GRU. By adopting the same dataset, this research ensures consistency in experimental conditions and enables a fair, reliable comparison of the Transformer-based model’s performance in FSLR.
+Dataset Composition.
+The FSL-105 dataset consists of 2,130 video samples representing 105 distinct FSL signs. These signs were selected through purposive sampling, a non-probability sampling technique chosen to ensure the inclusion of signs that are pedagogically relevant and frequently encountered by FSL learners. This method was employed to deliberately target core vocabulary essential for functional daily communication, rather than relying on random or exhaustive sign selection (Tupal, 2023). The signs are grouped into ten thematic categories such as Greetings, Survival, Numbers, Calendar, and Family, reflecting practical and contextually meaningful language usage. A selection of representative signs is shown in Table 2.
+Table 2
+FSL-105 Dataset Composition
+Category/Classification
+	Signs (Examples) 
+	Greeting
+	Good morning, Good evening, How are you, Nice to meet you
+	Survival
+	I understand, I know, Yes, No, Wrong, Correct, Slow, Fast
+	Number
+	One, Two, Three, Four, Five, Six, Seven, Eight, Nine, Ten
+	Calendar
+	January, February, March, April, May, June, July, August, September
+	Days
+	Monday, Tuesday, Wednesday, Today, Tomorrow, Yesterday
+	Family
+	Father, Daughter, Grandfather, Auntie, Cousin, Parents
+	Relationships
+	Boy, Girl, Woman, Deaf, Hard of Hearing, Blind, Married
+	Color
+	Blue, Green, Red, Brown, Black, White, Yellow, Orange
+	Food
+	Bread, Egg, Fish, Meat, Chicken, Spaghetti, Rice, Longanisa
+	Drink
+	Hot, Cold, Juice, Milk, Coffee, Beer, Wine, Sugar, No sugar
+	
+
+
+
+The dataset captures both manual features (hand-shape, motion, positioning) and non-manual features (facial expressions, head movements, body posture), which are crucial for accurately interpreting FSL signs. Non-manual features are particularly important in FSL, as they add contextual meaning that can alter the interpretation of a sign.
+Participants in the Dataset.
+The dataset was recorded with four native FSL signers—two males (one of whom is an FSL expert) and two females. The participants are Deaf and all are fluent in FSL. The decision to limit participation to four individuals was based on methodological and cultural considerations. As the Filipino Deaf community is part of a vulnerable sector, the selection process prioritized ethical engagement, linguistic authenticity, and cultural accuracy over sample size. This is consistent with ethical research practices that emphasize community-informed participation, cultural sensitivity, and the importance of building trust within marginalized groups (Singleton et al., 2014).
+The FSL expert, Sir Rey Alfred Lee, selected three of the participants and ensured that all recorded signs reflected real-world, community-accepted usage. A small, curated group also minimized variability in signing styles—reducing ambiguity and enhancing data consistency for recognition and modeling. This controlled approach supports both ethical and methodological integrity, and aligns with established practices in sign language corpora, where expert-guided curation and signer consistency take precedence over larger, less controlled samples.
+Prior to recording, all participants were fully informed of the dataset’s purpose and provided written consent. A trusted FSL interpreter facilitated the consent process to ensure clarity and transparency.
+Dataset Collection and Preprocessing.
+The dataset was originally collected under controlled conditions, following the strict protocols established in the foundational study by Tupal (2023), which this research builds upon.
+Recordings were conducted in a standardized environment with a plain background to reduce distractions. The signers' torso and hands remained fully visible to capture both manual and non-manual cues. A front-facing camera ensured consistent framing across all videos.
+Each sample is a four-second video clip recorded at 60 FPS and 1920×1080 resolution using an iPhone SE 2020. In accordance with Tupal (2023), the dataset was split into 80% training data (1,704 videos) and 20% testing data (426 videos). For efficiency, videos were resized to 640×360 pixels and downsampled to 30 FPS. Keypoint extraction was performed using MediaPipe Pose Estimator, producing 89 keypoints per frame to track key body landmarks. MediaPipe Selfie Segmentation was applied to isolate the signer from the background and emphasize relevant visual cues. Each frame was then padded to a square aspect ratio and resized to 256×256 pixels for consistency across the dataset. 
+
+
+
+
+Research Instrument
+System Architecture.
+Figure 6. System Architecture  
+The system begins by sampling each video clip from FSL-105 at 30 frames per second (fps) and applying background removal through MediaPipe Selfie Segmentation. For every frame, MediaPipe Pose and Hands modules extract a total of 89 two-dimensional keypoints representing both manual (hand and arm) and non-manual (face and upper body) components. These (x,y) coordinates are normalized to the range [−1,1] and concatenated into a 178-element feature vector per frame.
+        Because our input is a structured stream of keypoints rather than raw image patches, off-the-shelf Vision Transformer checkpoints (e.g., ImageNet-pretrained ViT) are not directly applicable and lack the specialized spatio-temporal attention we require. We therefore implement and train a bespoke Transformer that operates on keypoint embeddings from scratch (Dosovitskiy et al., 2020).
+Each frame vector is passed through a learnable linear layer to produce a 256-dimensional embedding. A matching 256-dimensional sinusoidal positional encoding is added to each frame embedding, allowing the model to retain frame order information without any recurrent connections. The resulting sequence of T embeddings is normalized through Layer Normalization and then passed into a stack of four Transformer encoder blocks. Each block applies multi-head self-attention with eight heads (head dimension = 32), followed by a position-wise feed-forward network with an inner dimension of 1024. Both sublayers are surrounded by residual connections, pre-layer normalization, and dropout (p=0.1), ensuring stable and efficient training.
+After the fourth encoder block, the sequence is reduced through a configurable pooling operation to form a single 256-dimensional feature vector that integrates both manual and non-manual keypoint information. Depending on configuration, the model can apply mean pooling, max pooling, or CLS token pooling to summarize the temporal sequence into a fixed-length representation. This fused feature vector serves as a compact spatio-temporal summary of the entire sign sequence.
+The pooled representation is then passed to two lightweight, parallel output heads. The gloss recognition head applies a projection sequence of Linear(256 → 128), ReLU, Dropout, and a final Linear(128 → 105) layer to yield per-gloss probabilities corresponding to the 105 signs in the dataset. In parallel, the category head applies an identical structure but projects to C categories (e.g., greetings, numbers, actions), producing per-category probabilities through a softmax layer.
+By utilizing self-attention across all frames and body regions, the model captures synchronous and temporal interactions even when certain keypoints are missing or occluded. The streamlined design consisting of four encoder layers and compact embeddings maintains a moderate parameter count (≈ 30–40 million), ensuring that computation focuses on spatio-temporal feature extraction critical for accurate gloss recognition and semantic category classification.        
+Preprocessing Pipeline.
+Figure 7. Preprocessing Pipeline  
+
+
+
+
+Each 4-second video clip is sampled at 30 fps and resized for consistency. MediaPipe Selfie Segmentation removes the background to isolate the signer. For each frame, MediaPipe Pose and Hands modules extract 89 two-dimensional keypoints (25 points × 2 pose landmarks, 21 points × 2 per hand, 22 points × 2 face mesh) to capture manual and non-manual cues. This step captures both manual and non-manual cues while discarding irrelevant features such as background and skin tone (Co et al., 2024).
+The resulting raw (x,y) coordinates are flattened into a 178-element feature vector for each frame. These vectors are normalized to a standardized range, ensuring that positional values remain consistent regardless of signer distance or camera scale. The normalized frame-level keypoint vectors are then arranged sequentially according to their temporal order, forming a structured input stream suitable for the Transformer model. Finally, each frame vector is passed through a learnable linear projection layer to embed the data into the model’s 256-dimensional feature space, preparing it for downstream spatio-temporal encoding and recognition tasks.
+Transformer Architecture.
+Figure 8. Transformer Architecture  
+The Transformer processes the frame-level embeddings generated by the preprocessing pipeline. Before entering the encoder, each 256-dimensional embedding is augmented with a matching 256-dimensional sinusoidal positional encoding, allowing the model to retain information about each frame’s position in the temporal sequence. The resulting sequence of embeddings is normalized through Layer Normalization and then passed into a stack of four Transformer encoder blocks. Each block consists of multi-head self-attention with eight heads (head dimension = 32) and a position-wise feed-forward network with an inner dimension of 1024. Residual connections, pre-layer normalization, and dropout (p=0.1) are applied around both sublayers to stabilize learning and improve generalization.
+These sinusoidal encodings generate a unique pattern of sine and cosine values at varying frequencies for each frame index, allowing the model to distinguish both absolute positions (e.g. frame 1 vs. frame 30) and relative distances (e.g. two frames three steps apart). When added to the frame embeddings, they enable the self-attention layers to reason about the order and spacing of frames, essential for capturing the timing and flow of a sign gesture, even though the core Transformer has no recurrent or convolutional structure.
+The model consists of an encoder composed of stacked layers, each containing a MHAM, a position-wise feed-forward network, residual (skip) connections, and layer normalization to stabilize training (Zhang & Jiang, 2024). Within each encoder layer, MHAM enables the model to attend to multiple positions in the sequence simultaneously. In the context of FSLR, this allows the model to capture both spatial relationships (e.g., between hand-shape and facial expression within a frame) and temporal dependencies (e.g., smooth transitions across frames) that are critical for accurately interpreting sign language (Althubiti & Algethami, 2024).
+Each attention head will learn its own projection of Queries, Keys, and Values, allowing the model to focus on different sub-features of the input. The outputs of all heads will be aggregated, enabling the model to learn both short- and long-range dependencies across the input sequence (Vaswani et al., 2017; Batnasan, 2024).
+After all encoder blocks, the model outputs a sequence of T×256 frame embeddings. These embeddings are then aggregated into a single 1 × 256 feature vector using a configurable pooling strategy—either mean pooling, max pooling, or a learnable CLS-token pooling approach. This pooled representation fuses temporal and spatial information across all frames, forming a compact summary of the entire sign sequence. From this fused vector, two parallel output branches perform the final classification tasks. The gloss recognition head applies a series of linear projections (256 → 128 → 105) with ReLU activation and dropout before a softmax layer, yielding the predicted gloss label from the 105 gloss classes. The category classification head mirrors this structure but projects to C output classes (256 → 128 → C), producing the semantic category probabilities (e.g., greetings, numbers, actions) through a separate softmax function.
+This approach follows the common practice of attaching a feed-forward classifier to Transformer encoders for sequence classification tasks. By using the Transformer's self-attentive encoder to generate a sequence representation and then a dedicated classification head to produce the final prediction, the model will directly output the predicted FSL gloss for each input video.
+Overall, this architecture enables modeling of spatio-temporal features across the video input. MHAM dynamically weighs these signals while positional encoding preserves frame order, supporting direct and accurate gloss recognition and semantic category prediction.
+Multi-Head Attention Mechanism (MHAM).
+Figure 9. Multi-Head Attention Mechanism (MHAM)
+  
+
+The MHAM enables the Transformer to focus on different parts of an input sequence simultaneously (Vaswani et al., 2017). As shown in Figure 9, MHAM extends self-attention by running multiple attention "heads" in parallel, with each head processing the input independently through its own learned projections. By attending to different aspects of the data concurrently (denoted as h parallel Scaled Dot-Product Attentions), the model captures a broader range of relationships within the sequence (Batnasan, 2024).
+This structure allows the model to learn information at multiple levels of granularity. Some heads may focus on short-term local patterns, while others attend to long-range dependencies, enabling the representation of both fine-grained and global contextual features (Vaswani et al., 2017; Batnasan, 2024).
+In each self-attention unit, input elements (e.g., frame embeddings) are projected into three vectors: Query (Q), Key (K), and Value (V). The Query represents the information an element seeks, the Key describes what is offered by other elements, and the Value contains the information to be aggregated if a match is found. Each Query interacts with all Keys to determine attention weights, with stronger Query-Key matches leading to greater influence during aggregation (Vaswani et al., 2017).
+The core operation inside each head is Scaled Dot-Product Attention, expanded on the left side of Figure 9, and proceeds through four steps:
+Matrix Multiplication: Queries are multiplied by the transposed Keys to produce raw attention scores.
+Scaling: Scores are divided by the square root of the Key dimension to stabilize gradients (Vaswani et al., 2017).
+Softmax: The scaled scores are normalized into a probability distribution.
+Weighted Sum: The resulting weights are used to compute a weighted sum of the Values, producing the attention output.
+Through this mechanism, each input element dynamically aggregates context from the sequence based on learned relevance.
+In a basic self-attention mechanism, a single attention head computes all interactions using one set of learned projections for queries, keys, and values. This single-head approach condenses the contextual information into one representation, which can limit the diversity of features captured. 
+In contrast, MHAM addresses this limitation by employing multiple attention heads (h) in parallel, each with its own learned projections for queries, keys, and values. By attending to different representation subspaces simultaneously, these heads capture a richer and more diverse set of patterns within the input (Vaswani et al., 2017). Each head can specialize in distinct aspects—such as temporal dynamics, spatial structures, or feature subsets (Batnasan, 2024)—and their outputs are concatenated to form a combined representation.
+To return to the expected dimensionality and integrate the specialized information, the concatenated outputs are passed through a final Linear projection. This design, along with the use of independent Linear layers before attention, allows each head to focus uniquely while enabling the model to synthesize the heads’ outputs into a coherent feature space (Vaswani et al., 2017).
+Following the multi-head attention operation, the enriched sequence representations proceed to the next stage in the Transformer Architecture, specifically into the encoder's position-wise feed-forward network for further transformation.
+Development Methodology.
+The study will follow an Iterative Development Methodology, enabling repeated cycles of model training, evaluation, and refinement throughout the experimentation process. Each iteration will incorporate insights from performance metrics and error analysis, allowing the system to evolve based on empirical results rather than fixed development stages.
+To implement this system, the development will be carried out primarily using Python, due to its extensive ecosystem and community support in machine learning and computer vision. The PyTorch framework will serve as the backbone for building and training the Transformer model, offering dynamic computation graphs and fine-grained control over model parameters.
+For video and image data processing, OpenCV and NumPy will be utilized to handle frame extraction, format conversions, and numerical operations. To extract pose and keypoint data from each frame, the system will integrate MediaPipe, which provides state-of-the-art landmark detection crucial for recognizing both manual and non-manual sign language cues.
+Evaluation of model performance will be supported by Scikit-learn, particularly for computing classification metrics such as F1-score and accuracy. Visualizations will be handled by Matplotlib and Seaborn.
+Development and experimentation will take place both in a Vast AI environment, for scalable cloud-based execution, and locally via Jupyter Notebooks, especially during preprocessing and initial testing stages. For writing and organizing code efficiently, Visual Studio Code will be used as the primary IDE.
+Lastly, Weights & Biases (WandB) will be integrated for experiment tracking, helping monitor training logs, hyperparameter configurations, and performance metrics across multiple runs—critical for ensuring transparency and reproducibility in model development.
+
+
+
+
+
+
+
+
+Data Generation Procedure
+This section describes the experimental workflow used to compare the MHAM Transformer and IV3-GRU models under varying occlusion conditions. It provides a detailed overview of the preprocessing, training, and evaluation procedures, which are organized into three distinct phases: Pre-Experimentation, Experimentation, and Post-Experimentation.
+Pre-Experimentation Phase. 
+The Pre-Experimentation Phase involves the preparation of data and the training of models, ensuring consistent preprocessing and controlled training conditions.
+Concatenated Isolated FSL Glosses Generation.
+As the FSL-105 dataset consists of isolated signs, concatenated isolated FSL glosses were generated using the methodology from `preprocessing/continuous/create_continuous_signs.py`. Isolated videos from the validation set were concatenated based on two strategies:
+1. Strategy 1 (Same Category): Sequences were formed by joining 3-6 different glosses that all belong to the same semantic category (e.g., "Good morning," "Hello," "How are you").
+2. Strategy 2 (Different Categories): Sequences were formed by joining 4-5 glosses, each from a different semantic category.
+For each generated sequence (e.g., `continuous_0001_S1.npz`), a corresponding ground truth JSON file was created. This JSON file stores an array of "segments," with each segment defining the start time, end time, and correct gloss label for every sign in the concatenated video. This ground truth is essential for evaluating performance using Word Error Rate and detection metrics.
+Keypoint Extraction & Normalization.
+        The data preparation process begins with extracting keypoints from video frames using the MediaPipe framework. This system captures essential features for Filipino Sign Language (FSL) recognition, including both manual and non-manual components like hand gestures and facial expressions. These keypoints will be normalized to ensure consistency across frames and videos. The data will then be organized into time-ordered sequences, which are crucial for capturing the dynamic nature of sign language. This structured data will form the foundation for model training and evaluation.
+Pipeline Compatibility Check.
+        After preprocessing, the next step is verifying that the data is compatible with the model pipeline. Key factors such as input shapes, padding behavior, and batch processing mechanisms will be checked to ensure they align with the model’s requirements. Any inconsistencies or errors in data formatting will be addressed to ensure the data flows smoothly through the pipeline.
+Model Training.
+        Model training will begin with the selection of the MHAM Transformer and IV3-GRU baseline models. Both models will be trained from scratch using the preprocessed data within the PyTorch framework. Identical hyperparameters will be initialized for both models to ensure a fair comparison. Training will occur in two phases: first, the Transformer model will be trained on a small subset of 10 signs from the "Greetings" category as an initial evaluation. Following this, the model’s weights will be reinitialized, and the model will be trained on the full 105-sign dataset to assess generalization across a broader set of signs. Adam optimizer will be used to update the model’s weights, with batch size and epoch numbers optimized during preliminary tuning.
+Define and Apply Stopping Criteria.
+        To prevent overfitting or unnecessary training, stopping criteria will be established. A predetermined number of epochs (e.g., 50) will be set, with training halting after this point unless earlier termination is triggered by a lack of improvement in the validation loss over consecutive epochs, a condition known as "patience." The delta parameter will be adjusted to balance performance with training efficiency.
+Experimentation Phase. 
+The Experimentation Phase involves running inference on the held-out test (20%) sets and logging model outputs and performance metrics.
+Determine If Sign is With or Without Occlusion.
+To robustly evaluate performance, test clips are automatically flagged as "with occlusion" using a multi-method detection system. This system is far more comprehensive than simple landmark disappearance:
+1. Multi-Region Partitioning: The head is divided into five anatomical regions for analysis: forehead, cheeks, nose, mouth, and neck (`HeadRegion`).
+2. Hand Feature Extraction: For each frame, the system identifies the palm center and all fingertip locations for both hands (`_hand_centers_and_tips`).
+3. Multi-Method Detection: An occlusion is detected if a hand's features intersect with a facial region, based on a combination of weighted methods:
+   1. Fingertip Intersection: Direct overlap of fingertip coordinates within a facial region.
+   2. Palm Proximity: The palm center is within an adaptive radius of a facial region.
+   3. Trajectory Analysis: The hand's motion vector over recent frames indicates movement towards a facial region.
+4. Temporal Filtering: To prevent noise from brief, incidental movements, a final occlusion event is only confirmed if the detection persists across a 5-frame sliding window, allowing for up to 2 missed frames (skips) within that window (`_apply_temporal_filtering`, `DEFAULT_OCCLUSION_CONFIG`). Clips meeting this criterion are labeled "with occlusion."
+Inference and Log Predictions. 
+Once categorized into clean or occluded conditions, both the MHAM Transformer and IV3-GRU models will be evaluated on the respective test sets. The models will generate predictions for both recognition (identifying the correct gloss labels) and classification (categorizing glosses into semantic categories). The predictions, along with their confidence scores, will be recorded and compared to the ground truth labels to measure performance under both clean and occluded conditions.
+Aggregate Per-Sample Logs (TP/FP/TN/FN).
+For each test sample, the predictions will be logged in structured logs, capturing key metrics such as True Positives (TP), False Positives (FP), True Negatives (TN), and False Negatives (FN). These metrics will be used to compute macro-averaged precision, recall, and F1-score for both recognition and classification tasks. The logs will ensure that the performance of each model can be thoroughly evaluated at the individual sample level, providing insights into the strengths and weaknesses of each model.
+Record Training Metadata.
+In addition to logging predictions and performance metrics, metadata related to the training process will be recorded. This includes tracking training and validation loss curves, the convergence epoch (when training stabilizes), final accuracy values, and hyperparameter configurations. These records will ensure transparency and reproducibility of the experiment.
+Post-Experimentation Phase. 
+        The Post-Experimentation Phase focuses on analyzing the results obtained from the inference and logging processes. This phase includes computing performance metrics, conducting statistical testing, and evaluating model robustness to occlusion.
+Compute descriptive metrics (precision, recall, F₁).
+After obtaining the per-sample precision, recall, and F₁ scores for both recognition and classification tasks, the macro-averaged precision, recall, and F₁ scores will be computed for each model under clean and occluded conditions. These macro-averaged metrics will provide a balanced comparison of model performance, ensuring equal weighting for each gloss category regardless of frequency.
+Perform paired statistical tests with assumption checks. 
+To evaluate whether the differences in performance are statistically significant, paired statistical tests will be conducted. The normality of paired differences will first be assessed using the Shapiro-Wilk test. If the differences are normally distributed, a paired t-test will be used; otherwise, the Wilcoxon signed-rank test will be applied. These tests will assess whether the observed performance differences between the two models are statistically significant.
+Apply multiple-comparisons correction.
+Since multiple statistical tests will be performed across different occlusion levels and performance metrics, the Holm-Bonferroni correction will be applied to adjust for multiple comparisons. This correction ensures that the family-wise error rate is controlled, reducing the likelihood of false positives in statistical testing.
+Conduct error analysis on per-sample failures.
+Error analysis will be conducted to investigate the misclassifications made by each model. This analysis will focus on the false positives (FP) and false negatives (FN) from the per-sample logs, which were recorded in the Experiment Report Template. By identifying continuous glosses or categories that were more likely to be misclassified under occluded versus clean conditions, the error analysis will help pinpoint areas where the models struggle. The process will also compare the performance of the MHAM Transformer and IV3-GRU model, particularly under occlusion, and reveal patterns of misclassification that can be addressed in future model iterations.
+Experiment Report Template.
+The Experiment Report Template organizes each run into two main sections. The first section comprises four summary tables (Tables 3–6) that present recognition and classification metrics—precision, recall, and F₁—for both the MHAM Transformer and the IV3-GRU with and without occlusion. Each summary table reports both models’ scores, the difference Δ and the corresponding H₀ decision.
+The second section presents four per-sample log tables (Tables 7–10) that detail the recognition and classification outcomes for each model and task in continuous sign scenarios. Each log entry lists the input video file, the evaluated gloss or category sequence, and the corresponding performance metrics: Precision, Recall, and F1-Score alongside the counts of True Positives (TP), False Positives (FP), True Negatives (TN), and False Negatives (FN).This two-part structure ensures a consistent presentation of raw scores, practical significance, and statistical testing across all experimental conditions.
+
+
+Table 3
+RQ1 – Recognition (With Occlusion)
+Metric
+	Transformer Score
+	IV3-GRU Score
+	Δ (T – I)
+	p-Value
+	H₀₁ Decision
+	Precision
+	—
+	—
+	—
+	—
+	Reject / Fail to Reject
+	Recall
+	—
+	—
+	—
+	—
+	Reject / Fail to Reject
+	F₁-Score
+	—
+	—
+	—
+	—
+	Reject / Fail to Reject
+	
+
+Table 4
+RQ1 – Recognition (Without Occlusion)
+Metric
+	Transformer Score
+	IV3-GRU Score
+	Δ (T – I)
+	p-Value
+	H₀₁ Decision
+	Precision
+	—
+	—
+	—
+	—
+	Reject / Fail to Reject
+	Recall
+	—
+	—
+	—
+	—
+	Reject / Fail to Reject
+	F₁-Score
+	—
+	—
+	—
+	—
+	Reject / Fail to Reject
+	Table 5
+RQ2 – Classification (With Occlusion)
+Metric
+	Transformer Score
+	IV3-GRU Score
+	Δ (T – I)
+	p-Value
+	H₀₁ Decision
+	Precision
+	—
+	—
+	—
+	—
+	Reject / Fail to Reject
+	Recall
+	—
+	—
+	—
+	—
+	Reject / Fail to Reject
+	F₁-Score
+	—
+	—
+	—
+	—
+	Reject / Fail to Reject
+	
+
+Table 6
+RQ2 – Classification (Without Occlusion)
+Metric
+	Transformer Score
+	IV3-GRU Score
+	Δ (T – I)
+	p-Value
+	H₀₁ Decision
+	Precision
+	—
+	—
+	—
+	—
+	Reject / Fail to Reject
+	Recall
+	—
+	—
+	—
+	—
+	Reject / Fail to Reject
+	F₁-Score
+	—
+	—
+	—
+	—
+	Reject / Fail to Reject
+	
+
+Table 7
+Per-Sample Recognition Log – Transformer
+FIle
+	Gloss Sequence
+	TP
+	FP
+	TN
+	FN
+	Precision
+	Recall
+	F1-Score
+	continuous_0001.mp4
+	100.00%
+	100.00%
+	100.00%
+	1
+	0
+	104
+	0
+	…
+	…
+	…
+	
+
+	…
+	…
+	…
+	…
+	
+
+Table 8
+Per-Sample Recognition Log – IV3-GRU
+FIle
+	Gloss Sequence
+	TP
+	FP
+	TN
+	FN
+	Precision
+	Recall
+	F1-Score
+	continuous_0001.mp4
+	100.00%
+	100.00%
+	100.00%
+	1
+	0
+	104
+	0
+	…
+	…
+	…
+	
+
+	…
+	…
+	…
+	…
+	
+
+Table 9
+Per-Sample Classification Log – Transformer
+FIle
+	Category Sequence
+	TP
+	FP
+	TN
+	FN
+	Precision
+	Recall
+	F1-Score
+	continuous_0001.mp4
+	100.00%
+	100.00%
+	100.00%
+	1
+	0
+	104
+	0
+	…
+	…
+	…
+	
+
+	…
+	…
+	…
+	…
+	
+
+Table 10
+Per-Sample Classification Log – IV3-GRU
+FIle
+	Category Sequence
+	TP
+	FP
+	TN
+	FN
+	Precision
+	Recall
+	F1-Score
+	continuous_0001.mp4
+	100.00%
+	100.00%
+	100.00%
+	1
+	0
+	104
+	0
+	…
+	…
+	…
+	
+
+	…
+	…
+	…
+	…
+	
+
+
+
+Ethical Considerations
+The FSL-105 dataset is publicly available and includes video recordings of FSL signers, all credited for their contributions. It was created with informed consent, ensuring participants understood how their recordings would be used. This study follows the dataset’s original guidelines and ensures no additional personally identifiable information (PII) is introduced during processing.
+Moreover, FSL-105 is also openly accessible for research, education, and development. Proper attribution will be given to Tupal and his collaborators in all outputs derived from the dataset. To supplement the limited public documentation, we obtained permission from Tupal for full access to his research. His work serves as a primary reference, and we fully adhere to the ethical and usage guidelines he outlined. The dataset carries no restrictive licensing, and its reuse is permitted with appropriate credit.
+The dataset may not fully represent the diversity of the Filipino Deaf community due to:
+1. Demographic constraints (e.g., age, gender, regional variation)
+2. Linguistic gaps (e.g., underrepresented signs)
+3. Contextual limitations (e.g., absence of sentence-level signing)
+These limitations, acknowledged by the dataset creator, are recognized and considered in this study’s application and interpretation of results.
+
+
+Data Analysis
+Following the data generation procedure, this section involves evaluating the models' performance based on the results obtained during the Experimentation Phase. The analysis includes computing descriptive metrics, performing statistical testing, conducting error analysis, and visualizing the results to compare the MHAM Transformer and IV3-GRU models under clean and occluded conditions.
+Descriptive Analysis.
+After obtaining the per-sample precision, recall, and F₁ scores for both recognition and classification tasks, the macro-averaged precision, recall, and F₁ scores will be computed for each model under both clean and occluded conditions. These computed metrics will enable an overall evaluation of how well each model performs in both recognizing individual glosses and classifying them into semantic categories.
+Summarize precision, recall, and F₁ by model and occlusion conditions.
+Macro-averaged metrics will be computed per model and condition. These metrics will be calculated as follows:
+
+
+Table 11
+Metrics Formula
+Metric
+	Formula
+	Precision measures the proportion of correct predictions out of all predicted glosses:
+	
+	Recall measures the proportion of correct predictions out of all actual glosses:
+	
+	Continuation of Table 11
+Metric
+	Formula
+	F1-score is the harmonic mean of precision and recall, providing a balanced measure of model performance:
+	
+	These metrics will be macro-averaged across all classes to ensure that each gloss category is given equal weight, preventing dominant categories from skewing the results.
+Tabulate raw metric values and differences.
+For each model and condition, raw values for precision, recall, and F₁-score will be recorded. The differences in performance between the MHAM Transformer and IV3-GRU models will be computed, highlighting the impact of occlusion on each model’s ability to recognize and classify signs. The performance difference for each sample is computed  using Equation (3.1) as follows:
+
+
+
+
+	
+	(3.1) 
+	  
+Where  is the difference for sample , and  denotes the metric (e.g., F1-score).
+Statistical Testing.
+        To assess whether the differences in performance are statistically significant, paired statistical tests will be conducted. The approach for testing normality and selecting the appropriate statistical test is outlined below:
+Check normality (Shapiro–Wilk).
+The Shapiro-Wilk test will be used to assess the normality of the paired differences between the models' performance metrics. This test will determine whether the differences follow a normal distribution. The formula for the Shapiro-Wilk test statistic is shown in Equation (3.2):
+
+
+
+
+	
+	(3.2) 
+	
+
+Where  is the ordered sample value,  is the sample mean, and  are constants derived from the covariance matrix of the order statistics.
+Select and run paired t-test or Wilcoxon.
+The choice of statistical test depends on the distribution of the differences. If the differences are normally distributed, a paired t-test will be applied to compare the means of the paired differences. Otherwise, the Wilcoxon signed-rank test will be used instead, which is a non-parametric alternative.
+Paired t-Test for Normal Data. 
+The paired t-test compares the means of the paired differences between the two models across each performance metric to determine if the means are significantly different from zero.  
+1. Calculate the paired differences between model metrics using Equation (3.3):
+
+
+
+
+	
+	(3.3) 
+	
+
+Where: 
+1.  and  are the performance metrics of the Transformer model and IV3-GRU model
+   2. Compute the mean and standard deviation of the paired differences using Equations (3.4) and (3.5), respectively:
+   1. Mean: 
+
+
+	
+	(3.4) 
+	
+
+Where:
+   1.  represents each individual difference between the paired observations
+   2.  is the number of pairs of observations
+   3.  is the sum of all the differences
+      1. Standard Deviation: 
+
+
+	
+	(3.5) 
+	
+
+Where:
+      1.  is each individual difference between the paired observations
+      2.  is the mean differences
+      3.  is the number of values in the dataset
+      4.  is the sum of the squared deviations of each difference from the mean of the differences
+         3. Apply the t-test formula using Equation (3.6):
+                
+
+
+	
+	(3.6) 
+	
+
+Where:
+         1.  is the mean of paired differences
+         2.  is the standard deviation of the differences
+         3.  is the number of samples
+            4. Compare the t-value with the critical value from the distribution table.
+Wilcoxon Signed-Rank Test for Non-normal Data.
+        For non-normal differences, the Wilcoxon signed-rank test will be applied. This ranks the absolute differences and assesses whether the median difference is significantly different from zero. 
+            1. Calculate absolute differences between paired observations (i.e., subtract the second value from the first for each pair) using Equation (3.7).
+                
+
+
+	
+	(3.7) 
+	
+
+Where:
+            1.  and  are the paired values
+               2. Rank the absolute differences in ascending order. If there are tied values, assign the average rank to each tied value.
+               3. Assign the signs of the ranks to the differences. If the difference of  is positive, the rank will be positive. If the difference  is negative, the rank will be negative.
+               4. Sum the ranks of the positive differences () and the ranks of the negative differences ().
+               5. Calculate test statistic , which is smaller of the two sums:   and   using Equation (3.8).
+
+
+	
+	(3.8) 
+	
+
+                  6. Determine the critical value from the Wilcoxon Signed-Rank distribution table based on the sample size  (number of pairs), and the significance level .
+                  7. Compare the test statistic to the critical value from the Wilcoxon table. 
+                     1. If  is less than or equal to the critical value, reject the null hypothesis (there is a significant difference between the pairs).
+                     2. If  is greater than the critical value, then fail to reject the null hypothesis (there is no significant difference between the pairs).
+Correct for Multiple Comparisons.
+        Since multiple statistical tests will be performed (across different metrics and occlusion levels), the Holm-Bonferroni correction will be applied. This method adjusts the significance threshold for each test to control the family-wise error rate, ensuring that the likelihood of committing a Type I error is minimized. The following steps will be followed:
+                        1. Arrange the p-values in ascending order as shown in Equation (3.9):
+The p-values from all the hypothesis tests will be sorted in ascending order, so that:
+
+
+	
+	(3.9) 
+	
+
+Where  is the smallest p-value,  is the second smallest, and so on.
+                        2. Calculate adjusted p-values using Equation (3.10):
+For each p-value  (where ), calculate the adjusted p-value  using the following formula:
+
+
+
+
+	
+	(3.10) 
+	
+
+This formula adjusts the p-value by multiplying it by the number of tests remaining, accounting for the increasing stringency as more tests are performed.
+                        3. Compare adjusted p-values with significance level :
+The null hypothesis for each test is rejected if the adjusted p-value  is less than the significance level  as defined in Equation (3.11). Formally, reject  for test  if:
+
+
+
+
+	
+	(3.11) 
+	
+
+If the adjusted p-value  exceeds ,  do not reject the null hypothesis for that test and all subsequent tests.
+Report exact p-values and H₀ decision.
+        The final step in the statistical testing process involves reporting the exact p-values for each hypothesis test, along with the decision regarding the null hypothesis (). If the adjusted p-value is less than 0.05, the null hypothesis will be rejected, indicating that there is a statistically significant difference between the models' performances. If the adjusted p-value exceeds 0.05, the null hypothesis will fail to be rejected, suggesting no significant difference between the two models.
+All results, including the p-values and decisions, will be clearly documented and presented to ensure transparency and reproducibility in the analysis.
+Error Analysis.
+        Error analysis is critical for identifying common failure patterns across the MHAM Transformer and IV3-GRU models, particularly in relation to misclassified samples. This analysis will focus on understanding the influence of occlusion on the models' performance, with a particular emphasis on False Positives (FP) and False Negatives (FN).
+Impact of Occlusion.
+The first step in error analysis will be to identify and categorize samples into False Positives and False Negatives. This categorization will facilitate an exploration of which glosses or categories are most susceptible to misclassification under condition with and without occlusion. The analysis will assess how occlusion affects patterns and whether occlusion results in increased FP or FN. It will also explore which signs are more prone to performance degradation when certain keypoints (such as facial expressions or hand positions) are occluded.
+False Positives and False Negatives Analysis.
+Following the initial categorization of samples, a more detailed analysis will be conducted on False Positives and False Negatives. For False Positives, the analysis will identify whether specific signs are misclassified more frequently as one class when they do not belong to it, particularly under occluded conditions. Signs with visually similar features or gestures may be prone to misclassification due to occluded keypoints, leading to confusion in the classification process.
+For False Negatives, the focus will shift to determining whether occluded conditions increase the number of missed classifications, where the model fails to recognize signs that should have been correctly identified. This is especially relevant for signs that rely on subtle facial expressions or intricate hand movements, which may be more challenging to detect when portions of the keypoints are occluded. The analysis will uncover which signs are more likely to be overlooked by both models, particularly under occluded conditions, providing insights into the specific weaknesses of each model in handling occlusion-induced challenges.
+Visualization.
+Visualization will play a critical role in presenting and interpreting the results of the analysis. Plots and charts may be created to provide a clear understanding of how key performance metrics behave across clean and occluded conditions.
+Plot metrics across occlusion levels.
+Line plots may be generated to visually demonstrate how key performance metrics—precision, recall, and F₁ score—change across clean and occluded conditions. These metrics will be plotted for both the MHAM Transformer and IV3-GRU models. Separate plots may also be generated for the recognition and classification tasks, as these metrics may behave differently depending on the nature of the task. By examining these line plots, trends in model performance across the different conditions will be revealed. This will highlight which model is more resilient to occlusion and where performance degradation becomes more pronounced, allowing for the identification of threshold points at which occlusion begins to significantly affect model accuracy.
+Chart confidence indicators.
+Bar charts may be created to visualize the performance differences between the MHAM Transformer and IV3-GRU models for each metric (precision, recall, and F₁ score) under clean and occluded conditions. Each bar will represent the difference in performance between the two models for clean versus occluded conditions.
+To provide additional clarity, confidence intervals may also be included in the charts for each performance metric. These intervals will give a range within which the true value of the metric is likely to fall, offering a sense of the reliability and stability of the observed differences between the models. The inclusion of confidence intervals will help assess whether the performance differences are statistically significant and whether these differences remain consistent across the tested conditions.
+
+
+
+
+
+
+
+
+Table 12 
+Mapping of Research Questions to Data and Methods
+Research Question
+	Data Sources
+	Data Analysis
+	Central Question
+	How does a Multi-Head Attention Mechanism Transformer improve recognition and classification of continuous FSL glosses compared to the IV3-GRU baseline, both with and without occlusion?
+	Derived from RQ1, RQ2, and RQ3.
+	Summary of results from RQ1–3: Comparative analysis of MHAM Transformer and IV3-GRU performance based on recognition and classification metrics, including statistical significance testing.
+	Sub-Question 1
+	                           1. RQ1: What is the performance of IV3-GRU and MHAM Transformer in recognizing sign glosses with and without occlusion in terms of Precision, Recall, and F1-Score?
+	Occluded and Non-occluded test dataset of continuous FSL glosses with ground truth labels,
+Gloss-level prediction outputs from MHAM Transformer and IV3-GRU 
+	Compute per-gloss: Precision, Recall, F1-score.
+Aggregate macro-averaged scores per model.
+Analyze confusion matrix (TP, FP, FN).
+Log gloss-level results.
+	Sub-Question 2
+	                           2. RQ2: What is the performance of IV3-GRU and MHAM Transformer in classifying sign glosses with and without occlusion in terms of Precision, Recall, and F1-Score?
+	Occluded and Non-occluded test dataset of continuous FSL glosses with semantic category labels (e.g., greetings, survival, numbers), Category-level prediction outputs from MHAM Transformer and IV3-GRU 
+	Compute per-gloss: Precision, Recall, F1-score.
+Aggregate macro-averaged scores per model.
+Analyze confusion matrix (TP, FP, FN).
+Log gloss-level results.
+	Sub-Question 3
+	                           3. RQ3: Is there a significant difference in the performance of IV3-GRU and MHAM Transformer in recognizing sign glosses with and without occlusion in terms of Precision, Recall, and F1 Score?
+	Performance metrics (Precision, Recall, F1-score) from RQ1 and RQ2. Per-sample performance differences between the MHAM Transformer and IV3-GRU models
+	Conduct paired statistical tests (paired t-test or Wilcoxon signed-rank test, depending on data normality) to compare the performance metrics of the two models.
+Apply the Holm-Bonferroni correction to adjust for multiple comparisons.
+Report exact p-values and make a decision to reject or fail to reject the null hypothesis based on the significance level (α = 0.05).
+	
+
+
+
+
+
+
+
+REFERENCES
+
+
+Abhishek, K. S., Qubeley, L. C. F., & Ho, D. (2016). Glove-based hand gesture recognition sign language translator using capacitive touch sensor. 2016 IEEE International Conference on Electron Devices and Solid-State Circuits (EDSSC), 334–337. https://doi.org/10.1109/EDSSC.2016.7785276
+
+
+Althubiti, A. H., & Algethami, H. (2024). Dynamic Gesture Recognition using a Transformer and Mediapipe. International Journal of Advanced Computer Science and Applications, 15(6). https://doi.org/10.14569/ijacsa.2024.01506143
+
+
+Al-Qurishi, M., Khalid, T., & Souissi, R. (2021). Deep Learning for Sign Language Recognition: Current Techniques, Benchmarks, and Open Issues. IEEE Access, 9, 126917–126951. https://doi.org/10.1109/ACCESS.2021.3110912
+
+
+Batnasan, G. (2024). TRANSFORMER BASED DEEP LEARNING MODEL FOR SIGN LANGUAGE RECOGNITION. Scholarworks@UAEU. https://scholarworks.uaeu.ac.ae/thesis_dissertation_defense/2024-2023/thesis_defenses/27/
+
+
+Belinkov, Y. (2022). Probing classifiers: promises, shortcomings, and advances. Computational Linguistics, 48(1), 207–219. https://doi.org/10.1162/coli_a_00422
+
+
+Bohacek, M., & Hruz, M. (2022). Sign pose-based transformer for word-level sign language recognition. 2022 IEEE/CVF Winter Conference on Applications of Computer Vision Workshops (WACVW), 182–191. https://doi.org/10.1109/wacvw54805.2022.00024
+
+
+Brydges, C. R. (2019). Effect size guidelines, sample size calculations, and statistical 
+power in gerontology. Innovation in Aging, 3(4), Article igz036. 
+https://doi.org/10.1093/geroni/igz036
+
+
+Cabalfin, E. P., Martinez, L. B., Guevara, R. C. L., & Naval, P. C. (2012). Filipino sign language recognition using manifold projection learning. TENCON 2012 IEEE Region 10 Conference, 1–5. https://doi.org/10.1109/TENCON.2012.6412231
+
+
+Capirci, O., Bonsignori, C., Di Renzo, A., Institute of Cognitive Sciences and Technologies (ISTC), National Research Council (CNR) of Italy, & Department of Letters and Modern Cultures, Sapienza University of Rome. (2022). Signed Languages: A triangular Semiotic dimension. In Frontiers in Psychology, Frontiers in Psychology (Vol. 12, p. 802911) [Journal-article]. https://doi.org/10.3389/fpsyg.2021.802911
+
+
+Castelli, T. J., Betke, M., Neidle, C., Boston University Computer Science, Department of Computer Science, & Department of Modern Foreign Languages. (2005). Facial feature tracking and occlusion recovery in American sign language. In Boston University Computer Science Technical Report (No. 2005–024).
+
+
+Co, S. N., Ardales, D., Gonzales, M., Suzada, S. J., Wu, W. W., Tiam-Lee, T. J., & Laguna, A. F. (2024, May). Towards a memory-efficient Filipino Sign Language recognition model for low-resource devices. In Proceedings of the Philippine Computing Science Congress (PCSC 2024). https://pcsc.dlsu.edu.ph/proceedings/student-research-workshop/48.pdf
+
+
+De Coster, M., Van Herreweghe, M., & Dambre, J. (2020, May 1). Sign Language Recognition with Transformer Networks. ACL Anthology. https://aclanthology.org/2020.lrec-1.737/
+
+
+Doshi, K. (2021, December 27). Transformers Explained Visually (Part 3): Multi-head Attention, deep dive. Towards Data Science. https://towardsdatascience.com/transformers-explained-visually-part-3-multi-head-attention-deep-dive-1c1ff1024853
+
+
+Dosovitskiy, A., Beyer, L., Kolesnikov, A., Weissenborn, D., Zhai, X., Unterthiner, T., Dehghani, M., Minderer, M., Heigold, G., Gelly, S., Uszkoreit, J., & Houlsby, N. (2020, October 22). An Image is Worth 16x16 Words: Transformers for Image Recognition at Scale. arXiv.org. https://arxiv.org/abs/2010.11929
+
+
+Fischer, S. (2015). Sign languages in their Historical Context (pp. 442–465). https://doi.org/10.13140/2.1.2085.5683
+
+
+Heuju, S., Rijal, B., Department of Electronics and Computer Engineering, Thapathali Campus, IOE, Tribhuvan University, Nepal, & Everest Engineering College, Pokhara University, Nepal. (2022). Word Level Nepali sign language recognition using Transformer (Vol. 12, pp. 883–890) [Journal-article].
+
+
+Jarabese, M. B. D., Marzan, C. S., Boado, J. Q., Lopez, R. R. M. F., Ofiana, L. G. B., & Pilarca, K. J. P. (2021). Sign to Speech Convolutional Neural Network-Based Filipino Sign Language Hand Gesture Recognition System. 2021 International Symposium on Computer Science and Intelligent Controls (ISCSIC), 147–153. https://doi.org/10.1109/ISCSIC54682.2021.00036
+
+
+Kothadiya, D. R., Bhatt, C. M., Saba, T., Rehman, A., & Bahaj, S. A. (2023). SIGNFORMER: DeepVision Transformer for sign Language recognition. IEEE Access, 11, 4730–4739. https://doi.org/10.1109/access.2022.3231130
+
+
+Liu, Y., Nand, P., Hossain, M. A., Nguyen, M., & Yan, W. Q. (2023). Sign language recognition from digital videos using feature pyramid network with detection transformer. Multimedia Tools and Applications, 82(14), 21673–21685. https://doi.org/10.1007/s11042-023-14646-0
+
+
+Lipton, Z. C., Berkowitz, J., & Elkan, C. (2015). A critical review of recurrent neural networks for sequence learning. arXiv preprint arXiv:1506.00019v4.
+
+
+Mehdi, S. A., & Khan, Y. N. (2002). Sign language recognition using sensor gloves. Proceedings of the 9th International Conference on Neural Information Processing (ICONIP ’02), 5, 2204–2206. https://doi.org/10.1109/ICONIP.2002.1201884
+
+
+Montefalcon, M. D., Padilla, J. R., & Llabanes Rodriguez, R. (2021). Filipino Sign Language Recognition Using Deep Learning. 2021 5th International Conference on E-Society, E-Education and E-Technology, 219–225. https://doi.org/10.1145/3485768.3485783
+
+
+Notarte-Balanquit, L. (2021). Insights from the First Filipino Sign Language (FSL) Summit (February 20-21) & the prospects for Filipino sign linguistics. ResearchGate. https://www.researchgate.net/publication/349492274_Insights_from_the_First_Filipino_Sign_Language_FSL_Summit_February_20-21_the_prospects_for_Filipino_sign_linguistics
+
+
+Oliva, K. E., Ortaliz, L. L., Tobias, M. A., & Vea, L. (2018). Filipino Sign Language Recognition for Beginners using Kinect. 2018 IEEE 10th International Conference on Humanoid, Nanotechnology, Information Technology, Communication and Control, Environment and Management (HNICEM), 1–6. https://doi.org/10.1109/HNICEM.2018.8666346
+
+
+Peirce, C. S. (1994). The Collected Papers of Charles Sanders Peirce I-VIII.  Cambridge, MA: Harvard University Press.
+
+
+Pigou, L., Dieleman, S., Kindermans, P., & Schrauwen, B. (2015). Sign language recognition using convolutional neural networks. In Lecture notes in computer science (pp. 572–578). https://doi.org/10.1007/978-3-319-16178-5_40
+
+
+Rivera, J. P., & Ong, C. (2018). Recognizing non-manual signals in Filipino sign language. Proc. Eleventh International Conference on Language Resources and Evaluation (LREC 2018), 1–8. https://www.researchgate.net/publication/333244608_Recognizing_Non-manual_Signals_in_Filipino_Sign_Language
+
+
+Sandoval-Castaneda, M., Li, Y., Brentari, D., Livescu, K., & Shakhnarovich, G. (2023, September 2). Self-Supervised Video Transformers for isolated sign language recognition. arXiv.org. https://arxiv.org/abs/2309.02450
+
+
+Shin, J., Miah, A. S. M., Hasan, M. a. M., Hirooka, K., Suzuki, K., Lee, H., & Jang, S. (2023). Korean sign language recognition using Transformer-Based Deep Neural Network. Applied Sciences, 13(5), 3029. https://doi.org/10.3390/app13053029
+
+
+Singleton, J. L., Jones, G., & Hanumantha, S. (2014). Toward ethical research practice with Deaf participants. Journal of Empirical Research on Human Research Ethics, 9(3), 59–66. https://doi.org/10.1177/1556264614540589
+
+
+Tiongson, P. A., & Martinez, L. B. (Eds.). (2004). An Introduction to Filipino sign language. Philippine Deaf Resource Center, Inc.
+
+
+Tupal, I. L. (2023). Recognizing Filipino sign language video sequences using deep learning techniques. Animo Repository. https://animorepository.dlsu.edu.ph/etdm_ece/25/
+
+
+Ugale, M., Shinde, O. R. A., Desle, K., & Yadav, S. (2023). A review on sign language recognition using CNN. Advances in Computer Science Research, 251–259. https://doi.org/10.2991/978-94-6463-136-4_23
+
+
+Vaswani, A., Shazeer, N., Parmar, N., Uszkoreit, J., Jones, L., Gomez, A. N., Kaiser, L., & Polosukhin, I. (2017, June 12). Attention is all you need. arXiv.org. https://arxiv.org/abs/1706.03762
+
+
+Viitaniemi, V., Karppa, M., Laaksonen, J., & Jantunen, T. (2013). Detecting hand-head occlusions in sign language video. In J. Kämäräinen & M. Koskela (Eds.), SCIA 2013 (pp. 361–372). Springer.
+
+
+Wenkel, S., Alhazmi, K., Liiv, T., Alrshoud, S., & Simon, M. (2021). Confidence Score: The Forgotten Dimension of Object Detection Performance Evaluation. Sensors, 21(13), 4350. https://doi.org/10.3390/s21134350
+
+
+Zhang, Y., & Jiang, X. (2024). Recent advances on deep learning for sign language recognition. Computer Modeling in Engineering & Sciences, 139(3), 2399–2450. https://doi.org/10.32604/cmes.2023.045731
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+APPENDICES
+
+
+Appendix 1: FSL-105 Dataset (Raw Video Input)
+Figure 10. FSL-105 Dataset Retrieved from Mendeley Data  
+________________
+
+
+Appendix 2: Research Instrument – Screen Mockup[a]
+  Figure 11. File Upload Interface - No File Selected
+  
+
+
+
+Figure 12. File Upload Interface - Batch Files Preview
+  
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+Figure 13. File Upload Interface - Select Transformer Model
+  
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+Figure 14. File Upload Interface - Select IV3-GRU Model
+  
+
+
+
+Figure 15. Processing Interface - Transformer Model
+  
+
+
+
+
+
+Figure 16. Processing Interface - IV3-GRU Model
+  
+
+
+
+Figure 17. Visualization Interface - Transformer Model
+  
+
+
+
+Figure 18. Visualization Interface - IV3-GRU Model
+  
+
+
+
+
+
+
+
+
+
+Figure 19. Results Interface - Transformer Model
+  
+
+
+
+Figure 20. Results Interface - IV3-GRU Model
+  
+
+i
+[a]Update after re-defense.
