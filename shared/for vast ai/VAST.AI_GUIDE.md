@@ -133,7 +133,7 @@ gdown 17wBvsJkLkjNC5dYxqUClVWCAsWtmOr1A
 gdown 1E9sfkdRaJYwFMdOAMShAGBCxsv660XyI
 
 # Fix Occluded item in JSON for Continuous Vids
-python data/raw/fix_occlusion.py
+python preprocessing/utils/fix_occlusion.py
 
 # Different Category - NPZ
 gdown 1_QfNMFIIhNxvzOEsDOqNzQP1PkXEHpMh
