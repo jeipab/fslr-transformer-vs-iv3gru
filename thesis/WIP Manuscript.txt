@@ -272,7 +272,7 @@ Effective communication is fundamental to human interaction. While spoken langua
 At the linguistic level, FSL conveys meaning through a rich interplay of manual (hand movements) and non-manual (facial expressions, body movements)  markers, forming a complete grammar and syntax independent of spoken Filipino (Notarte-Balanquit, 2021; Fischer, 2015; Tiongson & Martinez, 2004). Effective recognition of FSL therefore requires models capable of integrating these spatio-temporal features in both space and time and remaining resilient when some of those signals are temporarily hidden by occlusion—such as when the signer’s hands pass in front of the face. Despite the language’s critical role in social inclusion, most existing Filipino Sign Language recognition (FSLR) systems still target isolated gestures—typically the manual alphabet or basic vocabulary. As a result, these models struggle to disambiguate signs with similar hand motions but different facial expressions—an essential distinction in natural sign communication—and they degrade sharply whenever keypoints are occluded (Tupal, 2023; Rivera & Ong, 2018).
 Conventional deep‑learning pipelines based on Convolutional Neural Networks (CNNs) for spatial feature extraction and recurrent units such as Gated Recurrent Units (GRUs) for temporal modelling have achieved steady progress. While this CNN–GRU hybrid approach has shown promise, it processes input sequentially and treats spatial and temporal cues independently. Because these cues are encoded in separate streams, the model cannot fall back on visible features when occlusion masks one modality, leading to frequent misclassifications in realistic, cluttered signing scenarios. This architectural limitation results in poor integration of spatio-temporal features, leading to frequent misclassifications, particularly for signs where facial expression is a critical differentiator (Tupal, 2023; Pigou et al., 2015).
 Recent advances in deep learning, especially the Transformer architecture introduced by Vaswani et al. (2017), present a compelling alternative. Unlike recurrent models, Transformers use a Multi-Head Attention Mechanism (MHAM) to process sequences in parallel, allowing the model to attend to multiple aspects of the input simultaneously. This parallelism enables finer-grained integration of spatio-temporal features—such as hand movement trajectories, facial affect, and body posture—offering a richer and more holistic representation of sign language inputs, even when parts of the signer become temporarily invisible (Doshi, 2021; Liu et al., 2023). While Transformers have revolutionized other vision tasks, their application to FSL remains underexplored, and a systematic benchmark comparing their performance against CNN–GRU architectures in the context of FSL, or their effectiveness in integrating manual and non-manual features for improved sign disambiguation under varying levels of occlusion has not yet been conducted.
-In response, this study addresses that gap by developing a Transformer-based model with MHAM for recognizing continuous Filipino Sign Language glosses and explicitly tests its robustness to keypoint occlusion. The model is evaluated against the InceptionV3-GRU architecture proposed by Tupal (2023), with particular attention to its ability to integrate spatio-temporal features when some are hidden. By empirically comparing these models across clean and occluded keypoint streams, the research aims to determine whether Transformer-based approaches offer meaningful improvements in recognition and semantic-category classification accuracy, especially for signs that rely heavily on facial expressions and other non-manual cues. Furthermore, by addressing the deficiencies in current evidence and model limitations, this study seeks to contribute to the development of more robust and inclusive FSLR systems, ultimately promoting accessibility and communication equity for the Filipino Deaf community and advancing the application of Transformer models to domain-specific, multimodal tasks. 
+In response, this study addresses that gap by developing a Transformer-based model with MHAM for recognizing continuous FSL glosses and classifying them, and explicitly tests its robustness to occlusion. The model is evaluated against the InceptionV3-GRU architecture proposed by Tupal (2023), with particular attention to its ability to integrate spatio-temporal features when some are hidden. By empirically comparing these models across clean and occluded keypoint streams, the research aims to determine whether Transformer-based approaches offer meaningful improvements in recognition and semantic-category classification accuracy, especially for signs that rely heavily on facial expressions and other non-manual cues. Furthermore, by addressing the deficiencies in current evidence and model limitations, this study seeks to contribute to the development of more robust and inclusive FSLR systems, ultimately promoting accessibility and communication equity for the Filipino Deaf community and advancing the application of Transformer models to domain-specific, multimodal tasks. 
 
 
 
@@ -298,7 +298,7 @@ Figure 1. Triangular Semiotic Model – Sign Classification
 2. (Ic) Iconic: A sign that physically resembles or imitates its meaning. The relationship is one of similarity (e.g., the sign for "eat" mimicking the motion of bringing food to the mouth).
 3. (In) Indexical: A sign that indicates its meaning by having a direct physical or contextual connection to it. It "points to" or is a symptom of its meaning (e.g., pointing to an object (indexing) or using facial expressions to modify a sign's meaning (e.g., a furrowed brow indicating a question).
 “Good morning” and its semiotic features. 
-In Filipino Sign Language, the sign for “Good morning” is a compound sign composed of “good” and “morning.” The signer begins with the gesture for “good,” with their dominant hand (right hand) in a "thumbs-up" shape—a closed fist with the thumb extended upwards. Then, the hand shape transitions from the "thumbs-up" into an open "5" hand (all fingers and the thumb are extended and spread apart). As the hand opens, it moves in a smooth, upward and outward arc away from the body, as if gesturing toward the rising sun. Throughout the entire sign, the signer maintains a pleasant and positive facial expression, including a gentle smile. This non-manual marker is important as it conveys the positive nature of the greeting.
+In FSL, the sign for “Good morning” is a compound sign composed of “good” and “morning.” The signer begins with the gesture for “good,” with their dominant hand (right hand) in a "thumbs-up" shape—a closed fist with the thumb extended upwards. Then, the hand shape transitions from the "thumbs-up" into an open "5" hand (all fingers and the thumb are extended and spread apart). As the hand opens, it moves in a smooth, upward and outward arc away from the body, as if gesturing toward the rising sun. Throughout the entire sign, the signer maintains a pleasant and positive facial expression, including a gentle smile. This non-manual marker is important as it conveys the positive nature of the greeting.
 The provided example combines all three semiotic features:
 1. Symbolic (the “GOOD” sign): There is nothing about the physical shape of a "thumbs-up" that naturally looks, sounds, or feels like the concept of "goodness." We have simply learned to associate this specific gesture with approval, positivity, or the word "good."
 2. Iconic (the “MORNING” gesture): The subsequent gesture is a visual depiction of the sun rising over the horizon. The open hand represents the sun, and its upward movement mimics the sun's path as it comes up to start the day. We can intuitively "see" the meaning in this motion.
@@ -313,7 +313,7 @@ Conceptual Framework
 Figure 2. Conceptual Model
   
 
-The conceptual framework illustrates how the independent variable influences the dependent variables in the study. The independent variable includes the FSL-105 Dataset as the data source, which is processed through a defined preprocessing pipeline to extract relevant visual features. The key experimental factor as one of the independent variables being tested is the occlusion condition whether the model performs with or without occlusion in the input data. This condition assesses how visual obstructions affect the model’s ability to recognize and classify Filipino Sign Language (FSL) gestures. The processed data are then evaluated using a Multi-Head Attention Transformer model, which serves as the architecture for sign recognition.
+The conceptual framework illustrates how the independent variable influences the dependent variables in the study. The independent variable includes the FSL-105 Dataset as the data source, which is processed through a defined preprocessing pipeline to extract relevant visual features. The key experimental factor as one of the independent variables being tested is the occlusion condition whether the model performs with or without occlusion in the input data. This condition assesses how visual obstructions affect the model’s ability to recognize and classify FSL gestures. The processed data are then evaluated using a Multi-Head Attention Transformer model, which serves as the architecture for sign recognition.
 Grounded in Sign Linguistic Theory, specifically the Triangular Semiotic Model and Sign Language Structure, which examines the grammatical patterns in FSL, this framework integrates linguistic foundations with computational modeling. Lastly, the dependent variables, Recognition Performance and Classification Performance, measure the model’s accuracy under different occlusion conditions. 
 
 
@@ -337,8 +337,10 @@ Statement of the Problem
    1. Precision
    2. Recall
    3. F₁ Score
-
-
+4. Is there a significant difference in the performance of IV3-GRU and MHAM Transformer in classifying sign categories with and without occlusion in terms of:
+   1. Precision
+   2. Recall
+   3. F₁ Score
 
 
 
@@ -350,25 +352,28 @@ H₀2. There is no significant difference in the performance of IV3-GRU and MHAM
 
 
 
-Scope and Limitations of the Study
-This study focuses on the development and evaluation of a MHAM-based Transformer architecture for FSLR, with the goal of addressing the limitations observed in the baseline IV3-GRU model. Specifically, the research investigates how effectively each model captures and integrates critical spatio-temporal features such as hand shapes, motion trajectories, and facial expressions—while maintaining recognition fidelity when any of these keypoints become occluded.
-The scope of this research is limited to the analysis of video sequences from the publicly available FSL-105 dataset. As such, the study does not involve the creation, collection, or augmentation of new datasets. The research is also constrained by available computational resources, which may affect the scalability or depth of model training. 
-Furthermore, the findings discussed are specifically designed for FSL and may not be directly transferable to other sign languages, which differ in grammar, gestures, and non-manual signals. 
+Scope and Limitations of the Study[a]
+This study focuses on the development and evaluation of a Multi-Head Attention Mechanism (MHAM)–based Transformer model for Filipino Sign Language Recognition (FSLR), compared against the baseline InceptionV3-GRU (IV3-GRU). The research investigates how effectively each model captures essential spatio-temporal and multimodal features, such as hand shapes, motion trajectories, and facial expressions, under both occluded and non-occluded conditions.
+The scope is limited to sign recognition and classification, not full translation. The developed Android and Streamlit-based web applications function as one-way recognition tools that help hearing users identify FSL glosses and semantic categories from video input. They do not enable Deaf users to interpret spoken or written responses, and therefore do not yet support two-way communication.
+The study is confined to the FSL-105 dataset, which may limit generalization to other signing conditions or dialects. Model training and evaluation were constrained by available computational resources, and the implementations were designed as proof-of-concept prototypes rather than optimized production systems. Nonetheless, the research establishes a foundation for future improvements in real-time FSL recognition and inclusive communication technologies.
 
 
-
-Significance of the Study
-        Transformer-based models have shown strong results in sequence modeling tasks, but their use in FSLR has not been explored in depth. FSL is challenging because it relies on hand gestures, facial expressions, and body movement. Current models like IV3-GRU mostly focus on hand movements, often missing these non-manual features. Whether attention-based models like Transformers using MHAM can better handle FSL's complexity is still uncertain. This justifies comparing these approaches to see if newer models can improve recognition accuracy and support real-world FSL use.
-The Filipino Deaf community will benefit from this study through the development of more responsive and inclusive communication tools. As accuracy improves, these tools could help Deaf individuals express themselves in everyday scenarios like requesting assistance, using public services, or engaging in classroom activities. By building a foundation for systems that better understand FSL, this study helps bridge the communication gap between Deaf and hearing individuals.
-Educators and interpreters will also receive actionable metrics on non-manual cue recognition, identifying which facial expressions, head movements and motion subtleties are most often misclassified, so they can tailor lesson plans, design targeted drills, and build assessment rubrics that directly address these gaps in learner performance.
-This research will also benefit developers working on assistive technology. The proposed  model is designed to better capture spatio-temporal features needed for accurate sign recognition, making it more suitable for translation apps, learning software, or interpretation tools. With clear benchmarks and evaluation results, the study will provide technical insights developers can apply to improve recognition in future projects.
-Lastly, this research will contribute to the ongoing work of future researchers in SLR and machine learning. It will present a comparative evaluation of Transformer-based and IV3-GRU architectures using the FSL-105 dataset. Researchers working on SLR systems can use this study as a foundation for further experimentation and model enhancement.
+Significance of the Study[b]
+        Transformer-based architectures have shown strong performance in sequence modeling tasks, yet their application to Filipino Sign Language Recognition (FSLR) remains limited. FSL presents unique challenges because it integrates manual gestures with non-manual cues such as facial expressions, head movements, and body posture. Existing hybrid architectures like IV3-GRU primarily focus on hand features, often overlooking these multimodal aspects. This study addresses that gap by examining whether Transformers with Multi-Head Attention Mechanisms (MHAM) can better capture the complex spatio-temporal dependencies of FSL. Through comparative evaluation, the study provides empirical insight into whether modern Transformer models offer measurable improvements in recognition and classification accuracy.
+To demonstrate practical application, two complementary systems were developed. The first is an Android-based FSL recognition app that allows a hearing user to capture live or recorded sign videos using a camera. Extracted keypoints of hand, face, and body movements are processed by the trained model, which outputs the recognized gloss and its semantic category on-screen. While the system currently supports one-way communication—helping hearing individuals understand Deaf signers, it offers immediate real-world value in various contexts such as classrooms, customer service desks, and public broadcasts. For instance, it mirrors scenarios similar to television programs or news segments where a sign language interpreter appears in a small corner of the screen, providing sign language for Deaf viewers. In this case, however, the tool works in reverse—helping hearing users interpret what a Deaf individual is signing in real time. The recognized gloss and category provide enough context for users to infer meaning, fostering basic comprehension and promoting awareness of FSL in everyday interactions.
+The second component is a Streamlit-based web application designed for model validation and batch evaluation. Users can upload individual or multiple sign videos, which are automatically preprocessed to extract keypoints before being analyzed by the recognition models. The platform then displays the predicted glosses and semantic categories for each input, along with quantitative metrics such as True Positives, False Positives, True Negatives, False Negatives, Precision, Recall, and F₁ scores across all test sequences. This tool enables researchers, educators, and developers to assess model reliability, visualize performance patterns, and identify recurring recognition errors under both occluded and non-occluded conditions.
+For the Filipino Deaf community, this research indirectly contributes by supporting broader accessibility awareness and visibility of FSL in technology. Although the system does not yet provide full translation or two-way communication, it lays the groundwork for future systems that could integrate recognition with sign synthesis or spoken-text output. Such progress encourages inclusion by helping hearing individuals become more familiar with FSL, thus narrowing the cultural and communicative gap.
+Educators and interpreters can also benefit from the analytical data derived from the models’ performance metrics, particularly in identifying signs or non-manual features (e.g., head tilts, facial expressions, or transitional motions) that are frequently misclassified. These insights can inform curriculum design, targeted training exercises, and assessment rubrics that enhance sign literacy and interpreter education.
+From a technological standpoint, the study establishes a benchmark for evaluating Transformer-based models in continuous FSL recognition and classification. The developed tools demonstrate how advanced deep learning architectures can be adapted for Filipino Sign Language and serve as prototypes for future applications in assistive communication, interactive learning, and inclusive digital services.
+Finally, this research supports the advocacy for linguistic inclusion and digital accessibility mandated by Republic Act No. 11106, or the Filipino Sign Language Act of 2018. By bridging deep learning innovation and social relevance, the study strengthens the local foundation for FSLR research and advances the goal of making digital communication more inclusive for the Filipino Deaf community.
 
 
 
 Definition of Terms
         Adam Optimizer. Used in training the models to automatically adjust learning rates and update weights to reduce classification error.
 Classification Performance. The model’s ability to correctly assign glosses to semantic categories. Evaluated using precision, recall, and  F₁-score.
+False Negative (FN). Refers to an instance where the model fails to recognize a gloss or category that is actually present in the ground truth labels.
+False Positive (FP). Refers to an instance where the model incorrectly identifies a gloss or category that is not actually present in the ground truth labels.
 Gloss. A textual label representing the true meaning of a sign in sign language. In this study, each gloss corresponds to a specific FSL (Filipino Sign Language) gesture.
 InceptionV3-GRU (IV3-GRU). A baseline model used for comparison, combining InceptionV3 for extracting spatial features from video frames and GRU for analyzing their sequence over time. (Tupal, 2023)
 Manual Cues. The component of sign language relating to hand movements. These features include hand-shape, motion trajectory, positioning, and general hand gestures. In the context of this study's model, manual cues refer to the keypoints extracted from the hands and arms.
@@ -380,6 +385,8 @@ Recognized Sign. Referred to as the predicted or recognized gloss; it is the out
 PyTorch. The machine learning framework used to implement, train, and test all models in this study.
 Recognition Performance. The model’s ability to correctly identify individual glosses. Evaluated using precision, recall, and  F₁-score.
 Transformer Architecture. A deep learning model that uses self-attention to process sequences in parallel. In this study, it learns spatio-temporal features in sign language videos, capturing gesture changes over time and space without recurrence.
+True Negative (TN). Refers to an instance where the model correctly recognizes the absence of a gloss or category that is also absent in the ground truth labels.
+True Positive (TP). Refers to an instance where the model correctly identifies a gloss or category that matches the ground truth labels. 
 Vast AI. A cloud computing platform utilized in this study for tool development, including training and experimentation, due to its cost-effectiveness and flexibility in offering a wide range of GPU options.
 Weights and Biases (W&B). Used to log training metrics, visualize model performance, and manage experiments throughout the study.
 Chapter 2
@@ -763,58 +770,387 @@ This study uses a quantitative experimental framework with two independent varia
 1. Model Architecture: The performance of the proposed MHAM Transformer is compared against the IV3-GRU baseline.
 2. Occlusion Condition: Model performance is evaluated under two distinct conditions: test samples 'with occlusion' and test samples 'without occlusion’.
 The dependent variables correspond directly to our research questions:
-1. Recognition performance (RQ1): Measured by macro-averaged precision, recall, and F₁-score across all 105 gloss classes, evaluated under two conditions:
+1. Recognition performance (RQ1): Evaluated based on the mean Precision, Recall, and F₁-Score computed across 105 glosses under two conditions:
    1. Occluded signs
    2. Non-occluded signs
-2. Classification performance (RQ2): Measured by macro-averaged precision, recall, and F₁-score across semantic categories (e.g., greetings, numbers), also evaluated under:
+2. Classification performance (RQ2): Evaluated based on the mean Precision, Recall, and F₁-Score computed across 10 categories, also under the following conditions:
    1. Occluded signs
    2. Non-occluded signs
 Both models are trained from scratch on the same 80/20 training/testing split, using identical hyperparameters and preprocessing steps—including 89-keypoint extraction via MediaPipe, coordinate normalization, and embedding generation.
-During evaluation, the held-out test set is automatically divided into non-occluded and occluded subsets based on keypoint visibility (e.g., missing facial landmarks such as the eyes, nose, or mouth). Predictions for recognition and classification tasks are logged and compared against ground truth.
+During evaluation, the continuous test set is automatically divided into occluded and non-occluded subsets based on keypoint visibility (e.g., missing facial landmarks such as the eyes, nose, or mouth). Predictions for recognition and classification tasks are logged and compared against ground truth.
 Statistical significance of performance differences between the two models will be tested using paired t-tests or Wilcoxon signed-rank tests (α = 0.05), depending on data normality.
 
 
 Sources of Data
 This study will utilize the FSL-105 dataset, a publicly available and pre-annotated video dataset specifically developed for FSLR. The use of this existing dataset provides a standardized benchmark for evaluating the performance of both the Transformer-based FSLR model and the baseline IV3-GRU. By adopting the same dataset, this research ensures consistency in experimental conditions and enables a fair, reliable comparison of the Transformer-based model’s performance in FSLR.
 Dataset Composition.
-The FSL-105 dataset consists of 2,130 video samples representing 105 distinct FSL signs. These signs were selected through purposive sampling, a non-probability sampling technique chosen to ensure the inclusion of signs that are pedagogically relevant and frequently encountered by FSL learners. This method was employed to deliberately target core vocabulary essential for functional daily communication, rather than relying on random or exhaustive sign selection (Tupal, 2023). The signs are grouped into ten thematic categories such as Greetings, Survival, Numbers, Calendar, and Family, reflecting practical and contextually meaningful language usage. A selection of representative signs is shown in Table 2.
+The FSL-105 dataset consists of 2,130 video samples representing 105 distinct FSL signs. These signs were selected through purposive sampling, a non-probability sampling technique chosen to ensure the inclusion of signs that are pedagogically relevant and frequently encountered by FSL learners. This method was employed to deliberately target core vocabulary essential for functional daily communication, rather than relying on random or exhaustive sign selection (Tupal, 2023). 
+The signs are grouped into ten thematic categories (e.g., Greetings, Survival, Numbers, etc.) reflecting practical and contextually meaningful language usage. The complete list of categories and its description is shown in Table 2.
 Table 2
-FSL-105 Dataset Composition
-Category/Classification
-	Signs (Examples) 
+Category list and Description[c]
+Cat ID
+	Category/Classification
+	Description
+	0
 	Greeting
-	Good morning, Good evening, How are you, Nice to meet you
+	Greetings and polite expressions
+	1
 	Survival
-	I understand, I know, Yes, No, Wrong, Correct, Slow, Fast
+	Basic communication needs
+	2
 	Number
-	One, Two, Three, Four, Five, Six, Seven, Eight, Nine, Ten
+	Numbers 1-10  
+	3
 	Calendar
-	January, February, March, April, May, June, July, August, September
+	Months of the year  
+	4
 	Days
-	Monday, Tuesday, Wednesday, Today, Tomorrow, Yesterday
+	Days of the week and time references
+	5
 	Family
-	Father, Daughter, Grandfather, Auntie, Cousin, Parents
+	Family relationships
+	6
 	Relationships
-	Boy, Girl, Woman, Deaf, Hard of Hearing, Blind, Married
+	People and relationships 
+	7
 	Color
-	Blue, Green, Red, Brown, Black, White, Yellow, Orange
+	Colors and visual descriptors
+	8
 	Food
-	Bread, Egg, Fish, Meat, Chicken, Spaghetti, Rice, Longanisa
+	Food items
+	9
 	Drink
-	Hot, Cold, Juice, Milk, Coffee, Beer, Wine, Sugar, No sugar
+	Beverages and drinks
 	
 
 
 
+In FSL-105, each category, as mapped in Figure X, consists of multiple sign glosses. Specifically, every category, such as "Greeting" and "Survival," consists of 10 sign glosses, except for "Calendar" and "Color," which have 12 and 13 glosses, respectively. The complete gloss labels in each category are listed in Tables X-X.
+
+
+Figure 6.  Category and Gloss Mappings[d]  
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+Table X
+Gloss labels in ‘Greetings’ Category
+Gloss ID
+	Gloss
+	0
+	Good morning
+	1
+	Good afternoon
+	2
+	Good evening
+	3
+	Hello
+	4
+	How are you
+	5
+	I’m fine
+	6
+	Nice to meet you
+	7
+	Thank you
+	8
+	You're welcome
+	9
+	See you tomorrow
+	
+
+Table X
+Gloss labels in ‘Survival’ Category
+Gloss ID
+	Gloss
+	10
+	Understand
+	11
+	Don't understand
+	12
+	Know
+	13
+	Don't know
+	14
+	No
+	15
+	Yes 
+	16
+	Wrong
+	17
+	Correct
+	18
+	Slow
+	9
+	See you tomorrow
+	
+
+Table X
+Gloss labels in ‘Number’ Category
+Gloss ID
+	Gloss
+	20
+	One 
+	21
+	Two
+	22
+	Three
+	23
+	Four
+	24
+	Five
+	25
+	Six
+	26
+	Seven
+	27
+	Eight
+	28
+	Nine 
+	29
+	Ten
+	
+
+Table X
+Gloss labels in ‘Calendar’ Category
+Gloss ID
+	Gloss
+	30
+	January
+	31
+	February
+	32
+	March
+	33
+	April
+	34
+	May
+	35
+	June
+	36
+	July
+	37
+	August
+	38
+	September
+	39
+	October
+	40
+	November
+	41
+	December
+	
+
+Table X
+Gloss labels in ‘Days’ Category
+Gloss ID
+	Gloss
+	42
+	Monday
+	43
+	Tuesday
+	44
+	Wednesday
+	45
+	Thursday
+	46
+	Friday
+	47
+	Saturday
+	48
+	Sunday
+	49
+	Today
+	50
+	Tomorrow
+	51
+	Yesterday
+	
+
+Table X
+Gloss labels in ‘Family’ Category
+Gloss ID
+	Gloss
+	52
+	Father
+	53
+	Mother
+	54
+	Son
+	55
+	Daughter
+	56
+	Grandfather
+	57
+	Grandmother
+	58
+	Uncle
+	59
+	Auntie
+	60
+	Cousin
+	61
+	Parents
+	
+
+
+
+Table X
+Gloss labels in ‘Relationships’ Category
+Gloss ID
+	Gloss
+	62
+	Boy
+	63
+	Girl
+	64
+	Man
+	65
+	Woman
+	66
+	Deaf
+	67
+	Hard of hearing
+	68
+	Wheelchair person
+	69
+	Blind
+	70
+	Deaf blind
+	71
+	Married
+	
+
+Table X
+Gloss labels in ‘Color’ Category
+Gloss ID
+	Gloss
+	72
+	Blue
+	73
+	Green
+	74
+	Red
+	75
+	Brown
+	76
+	Black
+	77
+	White
+	78
+	Yellow
+	79
+	Orange
+	80
+	Gray
+	81
+	Pink
+	82
+	Violet
+	83
+	Light
+	        Continuation of Table X.
+84
+	Dark
+	
+
+Table X
+Gloss labels in ‘Food’ Category
+Gloss ID
+	Gloss
+	85
+	Bread
+	86
+	Egg 
+	87
+	Fish
+	88
+	Meat
+	89
+	Chicken
+	90
+	Spaghetti
+	91
+	Rice
+	92
+	Longanisa
+	93
+	Shrimp
+	94
+	Crab
+	
+
+Table X
+Gloss labels in ‘Drink’ Category
+Gloss ID
+	Gloss
+	95
+	Hot
+	96
+	Cold
+	97
+	Juice
+	98
+	Milk
+	99
+	Coffee
+	100
+	Tea
+	101
+	Beer
+	
+
+        Continuation of Table X.
+102
+	Wine
+	103
+	Sugar
+	104
+	No sugar[e]
+	
+
 The dataset captures both manual features (hand-shape, motion, positioning) and non-manual features (facial expressions, head movements, body posture), which are crucial for accurately interpreting FSL signs. Non-manual features are particularly important in FSL, as they add contextual meaning that can alter the interpretation of a sign.
-Participants in the Dataset.
-The dataset was recorded with four native FSL signers—two males (one of whom is an FSL expert) and two females. The participants are Deaf and all are fluent in FSL. The decision to limit participation to four individuals was based on methodological and cultural considerations. As the Filipino Deaf community is part of a vulnerable sector, the selection process prioritized ethical engagement, linguistic authenticity, and cultural accuracy over sample size. This is consistent with ethical research practices that emphasize community-informed participation, cultural sensitivity, and the importance of building trust within marginalized groups (Singleton et al., 2014).
-The FSL expert, Sir Rey Alfred Lee, selected three of the participants and ensured that all recorded signs reflected real-world, community-accepted usage. A small, curated group also minimized variability in signing styles—reducing ambiguity and enhancing data consistency for recognition and modeling. This controlled approach supports both ethical and methodological integrity, and aligns with established practices in sign language corpora, where expert-guided curation and signer consistency take precedence over larger, less controlled samples.
-Prior to recording, all participants were fully informed of the dataset’s purpose and provided written consent. A trusted FSL interpreter facilitated the consent process to ensure clarity and transparency.
-Dataset Collection and Preprocessing.
+Participants in the Dataset.[f]
+The original FSL-105 dataset was recorded with four native FSL signers—two males (one of whom is an FSL expert) and two females, identified by the researchers as `S0` to `S3`. The participants are Deaf and all are fluent in FSL. The decision to limit original participation to four individuals was based on methodological and cultural considerations. As the Filipino Deaf community is part of a vulnerable sector, the selection process prioritized ethical engagement, linguistic authenticity, and cultural accuracy over sample size. This is consistent with ethical research practices that emphasize community-informed participation, cultural sensitivity, and the importance of building trust within marginalized groups (Singleton et al., 2014). The FSL expert, Sir Rey Alfred Lee, selected three of the participants and ensured that all recorded signs reflected real-world, community-accepted usage.
+To increase the dataset size for proper testing outside of the original training and validation data, the researchers also participated as signers. The four researchers are identified as `S4` (Jeremias Pablo), `S5` (Nathaniel Magtibay), `S6` (Novelle Estrella), and `S7` (Rica Joi Migueh). This additional recording was conducted following consultation with and allowed by the FSL expert.
+A small, curated group (for the original dataset) also minimized variability in signing styles—reducing ambiguity and enhancing data consistency for recognition and modeling. This controlled approach supports both ethical and methodological integrity, and aligns with established practices in sign language corpora, where expert-guided curation and signer consistency take precedence over larger, less controlled samples.
+Prior to the original recording, all participants were fully informed of the dataset’s purpose and provided written consent. A trusted FSL interpreter facilitated the consent process to ensure clarity and transparency.
+Dataset Collection and Preprocessing.[g]
 The dataset was originally collected under controlled conditions, following the strict protocols established in the foundational study by Tupal (2023), which this research builds upon.
 Recordings were conducted in a standardized environment with a plain background to reduce distractions. The signers' torso and hands remained fully visible to capture both manual and non-manual cues. A front-facing camera ensured consistent framing across all videos.
 Each sample is a four-second video clip recorded at 60 FPS and 1920×1080 resolution using an iPhone SE 2020. In accordance with Tupal (2023), the dataset was split into 80% training data (1,704 videos) and 20% testing data (426 videos). For efficiency, videos were resized to 640×360 pixels and downsampled to 30 FPS. Keypoint extraction was performed using MediaPipe Pose Estimator, producing 89 keypoints per frame to track key body landmarks. MediaPipe Selfie Segmentation was applied to isolate the signer from the background and emphasize relevant visual cues. Each frame was then padded to a square aspect ratio and resized to 256×256 pixels for consistency across the dataset. 
+The researchers' recording of new clips (forming the SMP-105 dataset) replicated this same process, utilizing a plain background, dark shirts, and an up-to-torso frame shot to maintain environmental consistency. However, the recording of these new clips also aimed to intentionally introduce variations to test the system's capability to predict in varied environments reflecting real-world scenario use. These variations included different lighting conditions, natural changes in facial expressions, and individual ways of signing. Furthermore, the mobile phones used for recording were also varied, including [phone 1], [phone 2], [phone 3], and [phone 4][h].
+Dataset Augmentation.
+The original FSL-105 dataset, while suitable for isolated sign classification, contains only 2,130 video samples. This limited size was deemed insufficient to robustly train and validate a model for the more complex task of sequential recognition and to ensure the model could generalize to different signers.
+To address this limitation, the researchers undertook a data augmentation process. This involved recording an entirely new dataset named “SMP-105.”
+1. SMP-105 (Augmented Dataset): The researchers recorded 10,608 new video clips replicating the 105 glosses from the original FSL-105 vocabulary.
+2. CMB-105 (Combined Dataset): This expanded the total pool of isolated clips to 12,738 videos (2,130 from FSL-105 + 10,608 from SMP-105).
+The data was then organized and partitioned as follows:
+1. FSL-105 (2,130 videos): Used for training and validating the baseline isolated recognition models.
+2. SMP-105 (10,608 videos): This new, larger dataset was used exclusively to create the testbed for the primary research objective: sequential recognition using CTC. The 10,608 isolated clips were programmatically concatenated (using the logic from `create_continuous_signs.py`) to generate 1,599 unique concatenated sequences.
+These 1,599 sequences form the continuous test set for the CTC models. This continuous test set has 7,304 of its segment clips featuring hand-head occlusion and 2,318 segment clips being non-occluded.        
+        To ensure systematic organization and facilitate efficient mapping across levels of analysis, the entire dataset was structured into a three-level hierarchical format: 
+Category → Gloss → Signer (C0–C9 / G0–G104 / S0–S7)[i][j][k]
+This hierarchical arrangement allows the researchers to trace each gloss to its corresponding category and signer, thereby simplifying dataset management, retrieval, and analytical mapping. For instance, the structure enables straightforward identification of which glosses belong to a particular category or which specific samples were produced by each signer. This organization was particularly valuable in the evaluation and visualization phases, where recognition outputs needed to be mapped back to their original categorical and signer contexts.
+
+
+        
 
 
 
@@ -834,7 +1170,7 @@ Figure 7. Preprocessing Pipeline
 
 
 
-Each 4-second video clip is sampled at 30 fps and resized for consistency. MediaPipe Selfie Segmentation removes the background to isolate the signer. For each frame, MediaPipe Pose and Hands modules extract 89 two-dimensional keypoints (25 points × 2 pose landmarks, 21 points × 2 per hand, 22 points × 2 face mesh) to capture manual and non-manual cues. This step captures both manual and non-manual cues while discarding irrelevant features such as background and skin tone (Co et al., 2024).
+Each 4-second video clip is sampled at 30 fps and resized for consistency. MediaPipe Selfie Segmentation removes the background to isolate the signer. For each frame, MediaPipe Holistic module extracts 89 two-dimensional keypoints (25 points × 2 pose landmarks, 21 points × 2 per hand, 22 points × 2 face mesh) to capture manual and non-manual cues. This step captures both manual and non-manual cues while discarding irrelevant features such as background and skin tone (Co et al., 2024).
 The resulting raw (x,y) coordinates are flattened into a 178-element feature vector for each frame. These vectors are normalized to a standardized range, ensuring that positional values remain consistent regardless of signer distance or camera scale. The normalized frame-level keypoint vectors are then arranged sequentially according to their temporal order, forming a structured input stream suitable for the Transformer model. Finally, each frame vector is passed through a learnable linear projection layer to embed the data into the model’s 256-dimensional feature space, preparing it for downstream spatio-temporal encoding and recognition tasks.
 Transformer Architecture.
 Figure 8. Transformer Architecture  
@@ -866,7 +1202,7 @@ Development Methodology.
 The study will follow an Iterative Development Methodology, enabling repeated cycles of model training, evaluation, and refinement throughout the experimentation process. Each iteration will incorporate insights from performance metrics and error analysis, allowing the system to evolve based on empirical results rather than fixed development stages.
 To implement this system, the development will be carried out primarily using Python, due to its extensive ecosystem and community support in machine learning and computer vision. The PyTorch framework will serve as the backbone for building and training the Transformer model, offering dynamic computation graphs and fine-grained control over model parameters.
 For video and image data processing, OpenCV and NumPy will be utilized to handle frame extraction, format conversions, and numerical operations. To extract pose and keypoint data from each frame, the system will integrate MediaPipe, which provides state-of-the-art landmark detection crucial for recognizing both manual and non-manual sign language cues.
-Evaluation of model performance will be supported by Scikit-learn, particularly for computing classification metrics such as F1-score and accuracy. Visualizations will be handled by Matplotlib and Seaborn.
+Evaluation of model performance will be supported by Scikit-learn, particularly for computing classification metrics such as F₁-Score and accuracy. Visualizations will be handled by Matplotlib and Seaborn.
 Development and experimentation will take place both in a Vast AI environment, for scalable cloud-based execution, and locally via Jupyter Notebooks, especially during preprocessing and initial testing stages. For writing and organizing code efficiently, Visual Studio Code will be used as the primary IDE.
 Lastly, Weights & Biases (WandB) will be integrated for experiment tracking, helping monitor training logs, hyperparameter configurations, and performance metrics across multiple runs—critical for ensuring transparency and reproducibility in model development.
 
@@ -877,303 +1213,331 @@ Lastly, Weights & Biases (WandB) will be integrated for experiment tracking, hel
 
 
 
-Data Generation Procedure
+Data Generation Procedure[l][m][n][o][p]
 This section describes the experimental workflow used to compare the MHAM Transformer and IV3-GRU models under varying occlusion conditions. It provides a detailed overview of the preprocessing, training, and evaluation procedures, which are organized into three distinct phases: Pre-Experimentation, Experimentation, and Post-Experimentation.
 Pre-Experimentation Phase. 
 The Pre-Experimentation Phase involves the preparation of data and the training of models, ensuring consistent preprocessing and controlled training conditions.
-Concatenated Isolated FSL Glosses Generation.
+Concatenated Isolated FSL Glosses Generation.[q][r]
 As the FSL-105 dataset consists of isolated signs, concatenated isolated FSL glosses were generated using the methodology from `preprocessing/continuous/create_continuous_signs.py`. Isolated videos from the validation set were concatenated based on two strategies:
 1. Strategy 1 (Same Category): Sequences were formed by joining 3-6 different glosses that all belong to the same semantic category (e.g., "Good morning," "Hello," "How are you").
 2. Strategy 2 (Different Categories): Sequences were formed by joining 4-5 glosses, each from a different semantic category.
-For each generated sequence (e.g., `continuous_0001_S1.npz`), a corresponding ground truth JSON file was created. This JSON file stores an array of "segments," with each segment defining the start time, end time, and correct gloss label for every sign in the concatenated video. This ground truth is essential for evaluating performance using Word Error Rate and detection metrics.
+For each generated sequence (e.g., `continuous_0001_S1.npz`), a corresponding ground truth JSON file was created. This JSON file stores an array of "segments," with each segment defining the start time, end time, and correct gloss label for every sign in the concatenated video. This ground truth is essential for evaluating performance metrics using Precision, Recall, and F₁-Score
 Keypoint Extraction & Normalization.
-        The data preparation process begins with extracting keypoints from video frames using the MediaPipe framework. This system captures essential features for Filipino Sign Language (FSL) recognition, including both manual and non-manual components like hand gestures and facial expressions. These keypoints will be normalized to ensure consistency across frames and videos. The data will then be organized into time-ordered sequences, which are crucial for capturing the dynamic nature of sign language. This structured data will form the foundation for model training and evaluation.
+        The data preparation process begins with extracting keypoints from video frames using the MediaPipe framework. This system captures essential features for FSL recognition, including both manual and non-manual components like hand gestures and facial expressions. These keypoints will be normalized to ensure consistency across frames and videos. The data will then be organized into time-ordered sequences, which are crucial for capturing the dynamic nature of sign language. This structured data will form the foundation for model training and evaluation.
 Pipeline Compatibility Check.
         After preprocessing, the next step is verifying that the data is compatible with the model pipeline. Key factors such as input shapes, padding behavior, and batch processing mechanisms will be checked to ensure they align with the model’s requirements. Any inconsistencies or errors in data formatting will be addressed to ensure the data flows smoothly through the pipeline.
-Model Training.
-        Model training will begin with the selection of the MHAM Transformer and IV3-GRU baseline models. Both models will be trained from scratch using the preprocessed data within the PyTorch framework. Identical hyperparameters will be initialized for both models to ensure a fair comparison. Training will occur in two phases: first, the Transformer model will be trained on a small subset of 10 signs from the "Greetings" category as an initial evaluation. Following this, the model’s weights will be reinitialized, and the model will be trained on the full 105-sign dataset to assess generalization across a broader set of signs. Adam optimizer will be used to update the model’s weights, with batch size and epoch numbers optimized during preliminary tuning.
 Define and Apply Stopping Criteria.
         To prevent overfitting or unnecessary training, stopping criteria will be established. A predetermined number of epochs (e.g., 50) will be set, with training halting after this point unless earlier termination is triggered by a lack of improvement in the validation loss over consecutive epochs, a condition known as "patience." The delta parameter will be adjusted to balance performance with training efficiency.
+Model Training.
+        Model training will begin with the selection of the MHAM Transformer and IV3-GRU baseline models. Both models will be trained from scratch using the preprocessed data within the PyTorch framework. Identical hyperparameters will be initialized for both models to ensure a fair comparison. Training will occur in two phases: first, the Transformer model will be trained on a small subset of 10 signs from the "Greetings" category as an initial evaluation. Following this, the model’s weights will be reinitialized, and the model will be trained on the full 105-sign dataset to assess generalization across a broader set of signs. Adam optimizer will be used to update the model’s weights, with batch size and epoch numbers optimized during preliminary tuning.
 Experimentation Phase. 
-The Experimentation Phase involves running inference on the held-out test (20%) sets and logging model outputs and performance metrics.
-Determine If Sign is With or Without Occlusion.
-To robustly evaluate performance, test clips are automatically flagged as "with occlusion" using a multi-method detection system. This system is far more comprehensive than simple landmark disappearance:
-1. Multi-Region Partitioning: The head is divided into five anatomical regions for analysis: forehead, cheeks, nose, mouth, and neck (`HeadRegion`).
-2. Hand Feature Extraction: For each frame, the system identifies the palm center and all fingertip locations for both hands (`_hand_centers_and_tips`).
+The Experimentation Phase involves running inference using the continuous test data rather than isolated gloss samples. Each continuous sequence represents a concatenation of multiple signs, designed to better simulate real-world signing behavior. The models will process these continuous sequences and produce predicted gloss labels and corresponding semantic categories for each frame.
+Determine If Sign is With or Without Occlusion.[s][t]
+To evaluate performance, test clips are automatically flagged as "with occlusion" using a multi-method detection system:
+1. Multi-Region Partitioning: The head is divided into five anatomical regions for analysis: forehead, cheeks, nose, mouth, and neck.
+2. Hand Feature Extraction: For each frame, the system identifies the palm center and all fingertip locations for both hands.
 3. Multi-Method Detection: An occlusion is detected if a hand's features intersect with a facial region, based on a combination of weighted methods:
    1. Fingertip Intersection: Direct overlap of fingertip coordinates within a facial region.
    2. Palm Proximity: The palm center is within an adaptive radius of a facial region.
    3. Trajectory Analysis: The hand's motion vector over recent frames indicates movement towards a facial region.
-4. Temporal Filtering: To prevent noise from brief, incidental movements, a final occlusion event is only confirmed if the detection persists across a 5-frame sliding window, allowing for up to 2 missed frames (skips) within that window (`_apply_temporal_filtering`, `DEFAULT_OCCLUSION_CONFIG`). Clips meeting this criterion are labeled "with occlusion."
-Inference and Log Predictions. 
-Once categorized into clean or occluded conditions, both the MHAM Transformer and IV3-GRU models will be evaluated on the respective test sets. The models will generate predictions for both recognition (identifying the correct gloss labels) and classification (categorizing glosses into semantic categories). The predictions, along with their confidence scores, will be recorded and compared to the ground truth labels to measure performance under both clean and occluded conditions.
-Aggregate Per-Sample Logs (TP/FP/TN/FN).
-For each test sample, the predictions will be logged in structured logs, capturing key metrics such as True Positives (TP), False Positives (FP), True Negatives (TN), and False Negatives (FN). These metrics will be used to compute macro-averaged precision, recall, and F1-score for both recognition and classification tasks. The logs will ensure that the performance of each model can be thoroughly evaluated at the individual sample level, providing insights into the strengths and weaknesses of each model.
+4. Temporal Filtering: To prevent noise from brief, incidental movements, a final occlusion event is only confirmed if the detection persists across a 5-frame sliding window, allowing for up to 2 missed frames (skips) within that window. Clips meeting this criterion are automatically labeled "with occlusion."
+Inference and Log Predictions. [u][v]
+Each continuous test sequence will be evaluated by comparing the model’s predicted frames with the ground truth annotations while considering their frame order within the sequence. 
+Through this frame-aligned comparison, the system will identify the number of True Positives (TP), False Positives (FP), True Negatives (TN), and False Negatives (FN) for both recognition (gloss identification) and classification (semantic category assignment). From these values, the Precision, Recall, and F₁-Score will be computed to measure the performance of the MHAM Transformer and IV3-GRU models under occluded and non-occluded conditions.
+
+
+Aggregate Per-Sample Logs (TP/FP/TN/FN).[w][x]
+For each continuous test sequence, results will be logged with counts of True Positives (TP), False Positives (FP), True Negatives (TN), and False Negatives (FN). A frame prediction is considered TP if the predicted gloss matches the ground truth at the same frame position, FP if a gloss is incorrectly predicted, FN if a gloss is missed, and TN if the absence of a gloss is correctly identified. 
+From these logs, the mean Precision, Recall, and F₁-score will be computed for both recognition and classification tasks, enabling per-sequence evaluation of each model’s handling of occlusion, sequential consistency, and temporal alignment.
 Record Training Metadata.
 In addition to logging predictions and performance metrics, metadata related to the training process will be recorded. This includes tracking training and validation loss curves, the convergence epoch (when training stabilizes), final accuracy values, and hyperparameter configurations. These records will ensure transparency and reproducibility of the experiment.
-Post-Experimentation Phase. 
-        The Post-Experimentation Phase focuses on analyzing the results obtained from the inference and logging processes. This phase includes computing performance metrics, conducting statistical testing, and evaluating model robustness to occlusion.
-Compute descriptive metrics (precision, recall, F₁).
-After obtaining the per-sample precision, recall, and F₁ scores for both recognition and classification tasks, the macro-averaged precision, recall, and F₁ scores will be computed for each model under clean and occluded conditions. These macro-averaged metrics will provide a balanced comparison of model performance, ensuring equal weighting for each gloss category regardless of frequency.
+Post-Experimentation Phase. [y][z][aa]
+        The Post-Experimentation Phase focuses on analyzing the results obtained from the inference and logging processes. This phase includes mapping predicted sequences to their ground truth equivalents, computing performance metrics, conducting statistical testing, and evaluating model robustness under occlusion.
+Map and Compare Frame Order (Temporal Alignment).
+Each continuous prediction sequence will be mapped to its corresponding ground truth annotation based on frame order. This alignment ensures that the evaluation captures both the correctness of each predicted gloss and its sequential placement within the continuous stream. From this frame-level comparison, the True Positives (TP), False Positives (FP), True Negatives (TN), and False Negatives (FN) for each sequence will be identified. To illustrate this alignment, a comparison table below is generated to imitate the mapping between ground truth and predicted frames. The table visually presents which glosses were correctly recognized, missed, or misclassified across the sequence, providing a clear overview of how each model interprets continuous signing.
+[Insert temporal alignment imitation][ab]
+Conduct error analysis on per-sample failures.[ac]
+Error analysis will focus on investigating all prediction outcomes—True Positives (TP), False Positives (FP), True Negatives (TN), and False Negatives (FN)—derived from the continuous frame-level comparisons. Each prediction will be analyzed within its corresponding frame range, ensuring that the recognition results are interpreted in relation to the actual temporal occurrence of each sign.
+By examining correctly and incorrectly classified frames in their proper sequence, the analysis will reveal how errors emerge over time—such as whether they cluster at sign boundaries, occur due to temporal misalignment, or result from occlusion within the signing sequence. The distribution of TP, FP, TN, and FN values across frame ranges will provide insights into each model’s ability to maintain temporal consistency and contextual accuracy throughout continuous signing.
+Map and Compare Predicted Frame Order. [ad]
+To ensure accurate evaluation of model performance, each predicted sequence will be mapped to its corresponding ground truth sequence based on frame order. This temporal alignment allows the system to determine how each predicted gloss aligns with its actual occurrence in time. From this mapping, the True Positives (TP), False Positives (FP), True Negatives (TN), and False Negatives (FN) for each sequence will be identified.
+A comparison table will then be created to illustrate the alignment between predicted and actual glosses, imitating the frame-by-frame mapping. This visual representation highlights which glosses were correctly recognized, missed, or misclassified within each continuous sequence, providing a clearer understanding of how each model interprets sign boundaries and maintains temporal consistency during recognition.
+Compute performance metrics (precision, recall, F₁).[ae]
+After computing per-sequence Precision, Recall, and F₁ scores for both the recognition and classification tasks, the mean Precision, mean Recall, and mean F₁ scores will be calculated for each model under occluded and non-occluded conditions. Averaging per-sequence metrics provides a straightforward arithmetic mean of performance across all continuous test sequences, ensuring that each sequence contributes equally to the overall evaluation regardless of length or content. These mean values serve as reliable indicators of overall model performance and allow for a balanced and interpretable comparison between the MHAM Transformer and IV3-GRU across varying signing conditions.
 Perform paired statistical tests with assumption checks. 
-To evaluate whether the differences in performance are statistically significant, paired statistical tests will be conducted. The normality of paired differences will first be assessed using the Shapiro-Wilk test. If the differences are normally distributed, a paired t-test will be used; otherwise, the Wilcoxon signed-rank test will be applied. These tests will assess whether the observed performance differences between the two models are statistically significant.
+To determine whether the performance differences between the IV3-GRU and MHAM Transformer models are statistically significant, paired statistical tests will be conducted. The normality of paired differences will first be assessed using the Shapiro–Wilk test. If the paired differences are normally distributed, a paired t-test will be applied; otherwise, the Wilcoxon signed-rank test will be used. These tests will verify whether the observed differences in mean Precision, Recall, and F₁ scores between the two models are statistically significant under both occluded and non-occluded conditions.
 Apply multiple-comparisons correction.
-Since multiple statistical tests will be performed across different occlusion levels and performance metrics, the Holm-Bonferroni correction will be applied to adjust for multiple comparisons. This correction ensures that the family-wise error rate is controlled, reducing the likelihood of false positives in statistical testing.
-Conduct error analysis on per-sample failures.
-Error analysis will be conducted to investigate the misclassifications made by each model. This analysis will focus on the false positives (FP) and false negatives (FN) from the per-sample logs, which were recorded in the Experiment Report Template. By identifying continuous glosses or categories that were more likely to be misclassified under occluded versus clean conditions, the error analysis will help pinpoint areas where the models struggle. The process will also compare the performance of the MHAM Transformer and IV3-GRU model, particularly under occlusion, and reveal patterns of misclassification that can be addressed in future model iterations.
-Experiment Report Template.
-The Experiment Report Template organizes each run into two main sections. The first section comprises four summary tables (Tables 3–6) that present recognition and classification metrics—precision, recall, and F₁—for both the MHAM Transformer and the IV3-GRU with and without occlusion. Each summary table reports both models’ scores, the difference Δ and the corresponding H₀ decision.
-The second section presents four per-sample log tables (Tables 7–10) that detail the recognition and classification outcomes for each model and task in continuous sign scenarios. Each log entry lists the input video file, the evaluated gloss or category sequence, and the corresponding performance metrics: Precision, Recall, and F1-Score alongside the counts of True Positives (TP), False Positives (FP), True Negatives (TN), and False Negatives (FN).This two-part structure ensures a consistent presentation of raw scores, practical significance, and statistical testing across all experimental conditions.
-
-
+Since multiple hypothesis tests will be conducted to compare the performance of the IV3-GRU and MHAM Transformer models across two occlusion conditions (with and without occlusion) and three performance metrics (Precision, Recall, and F₁ Score), the Holm–Bonferroni correction will be applied.
+This stepwise adjustment method controls the Family-Wise Error Rate (FWER) by sequentially modifying the significance thresholds, ensuring that the overall probability of committing one or more Type I errors remains below the specified significance level (α = 0.05). Applying this correction reduces the likelihood of false-positive findings when evaluating multiple model-performance comparisons.
+Experiment Report Template.[af]
+The Experiment Report Template organizes each run into two main sections. The first section (Tables 3–6) contains the per-sample log tables, which detail the recognition and classification results for each model in continuous signing scenarios. Each log entry lists the input video file, the evaluated gloss or category sequence, and the corresponding counts of True Positives (TP), False Positives (FP), True Negatives (TN), and False Negatives (FN), along with the computed Precision, Recall, and F₁-Score. This structure ensures a standardized presentation of per-sequence performance across all experimental conditions.
+The second section (Tables 7–10) summarizes the mean metrics and statistical test results for each research question (RQ3–RQ4). These tables present the mean Precision, mean Recall, and mean F₁-Score for both the MHAM Transformer and IV3-GRU models under occluded and non-occluded conditions, the corresponding difference (Δ = T − I), the p-value, and the H₀ decision (Reject or Fail to Reject).
 Table 3
-RQ1 – Recognition (With Occlusion)
-Metric
-	Transformer Score
-	IV3-GRU Score
-	Δ (T – I)
-	p-Value
-	H₀₁ Decision
+[ag]Per-Sample Recognition Log – Transformer
+File
+	Gloss Sequence
+	TP
+	FP
+	TN
+	FN
 	Precision
-	—
-	—
-	—
-	—
-	Reject / Fail to Reject
 	Recall
-	—
-	—
-	—
-	—
-	Reject / Fail to Reject
-	F₁-Score
-	—
-	—
-	—
-	—
-	Reject / Fail to Reject
+	F1-Score
+	continuous_0001.mp4
+	1
+	0
+	104
+	0
+	100.00%
+	100.00%
+	100.00%
+	…
+	…
+	…
+	
+
+	…
+	…
+	…
+	…
 	
 
 Table 4
-RQ1 – Recognition (Without Occlusion)
-Metric
-	Transformer Score
-	IV3-GRU Score
-	Δ (T – I)
-	p-Value
-	H₀₁ Decision
+Per-Sample Recognition Log – IV3-GRU
+File
+	Gloss Sequence
+	TP
+	FP
+	TN
+	FN
 	Precision
-	—
-	—
-	—
-	—
-	Reject / Fail to Reject
 	Recall
-	—
-	—
-	—
-	—
-	Reject / Fail to Reject
-	F₁-Score
-	—
-	—
-	—
-	—
-	Reject / Fail to Reject
-	Table 5
-RQ2 – Classification (With Occlusion)
-Metric
-	Transformer Score
-	IV3-GRU Score
-	Δ (T – I)
-	p-Value
-	H₀₁ Decision
+	F1-Score
+	continuous_0001.mp4
+	1
+	0
+	104
+	0
+	100.00%
+	100.00%
+	100.00%
+	…
+	…
+	…
+	
+
+	…
+	…
+	…
+	…
+	
+
+Table 5
+Per-Sample Classification Log – Transformer
+File
+	Category Sequence
+	TP
+	FP
+	TN
+	FN
 	Precision
-	—
-	—
-	—
-	—
-	Reject / Fail to Reject
 	Recall
-	—
-	—
-	—
-	—
-	Reject / Fail to Reject
-	F₁-Score
-	—
-	—
-	—
-	—
-	Reject / Fail to Reject
+	F1-Score
+	continuous_0001.mp4
+	1
+	0
+	9
+	0
+	100.00%
+	100.00%
+	100.00%
+	…
+	…
+	…
+	
+
+	…
+	…
+	…
+	…
 	
 
 Table 6
-RQ2 – Classification (Without Occlusion)
+Per-Sample Classification Log – IV3-GRU
+File
+	Category Sequence
+	TP
+	FP
+	TN
+	FN
+	Precision
+	Recall
+	F1-Score
+	continuous_0001.mp4
+	1
+	0
+	9
+	0
+	100.00%
+	100.00%
+	100.00%
+	…
+	…
+	…
+	
+
+	…
+	…
+	…
+	…
+	
+
+Table 7
+[ah][ai]RQ3 – Recognition (With Occlusion)
 Metric
 	Transformer Score
 	IV3-GRU Score
 	Δ (T – I)
 	p-Value
 	H₀₁ Decision
-	Precision
+	Mean Precision
 	—
 	—
 	—
 	—
-	Reject / Fail to Reject
-	Recall
+	Reject / Fail 
+to Reject
+	Mean  Recall
 	—
 	—
 	—
 	—
-	Reject / Fail to Reject
-	F₁-Score
+	Reject / Fail 
+to Reject
+	Mean F₁-Score
 	—
 	—
 	—
 	—
-	Reject / Fail to Reject
-	
-
-Table 7
-Per-Sample Recognition Log – Transformer
-FIle
-	Gloss Sequence
-	TP
-	FP
-	TN
-	FN
-	Precision
-	Recall
-	F1-Score
-	continuous_0001.mp4
-	100.00%
-	100.00%
-	100.00%
-	1
-	0
-	104
-	0
-	…
-	…
-	…
-	
-
-	…
-	…
-	…
-	…
+	Reject / Fail 
+to Reject
 	
 
 Table 8
-Per-Sample Recognition Log – IV3-GRU
-FIle
-	Gloss Sequence
-	TP
-	FP
-	TN
-	FN
-	Precision
-	Recall
-	F1-Score
-	continuous_0001.mp4
-	100.00%
-	100.00%
-	100.00%
-	1
-	0
-	104
-	0
-	…
-	…
-	…
-	
-
-	…
-	…
-	…
-	…
-	
-
-Table 9
-Per-Sample Classification Log – Transformer
-FIle
-	Category Sequence
-	TP
-	FP
-	TN
-	FN
-	Precision
-	Recall
-	F1-Score
-	continuous_0001.mp4
-	100.00%
-	100.00%
-	100.00%
-	1
-	0
-	104
-	0
-	…
-	…
-	…
-	
-
-	…
-	…
-	…
-	…
+RQ3 – Recognition (Without Occlusion)
+Metric
+	Transformer Score
+	IV3-GRU Score
+	Δ (T – I)
+	p-Value
+	H₀₁ Decision
+	Mean Precision
+	—
+	—
+	—
+	—
+	Reject / Fail 
+to Reject
+	Mean  Recall
+	—
+	—
+	—
+	—
+	Reject / Fail 
+to Reject
+	Mean F₁-Score
+	—
+	—
+	—
+	—
+	Reject / Fail 
+to Reject
+	Table 9
+RQ4 – Classification (With Occlusion)
+Metric
+	Transformer Score
+	IV3-GRU Score
+	Δ (T – I)
+	p-Value
+	H₀2 Decision
+	Mean Precision
+	—
+	—
+	—
+	—
+	Reject / Fail 
+to Reject
+	Mean  Recall
+	—
+	—
+	—
+	—
+	Reject / Fail 
+to Reject
+	Mean F₁-Score
+	—
+	—
+	—
+	—
+	Reject / Fail 
+to Reject
 	
 
 Table 10
-Per-Sample Classification Log – IV3-GRU
-FIle
-	Category Sequence
-	TP
-	FP
-	TN
-	FN
-	Precision
-	Recall
-	F1-Score
-	continuous_0001.mp4
-	100.00%
-	100.00%
-	100.00%
-	1
-	0
-	104
-	0
-	…
-	…
-	…
+RQ4 – Classification (Without Occlusion)
+Metric
+	Transformer Score
+	IV3-GRU Score
+	Δ (T – I)
+	p-Value
+	H₀2 Decision
+	Mean Precision
+	—
+	—
+	—
+	—
+	Reject / Fail 
+to Reject
+	Mean  Recall
+	—
+	—
+	—
+	—
+	Reject / Fail 
+to Reject
+	Mean F₁-Score
+	—
+	—
+	—
+	—
+	Reject / Fail 
+to Reject
 	
 
-	…
-	…
-	…
-	…
-	
 
 
 
-Ethical Considerations
-The FSL-105 dataset is publicly available and includes video recordings of FSL signers, all credited for their contributions. It was created with informed consent, ensuring participants understood how their recordings would be used. This study follows the dataset’s original guidelines and ensures no additional personally identifiable information (PII) is introduced during processing.
-Moreover, FSL-105 is also openly accessible for research, education, and development. Proper attribution will be given to Tupal and his collaborators in all outputs derived from the dataset. To supplement the limited public documentation, we obtained permission from Tupal for full access to his research. His work serves as a primary reference, and we fully adhere to the ethical and usage guidelines he outlined. The dataset carries no restrictive licensing, and its reuse is permitted with appropriate credit.
-The dataset may not fully represent the diversity of the Filipino Deaf community due to:
-1. Demographic constraints (e.g., age, gender, regional variation)
-2. Linguistic gaps (e.g., underrepresented signs)
-3. Contextual limitations (e.g., absence of sentence-level signing)
-These limitations, acknowledged by the dataset creator, are recognized and considered in this study’s application and interpretation of results.
 
 
-Data Analysis
+
+Ethical Considerations[aj][ak]
+The FSL-105 dataset used in this study is publicly available and was developed with informed consent from all participants. This research complies with the dataset’s ethical guidelines and ensures that no personally identifiable information (PII) is introduced during preprocessing or analysis.
+To strengthen testing validity, the dataset was augmented with additional recordings created by the researchers, designed to replicate the original FSL-105 setup—including camera position, background, and signing format. All participants in these augmented recordings were fully informed of the study’s purpose and provided written consent. The augmented data are used solely for internal validation and will not be publicly released to protect participant privacy.
+Proper attribution will be given to Tupal and collaborators, the creators of FSL-105, and all data use strictly follows their stated ethical and usage guidelines.
+The study also acknowledges that the original and augmented datasets may not fully represent the diversity of the Filipino Deaf community due to:
+1. Demographic constraints (e.g., age, gender, regional variation),
+2. Linguistic gaps (e.g., underrepresented or context-dependent signs), and
+3. Contextual limitations (e.g., absence of sentence-level or conversational signing).
+These constraints are recognized and taken into account when analyzing and interpreting the study’s findings.
+
+
+Data Analysis[al][am]
 Following the data generation procedure, this section involves evaluating the models' performance based on the results obtained during the Experimentation Phase. The analysis includes computing descriptive metrics, performing statistical testing, conducting error analysis, and visualizing the results to compare the MHAM Transformer and IV3-GRU models under clean and occluded conditions.
 Descriptive Analysis.
-After obtaining the per-sample precision, recall, and F₁ scores for both recognition and classification tasks, the macro-averaged precision, recall, and F₁ scores will be computed for each model under both clean and occluded conditions. These computed metrics will enable an overall evaluation of how well each model performs in both recognizing individual glosses and classifying them into semantic categories.
+After obtaining the frame-level results, class-wise Precision, Recall, and F₁-Score will be computed for each continuous sequence. These class-wise scores will then be macro-averaged within each sequence to ensure equal weighting across glosses, producing per-sequence macro Precision, Recall, and F₁.
+Each sequence’s macro metrics will be paired between models (MHAM Transformer vs. IV3-GRU) under both occluded and non-occluded conditions to enable direct comparison.
 Summarize precision, recall, and F₁ by model and occlusion conditions.
-Macro-averaged metrics will be computed per model and condition. These metrics will be calculated as follows:
+These per-sequence metrics will then be averaged across all test sequences to obtain each model’s overall mean Precision, Recall, and F₁-Score per condition.:
 
 
 Table 11
@@ -1191,7 +1555,7 @@ Metric
 	
 	These metrics will be macro-averaged across all classes to ensure that each gloss category is given equal weight, preventing dominant categories from skewing the results.
 Tabulate raw metric values and differences.
-For each model and condition, raw values for precision, recall, and F₁-score will be recorded. The differences in performance between the MHAM Transformer and IV3-GRU models will be computed, highlighting the impact of occlusion on each model’s ability to recognize and classify signs. The performance difference for each sample is computed  using Equation (3.1) as follows:
+For each model and condition, raw values for Precision, Recall, and F₁-Score will be recorded. The differences in performance between the MHAM Transformer and IV3-GRU models will be computed, highlighting the impact of occlusion on each model’s ability to recognize and classify signs. The performance difference for each sample is computed  using Equation (3.1) as follows:
 
 
 
@@ -1201,7 +1565,7 @@ For each model and condition, raw values for precision, recall, and F₁-score w
 	  
 Where  is the difference for sample , and  denotes the metric (e.g., F1-score).
 Statistical Testing.
-        To assess whether the differences in performance are statistically significant, paired statistical tests will be conducted. The approach for testing normality and selecting the appropriate statistical test is outlined below:
+        Statistical testing will be conducted on the paired per-sequence metrics (Precision, Recall, and F₁) between the MHAM Transformer and IV3-GRU models under both occluded and non-occluded conditions. The approach for testing normality and selecting the appropriate statistical test is outlined below:
 Check normality (Shapiro–Wilk).
 The Shapiro-Wilk test will be used to assess the normality of the paired differences between the models' performance metrics. This test will determine whether the differences follow a normal distribution. The formula for the Shapiro-Wilk test statistic is shown in Equation (3.2):
 
@@ -1292,7 +1656,7 @@ Where:
                      1. If  is less than or equal to the critical value, reject the null hypothesis (there is a significant difference between the pairs).
                      2. If  is greater than the critical value, then fail to reject the null hypothesis (there is no significant difference between the pairs).
 Correct for Multiple Comparisons.
-        Since multiple statistical tests will be performed (across different metrics and occlusion levels), the Holm-Bonferroni correction will be applied. This method adjusts the significance threshold for each test to control the family-wise error rate, ensuring that the likelihood of committing a Type I error is minimized. The following steps will be followed:
+        Since multiple statistical tests will be performed (across different metrics and occlusion levels), the Holm-–Bonferroni correction will then be applied across the six comparisons (three metrics × two conditions) to control the Family-Wise Error Rate (FWER) and minimize the likelihood of Type I errors. The following steps will be followed:
                         1. Arrange the p-values in ascending order as shown in Equation (3.9):
 The p-values from all the hypothesis tests will be sorted in ascending order, so that:
 
@@ -1327,26 +1691,22 @@ If the adjusted p-value  exceeds ,  do not reject the null hypothesis for that t
 Report exact p-values and H₀ decision.
         The final step in the statistical testing process involves reporting the exact p-values for each hypothesis test, along with the decision regarding the null hypothesis (). If the adjusted p-value is less than 0.05, the null hypothesis will be rejected, indicating that there is a statistically significant difference between the models' performances. If the adjusted p-value exceeds 0.05, the null hypothesis will fail to be rejected, suggesting no significant difference between the two models.
 All results, including the p-values and decisions, will be clearly documented and presented to ensure transparency and reproducibility in the analysis.
+        In addition to the per-sequence macro results, overall micro-averaged Precision, Recall, and F₁ will also be reported as complementary indicators of frame-level performance. While the statistical tests will focus on per-sequence metrics, these micro-averaged scores provide a broader view of each model’s aggregate behavior across all frames.
 Error Analysis.
         Error analysis is critical for identifying common failure patterns across the MHAM Transformer and IV3-GRU models, particularly in relation to misclassified samples. This analysis will focus on understanding the influence of occlusion on the models' performance, with a particular emphasis on False Positives (FP) and False Negatives (FN).
 Impact of Occlusion.
 The first step in error analysis will be to identify and categorize samples into False Positives and False Negatives. This categorization will facilitate an exploration of which glosses or categories are most susceptible to misclassification under condition with and without occlusion. The analysis will assess how occlusion affects patterns and whether occlusion results in increased FP or FN. It will also explore which signs are more prone to performance degradation when certain keypoints (such as facial expressions or hand positions) are occluded.
-False Positives and False Negatives Analysis.
-Following the initial categorization of samples, a more detailed analysis will be conducted on False Positives and False Negatives. For False Positives, the analysis will identify whether specific signs are misclassified more frequently as one class when they do not belong to it, particularly under occluded conditions. Signs with visually similar features or gestures may be prone to misclassification due to occluded keypoints, leading to confusion in the classification process.
-For False Negatives, the focus will shift to determining whether occluded conditions increase the number of missed classifications, where the model fails to recognize signs that should have been correctly identified. This is especially relevant for signs that rely on subtle facial expressions or intricate hand movements, which may be more challenging to detect when portions of the keypoints are occluded. The analysis will uncover which signs are more likely to be overlooked by both models, particularly under occluded conditions, providing insights into the specific weaknesses of each model in handling occlusion-induced challenges.
-Visualization.
-Visualization will play a critical role in presenting and interpreting the results of the analysis. Plots and charts may be created to provide a clear understanding of how key performance metrics behave across clean and occluded conditions.
+Confusion Table Analysis.[an][ao]
+A detailed confusion table analysis will be conducted to evaluate how each model performs across all prediction outcomes—True Positives (TP), False Positives (FP), True Negatives (TN), and False Negatives (FN)—under both occluded and non-occluded conditions. This analysis provides a comprehensive view of model behavior, revealing not only where errors occur but also where the models consistently succeed.
+True Positives (TP) and True Negatives (TN) will be examined to identify conditions or gloss types that are recognized with high reliability, highlighting each model’s strengths and stable feature representations.
+In contrast, False Positives (FP) and False Negatives (FN) will be analyzed to determine common sources of misclassification and omission. FP analysis will focus on signs frequently mistaken for others—particularly those with visually similar gestures or partial occlusions—while FN analysis will investigate missed detections, especially in signs dependent on facial expressions or fine hand details that are difficult to capture when keypoints are obscured.
+By assessing the distribution and causes of TP, FP, TN, and FN across all continuous sequences, the confusion table analysis will provide insight into each model’s robustness, sensitivity to occlusion, and ability to maintain temporal and contextual accuracy in recognizing continuous FSL glosses.
+Visualization.[ap][aq]
+Visualization will play a critical role in presenting and interpreting the results of the analysis. In addition to plots and charts illustrating key performance metrics across clean and occluded conditions, visualizations of frame order alignment will also be generated. These temporal alignment charts will map each model’s predicted glosses against the ground truth frame sequence, clearly indicating the positions of True Positives (TP), False Positives (FP), True Negatives (TN), and False Negatives (FN) over time. This frame-level visualization enables a detailed examination of how recognition accuracy fluctuates throughout each continuous signing sequence and provides an intuitive view of where temporal misalignments or occlusion-related errors occur.
 Plot metrics across occlusion levels.
-Line plots may be generated to visually demonstrate how key performance metrics—precision, recall, and F₁ score—change across clean and occluded conditions. These metrics will be plotted for both the MHAM Transformer and IV3-GRU models. Separate plots may also be generated for the recognition and classification tasks, as these metrics may behave differently depending on the nature of the task. By examining these line plots, trends in model performance across the different conditions will be revealed. This will highlight which model is more resilient to occlusion and where performance degradation becomes more pronounced, allowing for the identification of threshold points at which occlusion begins to significantly affect model accuracy.
-Chart confidence indicators.
-Bar charts may be created to visualize the performance differences between the MHAM Transformer and IV3-GRU models for each metric (precision, recall, and F₁ score) under clean and occluded conditions. Each bar will represent the difference in performance between the two models for clean versus occluded conditions.
-To provide additional clarity, confidence intervals may also be included in the charts for each performance metric. These intervals will give a range within which the true value of the metric is likely to fall, offering a sense of the reliability and stability of the observed differences between the models. The inclusion of confidence intervals will help assess whether the performance differences are statistically significant and whether these differences remain consistent across the tested conditions.
-
-
-
-
-
-
+Line plots will be generated to visually demonstrate how key performance metrics—precision, recall, and F₁ score—change across occluded and non-occluded conditions. These metrics will be plotted for both the MHAM Transformer and IV3-GRU models. Separate plots may also be generated for the recognition and classification tasks, as these metrics may behave differently depending on the nature of the task. By examining these line plots, trends in model performance across the different conditions will be revealed. This will highlight which model is more resilient to occlusion and where performance degradation becomes more pronounced, allowing for the identification of threshold points at which occlusion begins to significantly affect model accuracy.
+Chart confidence indicators.[ar][as]
+Bar charts will be used to visualize the performance differences between the MHAM Transformer and IV3-GRU models across each performance metric (Precision, Recall, and F₁-Score) under both clean and occluded conditions. Each bar will represent the mean performance of each model, while confidence intervals (CIs) or standard deviation (SD) error bars will be included to indicate variability across test sequences. These visual indicators provide an intuitive representation of the reliability and stability of each metric estimate and help illustrate whether the observed performance differences between models are consistent and statistically meaningful across conditions.
 
 
 Table 12 
@@ -1362,20 +1722,26 @@ Research Question
 	                           1. RQ1: What is the performance of IV3-GRU and MHAM Transformer in recognizing sign glosses with and without occlusion in terms of Precision, Recall, and F1-Score?
 	Occluded and Non-occluded test dataset of continuous FSL glosses with ground truth labels,
 Gloss-level prediction outputs from MHAM Transformer and IV3-GRU 
-	Compute per-gloss: Precision, Recall, F1-score.
+	Compute per-sequence: Precision, Recall, F1-score.
 Aggregate macro-averaged scores per model.
 Analyze confusion matrix (TP, FP, FN).
-Log gloss-level results.
+Record gloss-level performance metrics for analysis.
 	Sub-Question 2
 	                           2. RQ2: What is the performance of IV3-GRU and MHAM Transformer in classifying sign glosses with and without occlusion in terms of Precision, Recall, and F1-Score?
 	Occluded and Non-occluded test dataset of continuous FSL glosses with semantic category labels (e.g., greetings, survival, numbers), Category-level prediction outputs from MHAM Transformer and IV3-GRU 
-	Compute per-gloss: Precision, Recall, F1-score.
+	Compute per sequence: Precision, Recall, F1-score.
 Aggregate macro-averaged scores per model.
 Analyze confusion matrix (TP, FP, FN).
-Log gloss-level results.
+Record category-level performance metrics for analysis.
 	Sub-Question 3
 	                           3. RQ3: Is there a significant difference in the performance of IV3-GRU and MHAM Transformer in recognizing sign glosses with and without occlusion in terms of Precision, Recall, and F1 Score?
-	Performance metrics (Precision, Recall, F1-score) from RQ1 and RQ2. Per-sample performance differences between the MHAM Transformer and IV3-GRU models
+	Performance metrics (Precision, Recall, F1-score) from RQ1. Per-sample performance differences between the MHAM Transformer and IV3-GRU models
+	Conduct paired statistical tests (paired t-test or Wilcoxon signed-rank test, depending on data normality) to compare the performance metrics of the two models.
+Apply the Holm-Bonferroni correction to adjust for multiple comparisons.
+Report exact p-values and make a decision to reject or fail to reject the null hypothesis based on the significance level (α = 0.05).
+	Sub-Question 4
+	                           4. RQ3: Is there a significant difference in the performance of IV3-GRU and MHAM Transformer in classifying sign categories with and without occlusion in terms of Precision, Recall, and F1 Score?
+	Performance metrics (Precision, Recall, F1-score) from RQ2. Per-sample performance differences between the MHAM Transformer and IV3-GRU models
 	Conduct paired statistical tests (paired t-test or Wilcoxon signed-rank test, depending on data normality) to compare the performance metrics of the two models.
 Apply the Holm-Bonferroni correction to adjust for multiple comparisons.
 Report exact p-values and make a decision to reject or fail to reject the null hypothesis based on the significance level (α = 0.05).
@@ -1531,7 +1897,7 @@ Figure 10. FSL-105 Dataset Retrieved from Mendeley Data
 ________________
 
 
-Appendix 2: Research Instrument – Screen Mockup[a]
+Appendix 2: Research Instrument – Screen Mockup[at]
   Figure 11. File Upload Interface - No File Selected
   
 
@@ -1657,4 +2023,98 @@ Figure 20. Results Interface - IV3-GRU Model
   
 
 i
-[a]Update after re-defense.
+[a]Updated.
+[b]Updated.
+[c]Updated.
+[d]Updated.
+[e]Added.
+[f]Updated.
+[g]Updated.
+[h]Add phone model units used here.
+[i]Can be clearer, kahit mahaba
+[j]I suggest creating a figure
+[k]@novelle.estrella@gmail.com
+[l]I suggest creating a flowchart for each of the ff:
+1. Pre-Exp
+2. Exp
+3.Post-Exp
+
+
+Para i-visualize lang yung pinakaflow, and i-adjust yung order if needed
+[m]@novelle.estrella@gmail.com
+[n]draw.io
+[o]https://app.diagrams.net/
+[p]Need matapos muna yung entire Data Generation Procedure before ko magawa yung flowchart.
+[q]@novelle.estrella@gmail.com 
+
+
+use precision, recall, f1 instead of word error rate/detection metrics
+_Assigned to novelle.estrella@gmail.com_
+[r]Updated.
+[s]Update. Remove mention of code stuff like "HeadRegion", "hand_center" ...
+
+
+Makes it sound confusing. Just explain them.
+[t]@ricajoicruzmigueh1243@gmail.com
+[u]Need i-update.
+
+
+Mention na we'll evaluate each continuous sequence by comparing with the ground truth as well as considering their frame order, from there makukha natin TP, FP, TN, FN, from there yung Precision, Recall, F1-Score
+[v]Updated.
+[w]Also state criteria for defining what TP, FP, TN, FN is
+[x]Updated.
+[y]Pwede here i-reiterate yung pagkuha ng TP, FP, TN, FN
+
+
+Add lang ng new section, something like 
+
+
+We'll map out yung frame order ng predictions and compare it to ground truth.
+
+
+Pwede gumawa ng table, na inimitate yung comparison
+[z]Should go before Compute metrics
+[aa]Updated.
+[ab]Still missing.
+[ac]Updated.
+[ad]New.
+[ae]Updated.
+[af]Updated.
+[ag]Copy paste to experiment paper.
+[ah]table length is different from those above it
+[ai]Updated.
+[aj]Also need i-update since nag-augment tayo.
+[ak]Updated.
+[al]Recommended workflow
+
+
+1. Compute class-wise precision/recall/F₁ for each sequence.
+
+
+2. Average them → macro-precision/recall/F₁ per sequence.
+
+
+3. Pair each sequence’s macro-metric between models.
+
+
+4. Perform Shapiro–Wilk → choose paired t or Wilcoxon.
+
+
+5. Apply Holm–Bonferroni to p-values.
+
+
+6. Also report overall micro-averaged metrics as complementary.
+[am]Updated.
+[an]Update to Confusion Table Analysis
+
+
+Also mention impact of TP, TN
+[ao]Updated.
+[ap]Here add visualization of frame order to properly determine TP, FP ...
+[aq]Updated.
+[ar]try to integrate this, from chatgpt:
+
+
+Bar charts will be used to visualize the performance differences between the MHAM Transformer and IV3-GRU models across each performance metric (Precision, Recall, and F₁ Score) under both clean and occluded conditions. Each bar will represent the mean performance for each model, and confidence intervals (CIs) or standard deviation (SD) error bars will be included to indicate variability across sequences. These visual indicators will provide an intuitive representation of the reliability of each metric estimate and help illustrate whether observed performance differences are consistent and statistically meaningful across conditions.
+[as]Updated.
+[at]Update after re-defense.
