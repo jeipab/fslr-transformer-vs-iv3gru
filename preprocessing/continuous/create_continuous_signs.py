@@ -682,6 +682,7 @@ def concatenate_npz_files(
             'gloss_label': gloss_label,
             'category': int(sample['cat']),
             'category_label': cat_label,
+            'occluded': int(sample.get('occluded', 0)),
             'signer': sample['signer'],
             'original_file': sample['file']
         })
@@ -748,6 +749,7 @@ def concatenate_video_files(
             'gloss_label': gloss_label,
             'category': int(sample['cat']),
             'category_label': cat_label,
+            'occluded': int(sample.get('occluded', 0)),
             'signer': sample['signer'],
             'original_file': sample['file']
         })

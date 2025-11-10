@@ -8,6 +8,65 @@ import numpy as np
 from typing import List, Dict, Optional, Tuple
 
 
+def detect_inactive_hand_periods(
+    mask: np.ndarray,
+    timestamps_ms: np.ndarray,
+    left_hand_start: int = 25,
+    left_hand_end: int = 45,
+    right_hand_start: int = 46,
+    right_hand_end: int = 66
+) -> List[Tuple[float, float]]:
+    """
+    Detect time periods where hands are not in frame (all hand keypoints inactive).
+    
+    Args:
+        mask: Keypoint visibility mask [T, 89] where True = visible
+        timestamps_ms: Timestamp array [T] in milliseconds
+        left_hand_start: Starting index for left hand keypoints (default 25)
+        left_hand_end: Ending index for left hand keypoints (default 45)
+        right_hand_start: Starting index for right hand keypoints (default 46)
+        right_hand_end: Ending index for right hand keypoints (default 66)
+        
+    Returns:
+        List of (start_ms, end_ms) tuples for inactive periods
+    """
+    if mask is None or len(mask) == 0 or timestamps_ms is None or len(timestamps_ms) == 0:
+        return []
+    
+    if len(mask) != len(timestamps_ms):
+        return []
+    
+    inactive_periods = []
+    in_inactive_period = False
+    period_start = None
+    
+    for t in range(len(mask)):
+        # Check if both hands are inactive (all keypoints False)
+        left_hand_mask = mask[t, left_hand_start:left_hand_end+1]
+        right_hand_mask = mask[t, right_hand_start:right_hand_end+1]
+        
+        left_inactive = not np.any(left_hand_mask)
+        right_inactive = not np.any(right_hand_mask)
+        both_inactive = left_inactive and right_inactive
+        
+        if both_inactive and not in_inactive_period:
+            # Start of inactive period
+            in_inactive_period = True
+            period_start = timestamps_ms[t]
+        elif not both_inactive and in_inactive_period:
+            # End of inactive period
+            in_inactive_period = False
+            if period_start is not None:
+                inactive_periods.append((float(period_start), float(timestamps_ms[t])))
+                period_start = None
+    
+    # Handle case where sequence ends in inactive period
+    if in_inactive_period and period_start is not None:
+        inactive_periods.append((float(period_start), float(timestamps_ms[-1])))
+    
+    return inactive_periods
+
+
 def render_sequence_comparison(
     predicted_sequence: List[int],
     predicted_labels: List[str],
@@ -16,7 +75,8 @@ def render_sequence_comparison(
     confidence_scores: Optional[List[float]] = None,
     predicted_categories: Optional[List[int]] = None,
     category_confidences: Optional[List[float]] = None,
-    ground_truth_categories: Optional[List[int]] = None
+    ground_truth_categories: Optional[List[int]] = None,
+    ground_truth_occluded: Optional[List[int]] = None
 ):
     """
     Render side-by-side comparison of predicted vs ground truth sequences.
@@ -30,6 +90,7 @@ def render_sequence_comparison(
         predicted_categories: Optional list of predicted category IDs
         category_confidences: Optional category confidence scores
         ground_truth_categories: Optional list of ground truth category IDs
+        ground_truth_occluded: Optional list of occlusion flags (0 or 1) for ground truth
     """
     st.markdown("#### Sequence Comparison")
     
@@ -42,9 +103,15 @@ def render_sequence_comparison(
         with col1:
             st.markdown("**Ground Truth**")
             if has_categories and ground_truth_categories:
-                render_sequence_with_categories(ground_truth_labels, ground_truth_categories, None, None)
+                render_sequence_with_categories(
+                    ground_truth_labels, ground_truth_categories, None, None,
+                    occlusion_flags=ground_truth_occluded, is_ground_truth=True
+                )
             else:
-                render_sequence_chips(ground_truth_labels, None, color='#10b981')
+                render_sequence_chips(
+                    ground_truth_labels, None, color='#10b981',
+                    occlusion_flags=ground_truth_occluded
+                )
         
         with col2:
             st.markdown("**Predicted**")
@@ -68,7 +135,8 @@ def render_sequence_comparison(
 def render_sequence_chips(
     labels: List[str],
     confidence_scores: Optional[List[float]] = None,
-    color: str = '#3b82f6'
+    color: str = '#3b82f6',
+    occlusion_flags: Optional[List[int]] = None
 ):
     """
     Render sequence as colored chips/badges.
@@ -77,6 +145,7 @@ def render_sequence_chips(
         labels: List of gloss labels
         confidence_scores: Optional confidence scores
         color: Hex color for chips
+        occlusion_flags: Optional list of occlusion flags (0 or 1) - if 1, use red color
     """
     if not labels:
         st.info("Empty sequence")
@@ -95,8 +164,11 @@ def render_sequence_chips(
         else:
             opacity = 1.0
         
+        # Use red color if occluded, otherwise use provided color
+        chip_color = '#ef4444' if (occlusion_flags and i < len(occlusion_flags) and occlusion_flags[i] == 1) else color
+        
         chip_style = f"""
-            background-color: {color};
+            background-color: {chip_color};
             color: white;
             padding: 0.4rem 0.8rem;
             border-radius: 1rem;
@@ -115,7 +187,9 @@ def render_sequence_with_categories(
     gloss_labels: List[str],
     category_ids: List[int],
     gloss_confidences: Optional[List[float]] = None,
-    category_confidences: Optional[List[float]] = None
+    category_confidences: Optional[List[float]] = None,
+    occlusion_flags: Optional[List[int]] = None,
+    is_ground_truth: bool = False
 ):
     """
     Render sequence with both glosses and categories.
@@ -125,6 +199,8 @@ def render_sequence_with_categories(
         category_ids: List of category IDs
         gloss_confidences: Optional gloss confidence scores
         category_confidences: Optional category confidence scores
+        occlusion_flags: Optional list of occlusion flags (0 or 1) - if 1, use red color for ground truth
+        is_ground_truth: Whether this is ground truth (affects color when occluded)
     """
     if not gloss_labels:
         st.info("Empty sequence")
@@ -150,6 +226,10 @@ def render_sequence_with_categories(
         else:
             gloss_opacity = 1.0
         
+        # Determine gloss chip color: red if occluded ground truth, blue otherwise
+        is_occluded = occlusion_flags and i < len(occlusion_flags) and occlusion_flags[i] == 1
+        gloss_color = '#ef4444' if (is_ground_truth and is_occluded) else '#3b82f6'
+        
         # Category chip
         cat_label = "N/A"
         cat_conf_text = ""
@@ -164,7 +244,7 @@ def render_sequence_with_categories(
                 cat_opacity = 0.5 + (cat_conf * 0.5)
         
         # Container for this sign (vertical stack)
-        chips_html += f'<div style="display: flex; flex-direction: column; gap: 0.25rem;"><div style="background-color: #3b82f6; color: white; padding: 0.4rem 0.8rem; border-radius: 1rem; font-size: 0.9rem; font-weight: 500; opacity: {gloss_opacity};">{i+1}. {gloss_label}{gloss_conf_text}</div><div style="background-color: #10b981; color: white; padding: 0.3rem 0.6rem; border-radius: 0.8rem; font-size: 0.75rem; font-weight: 500; opacity: {cat_opacity}; text-align: center;">{cat_label}{cat_conf_text}</div></div>'
+        chips_html += f'<div style="display: flex; flex-direction: column; gap: 0.25rem;"><div style="background-color: {gloss_color}; color: white; padding: 0.4rem 0.8rem; border-radius: 1rem; font-size: 0.9rem; font-weight: 500; opacity: {gloss_opacity};">{i+1}. {gloss_label}{gloss_conf_text}</div><div style="background-color: #10b981; color: white; padding: 0.3rem 0.6rem; border-radius: 0.8rem; font-size: 0.75rem; font-weight: 500; opacity: {cat_opacity}; text-align: center;">{cat_label}{cat_conf_text}</div></div>'
     
     chips_html += '</div>'
     st.markdown(chips_html, unsafe_allow_html=True)
@@ -230,6 +310,9 @@ def smooth_timestamps(timestamps: List[Dict]) -> List[Dict]:
     current_gloss = timestamps[0].get('gloss', timestamps[0].get('index'))
     start_ms = timestamps[0]['start_ms']
     end_ms = timestamps[0]['end_ms']
+    # Preserve category info from first timestamp in merged segment
+    current_category = timestamps[0].get('category', None)
+    current_category_label = timestamps[0].get('category_label', '')
     
     for i in range(1, len(timestamps)):
         next_gloss = timestamps[i].get('gloss', timestamps[i].get('index'))
@@ -237,29 +320,47 @@ def smooth_timestamps(timestamps: List[Dict]) -> List[Dict]:
         if next_gloss == current_gloss:
             # Merge consecutive identical glosses
             end_ms = timestamps[i]['end_ms']
+            # Keep category from first occurrence, or update if current is None
+            if current_category is None:
+                current_category = timestamps[i].get('category', None)
+                current_category_label = timestamps[i].get('category_label', '')
         else:
             # Add the current merged segment
-            smoothed.append({
+            smoothed_ts = {
                 'gloss': current_gloss,
                 'index': timestamps[i-1].get('index', i-1),
                 'start_ms': start_ms,
                 'end_ms': end_ms,
                 'duration_ms': end_ms - start_ms
-            })
+            }
+            # Preserve category info if available
+            if current_category is not None:
+                smoothed_ts['category'] = current_category
+            if current_category_label:
+                smoothed_ts['category_label'] = current_category_label
+            smoothed.append(smoothed_ts)
             
             # Start new segment
             current_gloss = next_gloss
             start_ms = timestamps[i]['start_ms']
             end_ms = timestamps[i]['end_ms']
+            current_category = timestamps[i].get('category', None)
+            current_category_label = timestamps[i].get('category_label', '')
     
     # Add the final segment
-    smoothed.append({
+    final_ts = {
         'gloss': current_gloss,
         'index': timestamps[-1].get('index', len(timestamps)-1),
         'start_ms': start_ms,
         'end_ms': end_ms,
         'duration_ms': end_ms - start_ms
-    })
+    }
+    # Preserve category info if available
+    if current_category is not None:
+        final_ts['category'] = current_category
+    if current_category_label:
+        final_ts['category_label'] = current_category_label
+    smoothed.append(final_ts)
     
     return smoothed
 
@@ -267,7 +368,10 @@ def smooth_timestamps(timestamps: List[Dict]) -> List[Dict]:
 def render_temporal_alignment(
     predicted_timestamps: List[Dict],
     ground_truth_timestamps: Optional[List[Dict]] = None,
-    temporal_alignment_accuracy: Optional[float] = None
+    temporal_alignment_accuracy: Optional[float] = None,
+    mask: Optional[np.ndarray] = None,
+    timestamps_ms: Optional[np.ndarray] = None,
+    predicted_categories: Optional[List[int]] = None
 ):
     """
     Render temporal alignment visualization.
@@ -276,6 +380,9 @@ def render_temporal_alignment(
         predicted_timestamps: List of predicted gloss timestamps
         ground_truth_timestamps: Optional ground truth timestamps
         temporal_alignment_accuracy: Optional alignment accuracy metric
+        mask: Optional keypoint visibility mask [T, 89] for detecting inactive periods
+        timestamps_ms: Optional timestamp array [T] in milliseconds for inactive period detection
+        predicted_categories: Optional list of predicted category IDs as fallback if not in timestamps
     """
     st.markdown("#### Temporal Alignment")
     
@@ -293,64 +400,204 @@ def render_temporal_alignment(
     # Load label mappings to convert gloss indices to labels
     try:
         from data.labels.label_mapping import load_label_mappings
-        gloss_mapping, _ = load_label_mappings()
+        gloss_mapping, category_mapping = load_label_mappings()
     except Exception as e:
         st.warning(f"Could not load label mappings: {e}. Showing numeric IDs only.")
         gloss_mapping = {}
+        category_mapping = {}
+    
+    # Detect inactive hand periods if mask is available
+    inactive_periods = []
+    if mask is not None and timestamps_ms is not None:
+        inactive_periods = detect_inactive_hand_periods(mask, timestamps_ms)
+    
+    # Calculate max time for x-axis range
+    max_time = max(
+        ground_truth_timestamps[-1]['end_ms'] if ground_truth_timestamps else 0,
+        smoothed_predicted[-1]['end_ms'] if smoothed_predicted else 0
+    )
     
     # Create timeline comparison
     fig = go.Figure()
     
+    # Prepare patterned overlays for inactive periods
+    # Note: Plotly categorical y-axis uses 0-indexed positions
+    y_positions = ['Ground Truth', 'Predicted']
+    y_center = {'Ground Truth': 0, 'Predicted': 1}
+    bar_height = 0.3
+    ground_truth_color = 'rgba(16, 185, 129, 0.8)'
+    predicted_color = 'rgba(59, 130, 246, 0.8)'
+    ground_truth_label_bg = 'rgba(6, 95, 70, 0.92)'
+    predicted_label_bg = 'rgba(30, 64, 175, 0.92)'
+
+    inactive_segments = {row: {'bases': [], 'durations': []} for row in y_positions}
+    for start_ms, end_ms in inactive_periods:
+        if end_ms <= start_ms:
+            continue
+        duration = end_ms - start_ms
+        inactive_segments['Ground Truth']['bases'].append(start_ms)
+        inactive_segments['Ground Truth']['durations'].append(duration)
+
+    inactive_pattern = dict(
+        shape='/',
+        fgcolor='rgba(248, 250, 252, 0.9)',
+        bgcolor='rgba(0, 0, 0, 0)',
+        size=8,
+        solidity=0.35,
+        fillmode='replace'
+    )
+
+    inactive_traces = []
+    segments = inactive_segments['Ground Truth']
+    if segments['bases']:
+        inactive_traces.append(go.Bar(
+            name="Ground Truth Inactive",
+            x=segments['durations'],
+            y=['Ground Truth'] * len(segments['durations']),
+            orientation='h',
+            base=segments['bases'],
+            marker=dict(
+                color='rgba(0, 0, 0, 0)',
+                line=dict(width=0),
+                pattern=inactive_pattern
+            ),
+            hoverinfo='skip',
+            showlegend=False,
+            width=0.6,
+            opacity=1.0
+        ))
+    
     # Ground truth timeline
     for i, ts in enumerate(ground_truth_timestamps):
         gloss_label = ts.get('gloss_label', ts.get('gloss', ''))
+        category_id = ts.get('category', None)
+        category_label = ts.get('category_label', '')
+        
+        # Get category label from mapping if not in timestamp
+        if not category_label and category_id is not None:
+            category_label = category_mapping.get(category_id, f"Cat_{category_id}")
+        
+        category_display = category_label or ''
+        
+        hover_text = f"<b>{gloss_label}</b><br>"
+        if category_label:
+            hover_text += f"Category: {category_label}<br>"
+        hover_text += f"Start: {ts['start_ms']}ms<br>End: {ts['end_ms']}ms<br>Duration: {ts['duration_ms']}ms<extra></extra>"
+        
         fig.add_trace(go.Bar(
             name=f"GT: {gloss_label}",
             x=[ts['duration_ms']],
             y=['Ground Truth'],
             orientation='h',
-            marker=dict(color='rgba(16, 185, 129, 0.8)'),
-            text=gloss_label,
-            textposition='inside',
-            textfont=dict(
+            marker=dict(
+                color=ground_truth_color,
+                line=dict(color='rgba(6, 78, 59, 0.9)', width=2)
+            ),
+            textposition='none',
+            hovertemplate=hover_text,
+            base=ts['start_ms'],
+            width=0.6
+        ))
+
+        annotation_text = gloss_label if not category_display else f"{gloss_label}<br>{category_display}"
+        duration = ts['duration_ms']
+        label_offset = max(duration * 0.05, 40)
+        label_x = ts['end_ms'] - label_offset
+        if label_x <= ts['start_ms']:
+            label_x = ts['start_ms'] + duration * 0.5
+
+        fig.add_annotation(
+            x=label_x,
+            y='Ground Truth',
+            text=annotation_text,
+            showarrow=False,
+            xref='x',
+            yref='y',
+            xanchor='right',
+            yanchor='middle',
+            align='right',
+            bgcolor=ground_truth_label_bg,
+            bordercolor='rgba(15, 118, 110, 0.95)',
+            borderwidth=1,
+            borderpad=3,
+            font=dict(
                 color='white',
                 size=11,
                 family='Arial Black'
-            ),
-            hovertemplate=f"<b>{gloss_label}</b><br>" +
-                         f"Start: {ts['start_ms']}ms<br>" +
-                         f"End: {ts['end_ms']}ms<br>" +
-                         f"Duration: {ts['duration_ms']}ms<extra></extra>",
-            base=ts['start_ms']
-        ))
+            )
+        )
+
+        # No explicit separator line needed; bar outline handles boundary.
     
     # Predicted timeline (smoothed)
     for i, ts in enumerate(smoothed_predicted):
         gloss_index = ts.get('gloss', ts.get('index'))
         # Map gloss index to actual gloss label
         gloss_label = gloss_mapping.get(gloss_index, f"Gloss {gloss_index}")
+        category_id = ts.get('category', None)
+        category_label = ts.get('category_label', '')
+        
+        # Get category label from mapping if category_id is available
+        if category_id is not None:
+            if not category_label:
+                category_label = category_mapping.get(category_id, f"Cat_{category_id}")
+        
+        category_display = category_label or ''
+        
+        hover_text = f"<b>{gloss_label}</b><br>Gloss ID: {gloss_index}<br>"
+        if category_label:
+            hover_text += f"Category: {category_label}<br>"
+        hover_text += f"Start: {ts['start_ms']}ms<br>End: {ts['end_ms']}ms<br>Duration: {ts['duration_ms']}ms<extra></extra>"
         
         fig.add_trace(go.Bar(
             name=f"Pred: {gloss_label}",
             x=[ts['duration_ms']],
             y=['Predicted'],
             orientation='h',
-            marker=dict(color='rgba(59, 130, 246, 0.8)'),
-            text=gloss_label,
-            textposition='inside',
-            textfont=dict(
+            marker=dict(
+                color=predicted_color,
+                line=dict(color='rgba(30, 58, 138, 0.9)', width=2)
+            ),
+            textposition='none',
+            hovertemplate=hover_text,
+            base=ts['start_ms'],
+            width=0.6
+        ))
+
+        annotation_text = gloss_label if not category_display else f"{gloss_label}<br>{category_display}"
+        duration = ts['duration_ms']
+        label_offset = max(duration * 0.05, 40)
+        label_x = ts['end_ms'] - label_offset
+        if label_x <= ts['start_ms']:
+            label_x = ts['start_ms'] + duration * 0.5
+
+        fig.add_annotation(
+            x=label_x,
+            y='Predicted',
+            text=annotation_text,
+            showarrow=False,
+            xref='x',
+            yref='y',
+            xanchor='right',
+            yanchor='middle',
+            align='right',
+            bgcolor=predicted_label_bg,
+            bordercolor='rgba(30, 64, 175, 0.95)',
+            borderwidth=1,
+            borderpad=3,
+            font=dict(
                 color='white',
                 size=11,
                 family='Arial Black'
-            ),
-            hovertemplate=f"<b>{gloss_label}</b><br>" +
-                         f"Gloss ID: {gloss_index}<br>" +
-                         f"Start: {ts['start_ms']}ms<br>" +
-                         f"End: {ts['end_ms']}ms<br>" +
-                         f"Duration: {ts['duration_ms']}ms<extra></extra>",
-            base=ts['start_ms']
-        ))
+            )
+        )
+
+        # Bar outline defines separator; no additional shape required.
     
+    # Overlay inactive pattern traces last so they remain visible above bars (while edges/text stay readable)
+    for trace in inactive_traces:
+        fig.add_trace(trace)
+
     fig.update_layout(
         title=dict(
             text="Temporal Alignment Comparison",
@@ -360,21 +607,22 @@ def render_temporal_alignment(
             title=dict(text="Time (ms)", font=dict(size=12, color='white')),
             tickfont=dict(size=10, color='white'),
             gridcolor='rgba(255, 255, 255, 0.1)',
-            range=[0, max(
-                ground_truth_timestamps[-1]['end_ms'] if ground_truth_timestamps else 0,
-                smoothed_predicted[-1]['end_ms'] if smoothed_predicted else 0
-            )]
+            range=[0, max_time]
         ),
         yaxis=dict(
             title="",
-            tickfont=dict(size=12, color='white')
+            tickfont=dict(size=12, color='white'),
+            categoryorder='array',
+            categoryarray=['Ground Truth', 'Predicted']
         ),
         barmode='overlay',
-        height=350,
+        height=380,
+        bargap=0.15,
+        bargroupgap=0.05,
         showlegend=False,
         plot_bgcolor='rgba(0,0,0,0)',
         paper_bgcolor='rgba(0,0,0,0)',
-        margin=dict(l=50, r=50, t=60, b=50)
+        margin=dict(l=45, r=45, t=55, b=40)
     )
     
     st.plotly_chart(fig, use_container_width=True)
@@ -419,7 +667,7 @@ def render_timeline(timestamps: List[Dict], title: str = "Timeline"):
             textposition='inside',
             textfont=dict(
                 color='white',
-                size=10,
+                size=11,
                 family='Arial Black'
             ),
             hovertemplate=f"<b>{gloss_label}</b><br>" +

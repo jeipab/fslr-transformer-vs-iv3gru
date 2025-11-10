@@ -61,15 +61,19 @@ def convert_to_ground_truth_format(raw_data: Dict) -> Dict:
         
         # Transform timestamps
         ground_truth_timestamps = []
+        ground_truth_occluded = []
         for seg in segments:
             ground_truth_timestamps.append({
                 'index': seg['index'],
                 'gloss': seg['gloss'],
                 'gloss_label': seg['gloss_label'],
+                'category': seg.get('category', 0),
+                'category_label': seg.get('category_label', ''),
                 'start_ms': seg['timestamp_start_ms'],
                 'end_ms': seg['timestamp_end_ms'],
                 'duration_ms': seg['timestamp_end_ms'] - seg['timestamp_start_ms']
             })
+            ground_truth_occluded.append(seg.get('occluded', 0))
         
         # Extract categories if available
         ground_truth_categories = [seg.get('category', 0) for seg in segments]
@@ -81,6 +85,7 @@ def convert_to_ground_truth_format(raw_data: Dict) -> Dict:
             'ground_truth_labels': ground_truth_labels,
             'ground_truth_timestamps': ground_truth_timestamps,
             'ground_truth_categories': ground_truth_categories,
+            'ground_truth_occluded': ground_truth_occluded,
             'signer': raw_data.get('signer', 'unknown'),
             'strategy': raw_data.get('strategy_name', raw_data.get('strategy', 'unknown')),
             'total_duration_sec': raw_data.get('total_duration_sec', 0),
@@ -456,6 +461,7 @@ def make_ctc_prediction(npz_data: Dict[str, np.ndarray], model_name: str,
                 results['ground_truth_labels'] = ground_truth.get('ground_truth_labels', [])
                 results['ground_truth_timestamps'] = ground_truth.get('ground_truth_timestamps', [])
                 results['ground_truth_categories'] = ground_truth.get('ground_truth_categories', [])
+                results['ground_truth_occluded'] = ground_truth.get('ground_truth_occluded', [])
                 results['signer'] = ground_truth.get('signer', 'unknown')
                 results['strategy'] = ground_truth.get('strategy', 'unknown')
             
@@ -1118,16 +1124,24 @@ def render_continuous_sequence_predictions(filename: str, npz_data: Dict, metada
                 confidence_scores=results.get('confidence_scores'),
                 predicted_categories=results.get('predicted_categories'),
                 category_confidences=results.get('category_confidences'),
-                ground_truth_categories=results.get('ground_truth_categories')
+                ground_truth_categories=results.get('ground_truth_categories'),
+                ground_truth_occluded=results.get('ground_truth_occluded')
             )
             
             # Temporal alignment
             if 'predicted_timestamps' in results and 'ground_truth_timestamps' in results:
                 st.markdown("---")
+                # Extract mask and timestamps from npz_data for inactive period detection
+                mask = npz_data.get('mask', None)
+                timestamps_ms = npz_data.get('timestamps_ms', None)
+                
                 render_temporal_alignment(
                     predicted_timestamps=results['predicted_timestamps'],
                     ground_truth_timestamps=results['ground_truth_timestamps'],
-                    temporal_alignment_accuracy=results.get('temporal_alignment_accuracy')
+                    temporal_alignment_accuracy=results.get('temporal_alignment_accuracy'),
+                    mask=mask,
+                    timestamps_ms=timestamps_ms,
+                    predicted_categories=results.get('predicted_categories')
                 )
 
 

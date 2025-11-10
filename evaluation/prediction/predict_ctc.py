@@ -562,7 +562,7 @@ class CTCPredictor:
         
         self.model, self.input_dim = self._load_model()
         self._load_checkpoint()
-        self.gloss_mapping, _ = load_label_mappings()
+        self.gloss_mapping, self.category_mapping = load_label_mappings()
     
     def _load_model(self) -> Tuple[torch.nn.Module, int]:
         if self.model_type == 'transformer_ctc':
@@ -845,6 +845,15 @@ class CTCPredictor:
         
         predicted_labels = [self.gloss_mapping.get(g, f"GLOSS_{g}") for g in predicted_sequence]
         predicted_timestamps = estimate_timestamps(predicted_sequence, X.shape[1], fps)
+        
+        # Add category information to predicted_timestamps
+        if predicted_categories and len(predicted_categories) == len(predicted_timestamps):
+            for i, ts in enumerate(predicted_timestamps):
+                ts['category'] = predicted_categories[i] if i < len(predicted_categories) else None
+                if hasattr(self, 'category_mapping') and ts['category'] is not None:
+                    ts['category_label'] = self.category_mapping.get(ts['category'], f"Cat_{ts['category']}")
+                else:
+                    ts['category_label'] = ''
         
         result = {
             'file_name': npz_path.name,
@@ -1199,6 +1208,15 @@ class CTCPredictor:
         # Convert to labels
         predicted_labels = [self.gloss_mapping.get(g, f"GLOSS_{g}") for g in final_sequence]
         predicted_timestamps = estimate_timestamps(final_sequence, seq_len, fps)
+        
+        # Add category information to predicted_timestamps
+        if final_categories and len(final_categories) == len(predicted_timestamps):
+            for i, ts in enumerate(predicted_timestamps):
+                ts['category'] = final_categories[i] if i < len(final_categories) else None
+                if hasattr(self, 'category_mapping') and ts['category'] is not None:
+                    ts['category_label'] = self.category_mapping.get(ts['category'], f"Cat_{ts['category']}")
+                else:
+                    ts['category_label'] = ''
         
         result = {
             'file_name': npz_path.name,
