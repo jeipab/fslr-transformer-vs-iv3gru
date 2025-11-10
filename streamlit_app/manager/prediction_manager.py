@@ -26,8 +26,11 @@ from ..components.visualization import (
 )
 from ..components.components import render_predictions_section
 from ..components.ctc_visualization import (
-    render_sequence_comparison, render_temporal_alignment,
-    render_ctc_prediction_card
+    render_sequence_comparison,
+    render_temporal_alignment,
+    render_ctc_prediction_card,
+    render_sequence_with_categories,
+    render_sequence_chips,
 )
 from .upload_manager import remove_file_from_stage
 
@@ -191,21 +194,26 @@ def render_ground_truth_preview(ground_truth: Dict):
         st.info("No ground truth labels available")
         return
     
-    sequence_html = '<div style="display: flex; flex-wrap: wrap; gap: 0.5rem; margin: 1rem 0;">'
-    
-    for i, label in enumerate(labels):
-        chip_style = """
-            background-color: #10b981;
-            color: white;
-            padding: 0.4rem 0.8rem;
-            border-radius: 1rem;
-            font-size: 0.9rem;
-            font-weight: 500;
-        """
-        sequence_html += f'<div style="{chip_style}">{i+1}. {label}</div>'
-    
-    sequence_html += '</div>'
-    st.markdown(sequence_html, unsafe_allow_html=True)
+    categories = ground_truth.get('ground_truth_categories', [])
+    occlusion_flags = ground_truth.get('ground_truth_occluded', [])
+    has_categories = bool(categories)
+
+    if has_categories:
+        render_sequence_with_categories(
+            gloss_labels=labels,
+            category_ids=categories,
+            gloss_confidences=None,
+            category_confidences=None,
+            occlusion_flags=occlusion_flags,
+            is_ground_truth=True,
+        )
+    else:
+        render_sequence_chips(
+            labels=labels,
+            confidence_scores=None,
+            color='#10b981',
+            occlusion_flags=occlusion_flags,
+        )
     
     # Show timestamps if available
     if 'ground_truth_timestamps' in ground_truth and ground_truth['ground_truth_timestamps']:
