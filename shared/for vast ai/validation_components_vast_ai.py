@@ -10,8 +10,67 @@ import plotly.express as px
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 import json
+from pathlib import Path
 
 from ..core.config import MODEL_CONFIG, is_ctc_model, get_models_by_mode
+from ..components.ctc_visualization import (
+    render_sequence_comparison,
+    render_temporal_alignment,
+)
+def _enrich_ground_truth_timestamps(
+    timestamps: List[Dict[str, Any]],
+    gloss_labels: List[str],
+    gloss_sequence: List[int],
+    category_ids: Optional[List[int]],
+    category_labels: Optional[List[str]],
+    gloss_mapping: Dict[int, str],
+    category_mapping: Dict[int, str],
+) -> List[Dict[str, Any]]:
+    """Ensure ground truth timestamps include gloss/category labels for visualization."""
+    if not timestamps:
+        return []
+
+    enriched: List[Dict[str, Any]] = []
+    for idx, ts in enumerate(timestamps):
+        ts_copy = dict(ts)
+
+        # Determine gloss id & label
+        gloss_id: Optional[int] = ts_copy.get('gloss')
+        if gloss_id is None and gloss_sequence and idx < len(gloss_sequence):
+            gloss_id = gloss_sequence[idx]
+            ts_copy['gloss'] = gloss_id
+
+        gloss_label = ts_copy.get('gloss_label')
+        if not gloss_label:
+            if gloss_labels and idx < len(gloss_labels):
+                gloss_label = gloss_labels[idx]
+            elif gloss_id is not None:
+                gloss_label = gloss_mapping.get(int(gloss_id), str(gloss_id))
+            else:
+                gloss_label = ''
+            ts_copy['gloss_label'] = gloss_label
+
+        # Determine category id & label
+        cat_id = ts_copy.get('category')
+        if cat_id is None and category_ids and idx < len(category_ids):
+            cat_id = category_ids[idx]
+            ts_copy['category'] = cat_id
+
+        cat_label = ts_copy.get('category_label')
+        if not cat_label:
+            if category_labels and idx < len(category_labels) and category_labels[idx]:
+                cat_label = category_labels[idx]
+            elif cat_id is not None:
+                cat_label = category_mapping.get(int(cat_id), f"Cat_{cat_id}")
+            else:
+                cat_label = ''
+            if cat_label:
+                ts_copy['category_label'] = cat_label
+
+        enriched.append(ts_copy)
+
+    return enriched
+
 
 
 def render_model_selection():
@@ -1277,54 +1336,83 @@ def render_ctc_validation_results(results: Dict[str, Any]):
                             f"<div style=\"display:inline-block;padding:6px 10px;border-radius:6px;border:1px solid #1f77b4;color:#1f77b4;font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace; font-weight:600; background:#0b1220;\">{selected_file}</div>",
                             unsafe_allow_html=True
                         )
-                        # Gloss sequences
-                        pred_gloss_labels = pred.get('predicted_labels') or [gloss_mapping.get(g, str(g)) for g in pred.get('predicted_sequence', [])]
-                        gt_gloss_labels = pred.get('ground_truth_labels') or [gloss_mapping.get(g, str(g)) for g in pred.get('ground_truth_sequence', [])]
 
-                        # Category sequences
-                        pred_cat_ids = pred.get('predicted_categories', []) or []
-                        pred_cat_labels = [category_mapping.get(c, str(c)) for c in pred_cat_ids]
-                        if 'ground_truth_category_labels' in pred and pred.get('ground_truth_category_labels'):
-                            gt_cat_labels = pred['ground_truth_category_labels']
-                        else:
-                            gt_cat_label = pred.get('category_label') or pred.get('ground_truth_category_label')
-                            if gt_cat_label:
-                                gt_cat_labels = [gt_cat_label]
-                            else:
-                                gt_cat_id = pred.get('category') or pred.get('ground_truth_category')
-                                gt_cat_labels = [category_mapping.get(gt_cat_id, str(gt_cat_id))] if gt_cat_id is not None else []
+                        predicted_sequence = pred.get('predicted_sequence', []) or []
+                        ground_truth_sequence = pred.get('ground_truth_sequence', []) or []
 
-                        def render_chips(title: str, items: List[str], occluded_flags: Optional[List[int]] = None):
-                            st.markdown(f"**{title}**")
-                            if not items:
-                                st.markdown("<div style='color:#999;'>N/A</div>", unsafe_allow_html=True)
-                                return
-                            chips = []
-                            for idx, t in enumerate(items):
-                                is_occ = False
-                                if occluded_flags is not None and idx < len(occluded_flags):
-                                    is_occ = int(occluded_flags[idx]) == 1
-                                if is_occ:
-                                    # Danger red like destructive buttons
-                                    chips.append(
-                                        f"<span style='display:inline-block;margin:2px;padding:4px 10px;border-radius:14px;background:#e74c3c;color:#ffffff;border:1px solid #c0392b;font-size:0.85rem;font-weight:600;'>{t}</span>"
-                                    )
-                                else:
-                                    chips.append(
-                                        f"<span style='display:inline-block;margin:2px;padding:4px 10px;border-radius:14px;background:#1f77b4;color:#ffffff;border:1px solid #1565a6;font-size:0.85rem;font-weight:600;'>{t}</span>"
-                                    )
-                            chips_html = "".join(chips)
-                            container = f"<div style='max-height:200px;overflow:auto;border:1px solid #1f2937;padding:6px;border-radius:6px;background:#ffffff10;'>{chips_html}</div>"
-                            st.markdown(container, unsafe_allow_html=True)
+                        pred_gloss_labels = pred.get('predicted_labels')
+                        if not pred_gloss_labels and predicted_sequence:
+                            pred_gloss_labels = [gloss_mapping.get(int(g), str(g)) for g in predicted_sequence]
 
-                        cols2 = st.columns(2)
-                        with cols2[0]:
-                            gt_occ = pred.get('ground_truth_occluded')
-                            render_chips("Ground Truth Gloss", gt_gloss_labels, gt_occ)
-                            render_chips("Ground Truth Category", gt_cat_labels, gt_occ)
-                        with cols2[1]:
-                            render_chips("Prediction Gloss", pred_gloss_labels)
-                            render_chips("Prediction Categories", pred_cat_labels)
+                        gt_gloss_labels = pred.get('ground_truth_labels')
+                        if not gt_gloss_labels and ground_truth_sequence:
+                            gt_gloss_labels = [gloss_mapping.get(int(g), str(g)) for g in ground_truth_sequence]
+
+                        predicted_categories = pred.get('predicted_categories')
+                        ground_truth_categories = pred.get('ground_truth_categories')
+                        category_confidences = pred.get('category_confidences')
+                        confidence_scores = pred.get('confidence_scores')
+                        ground_truth_occluded = pred.get('ground_truth_occluded')
+
+                        st.markdown("---")
+                        render_sequence_comparison(
+                            predicted_sequence=predicted_sequence,
+                            predicted_labels=pred_gloss_labels or [],
+                            ground_truth_sequence=ground_truth_sequence,
+                            ground_truth_labels=gt_gloss_labels or [],
+                            confidence_scores=confidence_scores,
+                            predicted_categories=predicted_categories,
+                            category_confidences=category_confidences,
+                            ground_truth_categories=ground_truth_categories,
+                            ground_truth_occluded=ground_truth_occluded,
+                        )
+
+                        predicted_timestamps = pred.get('predicted_timestamps')
+                        ground_truth_timestamps = pred.get('ground_truth_timestamps')
+                        if ground_truth_timestamps:
+                            ground_truth_timestamps = _enrich_ground_truth_timestamps(
+                                timestamps=ground_truth_timestamps,
+                                gloss_labels=gt_gloss_labels or [],
+                                gloss_sequence=ground_truth_sequence,
+                                category_ids=ground_truth_categories,
+                                category_labels=pred.get('ground_truth_category_labels'),
+                                gloss_mapping=gloss_mapping,
+                                category_mapping=category_mapping,
+                            )
+                        if predicted_timestamps and ground_truth_timestamps:
+                            data_sources = results.get('data_sources') or {}
+                            npz_folder = data_sources.get('npz_folder_path')
+                            mask_array = None
+                            timestamps_array = None
+
+                            if npz_folder:
+                                npz_path = Path(npz_folder) / selected_file
+                                if npz_path.exists():
+                                    try:
+                                        npz_data = np.load(npz_path, allow_pickle=False)
+                                        try:
+                                            if 'mask' in npz_data:
+                                                mask_array = np.array(npz_data['mask'])
+                                                if mask_array.dtype != bool:
+                                                    mask_array = mask_array.astype(bool)
+                                            if 'timestamps_ms' in npz_data:
+                                                timestamps_array = np.array(npz_data['timestamps_ms'])
+                                            elif 'timestamps' in npz_data:
+                                                timestamps_array = np.array(npz_data['timestamps'])
+                                        finally:
+                                            npz_data.close()
+                                    except Exception as load_err:
+                                        st.warning(f"Unable to load mask/timestamps for {selected_file}: {load_err}")
+
+                            st.markdown("---")
+                            render_temporal_alignment(
+                                predicted_timestamps=predicted_timestamps,
+                                ground_truth_timestamps=ground_truth_timestamps,
+                                temporal_alignment_accuracy=pred.get('temporal_alignment_accuracy'),
+                                mask=mask_array,
+                                timestamps_ms=timestamps_array,
+                                predicted_categories=predicted_categories,
+                            )
 
     # Download results shown for all tabs
     st.markdown("---")

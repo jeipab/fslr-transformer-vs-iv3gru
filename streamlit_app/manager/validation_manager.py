@@ -812,7 +812,11 @@ def run_ctc_validation_with_sliding_window(
         
         results = {
             'predictions': predictions,
-            'summary': summary
+            'summary': summary,
+            'data_sources': {
+                'npz_folder_path': str(Path(npz_folder_path).resolve()),
+                'ground_truth_folder': str(Path(ground_truth_folder).resolve()) if ground_truth_folder else None
+            }
         }
         
         # Add model info
