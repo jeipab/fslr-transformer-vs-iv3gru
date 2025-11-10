@@ -19,6 +19,10 @@ Epoch  33/150 | Train Loss: 4.3982 | Val Loss: 4.6557 | Val Gloss Acc: 0.000 | V
 
 V2 RESULTS:
 
+
+V3 RESULTS:
+
+
 STATUS: Done - Fail
 python -m training.train \
     --model iv3_gru_ctc \
@@ -88,3 +92,38 @@ python -m training.train \
     --label-smoothing 0.12 \
     --grad-clip 1.0 \
     --output-dir trained_models/iv3_gru/FSL105_ctc_v2
+
+STATUS: Waiting
+python -m training.train \
+    --model iv3_gru_ctc \
+    --training-mode ctc \
+    --epochs 27 \
+    --batch-size 128 \
+    --lr 0.0007 \
+    --num-gloss 105 \
+    --num-cat 10 \
+    --alpha 0.8 \
+    --beta 0.2 \
+    --num-ctc-classes 106 \
+    --ctc-blank-id 105 \
+    --features-train data/processed/FSL105_train \
+    --features-val data/processed/FSL105_val \
+    --labels-train-csv data/processed/FSL105_train.csv \
+    --labels-val-csv data/processed/FSL105_val.csv \
+    --feature-key X2048 \
+    --hidden1 50 \
+    --hidden2 40 \
+    --dropout 0.28 \
+    --no-freeze-backbone \
+    --amp \
+    --augment \
+    --augment-noise-std 0.0026 \
+    --augment-mask-prob 0.06 \
+    --augment-mask-ratio 0.06 \
+    --scheduler plateau \
+    --scheduler-patience 30 \
+    --early-stop 120 \
+    --weight-decay 8e-5 \
+    --label-smoothing 0.1 \
+    --grad-clip 1.0 \
+    --output-dir trained_models/iv3_gru/FSL105_ctc_v3

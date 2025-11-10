@@ -23,6 +23,9 @@ Epoch  83/300 | Train Loss: 1.9324 | Val Loss: 1.7856 | Val Gloss Acc: 0.545 | V
 V3 RESULTS:
 
 
+V4 RESULTS:
+
+
 STATUS: Done - Fail
 python -m training.train \
     --model transformer_ctc \
@@ -118,3 +121,35 @@ python -m training.train \
     --label-smoothing 0.12 \
     --grad-clip 1.0 \
     --output-dir trained_models/transformer/FSL105_ctc_v3
+
+STATUS: Waiting
+python -m training.train \
+    --model transformer_ctc \
+    --training-mode ctc \
+    --epochs 200 \
+    --batch-size 64 \
+    --lr 0.0003 \
+    --num-gloss 105 \
+    --num-cat 10 \
+    --alpha 0.8 \
+    --beta 0.2 \
+    --num-ctc-classes 106 \
+    --ctc-blank-id 105 \
+    --keypoints-train data/processed/FSL105_train \
+    --keypoints-val data/processed/FSL105_val \
+    --labels-train-csv data/processed/FSL105_train.csv \
+    --labels-val-csv data/processed/FSL105_val.csv \
+    --kp-key X \
+    --amp \
+    --augment \
+    --augment-noise-std 0.0055 \
+    --augment-mask-prob 0.09 \
+    --augment-mask-ratio 0.09 \
+    --scheduler warmup_cosine \
+    --warmup-epochs 55 \
+    --early-stop 70 \
+    --weight-decay 4.5e-4 \
+    --dropout 0.14 \
+    --label-smoothing 0.1 \
+    --grad-clip 1.0 \
+    --output-dir trained_models/transformer/FSL105_ctc_v4

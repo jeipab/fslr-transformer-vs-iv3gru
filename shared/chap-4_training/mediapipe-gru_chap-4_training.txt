@@ -23,6 +23,21 @@ Epoch  63/250 | Train Loss: 3.6050 | Val Loss: 3.4690 | Val Gloss Acc: 0.000 | V
 V3 RESULTS:
 Epoch 190/200 | Train Loss: 0.7279 | Val Loss: 0.6573 | Val Gloss Acc: 0.891 | Val Cat Acc: 0.660 | Time: 9.0s
 
+V4 RESULTS:
+Epoch  70/150 | Train Loss: 1.3779 | Val Loss: 1.1371 | Val Gloss Acc: 0.773 | Val Cat Acc: 0.496 | Time: 9.4s
+
+V5 RESULTS:
+Epoch  54/55 | Train Loss: 0.4986 | Val Loss: 0.5190 | Val Gloss Acc: 0.899 | Val Cat Acc: 0.852 | Time: 9.0s
+
+V6 RESULTS:
+Epoch  45/45 | Train Loss: 0.5683 | Val Loss: 0.5961 | Val Gloss Acc: 0.896 | Val Cat Acc: 0.800 | Time: 9.0s
+
+V7 RESULTS:
+Epoch  44/45 | Train Loss: 1.0103 | Val Loss: 0.9224 | Val Gloss Acc: 0.761 | Val Cat Acc: 0.639 | Time: 8.9s
+
+V8 RESULTS:
+Epoch  43/45 | Train Loss: 0.7938 | Val Loss: 0.6924 | Val Gloss Acc: 0.851 | Val Cat Acc: 0.730 | Time: 9.0s
+
 STATUS: Done - Fail
 python -m training.train \
     --model mediapipe_gru_ctc \
@@ -122,7 +137,7 @@ python -m training.train \
     --grad-clip 1.0 \
     --output-dir trained_models/mediapipe_gru/FSL105_ctc_v3
 
-Status: In progress
+Status: Done - Okay
 python -m training.train \
     --model mediapipe_gru_ctc \
     --training-mode ctc \
@@ -154,3 +169,135 @@ python -m training.train \
     --weight-decay 0.0005 \
     --grad-clip 1.0 \
     --output-dir trained_models/mediapipe_gru/FSL105_ctc_v4
+
+STATUS: Done - Okay
+python -m training.train \
+    --model mediapipe_gru_ctc \
+    --training-mode ctc \
+    --epochs 55 \
+    --batch-size 96 \
+    --lr 0.0003 \
+    --num-gloss 105 \
+    --num-cat 10 \
+    --alpha 0.8 \
+    --beta 0.2 \
+    --num-ctc-classes 106 \
+    --ctc-blank-id 105 \
+    --keypoints-train data/processed/FSL105_train \
+    --keypoints-val data/processed/FSL105_val \
+    --labels-train-csv data/processed/FSL105_train.csv \
+    --labels-val-csv data/processed/FSL105_val.csv \
+    --kp-key X \
+    --hidden1 512 \
+    --hidden2 512 \
+    --dropout 0.22 \
+    --amp \
+    --augment \
+    --augment-noise-std 0.0023 \
+    --augment-mask-prob 0.045 \
+    --augment-mask-ratio 0.045 \
+    --scheduler warmup_cosine \
+    --warmup-epochs 35 \
+    --early-stop 70 \
+    --weight-decay 1.25e-4 \
+    --grad-clip 1.0 \
+    --output-dir trained_models/mediapipe_gru/FSL105_ctc_v5
+
+STATUS: Done - Okay
+python -m training.train \
+    --model mediapipe_gru_ctc \
+    --training-mode ctc \
+    --epochs 45 \
+    --batch-size 96 \
+    --lr 0.0003 \
+    --num-gloss 105 \
+    --num-cat 10 \
+    --alpha 0.8 \
+    --beta 0.2 \
+    --num-ctc-classes 106 \
+    --ctc-blank-id 105 \
+    --keypoints-train data/processed/FSL105_train \
+    --keypoints-val data/processed/FSL105_val \
+    --labels-train-csv data/processed/FSL105_train.csv \
+    --labels-val-csv data/processed/FSL105_val.csv \
+    --kp-key X \
+    --hidden1 512 \
+    --hidden2 512 \
+    --dropout 0.22 \
+    --amp \
+    --augment \
+    --augment-noise-std 0.0023 \
+    --augment-mask-prob 0.045 \
+    --augment-mask-ratio 0.045 \
+    --scheduler warmup_cosine \
+    --warmup-epochs 35 \
+    --early-stop 70 \
+    --weight-decay 1.25e-4 \
+    --grad-clip 1.0 \
+    --output-dir trained_models/mediapipe_gru/FSL105_ctc_v6
+
+STATUS: Done - Okay
+python -m training.train \
+    --model mediapipe_gru_ctc \
+    --training-mode ctc \
+    --epochs 45 \
+    --batch-size 96 \
+    --lr 0.0003 \
+    --num-gloss 105 \
+    --num-cat 10 \
+    --alpha 0.8 \
+    --beta 0.2 \
+    --num-ctc-classes 106 \
+    --ctc-blank-id 105 \
+    --keypoints-train data/processed/FSL105_train \
+    --keypoints-val data/processed/FSL105_val \
+    --labels-train-csv data/processed/FSL105_train.csv \
+    --labels-val-csv data/processed/FSL105_val.csv \
+    --kp-key X \
+    --hidden1 400 \
+    --hidden2 400 \
+    --dropout 0.28 \
+    --amp \
+    --augment \
+    --augment-noise-std 0.0035 \
+    --augment-mask-prob 0.06 \
+    --augment-mask-ratio 0.06 \
+    --scheduler warmup_cosine \
+    --warmup-epochs 20 \
+    --early-stop 30 \
+    --weight-decay 0.00018 \
+    --grad-clip 1.0 \
+    --output-dir trained_models/mediapipe_gru/FSL105_ctc_v7
+
+STATUS: Done - Keep
+python -m training.train \
+    --model mediapipe_gru_ctc \
+    --training-mode ctc \
+    --epochs 45 \
+    --batch-size 96 \
+    --lr 0.0003 \
+    --num-gloss 105 \
+    --num-cat 10 \
+    --alpha 0.8 \
+    --beta 0.2 \
+    --num-ctc-classes 106 \
+    --ctc-blank-id 105 \
+    --keypoints-train data/processed/FSL105_train \
+    --keypoints-val data/processed/FSL105_val \
+    --labels-train-csv data/processed/FSL105_train.csv \
+    --labels-val-csv data/processed/FSL105_val.csv \
+    --kp-key X \
+    --hidden1 432 \
+    --hidden2 432 \
+    --dropout 0.25 \
+    --amp \
+    --augment \
+    --augment-noise-std 0.0030 \
+    --augment-mask-prob 0.055 \
+    --augment-mask-ratio 0.055 \
+    --scheduler warmup_cosine \
+    --warmup-epochs 20 \
+    --early-stop 30 \
+    --weight-decay 0.00015 \
+    --grad-clip 1.0 \
+    --output-dir trained_models/mediapipe_gru/FSL105_ctc_v8
