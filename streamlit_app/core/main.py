@@ -84,11 +84,10 @@ def render_validation_stage(cfg: Dict):
                 - **Ground Truth folder**: Directory containing ground truth JSON files (*_gt.json)
                 
                 **CTC Validation process:**
-                - Sliding‑window sequence prediction with CTC greedy decoding
-                - Requires ground‑truth JSON with timestamps for metrics
-                - Detection metrics: Precision, Recall, F1‑Score, Mean IoU (TP)
-                - Per‑signer and per‑strategy metric breakdowns
-                - Detailed per‑sequence results and downloadable report
+                - Continuous video sequence prediction
+                - Requires ground-truth JSON with timestamps for metrics
+                - Detection metrics: Precision, Recall, F1-Score
+                - Detailed per-sequence results and downloadable report
                 """)
             else:
                 st.info("""

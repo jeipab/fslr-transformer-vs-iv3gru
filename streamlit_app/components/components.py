@@ -775,9 +775,9 @@ def render_sidebar() -> Dict:
         - Compare two architectures: **Transformer** vs **InceptionV3+GRU**
         
         **Model Comparison**
-        - Side-by-side prediction results
-        - Confidence scores and top-5 predictions
-        - Performance insights on occluded signs
+        - Ground-truth vs prediction sequence comparison
+        - Temporal alignment over continuous timelines
+        - Category insights with occlusion awareness
         """)
     
     # About the Name (Expandable)

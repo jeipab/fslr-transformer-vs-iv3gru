@@ -90,11 +90,17 @@ def render_model_selection():
     # Model selection with font styling
     st.markdown("**Choose Model to Validate**")
     model_options = [f"{name} ({model_type})" for model_type, name in available_models]
+    default_index = 0
+    for idx, (model_type, _) in enumerate(available_models):
+        if model_type == 'transformer_ctc':
+            default_index = idx
+            break
     selected_option = st.selectbox(
         "Select model architecture",
         model_options,
         help="Select the model architecture for validation (includes both classification and CTC models)",
-        key="model_selection_selectbox"
+        key="model_selection_selectbox",
+        index=default_index
     )
     
     # Check if model selection has changed and clear validation results
