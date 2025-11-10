@@ -18,10 +18,25 @@ V1 RESULTS:
 Epoch  33/150 | Train Loss: 4.3982 | Val Loss: 4.6557 | Val Gloss Acc: 0.000 | Val Cat Acc: 0.240 | Time: 66.4s
 
 V2 RESULTS:
-
+Epoch 175/200 | Train Loss: 0.0952 | Val Loss: 0.1159 | Val Gloss Acc: 0.966 | Val Cat Acc: 0.987 | Time: 62.0s
 
 V3 RESULTS:
+Epoch  30/30 | Train Loss: 0.6013 | Val Loss: 0.3932 | Val Gloss Acc: 0.878 | Val Cat Acc: 0.957 | Time: 60.6s
 
+V4 RESUTLS:
+Epoch  30/30 | Train Loss: 1.3891 | Val Loss: 1.6557 | Val Gloss Acc: 0.002 | Val Cat Acc: 0.970 | Time: 61.5s
+
+V5 RESULTS:
+Epoch  30/30 | Train Loss: 0.3487 | Val Loss: 0.3040 | Val Gloss Acc: 0.894 | Val Cat Acc: 0.961 | Time: 60.9s
+
+V6 RESULTS:
+Epoch  30/30 | Train Loss: 1.0424 | Val Loss: 0.6498 | Val Gloss Acc: 0.769 | Val Cat Acc: 0.954 | Time: 61.1s
+
+V7 RESULTS:
+Epoch  29/30 | Train Loss: 1.2534 | Val Loss: 1.4638 | Val Gloss Acc: 0.000 | Val Cat Acc: 0.979 | Time: 61.1s
+
+V8 RESULTS:
+Epoch  28/30 | Train Loss: 1.2993 | Val Loss: 1.4704 | Val Gloss Acc: 0.000 | Val Cat Acc: 0.972 | Time: 60.8s
 
 STATUS: Done - Fail
 python -m training.train \
@@ -58,7 +73,7 @@ python -m training.train \
     --grad-clip 0.5 \
     --output-dir trained_models/iv3_gru/FSL105_ctc_regularized_v1
 
-STATUS: In progress
+STATUS: Done - Fail
 python -m training.train \
     --model iv3_gru_ctc \
     --training-mode ctc \
@@ -93,11 +108,11 @@ python -m training.train \
     --grad-clip 1.0 \
     --output-dir trained_models/iv3_gru/FSL105_ctc_v2
 
-STATUS: Waiting
+STATUS: Done - Better
 python -m training.train \
     --model iv3_gru_ctc \
     --training-mode ctc \
-    --epochs 27 \
+    --epochs 30 \
     --batch-size 128 \
     --lr 0.0007 \
     --num-gloss 105 \
@@ -127,3 +142,178 @@ python -m training.train \
     --label-smoothing 0.1 \
     --grad-clip 1.0 \
     --output-dir trained_models/iv3_gru/FSL105_ctc_v3
+
+STATUS: Done - Fail
+python -m training.train \
+    --model iv3_gru_ctc \
+    --training-mode ctc \
+    --epochs 30 \
+    --batch-size 128 \
+    --lr 0.0007 \
+    --num-gloss 105 \
+    --num-cat 10 \
+    --alpha 0.8 \
+    --beta 0.2 \
+    --num-ctc-classes 106 \
+    --ctc-blank-id 105 \
+    --features-train data/processed/FSL105_train \
+    --features-val data/processed/FSL105_val \
+    --labels-train-csv data/processed/FSL105_train.csv \
+    --labels-val-csv data/processed/FSL105_val.csv \
+    --feature-key X2048 \
+    --hidden1 40 \
+    --hidden2 32 \
+    --dropout 0.35 \
+    --no-freeze-backbone \
+    --amp \
+    --augment \
+    --augment-noise-std 0.0040 \
+    --augment-mask-prob 0.09 \
+    --augment-mask-ratio 0.09 \
+    --scheduler plateau \
+    --scheduler-patience 30 \
+    --early-stop 120 \
+    --weight-decay 0.00015 \
+    --label-smoothing 0.12 \
+    --grad-clip 1.0 \
+    --output-dir trained_models/iv3_gru/FSL105_ctc_v4
+
+STATUS: Done - Better
+python -m training.train \
+    --model iv3_gru_ctc \
+    --training-mode ctc \
+    --epochs 30 \
+    --batch-size 128 \
+    --lr 0.0007 \
+    --num-gloss 105 \
+    --num-cat 10 \
+    --alpha 0.8 \
+    --beta 0.2 \
+    --num-ctc-classes 106 \
+    --ctc-blank-id 105 \
+    --features-train data/processed/FSL105_train \
+    --features-val data/processed/FSL105_val \
+    --labels-train-csv data/processed/FSL105_train.csv \
+    --labels-val-csv data/processed/FSL105_val.csv \
+    --feature-key X2048 \
+    --hidden1 46 \
+    --hidden2 38 \
+    --dropout 0.31 \
+    --no-freeze-backbone \
+    --amp \
+    --augment \
+    --augment-noise-std 0.0032 \
+    --augment-mask-prob 0.07 \
+    --augment-mask-ratio 0.07 \
+    --scheduler plateau \
+    --scheduler-patience 30 \
+    --early-stop 120 \
+    --weight-decay 0.00010 \
+    --label-smoothing 0.11 \
+    --grad-clip 1.0 \
+    --output-dir trained_models/iv3_gru/FSL105_ctc_v5
+
+STATUS: Done - Keep
+python -m training.train \
+    --model iv3_gru_ctc \
+    --training-mode ctc \
+    --epochs 30 \
+    --batch-size 128 \
+    --lr 0.0007 \
+    --num-gloss 105 \
+    --num-cat 10 \
+    --alpha 0.8 \
+    --beta 0.2 \
+    --num-ctc-classes 106 \
+    --ctc-blank-id 105 \
+    --features-train data/processed/FSL105_train \
+    --features-val data/processed/FSL105_val \
+    --labels-train-csv data/processed/FSL105_train.csv \
+    --labels-val-csv data/processed/FSL105_val.csv \
+    --feature-key X2048 \
+    --hidden1 42 \
+    --hidden2 34 \
+    --dropout 0.34 \
+    --no-freeze-backbone \
+    --amp \
+    --augment \
+    --augment-noise-std 0.0038 \
+    --augment-mask-prob 0.085 \
+    --augment-mask-ratio 0.085 \
+    --scheduler plateau \
+    --scheduler-patience 30 \
+    --early-stop 120 \
+    --weight-decay 0.00013 \
+    --label-smoothing 0.115 \
+    --grad-clip 1.0 \
+    --output-dir trained_models/iv3_gru/FSL105_ctc_v6
+
+STATUS: Done - Fail
+python -m training.train \
+    --model iv3_gru_ctc \
+    --training-mode ctc \
+    --epochs 30 \
+    --batch-size 128 \
+    --lr 0.0007 \
+    --num-gloss 105 \
+    --num-cat 10 \
+    --alpha 0.8 \
+    --beta 0.2 \
+    --num-ctc-classes 106 \
+    --ctc-blank-id 105 \
+    --features-train data/processed/FSL105_train \
+    --features-val data/processed/FSL105_val \
+    --labels-train-csv data/processed/FSL105_train.csv \
+    --labels-val-csv data/processed/FSL105_val.csv \
+    --feature-key X2048 \
+    --hidden1 44 \
+    --hidden2 36 \
+    --dropout 0.32 \
+    --no-freeze-backbone \
+    --amp \
+    --augment \
+    --augment-noise-std 0.0035 \
+    --augment-mask-prob 0.075 \
+    --augment-mask-ratio 0.075 \
+    --scheduler plateau \
+    --scheduler-patience 30 \
+    --early-stop 120 \
+    --weight-decay 0.00011 \
+    --label-smoothing 0.11 \
+    --grad-clip 1.0 \
+    --output-dir trained_models/iv3_gru/FSL105_ctc_v7
+
+STATUS: Done - Fail
+python -m training.train \
+    --model iv3_gru_ctc \
+    --training-mode ctc \
+    --epochs 30 \
+    --batch-size 128 \
+    --lr 0.0007 \
+    --num-gloss 105 \
+    --num-cat 10 \
+    --alpha 0.8 \
+    --beta 0.2 \
+    --num-ctc-classes 106 \
+    --ctc-blank-id 105 \
+    --features-train data/processed/FSL105_train \
+    --features-val data/processed/FSL105_val \
+    --labels-train-csv data/processed/FSL105_train.csv \
+    --labels-val-csv data/processed/FSL105_val.csv \
+    --feature-key X2048 \
+    --hidden1 43 \
+    --hidden2 35 \
+    --dropout 0.33 \
+    --no-freeze-backbone \
+    --amp \
+    --augment \
+    --augment-noise-std 0.0036 \
+    --augment-mask-prob 0.080 \
+    --augment-mask-ratio 0.080 \
+    --scheduler plateau \
+    --scheduler-patience 30 \
+    --early-stop 120 \
+    --weight-decay 0.00012 \
+    --label-smoothing 0.11 \
+    --grad-clip 1.0 \
+    --output-dir trained_models/iv3_gru/FSL105_ctc_v8
