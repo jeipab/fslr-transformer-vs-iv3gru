@@ -21,10 +21,10 @@ V2 RESULTS:
 Epoch  83/300 | Train Loss: 1.9324 | Val Loss: 1.7856 | Val Gloss Acc: 0.545 | Val Cat Acc: 0.508 | Time: 27.2s
 
 V3 RESULTS:
-
+Epoch 298/300 | Train Loss: 0.5659 | Val Loss: 0.4469 | Val Gloss Acc: 0.947 | Val Cat Acc: 0.976 | Time: 25.3s
 
 V4 RESULTS:
-
+Epoch 198/200 | Train Loss: 0.1047 | Val Loss: 0.1618 | Val Gloss Acc: 0.961 | Val Cat Acc: 0.979 | Time: 21.6s
 
 STATUS: Done - Fail
 python -m training.train \
@@ -90,7 +90,7 @@ python -m training.train \
     --grad-clip 0.8 \
     --output-dir trained_models/transformer/FSL105_ctc_v2
 
-STATUS: In progress
+STATUS: Done - Keep
 python -m training.train \
     --model transformer_ctc \
     --training-mode ctc \
@@ -122,7 +122,7 @@ python -m training.train \
     --grad-clip 1.0 \
     --output-dir trained_models/transformer/FSL105_ctc_v3
 
-STATUS: Waiting
+STATUS: Done - Better
 python -m training.train \
     --model transformer_ctc \
     --training-mode ctc \
