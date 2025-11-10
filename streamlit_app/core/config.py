@@ -127,7 +127,7 @@ PROCESSING_CONFIG = {
         'max_gap': 5,
         'write_keypoints': True,
         'write_iv3_features': True,
-        'occ_detailed': False
+        'occ_detailed': True
     },
     'npz': {
         'sequence_length': 150,

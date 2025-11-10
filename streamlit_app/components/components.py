@@ -732,11 +732,12 @@ def render_sidebar() -> Dict:
     """, unsafe_allow_html=True)
     
     from ..core.config import RECOGNITION_MODES
+    default_mode = st.session_state.get('recognition_mode', 'continuous')
     recognition_mode = st.sidebar.radio(
         "Select mode",
         options=['isolated', 'continuous'],
         format_func=lambda x: RECOGNITION_MODES[x],
-        index=0 if st.session_state.get('recognition_mode', 'isolated') == 'isolated' else 1,
+        index=0 if default_mode == 'isolated' else 1,
         help="📍 Isolated Mode: Classify single signs from video clips\n\n🎬 Continuous Mode: Recognize sequences of signs using CTC models",
         key="recognition_mode_radio"
     )
@@ -873,18 +874,6 @@ def render_sidebar() -> Dict:
             key="model_architecture_select"
         )
     
-    # Occlusion Detection Options
-    st.sidebar.markdown("---")
-    st.sidebar.markdown("**Occlusion Detection**")
-    
-    # Detailed Results
-    occ_detailed = st.sidebar.checkbox(
-        "Detailed Results",
-        value=True,
-        help="Include detailed per-frame occlusion analysis with region detection",
-        key="occ_detailed_checkbox"
-    )
-
     return dict(
         model_choice=model_choice,
         sequence_length=150,  # Default sequence length

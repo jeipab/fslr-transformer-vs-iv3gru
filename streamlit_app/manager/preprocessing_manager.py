@@ -230,7 +230,7 @@ def get_default_preprocessing_options():
         'out_size': video_config['out_size'],
         'write_keypoints': video_config['write_keypoints'],
         'write_iv3_features': video_config['write_iv3_features'],
-        'occ_detailed': st.session_state.get('occ_detailed_checkbox', video_config['occ_detailed'])
+        'occ_detailed': video_config['occ_detailed']
     }
 
 
