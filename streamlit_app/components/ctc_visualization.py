@@ -101,9 +101,9 @@ def render_sequence_comparison(
     
     has_categories = predicted_categories is not None and len(predicted_categories) > 0
     case_palette = case_palette or {
-        'TP-EXACT': '#22c55e',   # lime green
-        'TP-GOOD': '#16a34a',    # green
-        'TP-LENIENT': '#0d9488', # teal-toned green
+        'TP-EXACT': '#22c55e',   # consistent green for true positives
+        'TP-GOOD': '#22c55e',
+        'TP-LENIENT': '#22c55e',
         'TP': '#22c55e',
         'FP': '#ef4444',
         'FN': '#f97316',
