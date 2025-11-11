@@ -837,15 +837,14 @@ def render_ctc_validation_results(results: Dict[str, Any]):
     # Validation Summary (CTC)
     st.markdown("---")
     st.markdown("<div class='main-section-header'>VALIDATION SUMMARY</div>", unsafe_allow_html=True)
-    col1, col2, col3, col4, col5 = st.columns(5)
-    with col1:
+    summary_cols = st.columns(5)
+    with summary_cols[0]:
         st.metric("Model", str(model_info.get('model_type', '')).upper())
-    with col2:
+    with summary_cols[1]:
         st.metric("Validation Time", model_info.get('timestamp', 'N/A'))
-    with col3:
+    with summary_cols[2]:
         st.metric("Total Sequences", summary.get('total_sequences', 0))
-    with col4:
-        # Occluded signs across dataset (sum of GT occluded flags)
+    with summary_cols[3]:
         total_occ = 0
         total_gt_signs = 0
         for p in predictions:
@@ -854,11 +853,10 @@ def render_ctc_validation_results(results: Dict[str, Any]):
                 total_occ += int(np.sum(np.array(occ)))
                 total_gt_signs += len(occ)
             else:
-                # Fallback: count by GT sequence length if occlusion flags missing
                 if 'ground_truth_sequence' in p:
                     total_gt_signs += len(p.get('ground_truth_sequence', []))
         st.metric("Occluded Signs", total_occ)
-    with col5:
+    with summary_cols[4]:
         total_non_occ = max(total_gt_signs - total_occ, 0)
         st.metric("Non-Occluded Signs", total_non_occ)
     
@@ -892,11 +890,12 @@ def render_ctc_validation_results(results: Dict[str, Any]):
         }
         if has_cat:
             metrics_data['Category'] = [cat_mean_p, cat_mean_r, cat_mean_f]
+        else:
+            metrics_data['Category'] = ['—', '—', '—']
 
         df = pd.DataFrame(metrics_data)
         st.dataframe(df, width='stretch', hide_index=True)
 
-        # Performance Metrics Comparison chart
         fig = go.Figure()
         fig.add_trace(go.Bar(
             name='Gloss',
@@ -916,9 +915,10 @@ def render_ctc_validation_results(results: Dict[str, Any]):
             xaxis_title="Metrics",
             yaxis_title="Score",
             barmode='group',
-            height=400
+            height=380
         )
         st.plotly_chart(fig, use_container_width=True)
+
 
     with tab2:
         # Per-Class Analysis for CTC using confusion matrices
@@ -1193,15 +1193,19 @@ def render_ctc_validation_results(results: Dict[str, Any]):
                 st.metric("Category Mean F1-Score", f"{cat_mean_f1*100:.2f}%")
 
         # Integrated detection counts
-        col1, col2, col3, col4 = st.columns(4)
-        with col1:
+        count_cols = st.columns(6)
+        with count_cols[0]:
             st.metric("True Positives (TP)", overall_metrics.get('total_tp', 0))
-        with col2:
+        with count_cols[1]:
             st.metric("False Positives (FP)", overall_metrics.get('total_fp', 0))
-        with col3:
+        with count_cols[2]:
             st.metric("False Negatives (FN)", overall_metrics.get('total_fn', 0))
-        with col4:
+        with count_cols[3]:
+            st.metric("True Negatives (TN)", overall_metrics.get('total_tn', 0))
+        with count_cols[4]:
             st.metric("Total GT Instances", overall_metrics.get('total_gt_instances', 0))
+        with count_cols[5]:
+            st.empty()
 
         # Detailed predictions table
         st.markdown("---")
@@ -1296,7 +1300,8 @@ def render_ctc_validation_results(results: Dict[str, Any]):
 
                 # Define column order
                 ordered_cols = ['Details', 'File', 'GT Length', 'Pred Length',
-                                'Gloss: Precision', 'Gloss: Recall', 'Gloss: F1-Score', 'Gloss: TP', 'Gloss: FP', 'Gloss: FN']
+                                'Gloss: Precision', 'Gloss: Recall', 'Gloss: F1-Score',
+                                'Gloss: TP', 'Gloss: FP', 'Gloss: FN']
                 cat_cols = ['Category: Precision', 'Category: Recall', 'Category: F1-Score', 'Category: TP', 'Category: FP', 'Category: FN']
                 for c in cat_cols:
                     if c in base_df.columns:
@@ -1360,6 +1365,139 @@ def render_ctc_validation_results(results: Dict[str, Any]):
                         confidence_scores = pred.get('confidence_scores')
                         ground_truth_occluded = pred.get('ground_truth_occluded')
 
+                        case_palette = {
+                            'TP-EXACT': '#22c55e',   # lime green
+                            'TP-GOOD': '#16a34a',    # green
+                            'TP-LENIENT': '#0d9488', # teal-ish green
+                            'TP': '#22c55e',
+                            'FP': '#ef4444',
+                            'FN': '#f97316',
+                            'TN': '#64748b',
+                        }
+                        prediction_case_map: Dict[int, str] = {}
+                        ground_truth_case_map: Dict[int, str] = {}
+                        iou_threshold = pred.get('iou_threshold', 0.5)
+                        matched_pairs = pred.get('matched_pairs') or []
+                        len_pred = len(predicted_sequence)
+                        len_gt = len(ground_truth_sequence)
+
+                        for pair in matched_pairs:
+                            pred_idx = pair.get('pred_idx')
+                            gt_idx = pair.get('gt_idx')
+                            if pred_idx is None or gt_idx is None:
+                                continue
+                            pred_idx = int(pred_idx)
+                            gt_idx = int(gt_idx)
+                            if not (0 <= pred_idx < len_pred and 0 <= gt_idx < len_gt):
+                                continue
+                            iou = float(pair.get('iou', 0.0))
+                            if iou >= 0.8:
+                                case = 'TP-EXACT'
+                            elif iou >= iou_threshold:
+                                case = 'TP-GOOD'
+                            else:
+                                case = 'TP-LENIENT'
+                            prediction_case_map[pred_idx] = case
+                            ground_truth_case_map[gt_idx] = case
+
+                        for idx in pred.get('tp_indices', []) or []:
+                            idx = int(idx)
+                            if 0 <= idx < len_pred:
+                                prediction_case_map.setdefault(idx, 'TP')
+                        for idx in pred.get('unmatched_predictions', []) or []:
+                            idx = int(idx)
+                            if 0 <= idx < len_pred:
+                                prediction_case_map[idx] = 'FP'
+                        for idx in pred.get('unmatched_ground_truth', []) or []:
+                            idx = int(idx)
+                            if 0 <= idx < len_gt:
+                                ground_truth_case_map[idx] = 'FN'
+
+                        low_conf_fn_count = 0
+                        threshold = pred.get('confidence_threshold', 0.5)
+                        for idx, conf in enumerate(confidence_scores or []):
+                            if conf is None:
+                                continue
+                            if 0 <= idx < len_pred and conf < threshold:
+                                if idx not in prediction_case_map:
+                                    prediction_case_map[idx] = 'FN'
+                                    low_conf_fn_count += 1
+
+                        st.markdown("##### Sequence Metrics")
+                        seq_cols = st.columns(4)
+                        with seq_cols[0]:
+                            st.metric("Precision", f"{pred.get('precision', 0)*100:.2f}%")
+                            st.metric("True Positive", pred.get('num_tp', 0))
+                        with seq_cols[1]:
+                            st.metric("Recall", f"{pred.get('recall', 0)*100:.2f}%")
+                            st.metric("False Positive", pred.get('num_fp', 0))
+                        with seq_cols[2]:
+                            st.metric("F1-Score", f"{pred.get('f1_score', 0)*100:.2f}%")
+                            st.metric("False Negative", pred.get('num_fn', 0))
+                        with seq_cols[3]:
+                            st.empty()
+                            st.metric("True Negative", pred.get('num_tn', 0))
+
+                        breakdown_rows: List[Dict[str, Any]] = []
+
+                        def _append_case_rows(group_label: str, mapping: Dict[str, str], counts: Dict[str, Any]):
+                            for key, label in mapping.items():
+                                count = int(counts.get(key, 0)) if counts else 0
+                                breakdown_rows.append({
+                                    'Group': group_label,
+                                    'Case': label,
+                                    'Count': count,
+                                })
+
+                        tp_labels = {
+                            'TP-EXACT': 'True Positive - Exact',
+                            'TP-GOOD': 'True Positive - Good',
+                            'TP-LENIENT': 'True Positive - Lenient',
+                            'TP': 'True Positive (Other)',
+                        }
+                        fp_labels = {
+                            'FP-PREMATURE': 'False Positive - Premature',
+                            'FP-LATE': 'False Positive - Late',
+                            'FP-WRONG-GLOSS': 'False Positive - Wrong Gloss',
+                            'FP-HALLUCINATION-INACTIVE': 'False Positive - Inactive Region',
+                            'FP-HALLUCINATION-GAP': 'False Positive - Gap Region',
+                            'FP-INSUFFICIENT-OVERLAP': 'False Positive - Insufficient Overlap',
+                            'FP-OVER-SEGMENTATION': 'False Positive - Over-Segmentation',
+                            'FP-LOW-CONFIDENCE-ACTIVE': 'False Positive - Low Confidence',
+                        }
+                        fn_labels = {
+                            'FN-COMPLETE-MISS': 'False Negative - Complete Miss',
+                            'FN-WRONG-GLOSS': 'False Negative - Wrong Gloss',
+                            'FN-PREMATURE-ONLY': 'False Negative - Premature Only',
+                            'FN-LATE-ONLY': 'False Negative - Late Only',
+                            'FN-INSUFFICIENT-OVERLAP': 'False Negative - Insufficient Overlap',
+                            'FN-UNDER-SEGMENTATION': 'False Negative - Under-Segmentation',
+                            'FN-LOW-CONFIDENCE': 'False Negative - Low Confidence',
+                            'FN-OCCLUDED': 'False Negative - Occluded',
+                        }
+                        tn_labels = {
+                            'TN-LOW-CONFIDENCE': 'True Negative - Low Confidence',
+                            'TN-GAP-IMPLIED': 'True Negative - Gap',
+                            'TN-FRAME-LEVEL': 'True Negative - Frame Level',
+                        }
+
+                        _append_case_rows('True Positive', tp_labels, pred.get('tp_breakdown') or {})
+                        _append_case_rows('False Positive', fp_labels, pred.get('fp_breakdown') or {})
+                        fn_counts = dict(pred.get('fn_breakdown') or {})
+                        if low_conf_fn_count:
+                            fn_counts['FN-LOW-CONFIDENCE'] = fn_counts.get('FN-LOW-CONFIDENCE', 0) + low_conf_fn_count
+                        _append_case_rows('False Negative', fn_labels, fn_counts)
+                        _append_case_rows('True Negative', tn_labels, pred.get('tn_breakdown') or {})
+
+                        st.markdown("##### Error Breakdown")
+                        breakdown_df = pd.DataFrame(breakdown_rows)
+                        st.dataframe(
+                            breakdown_df.sort_values(['Group', 'Case']),
+                            width='stretch',
+                            hide_index=True,
+                            height=280
+                        )
+
                         st.markdown("---")
                         render_sequence_comparison(
                             predicted_sequence=predicted_sequence,
@@ -1371,6 +1509,25 @@ def render_ctc_validation_results(results: Dict[str, Any]):
                             category_confidences=category_confidences,
                             ground_truth_categories=ground_truth_categories,
                             ground_truth_occluded=ground_truth_occluded,
+                            prediction_cases=prediction_case_map,
+                            case_palette=case_palette,
+                            confidence_threshold=pred.get('confidence_threshold', 0.5),
+                        )
+                        st.markdown(
+                            (
+                                "<span style='color:#22c55e;font-weight:600;'>True Positive - Exact</span>"
+                                "<span style='color:white;font-weight:600;'> | </span>"
+                                "<span style='color:#16a34a;font-weight:600;'>True Positive - Good</span>"
+                                "<span style='color:white;font-weight:600;'> | </span>"
+                                "<span style='color:#0d9488;font-weight:600;'>True Positive - Lenient</span>"
+                                "<span style='color:white;font-weight:600;'> | </span>"
+                                "<span style='color:#ef4444;font-weight:600;'>False Positive</span>"
+                                "<span style='color:white;font-weight:600;'> | </span>"
+                                "<span style='color:#64748b;font-weight:600;'>True Negative</span>"
+                                "<span style='color:white;font-weight:600;'> | </span>"
+                                "<span style='color:#f97316;font-weight:600;'>False Negative</span>"
+                            ),
+                            unsafe_allow_html=True,
                         )
 
                         predicted_timestamps = pred.get('predicted_timestamps')
@@ -1418,6 +1575,9 @@ def render_ctc_validation_results(results: Dict[str, Any]):
                                 mask=mask_array,
                                 timestamps_ms=timestamps_array,
                                 predicted_categories=predicted_categories,
+                                prediction_cases=prediction_case_map,
+                                ground_truth_cases=ground_truth_case_map,
+                                case_palette=case_palette,
                             )
 
     # Download results shown for all tabs

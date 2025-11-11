@@ -22,6 +22,20 @@ sys.path.insert(0, str(project_root))
 
 from models import SignTransformerCtc, MediaPipeGRUCtc, InceptionV3GRUCtc
 from evaluation.ctc_utils import greedy_ctc_decoder, beam_search_ctc_decoder
+from evaluation.metrics import (
+    ContinuousEvaluationConfig,
+    SequenceGroundTruth,
+    SequencePrediction,
+    Timestamp as MetricTimestamp,
+    TPCase,
+    FPCase,
+    FNCase,
+    TNCase,
+    compute_sequence_metrics,
+    compute_overall_metrics_micro,
+    compute_overall_metrics_macro,
+    compute_stratified_metrics,
+)
 from streamlit_app.core.config import CTC_CONFIG, CTC_CONFIG_SUBSET, MODEL_CONFIG
 from data.labels.label_mapping import load_label_mappings
 
@@ -563,6 +577,7 @@ class CTCPredictor:
         self.model, self.input_dim = self._load_model()
         self._load_checkpoint()
         self.gloss_mapping, self.category_mapping = load_label_mappings()
+        self.metrics_config = ContinuousEvaluationConfig()
     
     def _load_model(self) -> Tuple[torch.nn.Module, int]:
         if self.model_type == 'transformer_ctc':
@@ -746,6 +761,13 @@ class CTCPredictor:
     ) -> Dict:
         """Predict single continuous sequence with full metrics."""
         data = np.load(npz_path)
+
+        mask = None
+        timestamps_ms = None
+        if 'mask' in data:
+            mask = np.asarray(data['mask']).astype(bool)
+        if 'timestamps_ms' in data:
+            timestamps_ms = np.asarray(data['timestamps_ms']).astype(float)
         
         if self.input_dim == 2048:
             if 'X2048' not in data:
@@ -877,92 +899,128 @@ class CTCPredictor:
             if 'ground_truth_categories' in ground_truth:
                 result['ground_truth_categories'] = ground_truth['ground_truth_categories']
             
-            # Calculate detection metrics using temporal IoU matching
-            gt_timestamps = ground_truth.get('ground_truth_timestamps', [])
-            
-            try:
-                if gt_timestamps and len(gt_timestamps) > 0:
-                    tp_indices, fp_indices, fn_indices, matched_pairs, mean_iou = match_predictions_to_ground_truth(
-                        pred_glosses=predicted_sequence,
-                        pred_timestamps=predicted_timestamps,
-                        gt_glosses=ground_truth['ground_truth_sequence'],
-                        gt_timestamps=gt_timestamps,
-                        iou_threshold=iou_threshold
-                    )
-                    # Lenient augmentation: order-preserving matches for remaining unmatched
-                    add_pairs = _augment_matches_with_order(
-                        predicted_sequence,
-                        ground_truth['ground_truth_sequence'],
-                        fp_indices,
-                        fn_indices,
-                    )
-                    if add_pairs:
-                        matched_pairs.extend(add_pairs)
-                        tp_indices.extend([p['pred_idx'] for p in add_pairs])
-                        # Remove newly matched from FP/FN
-                        newly_matched_pred = set(p['pred_idx'] for p in add_pairs)
-                        newly_matched_gt = set(p['gt_idx'] for p in add_pairs)
-                        fp_indices = [i for i in fp_indices if i not in newly_matched_pred]
-                        fn_indices = [j for j in fn_indices if j not in newly_matched_gt]
-                    
-                    num_tp = len(tp_indices)
-                    num_fp = len(fp_indices)
-                    num_fn = len(fn_indices)
-                    num_gt = len(ground_truth['ground_truth_sequence'])
-                    
-                    precision, recall, f1_score = calculate_detection_metrics(num_tp, num_fp, num_fn)
-                    
-                    # Store detection metrics
-                    result['num_tp'] = num_tp
-                    result['num_fp'] = num_fp
-                    result['num_fn'] = num_fn
-                    result['num_gt'] = num_gt
-                    result['precision'] = float(precision)
-                    result['recall'] = float(recall)
-                    result['f1_score'] = float(f1_score)
-                    result['mean_iou'] = mean_iou
-                    result['iou_threshold'] = iou_threshold
-                    result['matched_pairs'] = matched_pairs
-                    result['unmatched_predictions'] = fp_indices
-                    result['unmatched_ground_truth'] = fn_indices
+            if len(confidence_scores) != len(predicted_sequence):
+                if len(predicted_sequence) == 0:
+                    confidence_scores = []
+                else:
+                    confidence_scores = [
+                        confidence_scores[i] if i < len(confidence_scores) else 1.0
+                        for i in range(len(predicted_sequence))
+                    ]
 
-                    # Occlusion split metrics if occlusion flags available
+            gt_timestamps = ground_truth.get('ground_truth_timestamps', [])
+
+            try:
+                if gt_timestamps:
+                    pred_ts_objects = [
+                        MetricTimestamp(
+                            start_ms=float(ts.get('start_ms', 0.0)),
+                            end_ms=float(ts.get('end_ms', 0.0)),
+                            gloss=int(predicted_sequence[i]) if i < len(predicted_sequence) else None,
+                        )
+                        for i, ts in enumerate(predicted_timestamps)
+                    ]
+                    gt_ts_objects = [
+                        MetricTimestamp(
+                            start_ms=float(ts.get('start_ms', 0.0)),
+                            end_ms=float(ts.get('end_ms', 0.0)),
+                            gloss=int(ts.get('gloss', ground_truth['ground_truth_sequence'][idx])),
+                        )
+                        for idx, ts in enumerate(gt_timestamps)
+                    ]
+
+                    seq_prediction = SequencePrediction(
+                        gloss_ids=[int(g) for g in predicted_sequence],
+                        labels=predicted_labels,
+                        timestamps=pred_ts_objects,
+                        confidence_scores=[float(c) for c in confidence_scores],
+                    )
+                    seq_ground_truth = SequenceGroundTruth(
+                        gloss_ids=[int(g) for g in ground_truth['ground_truth_sequence']],
+                        labels=ground_truth.get('ground_truth_labels', []),
+                        timestamps=gt_ts_objects,
+                        occlusion_flags=ground_truth.get('ground_truth_occluded'),
+                    )
+
+                    metrics_result = compute_sequence_metrics(
+                        prediction=seq_prediction,
+                        ground_truth=seq_ground_truth,
+                        config=ContinuousEvaluationConfig(
+                            iou_threshold=iou_threshold,
+                            confidence_threshold=self.metrics_config.confidence_threshold,
+                            inactive_threshold=self.metrics_config.inactive_threshold,
+                            active_overlap_threshold=self.metrics_config.active_overlap_threshold,
+                            min_gap_duration_ms=self.metrics_config.min_gap_duration_ms,
+                            enable_lenient_matching=self.metrics_config.enable_lenient_matching,
+                        ),
+                        mask=mask,
+                        timestamps_ms=timestamps_ms,
+                    )
+
+                    result['num_tp'] = metrics_result.num_tp
+                    result['num_fp'] = metrics_result.num_fp
+                    result['num_fn'] = metrics_result.num_fn
+                    result['num_tn'] = metrics_result.num_tn
+                    result['num_gt'] = len(ground_truth['ground_truth_sequence'])
+                    result['precision'] = float(metrics_result.precision)
+                    result['recall'] = float(metrics_result.recall)
+                    result['f1_score'] = float(metrics_result.f1_score)
+                    result['iou_threshold'] = iou_threshold
+                    result['matched_pairs'] = metrics_result.matched_pairs
+                    result['unmatched_predictions'] = metrics_result.fp_indices
+                    result['unmatched_ground_truth'] = metrics_result.fn_indices
+                    result['tp_indices'] = metrics_result.tp_indices
+                    result['tp_breakdown'] = {
+                        case.value: count
+                        for case, count in metrics_result.tp_breakdown.items()
+                    }
+                    result['fp_breakdown'] = {
+                        case.value: count
+                        for case, count in metrics_result.fp_breakdown.items()
+                    }
+                    result['fn_breakdown'] = {
+                        case.value: count
+                        for case, count in metrics_result.fn_breakdown.items()
+                    }
+                    result['tn_breakdown'] = {
+                        case.value: count
+                        for case, count in metrics_result.tn_breakdown.items()
+                    }
+
                     if 'ground_truth_occluded' in ground_truth:
                         occ = _compute_occlusion_split_metrics(
                             pred_timestamps=predicted_timestamps,
                             gt_timestamps=gt_timestamps,
                             gt_occluded=ground_truth['ground_truth_occluded'],
-                            matched_pairs=matched_pairs,
-                            fp_indices=fp_indices,
-                            fn_indices=fn_indices,
+                            matched_pairs=metrics_result.matched_pairs,
+                            fp_indices=metrics_result.fp_indices,
+                            fn_indices=metrics_result.fn_indices,
                         )
                         result['occlusion_metrics'] = occ
-                        # Category occlusion split (if categories available)
                         if predicted_categories and 'ground_truth_categories' in ground_truth:
                             occ_cat = _compute_category_occlusion_split_metrics(
                                 pred_categories=predicted_categories,
                                 gt_categories=ground_truth['ground_truth_categories'],
                                 gt_occluded=ground_truth['ground_truth_occluded'],
-                                matched_pairs=matched_pairs,
-                                fp_indices=fp_indices,
-                                fn_indices=fn_indices,
+                                matched_pairs=metrics_result.matched_pairs,
+                                fp_indices=metrics_result.fp_indices,
+                                fn_indices=metrics_result.fn_indices,
                                 pred_timestamps=predicted_timestamps,
                                 gt_timestamps=gt_timestamps,
                             )
                             result['occlusion_metrics_category'] = occ_cat
-                    
-                    # Category-level detection metrics (balanced, independent of gloss identity)
+
                     if predicted_categories and 'ground_truth_categories' in ground_truth:
                         gt_cats = ground_truth['ground_truth_categories']
                         if gt_cats:
                             cat_tp, cat_fp, cat_fn = _compute_category_metrics_balanced(
                                 pred_categories=predicted_categories,
                                 gt_categories=gt_cats,
-                                matched_pairs=matched_pairs,
+                                matched_pairs=metrics_result.matched_pairs,
                                 pred_len=len(predicted_sequence),
                                 gt_len=len(ground_truth['ground_truth_sequence']),
-                                gloss_fp_indices=fp_indices,
-                                gloss_fn_indices=fn_indices,
+                                gloss_fp_indices=metrics_result.fp_indices,
+                                gloss_fn_indices=metrics_result.fn_indices,
                             )
                             cat_precision, cat_recall, cat_f1 = calculate_detection_metrics(cat_tp, cat_fp, cat_fn)
                             result['category_num_tp'] = cat_tp
@@ -972,19 +1030,16 @@ class CTCPredictor:
                             result['category_recall'] = float(cat_recall)
                             result['category_f1_score'] = float(cat_f1)
                 else:
-                    # No timestamps available - cannot calculate detection metrics
                     raise ValueError("Ground truth timestamps are missing or empty. Detection metrics require timestamps.")
-                    
             except Exception as e:
-                # Set default values if matching fails
                 result['num_tp'] = 0
                 result['num_fp'] = len(predicted_sequence)
                 result['num_fn'] = len(ground_truth['ground_truth_sequence'])
+                result['num_tn'] = 0
                 result['num_gt'] = len(ground_truth['ground_truth_sequence'])
                 result['precision'] = 0.0
                 result['recall'] = 0.0
                 result['f1_score'] = 0.0
-                result['mean_iou'] = 0.0
                 result['iou_threshold'] = iou_threshold
                 result['matched_pairs'] = []
                 result['unmatched_predictions'] = list(range(len(predicted_sequence)))
@@ -1230,7 +1285,8 @@ class CTCPredictor:
             'num_windows': len(windows),
             'window_size': window_size,
             'stride': stride,
-            'method': 'sliding_window'
+            'method': 'sliding_window',
+            'confidence_threshold': float(self.metrics_config.confidence_threshold),
         }
         
         # Add ground truth comparison if available
@@ -1285,50 +1341,78 @@ class CTCPredictor:
             result['signer'] = ground_truth.get('signer')
             result['strategy'] = ground_truth.get('strategy', ground_truth.get('strategy_name'))
             
-            # Calculate detection metrics using temporal IoU matching
+            # Calculate detection metrics using unified evaluation pipeline
             try:
-                tp_indices, fp_indices, fn_indices, matched_pairs, mean_iou = match_predictions_to_ground_truth(
-                    pred_glosses=final_sequence,
-                    pred_timestamps=predicted_timestamps,
-                    gt_glosses=gt_gloss_ids,
-                    gt_timestamps=gt_timestamps,
-                    iou_threshold=iou_threshold
+                pred_ts_objects = [
+                    MetricTimestamp(
+                        start_ms=float(ts.get('start_ms', 0.0)),
+                        end_ms=float(ts.get('end_ms', 0.0)),
+                        gloss=int(final_sequence[i]) if i < len(final_sequence) else None,
+                    )
+                    for i, ts in enumerate(predicted_timestamps)
+                ]
+                gt_ts_objects = [
+                    MetricTimestamp(
+                        start_ms=float(ts.get('start_ms', 0.0)),
+                        end_ms=float(ts.get('end_ms', 0.0)),
+                        gloss=int(gt_gloss_ids[idx]) if idx < len(gt_gloss_ids) else ts.get('gloss'),
+                    )
+                    for idx, ts in enumerate(gt_timestamps)
+                ]
+
+                seq_prediction = SequencePrediction(
+                    gloss_ids=list(final_sequence),
+                    labels=predicted_labels,
+                    timestamps=pred_ts_objects,
+                    confidence_scores=[float(c) for c in final_confidences],
                 )
-                # Lenient augmentation: order-preserving matches for remaining unmatched
-                add_pairs = _augment_matches_with_order(
-                    final_sequence,
-                    gt_gloss_ids,
-                    fp_indices,
-                    fn_indices,
+                seq_ground_truth = SequenceGroundTruth(
+                    gloss_ids=list(gt_gloss_ids),
+                    labels=gt_labels,
+                    timestamps=gt_ts_objects,
+                    occlusion_flags=ground_truth.get('ground_truth_occluded'),
                 )
-                if add_pairs:
-                    matched_pairs.extend(add_pairs)
-                    tp_indices.extend([p['pred_idx'] for p in add_pairs])
-                    newly_matched_pred = set(p['pred_idx'] for p in add_pairs)
-                    newly_matched_gt = set(p['gt_idx'] for p in add_pairs)
-                    fp_indices = [i for i in fp_indices if i not in newly_matched_pred]
-                    fn_indices = [j for j in fn_indices if j not in newly_matched_gt]
-                
-                num_tp = len(tp_indices)
-                num_fp = len(fp_indices)
-                num_fn = len(fn_indices)
-                num_gt = len(gt_gloss_ids)
-                
-                precision, recall, f1_score = calculate_detection_metrics(num_tp, num_fp, num_fn)
-                
-                # Store detection metrics
-                result['num_tp'] = num_tp
-                result['num_fp'] = num_fp
-                result['num_fn'] = num_fn
-                result['num_gt'] = num_gt
-                result['precision'] = float(precision)
-                result['recall'] = float(recall)
-                result['f1_score'] = float(f1_score)
-                result['mean_iou'] = mean_iou
-                result['iou_threshold'] = iou_threshold
-                result['matched_pairs'] = matched_pairs
-                result['unmatched_predictions'] = fp_indices
-                result['unmatched_ground_truth'] = fn_indices
+
+                metrics_result = compute_sequence_metrics(
+                    prediction=seq_prediction,
+                    ground_truth=seq_ground_truth,
+                    config=ContinuousEvaluationConfig(
+                        iou_threshold=iou_threshold,
+                        confidence_threshold=self.metrics_config.confidence_threshold,
+                        inactive_threshold=self.metrics_config.inactive_threshold,
+                        active_overlap_threshold=self.metrics_config.active_overlap_threshold,
+                        min_gap_duration_ms=self.metrics_config.min_gap_duration_ms,
+                        enable_lenient_matching=self.metrics_config.enable_lenient_matching,
+                    ),
+                    mask=None,
+                    timestamps_ms=None,
+                )
+
+                result['num_tp'] = metrics_result.num_tp
+                result['num_fp'] = metrics_result.num_fp
+                result['num_fn'] = metrics_result.num_fn
+                result['num_tn'] = metrics_result.num_tn
+                result['num_gt'] = len(gt_gloss_ids)
+                result['precision'] = float(metrics_result.precision)
+                result['recall'] = float(metrics_result.recall)
+                result['f1_score'] = float(metrics_result.f1_score)
+                result['confidence_threshold'] = float(self.metrics_config.confidence_threshold)
+                result['tp_indices'] = metrics_result.tp_indices
+                result['matched_pairs'] = metrics_result.matched_pairs
+                result['unmatched_predictions'] = metrics_result.fp_indices
+                result['unmatched_ground_truth'] = metrics_result.fn_indices
+                result['tp_breakdown'] = {
+                    case.value: count for case, count in metrics_result.tp_breakdown.items()
+                }
+                result['fp_breakdown'] = {
+                    case.value: count for case, count in metrics_result.fp_breakdown.items()
+                }
+                result['fn_breakdown'] = {
+                    case.value: count for case, count in metrics_result.fn_breakdown.items()
+                }
+                result['tn_breakdown'] = {
+                    case.value: count for case, count in metrics_result.tn_breakdown.items()
+                }
 
                 # Occlusion split metrics if occlusion flags available
                 if 'ground_truth_occluded' in ground_truth:
@@ -1336,9 +1420,9 @@ class CTCPredictor:
                         pred_timestamps=predicted_timestamps,
                         gt_timestamps=gt_timestamps,
                         gt_occluded=ground_truth['ground_truth_occluded'],
-                        matched_pairs=matched_pairs,
-                        fp_indices=fp_indices,
-                        fn_indices=fn_indices,
+                        matched_pairs=metrics_result.matched_pairs,
+                        fp_indices=metrics_result.fp_indices,
+                        fn_indices=metrics_result.fn_indices,
                     )
                     result['occlusion_metrics'] = occ
                     # Category occlusion split (if categories available)
@@ -1347,9 +1431,9 @@ class CTCPredictor:
                             pred_categories=final_categories,
                             gt_categories=gt_categories,
                             gt_occluded=ground_truth['ground_truth_occluded'],
-                            matched_pairs=matched_pairs,
-                            fp_indices=fp_indices,
-                            fn_indices=fn_indices,
+                            matched_pairs=metrics_result.matched_pairs,
+                            fp_indices=metrics_result.fp_indices,
+                            fn_indices=metrics_result.fn_indices,
                             pred_timestamps=predicted_timestamps,
                             gt_timestamps=gt_timestamps,
                         )
@@ -1362,11 +1446,11 @@ class CTCPredictor:
                         cat_tp, cat_fp, cat_fn = _compute_category_metrics_balanced(
                             pred_categories=final_categories,
                             gt_categories=gt_categories,
-                            matched_pairs=matched_pairs,
+                            matched_pairs=metrics_result.matched_pairs,
                             pred_len=len(final_sequence),
                             gt_len=len(gt_gloss_ids),
-                            gloss_fp_indices=fp_indices,
-                            gloss_fn_indices=fn_indices,
+                            gloss_fp_indices=metrics_result.fp_indices,
+                            gloss_fn_indices=metrics_result.fn_indices,
                         )
                         cat_precision, cat_recall, cat_f1 = calculate_detection_metrics(cat_tp, cat_fp, cat_fn)
                         result['category_num_tp'] = cat_tp
@@ -1381,15 +1465,20 @@ class CTCPredictor:
                 result['num_tp'] = 0
                 result['num_fp'] = len(final_sequence)
                 result['num_fn'] = len(gt_gloss_ids)
+                result['num_tn'] = 0
                 result['num_gt'] = len(gt_gloss_ids)
                 result['precision'] = 0.0
                 result['recall'] = 0.0
                 result['f1_score'] = 0.0
-                result['mean_iou'] = 0.0
                 result['iou_threshold'] = iou_threshold
                 result['matched_pairs'] = []
                 result['unmatched_predictions'] = list(range(len(final_sequence)))
                 result['unmatched_ground_truth'] = list(range(len(gt_gloss_ids)))
+                result['tp_indices'] = []
+                result['tp_breakdown'] = {case.value: 0 for case in TPCase}
+                result['fp_breakdown'] = {case.value: 0 for case in FPCase}
+                result['fn_breakdown'] = {case.value: 0 for case in FNCase}
+                result['tn_breakdown'] = {case.value: 0 for case in TNCase}
                 print(f"Warning: Detection metrics calculation failed for {result.get('file_name', 'unknown')}: {str(e)}")
         
         return result
@@ -1472,84 +1561,32 @@ class CTCPredictor:
         }
         
         if has_gt:
-            # Aggregate detection metrics (micro-averaged)
-            total_tp = sum(p.get('num_tp', 0) for p in predictions_with_gt)
-            total_fp = sum(p.get('num_fp', 0) for p in predictions_with_gt)
-            total_fn = sum(p.get('num_fn', 0) for p in predictions_with_gt)
-            total_gt_instances = sum(p.get('num_gt', 0) for p in predictions_with_gt)
-            
-            # Overall metrics (micro-averaged)
-            overall_precision, overall_recall, overall_f1 = calculate_detection_metrics(total_tp, total_fp, total_fn)
-            
-            # Mean per-sequence metrics (macro-averaged)
-            precisions = [p.get('precision', 0.0) for p in predictions_with_gt]
-            recalls = [p.get('recall', 0.0) for p in predictions_with_gt]
-            f1_scores = [p.get('f1_score', 0.0) for p in predictions_with_gt]
-            mean_iou_all_tp = []
-            
-            for p in predictions_with_gt:
-                if 'mean_iou' in p and p['num_tp'] > 0:
-                    mean_iou_all_tp.append(p['mean_iou'])
-            
-            summary['overall_metrics'] = {
-                'total_sequences': len(predictions_with_gt),
-                'total_tp': int(total_tp),
-                'total_fp': int(total_fp),
-                'total_fn': int(total_fn),
-                'total_gt_instances': int(total_gt_instances),
-                'overall_precision': float(overall_precision),
-                'overall_recall': float(overall_recall),
-                'overall_f1_score': float(overall_f1),
-                'mean_precision': float(np.mean(precisions)) if precisions else 0.0,
-                'mean_recall': float(np.mean(recalls)) if recalls else 0.0,
-                'mean_f1_score': float(np.mean(f1_scores)) if f1_scores else 0.0,
-                'median_f1_score': float(np.median(f1_scores)) if f1_scores else 0.0,
-                'mean_iou_all_tp': float(np.mean(mean_iou_all_tp)) if mean_iou_all_tp else 0.0,
+            micro_metrics = compute_overall_metrics_micro(predictions_with_gt)
+            macro_metrics = compute_overall_metrics_macro(predictions_with_gt)
+            stratified_metrics = compute_stratified_metrics(predictions_with_gt)
+
+            combined_overall = dict(micro_metrics)
+            combined_overall.update({
+                'overall_precision': micro_metrics.get('precision', 0.0),
+                'overall_recall': micro_metrics.get('recall', 0.0),
+                'overall_f1_score': micro_metrics.get('f1_score', 0.0),
+                'mean_precision': macro_metrics.get('mean_precision', 0.0),
+                'mean_recall': macro_metrics.get('mean_recall', 0.0),
+                'mean_f1_score': macro_metrics.get('mean_f1_score', 0.0),
+                'median_f1_score': macro_metrics.get('median_f1_score', 0.0),
+            })
+
+            summary['overall_metrics'] = combined_overall
+            summary['macro_metrics'] = macro_metrics
+            summary['stratified_metrics'] = stratified_metrics
+            summary['per_signer_metrics'] = {
+                signer: dict(metrics, num_sequences=metrics.get('total_sequences', 0))
+                for signer, metrics in stratified_metrics.get('per_signer', {}).items()
             }
-            
-            # Per-signer metrics
-            per_signer_metrics = defaultdict(lambda: {'tp': 0, 'fp': 0, 'fn': 0, 'sequences': []})
-            for p in predictions_with_gt:
-                signer = p.get('signer')
-                if signer:
-                    per_signer_metrics[signer]['tp'] += p.get('num_tp', 0)
-                    per_signer_metrics[signer]['fp'] += p.get('num_fp', 0)
-                    per_signer_metrics[signer]['fn'] += p.get('num_fn', 0)
-                    per_signer_metrics[signer]['sequences'].append(p.get('f1_score', 0.0))
-            
-            summary['per_signer_metrics'] = {}
-            for signer, data in per_signer_metrics.items():
-                sig_precision, sig_recall, sig_f1 = calculate_detection_metrics(
-                    data['tp'], data['fp'], data['fn']
-                )
-                summary['per_signer_metrics'][signer] = {
-                    'precision': float(sig_precision),
-                    'recall': float(sig_recall),
-                    'f1_score': float(sig_f1),
-                    'num_sequences': len(data['sequences'])
-                }
-            
-            # Per-strategy metrics
-            per_strategy_metrics = defaultdict(lambda: {'tp': 0, 'fp': 0, 'fn': 0, 'sequences': []})
-            for p in predictions_with_gt:
-                strategy = p.get('strategy')
-                if strategy:
-                    per_strategy_metrics[strategy]['tp'] += p.get('num_tp', 0)
-                    per_strategy_metrics[strategy]['fp'] += p.get('num_fp', 0)
-                    per_strategy_metrics[strategy]['fn'] += p.get('num_fn', 0)
-                    per_strategy_metrics[strategy]['sequences'].append(p.get('f1_score', 0.0))
-            
-            summary['per_strategy_metrics'] = {}
-            for strategy, data in per_strategy_metrics.items():
-                strat_precision, strat_recall, strat_f1 = calculate_detection_metrics(
-                    data['tp'], data['fp'], data['fn']
-                )
-                summary['per_strategy_metrics'][strategy] = {
-                    'precision': float(strat_precision),
-                    'recall': float(strat_recall),
-                    'f1_score': float(strat_f1),
-                    'num_sequences': len(data['sequences'])
-                }
+            summary['per_strategy_metrics'] = {
+                strategy: dict(metrics, num_sequences=metrics.get('total_sequences', 0))
+                for strategy, metrics in stratified_metrics.get('per_strategy', {}).items()
+            }
             
             # Category-level metrics (if available)
             if has_categories:
@@ -1753,7 +1790,7 @@ def main():
         print(f"Total TP:           {om['total_tp']}")
         print(f"Total FP:           {om['total_fp']}")
         print(f"Total FN:           {om['total_fn']}")
-        print(f"Mean IoU (TP):      {om['mean_iou_all_tp']:.4f}")
+        # Mean IoU no longer reported in summary
         
         if summary.get('per_signer_metrics'):
             print(f"\nPer-signer F1-Score:")

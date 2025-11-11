@@ -76,7 +76,10 @@ def render_sequence_comparison(
     predicted_categories: Optional[List[int]] = None,
     category_confidences: Optional[List[float]] = None,
     ground_truth_categories: Optional[List[int]] = None,
-    ground_truth_occluded: Optional[List[int]] = None
+    ground_truth_occluded: Optional[List[int]] = None,
+    prediction_cases: Optional[Dict[int, str]] = None,
+    case_palette: Optional[Dict[str, str]] = None,
+    confidence_threshold: float = 0.5,
 ):
     """
     Render side-by-side comparison of predicted vs ground truth sequences.
@@ -95,6 +98,15 @@ def render_sequence_comparison(
     st.markdown("#### Sequence Comparison")
     
     has_categories = predicted_categories is not None and len(predicted_categories) > 0
+    case_palette = case_palette or {
+        'TP-EXACT': '#22c55e',   # lime green
+        'TP-GOOD': '#16a34a',    # green
+        'TP-LENIENT': '#0d9488', # teal-toned green
+        'TP': '#22c55e',
+        'FP': '#ef4444',
+        'FN': '#f97316',
+        'TN': '#64748b',
+    }
     
     if ground_truth_sequence and len(ground_truth_sequence) > 0:
         # Side-by-side comparison
@@ -104,21 +116,44 @@ def render_sequence_comparison(
             st.markdown("**Ground Truth**")
             if has_categories and ground_truth_categories:
                 render_sequence_with_categories(
-                    ground_truth_labels, ground_truth_categories, None, None,
-                    occlusion_flags=ground_truth_occluded, is_ground_truth=True
+                    ground_truth_labels,
+                    ground_truth_categories,
+                    None,
+                    None,
+                    occlusion_flags=ground_truth_occluded,
+                    is_ground_truth=True,
+                    case_palette=case_palette,
                 )
             else:
                 render_sequence_chips(
-                    ground_truth_labels, None, color='#10b981',
-                    occlusion_flags=ground_truth_occluded
+                    ground_truth_labels,
+                    None,
+                    color='#10b981',
+                    occlusion_flags=ground_truth_occluded,
+                    case_palette=case_palette,
                 )
         
         with col2:
             st.markdown("**Predicted**")
             if has_categories:
-                render_sequence_with_categories(predicted_labels, predicted_categories, confidence_scores, category_confidences)
+                render_sequence_with_categories(
+                    predicted_labels,
+                    predicted_categories,
+                    confidence_scores,
+                    category_confidences,
+                    case_map=prediction_cases,
+                    case_palette=case_palette,
+                    confidence_threshold=confidence_threshold,
+                )
             else:
-                render_sequence_chips(predicted_labels, confidence_scores, color='#3b82f6')
+                render_sequence_chips(
+                    predicted_labels,
+                    confidence_scores,
+                    color='#3b82f6',
+                    case_map=prediction_cases,
+                    case_palette=case_palette,
+                    confidence_threshold=confidence_threshold,
+                )
         
     else:
         # Only prediction - show warning if ground truth was expected
@@ -127,16 +162,35 @@ def render_sequence_comparison(
         
         st.markdown("**Predicted Sequence**")
         if has_categories:
-            render_sequence_with_categories(predicted_labels, predicted_categories, confidence_scores, category_confidences)
+            render_sequence_with_categories(
+                predicted_labels,
+                predicted_categories,
+                confidence_scores,
+                category_confidences,
+                case_map=prediction_cases,
+                case_palette=case_palette,
+                confidence_threshold=confidence_threshold,
+            )
         else:
-            render_sequence_chips(predicted_labels, confidence_scores, color='#3b82f6')
+            render_sequence_chips(
+                predicted_labels,
+                confidence_scores,
+                color='#3b82f6',
+                case_map=prediction_cases,
+                case_palette=case_palette,
+                confidence_threshold=confidence_threshold,
+            )
 
 
 def render_sequence_chips(
     labels: List[str],
     confidence_scores: Optional[List[float]] = None,
     color: str = '#3b82f6',
-    occlusion_flags: Optional[List[int]] = None
+    occlusion_flags: Optional[List[int]] = None,
+    case_map: Optional[Dict[int, str]] = None,
+    case_palette: Optional[Dict[str, str]] = None,
+    confidence_threshold: float = 0.5,
+    low_confidence_color: str = '#f97316',
 ):
     """
     Render sequence as colored chips/badges.
@@ -153,6 +207,7 @@ def render_sequence_chips(
     
     # Create HTML for chips
     chips_html = '<div style="display: flex; flex-wrap: wrap; gap: 0.5rem; margin: 1rem 0;">'
+    palette = case_palette or {}
     
     for i, label in enumerate(labels):
         confidence_text = ""
@@ -165,7 +220,12 @@ def render_sequence_chips(
             opacity = 1.0
         
         # Use red color if occluded, otherwise use provided color
-        chip_color = '#ef4444' if (occlusion_flags and i < len(occlusion_flags) and occlusion_flags[i] == 1) else color
+        chip_color = '#ef4444' if (occlusion_flags and i < len(occlusion_flags) and occlusion_flags[i] == 1 and not case_map) else color
+        if case_map and i in case_map:
+            chip_color = palette.get(case_map[i], chip_color)
+        elif confidence_scores and i < len(confidence_scores):
+            if confidence_scores[i] < confidence_threshold:
+                chip_color = low_confidence_color
         
         chip_style = f"""
             background-color: {chip_color};
@@ -189,7 +249,11 @@ def render_sequence_with_categories(
     gloss_confidences: Optional[List[float]] = None,
     category_confidences: Optional[List[float]] = None,
     occlusion_flags: Optional[List[int]] = None,
-    is_ground_truth: bool = False
+    is_ground_truth: bool = False,
+    case_map: Optional[Dict[int, str]] = None,
+    case_palette: Optional[Dict[str, str]] = None,
+    confidence_threshold: float = 0.5,
+    low_confidence_color: str = '#f97316',
 ):
     """
     Render sequence with both glosses and categories.
@@ -216,6 +280,8 @@ def render_sequence_with_categories(
     # Create HTML for dual chips (gloss + category)
     chips_html = '<div style="display: flex; flex-wrap: wrap; gap: 0.8rem; margin: 1rem 0;">'
     
+    palette = case_palette or {}
+
     for i, gloss_label in enumerate(gloss_labels):
         # Gloss chip
         gloss_conf_text = ""
@@ -226,9 +292,14 @@ def render_sequence_with_categories(
         else:
             gloss_opacity = 1.0
         
-        # Determine gloss chip color: red if occluded ground truth, blue otherwise
+        # Determine gloss chip color
         is_occluded = occlusion_flags and i < len(occlusion_flags) and occlusion_flags[i] == 1
-        gloss_color = '#ef4444' if (is_ground_truth and is_occluded) else '#3b82f6'
+        gloss_base = '#10b981' if is_ground_truth else '#3b82f6'
+        gloss_color = gloss_base
+        if case_map and i in case_map:
+            gloss_color = palette.get(case_map[i], gloss_color)
+        elif gloss_confidences and i < len(gloss_confidences) and gloss_confidences[i] < confidence_threshold:
+            gloss_color = low_confidence_color
         
         # Category chip
         cat_label = "N/A"
@@ -243,8 +314,21 @@ def render_sequence_with_categories(
                 cat_conf_text = f' ({cat_conf*100:.1f}%)'
                 cat_opacity = 0.5 + (cat_conf * 0.5)
         
-        # Container for this sign (vertical stack)
-        chips_html += f'<div style="display: flex; flex-direction: column; gap: 0.25rem;"><div style="background-color: {gloss_color}; color: white; padding: 0.4rem 0.8rem; border-radius: 1rem; font-size: 0.9rem; font-weight: 500; opacity: {gloss_opacity};">{i+1}. {gloss_label}{gloss_conf_text}</div><div style="background-color: #10b981; color: white; padding: 0.3rem 0.6rem; border-radius: 0.8rem; font-size: 0.75rem; font-weight: 500; opacity: {cat_opacity}; text-align: center;">{cat_label}{cat_conf_text}</div></div>'
+        category_base = '#ef4444' if (is_ground_truth and is_occluded) else '#10b981'
+        if not is_ground_truth:
+            category_base = '#10b981'
+        category_color = category_base
+        cat_color = category_color
+        if not is_ground_truth and category_confidences and i < len(category_confidences) and category_confidences[i] < confidence_threshold:
+            cat_color = low_confidence_color
+
+        chips_html += (
+            '<div style="display: flex; flex-direction: column; gap: 0.25rem;">'
+            f'<div style="background-color: {gloss_color}; color: white; padding: 0.4rem 0.8rem; border-radius: 1rem; font-size: 0.9rem; font-weight: 500; opacity: {gloss_opacity};">'
+            f'{i+1}. {gloss_label}{gloss_conf_text}</div>'
+            f'<div style="background-color: {cat_color}; color: white; padding: 0.3rem 0.6rem; border-radius: 0.8rem; font-size: 0.75rem; font-weight: 500; opacity: {cat_opacity}; text-align: center;">'
+            f'{cat_label}{cat_conf_text}</div></div>'
+        )
     
     chips_html += '</div>'
     st.markdown(chips_html, unsafe_allow_html=True)
@@ -371,7 +455,10 @@ def render_temporal_alignment(
     temporal_alignment_accuracy: Optional[float] = None,
     mask: Optional[np.ndarray] = None,
     timestamps_ms: Optional[np.ndarray] = None,
-    predicted_categories: Optional[List[int]] = None
+    predicted_categories: Optional[List[int]] = None,
+    prediction_cases: Optional[Dict[int, str]] = None,
+    ground_truth_cases: Optional[Dict[int, str]] = None,
+    case_palette: Optional[Dict[str, str]] = None,
 ):
     """
     Render temporal alignment visualization.
@@ -468,6 +555,16 @@ def render_temporal_alignment(
         ))
     
     # Ground truth timeline
+    palette = case_palette or {
+        'TP-EXACT': 'rgba(34, 197, 94, 0.85)',   # lime green
+        'TP-GOOD': 'rgba(22, 163, 74, 0.85)',    # green
+        'TP-LENIENT': 'rgba(13, 148, 136, 0.85)',# teal-ish green
+        'TP': 'rgba(34, 197, 94, 0.85)',
+        'FP': 'rgba(239, 68, 68, 0.9)',
+        'FN': 'rgba(249, 115, 22, 0.9)',
+        'TN': 'rgba(100, 116, 139, 0.85)',
+    }
+
     for i, ts in enumerate(ground_truth_timestamps):
         gloss_label = ts.get('gloss_label', ts.get('gloss', ''))
         category_id = ts.get('category', None)
@@ -549,20 +646,48 @@ def render_temporal_alignment(
             hover_text += f"Category: {category_label}<br>"
         hover_text += f"Start: {ts['start_ms']}ms<br>End: {ts['end_ms']}ms<br>Duration: {ts['duration_ms']}ms<extra></extra>"
         
-        fig.add_trace(go.Bar(
+        case_index = ts.get('index', i)
+        case = prediction_cases.get(case_index) if prediction_cases else None
+        pred_color = palette.get(case, predicted_color) if case else predicted_color
+        outline = palette.get(case, predicted_color) if case else predicted_color
+
+        bar = go.Bar(
             name=f"Pred: {gloss_label}",
             x=[ts['duration_ms']],
             y=['Predicted'],
             orientation='h',
             marker=dict(
-                color=predicted_color,
-                line=dict(color='rgba(30, 58, 138, 0.9)', width=2)
+                color=pred_color,
+                line=dict(color=outline, width=2)
             ),
             textposition='none',
             hovertemplate=hover_text,
             base=ts['start_ms'],
             width=0.6
-        ))
+        )
+        fig.add_trace(bar)
+
+        if case and case.startswith('FN'):
+            fig.add_shape(
+                type='rect',
+                x0=ts['start_ms'],
+                x1=ts['end_ms'],
+                y0=y_center['Predicted'] - bar_height,
+                y1=y_center['Predicted'] + bar_height,
+                fillcolor='rgba(249, 115, 22, 0.35)',
+                line=dict(color='rgba(249, 115, 22, 0.9)', width=2),
+                layer='above',
+            )
+
+        fig.add_shape(
+            type='line',
+            x0=ts['end_ms'],
+            x1=ts['end_ms'],
+            y0=y_center['Predicted'] - bar_height,
+            y1=y_center['Predicted'] + bar_height,
+            line=dict(color='rgba(255,255,255,0.9)', width=2),
+            layer='above',
+        )
 
         annotation_text = gloss_label if not category_display else f"{gloss_label}<br>{category_display}"
         duration = ts['duration_ms']
@@ -581,12 +706,12 @@ def render_temporal_alignment(
             xanchor='right',
             yanchor='middle',
             align='right',
-            bgcolor=predicted_label_bg,
-            bordercolor='rgba(30, 64, 175, 0.95)',
+            bgcolor='white',
+            bordercolor='rgba(15, 23, 42, 0.3)',
             borderwidth=1,
             borderpad=3,
             font=dict(
-                color='white',
+                color='black',
                 size=11,
                 family='Arial Black'
             )
