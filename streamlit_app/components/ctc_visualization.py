@@ -237,7 +237,7 @@ def render_sequence_chips(
             opacity: {opacity};
         """
         
-        chips_html += f'<div style="{chip_style}">{i+1}. {label}{confidence_text}</div>'
+        chips_html += f'<div style="{chip_style}">{label}{confidence_text}</div>'
     
     chips_html += '</div>'
     st.markdown(chips_html, unsafe_allow_html=True)
@@ -314,19 +314,24 @@ def render_sequence_with_categories(
                 cat_conf_text = f' ({cat_conf*100:.1f}%)'
                 cat_opacity = 0.5 + (cat_conf * 0.5)
         
-        category_base = '#ef4444' if (is_ground_truth and is_occluded) else '#10b981'
-        if not is_ground_truth:
-            category_base = '#10b981'
-        category_color = category_base
-        cat_color = category_color
-        if not is_ground_truth and category_confidences and i < len(category_confidences) and category_confidences[i] < confidence_threshold:
-            cat_color = low_confidence_color
+        if is_ground_truth:
+            if is_occluded:
+                cat_bg = '#000000'
+                cat_color = 'white'
+            else:
+                cat_bg = '#ffffff'
+                cat_color = '#000000'
+        else:
+            cat_bg = '#10b981'
+            cat_color = 'white'
+            if category_confidences and i < len(category_confidences) and category_confidences[i] < confidence_threshold:
+                cat_bg = low_confidence_color
 
         chips_html += (
             '<div style="display: flex; flex-direction: column; gap: 0.25rem;">'
             f'<div style="background-color: {gloss_color}; color: white; padding: 0.4rem 0.8rem; border-radius: 1rem; font-size: 0.9rem; font-weight: 500; opacity: {gloss_opacity};">'
-            f'{i+1}. {gloss_label}{gloss_conf_text}</div>'
-            f'<div style="background-color: {cat_color}; color: white; padding: 0.3rem 0.6rem; border-radius: 0.8rem; font-size: 0.75rem; font-weight: 500; opacity: {cat_opacity}; text-align: center;">'
+            f'{gloss_label}{gloss_conf_text}</div>'
+            f'<div style="background-color: {cat_bg}; color: {cat_color}; padding: 0.3rem 0.6rem; border-radius: 0.8rem; font-size: 0.75rem; font-weight: 500; opacity: {cat_opacity}; text-align: center;">'
             f'{cat_label}{cat_conf_text}</div></div>'
         )
     
