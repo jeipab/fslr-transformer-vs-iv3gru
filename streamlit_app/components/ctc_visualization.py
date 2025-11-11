@@ -128,7 +128,7 @@ def render_sequence_comparison(
                 render_sequence_chips(
                     ground_truth_labels,
                     None,
-                    color='#1f77b4',
+                    color=case_palette.get('TP', '#22c55e'),
                     occlusion_flags=ground_truth_occluded,
                     case_palette=case_palette,
                 )
@@ -300,7 +300,7 @@ def render_sequence_with_categories(
         
         # Determine gloss chip color
         is_occluded = occlusion_flags and i < len(occlusion_flags) and occlusion_flags[i] == 1
-        gloss_base = '#1f77b4' if is_ground_truth else '#3b82f6'
+        gloss_base = case_palette.get('TP', '#22c55e') if is_ground_truth else '#3b82f6'
         gloss_color = gloss_base
         if gloss_case_map and i in gloss_case_map:
             gloss_color = palette.get(gloss_case_map[i], gloss_color)
