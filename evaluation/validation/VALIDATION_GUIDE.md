@@ -1,271 +1,35 @@
-# Sign Language Recognition Model Validation Guide
+# Continuous Validation Guide
 
-## Usage
+This guide explains how to run the continuous validation pipeline and interpret the confusion-matrix metrics it produces. Content unrelated to the continuous workflow has been removed.
 
-### Basic Command
-
-```powershell
-python -m evaluation.validation.validate --model <model_type> --checkpoint <checkpoint_path> [options]
-```
-
-### Required Arguments
-
-- `--model`: Model type (`transformer`, `iv3_gru`, or `mediapipe_gru`)
-- `--checkpoint`: Path to model checkpoint (.pt file)
-
-### Optional Arguments
-
-- `--data-dir`: Directory with validation NPZ files (default: `data/processed/fsl_val`)
-- `--labels-csv`: Path to labels CSV (default: `data/processed/fsl_val.csv`)
-- `--output-dir`: Output directory (default: `results-validate`)
-- `--device`: Device (`cpu`, `cuda`, `auto`) (default: `auto`)
-- `--batch-size`: Batch size (default: `32`)
-- `--save-predictions`: Save individual predictions to JSON files
-- `--verbose`: Enable detailed output
-
-**Note**: Model input dimensions (156 for keypoints, 2048 for features) are auto-detected from checkpoints.
-
-### Output Files
-
-```
-results-validate/
-├── overall_results.json                   # Overall metrics
-├── occluded_results.json                  # Metrics for occluded samples
-├── non_occluded_results.json              # Metrics for non-occluded samples
-├── per_class_results.json                 # Per-class metrics
-├── confusion_matrices.json                # Confusion matrices
-├── complete_validation_results.json       # All results combined
-└── individual_predictions/                # Individual predictions (if --save-predictions)
-    ├── clip_0001_validation.json
-    └── ...
-```
-
-## Examples
-
-### Transformer Model
+## Running Continuous Validation
 
 ```bash
-python -m evaluation.validation.validate --model transformer --checkpoint trained_models/transformer/optimal/SignTransformer_best.pt
+python evaluation/validation/validate.py \
+    --model transformer \
+    --checkpoint trained_models/transformer/optimal/model.pt \
+    --data-dir data/processed/fsl_val \
+    --labels-csv data/processed/fsl_val.csv
 ```
 
-### IV3-GRU Model
+The command computes streaming predictions, aligns them with ground-truth activity windows, and saves confusion statistics to `confusion_matrices.json`.
 
-```bash
-python -m evaluation.validation.validate --model iv3_gru --checkpoint trained_models/iv3_gru/optimal/InceptionV3GRU_best.pt
-```
+## Confusion Matrix Enhancements
 
-### MediaPipe-GRU Model
+The continuous validator produces a richer confusion matrix than the legacy batch reports:
 
-```bash
-python -m evaluation.validation.validate --model mediapipe_gru --checkpoint trained_models/mediapipe_gru/optimal/MediaPipeGRU_best.pt
-```
+- Stores TP, FP, TN, FN counts per gloss and per category.
+- Persists the raw counts alongside derived metrics so downstream tools can recompute thresholds.
+- Tracks the decision windows used for each count, enabling timeline cross-checks in the dashboard.
 
-### With Options
+# Enhanced Confusion Matrix
 
-```bash
-python -m evaluation.validation.validate --model transformer --checkpoint trained_models/transformer/optimal/SignTransformer_best.pt --batch-size 16 --save-predictions --device cpu
-```
-
-### Custom Dataset
-
-```bash
-python -m evaluation.validation.validate --model transformer --checkpoint trained_models/transformer/optimal/SignTransformer_best.pt --data-dir data/processed/fsl_train --labels-csv data/processed/fsl_train.csv
-```
-
-## Output Format
-
-### Overall Results (`overall_results.json`)
-
-```json
-{
-  "gloss_accuracy": 0.8547,
-  "category_accuracy": 0.9123,
-  "gloss_precision": 0.8456,
-  "gloss_recall": 0.8547,
-  "gloss_f1_score": 0.8491,
-  "category_precision": 0.9087,
-  "category_recall": 0.9123,
-  "category_f1_score": 0.9105,
-  "num_samples": 428
-}
-```
-
-### Occlusion Analysis
-
-- `occluded_results.json`: Metrics for occluded samples
-- `non_occluded_results.json`: Metrics for non-occluded samples
-
-### Per-Class Results (`per_class_results.json`)
-
-```json
-{
-  "gloss_per_class": {
-    "0": {
-      "class": "GOOD MORNING (0)",
-      "precision": 0.9231,
-      "recall": 0.8571,
-      "f1-score": 0.8889,
-      "occurrences": 28
-    }
-  },
-  "category_per_class": {
-    "0": {
-      "class": "GREETING (0)",
-      "precision": 0.9156,
-      "recall": 0.9089,
-      "f1-score": 0.9122,
-      "occurrences": 98
-    }
-  }
-}
-```
-
-- **class**: Label name with ID
-- **precision**: TP / (TP + FP)
-- **recall**: TP / (TP + FN)
-- **f1-score**: Harmonic mean of precision and recall
-- **occurrences**: Number of samples in validation set
-
-### Individual Predictions (`individual_predictions/`)
-
-When using `--save-predictions`:
-
-```json
-{
-  "file": "clip_0138_nice to meet you",
-  "ground_truth": {
-    "gloss": "NICE TO MEET YOU (6)",
-    "category": "GREETING (0)",
-    "occluded": false
-  },
-  "prediction": {
-    "gloss": "NICE TO MEET YOU (6)",
-    "category": "GREETING (0)",
-    "gloss_probability": 0.9234,
-    "category_probability": 0.9876
-  },
-  "correct": {
-    "gloss": true,
-    "category": true
-  }
-}
-```
-
-## Metrics
-
-- **Accuracy**: Correctly predicted / Total samples
+- **TP (True Positive)**: High-confidence gloss matches that overlap ground truth while the signer is active (hands visible)
+- **FP (False Positive)**: High-confidence glosses that mismatch ground truth or occur during inactive periods (hands hidden)
+- **TN (True Negative)**: Low-confidence outputs that end inside inactive periods with no overlapping ground truth (model abstained correctly)
+- **FN (False Negative)**: Low-confidence outputs that fall inside active regions or overlap the ground truth (missed sign during activity)
 - **Precision**: TP / (TP + FP)
 - **Recall**: TP / (TP + FN)
-- **F1-Score**: 2 × (Precision × Recall) / (Precision + Recall)
+- **F1-Score**: 2 _ (Precision _ Recall) / (Precision + Recall)
 
-Metrics computed for:
-
-- Overall performance (all samples)
-- Occluded subset
-- Non-occluded subset
-- Per-class (each gloss and category)
-
-## Model Comparison
-
-```bash
-# Transformer
-python -m evaluation.validation.validate --model transformer --checkpoint trained_models/transformer/optimal/SignTransformer_best.pt --output-dir results_transformer
-
-# IV3-GRU
-python -m evaluation.validation.validate --model iv3_gru --checkpoint trained_models/iv3_gru/optimal/InceptionV3GRU_best.pt --output-dir results_iv3gru
-
-# MediaPipe-GRU
-python -m evaluation.validation.validate --model mediapipe_gru --checkpoint trained_models/mediapipe_gru/optimal/MediaPipeGRU_best.pt --output-dir results_mediapipe_gru
-```
-
-Compare `overall_results.json` from each output directory.
-
-## Troubleshooting
-
-**File Not Found**: Verify NPZ files exist in data directory and CSV paths are correct
-
-**CUDA Out of Memory**: Reduce batch size (`--batch-size 16`) or use CPU (`--device cpu`)
-
-**Model Loading Errors**: Check checkpoint path and model type match architecture
-
-**Empty Results**: Verify data directory contains NPZ files and CSV format is correct
-
-## CTC Evaluation (Continuous Recognition)
-
-### Quick Start
-
-```powershell
-python evaluation\validation\evaluate_ctc.py ^
-  --model transformer_ctc ^
-  --checkpoint trained_models\transformer_ctc\optimal\SignTransformerCtc_best.pt ^
-  --test-data data\processed\fsl_val ^
-  --test-labels data\processed\fsl_val.csv ^
-  --batch-size 32 ^
-  --output results_ctc.json
-```
-
-### Metrics
-
-**Word Error Rate (WER)**: Edit distance / reference length
-
-- WER = 0.0: Perfect (0% error)
-- WER < 0.2: Good (< 20% error)
-- WER > 0.5: Needs improvement
-
-**Sequence Accuracy**: Percentage of perfectly predicted sequences
-
-### Arguments
-
-| Argument          | Description                 | Default  |
-| ----------------- | --------------------------- | -------- |
-| `--model`         | CTC model type              | Required |
-| `--checkpoint`    | Model checkpoint path       | Required |
-| `--test-data`     | Test NPZ directory          | Required |
-| `--test-labels`   | Test CSV file               | Required |
-| `--decode-method` | greedy or beam_search       | greedy   |
-| `--beam-width`    | Beam width (if beam_search) | 10       |
-| `--batch-size`    | Batch size                  | 32       |
-| `--output`        | Save results to JSON        | None     |
-
-### Python API
-
-```python
-from evaluation.validation.evaluate_ctc import CTCEvaluator, load_model
-from training.train import FSLKeypointFileDataset, collate_for_ctc
-from torch.utils.data import DataLoader
-
-# Load model
-model = load_model('transformer_ctc', 'model.pt', device)
-
-# Create dataset
-dataset = FSLKeypointFileDataset('data/val', 'labels.csv', mode='ctc')
-loader = DataLoader(dataset, batch_size=32, collate_fn=collate_for_ctc)
-
-# Evaluate
-evaluator = CTCEvaluator(model, blank_id=105, device=device)
-results = evaluator.evaluate_dataset(loader)
-
-print(f"WER: {results['wer']:.4f}")
-print(f"Accuracy: {results['sequence_accuracy']:.4f}")
-```
-
-### Comparing Models
-
-```powershell
-# Evaluate Transformer CTC
-python evaluation\validation\evaluate_ctc.py --model transformer_ctc --checkpoint model_t.pt --test-data data\val --test-labels val.csv --output transformer_results.json
-
-# Evaluate GRU CTC
-python evaluation\validation\evaluate_ctc.py --model mediapipe_gru_ctc --checkpoint model_g.pt --test-data data\val --test-labels val.csv --output gru_results.json
-```
-
----
-
-## Dataset
-
-- **Training**: `data/processed/fsl_train` (80%)
-- **Validation**: `data/processed/fsl_val` (20%)
-- **Glosses**: 105 classes (0-104)
-- **Categories**: 10 classes (0-9): GREETING, SURVIVAL, NUMBER, CALENDAR, DAYS, FAMILY, RELATIONSHIPS, COLOR, FOOD, DRINK
-
-Label mappings: [LABEL_MAPPING_TABLE.md](../../data/labels/LABEL_MAPPING_TABLE.md)
+Use these metrics to monitor how well continuous decoding balances correctness and restraint. Spot-check the raw timeline outputs alongside the confusion matrix when diagnosing regressions.
