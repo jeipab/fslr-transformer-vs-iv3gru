@@ -23,9 +23,9 @@ def render_case_legend() -> None:
             "<span style='color:white;font-weight:600;'> | </span>"
             "<span style='color:#ef4444;font-weight:600;'>False Positive</span>"
             "<span style='color:white;font-weight:600;'> | </span>"
-            "<span style='color:#64748b;font-weight:600;'>True Negative</span>"
-            "<span style='color:white;font-weight:600;'> | </span>"
             "<span style='color:#f97316;font-weight:600;'>False Negative</span>"
+            "<span style='color:white;font-weight:600;'> | </span>"
+            "<span style='color:#9ca3af;font-weight:600;'>Blank</span>"
         ),
         unsafe_allow_html=True,
     )
@@ -919,8 +919,8 @@ def render_detailed_predictions(results: Dict[str, Any]):
         height=400
     )
     
-    # Per-class TP/FP/TN/FN aggregated table with toggle
-    st.markdown("#### TP/FP/TN/FN by Class")
+    # Per-class TP/FP/FN aggregated table with toggle
+    st.markdown("#### TP/FP/FN by Class")
     class_task_choice = st.selectbox(
         "Select task for per-class confusion counts",
         ["Gloss Recognition", "Category Classification"],
@@ -948,13 +948,10 @@ def render_detailed_predictions(results: Dict[str, Any]):
             fn = sum(1 for p in predictions if p['cat_pred'] != cid and p['cat_gt'] == cid)
             label = category_mapping.get(cid, f"Unknown ({cid})")
 
-        tn = total_n - (tp + fp + fn)
-
         per_class_rows.append({
             'Class': f"{label} ({cid})",
             'TP': tp,
             'FP': fp,
-            'TN': tn,
             'FN': fn,
         })
 
@@ -1336,7 +1333,7 @@ def render_ctc_validation_results(results: Dict[str, Any]):
                 st.metric("Category Mean F1-Score", f"{cat_mean_f1*100:.2f}%")
 
         # Integrated detection counts
-        count_cols = st.columns(6)
+        count_cols = st.columns(5)
         with count_cols[0]:
             st.metric("True Positives (TP)", overall_metrics.get('total_tp', 0))
         with count_cols[1]:
@@ -1344,10 +1341,8 @@ def render_ctc_validation_results(results: Dict[str, Any]):
         with count_cols[2]:
             st.metric("False Negatives (FN)", overall_metrics.get('total_fn', 0))
         with count_cols[3]:
-            st.metric("True Negatives (TN)", overall_metrics.get('total_tn', 0))
-        with count_cols[4]:
             st.metric("Total GT Instances", overall_metrics.get('total_gt_instances', 0))
-        with count_cols[5]:
+        with count_cols[4]:
             st.empty()
 
         # Detailed predictions table
@@ -1512,7 +1507,7 @@ def render_ctc_validation_results(results: Dict[str, Any]):
                             'TP': '#22c55e',
                             'FP': '#ef4444',
                             'FN': '#f97316',
-                            'TN': '#64748b',
+                            'BLANK': '#9ca3af',
                         }
                         prediction_case_map: Dict[int, str] = {}
                         ground_truth_case_map: Dict[int, str] = {}
@@ -1584,7 +1579,6 @@ def render_ctc_validation_results(results: Dict[str, Any]):
                                 'category_num_tp',
                                 'category_num_fp',
                                 'category_num_fn',
-                                'category_num_tn',
                             )
                         )
 
@@ -1604,14 +1598,12 @@ def render_ctc_validation_results(results: Dict[str, Any]):
                             with gloss_metrics_cols[2]:
                                 st.metric("F1-Score", _percent(pred.get('f1_score')))
 
-                            gloss_counts_cols = st.columns(4)
+                            gloss_counts_cols = st.columns(3)
                             with gloss_counts_cols[0]:
                                 st.metric("True Positive", _count(pred.get('num_tp')))
                             with gloss_counts_cols[1]:
                                 st.metric("False Positive", _count(pred.get('num_fp')))
                             with gloss_counts_cols[2]:
-                                st.metric("True Negative", _count(pred.get('num_tn')))
-                            with gloss_counts_cols[3]:
                                 st.metric("False Negative", _count(pred.get('num_fn')))
 
                         if category_metrics_present and cat_col is not None:
@@ -1625,14 +1617,12 @@ def render_ctc_validation_results(results: Dict[str, Any]):
                                 with cat_metrics_cols[2]:
                                     st.metric("F1-Score", _percent(pred.get('category_f1_score')))
 
-                                cat_counts_cols = st.columns(4)
+                                cat_counts_cols = st.columns(3)
                                 with cat_counts_cols[0]:
                                     st.metric("True Positive", _count(pred.get('category_num_tp')))
                                 with cat_counts_cols[1]:
                                     st.metric("False Positive", _count(pred.get('category_num_fp')))
                                 with cat_counts_cols[2]:
-                                    st.metric("True Negative", _count(pred.get('category_num_tn')))
-                                with cat_counts_cols[3]:
                                     st.metric("False Negative", _count(pred.get('category_num_fn')))
 
                         st.markdown("---")
@@ -1704,6 +1694,7 @@ def render_ctc_validation_results(results: Dict[str, Any]):
                                 case_palette=case_palette,
                                 category_prediction_cases=category_prediction_case_map,
                                 category_ground_truth_cases=category_ground_truth_case_map,
+                                confidence_threshold=pred.get('confidence_threshold', 0.5),
                             )
 
     # Download results shown for all tabs

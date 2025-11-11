@@ -890,14 +890,18 @@ class CTCPredictor:
         predicted_labels = [self.gloss_mapping.get(g, f"GLOSS_{g}") for g in predicted_sequence]
         predicted_timestamps = estimate_timestamps(predicted_sequence, X.shape[1], fps)
         
-        # Add category information to predicted_timestamps
-        if predicted_categories and len(predicted_categories) == len(predicted_timestamps):
-            for i, ts in enumerate(predicted_timestamps):
-                ts['category'] = predicted_categories[i] if i < len(predicted_categories) else None
+        # Add confidence and category information to predicted_timestamps
+        for i, ts in enumerate(predicted_timestamps):
+            if i < len(confidence_scores):
+                ts['confidence'] = float(confidence_scores[i])
+            if predicted_categories and i < len(predicted_categories):
+                ts['category'] = predicted_categories[i]
                 if hasattr(self, 'category_mapping') and ts['category'] is not None:
                     ts['category_label'] = self.category_mapping.get(ts['category'], f"Cat_{ts['category']}")
                 else:
                     ts['category_label'] = ''
+            if i < len(category_confidences):
+                ts['category_confidence'] = float(category_confidences[i])
         
         result = {
             'file_name': npz_path.name,
@@ -982,7 +986,6 @@ class CTCPredictor:
                     result['num_tp'] = metrics_result.num_tp
                     result['num_fp'] = metrics_result.num_fp
                     result['num_fn'] = metrics_result.num_fn
-                    result['num_tn'] = metrics_result.num_tn
                     result['num_gt'] = len(ground_truth['ground_truth_sequence'])
                     result['precision'] = float(metrics_result.precision)
                     result['recall'] = float(metrics_result.recall)
@@ -995,7 +998,6 @@ class CTCPredictor:
                     result['tp_breakdown'] = dict(metrics_result.tp_breakdown)
                     result['fp_breakdown'] = dict(metrics_result.fp_breakdown)
                     result['fn_breakdown'] = dict(metrics_result.fn_breakdown)
-                    result['tn_breakdown'] = dict(metrics_result.tn_breakdown)
 
                     if 'ground_truth_occluded' in ground_truth:
                         occ = _compute_occlusion_split_metrics(
@@ -1057,7 +1059,6 @@ class CTCPredictor:
                 result['num_tp'] = 0
                 result['num_fp'] = len(predicted_sequence)
                 result['num_fn'] = len(ground_truth['ground_truth_sequence'])
-                result['num_tn'] = 0
                 result['num_gt'] = len(ground_truth['ground_truth_sequence'])
                 result['precision'] = 0.0
                 result['recall'] = 0.0
@@ -1286,14 +1287,18 @@ class CTCPredictor:
         predicted_labels = [self.gloss_mapping.get(g, f"GLOSS_{g}") for g in final_sequence]
         predicted_timestamps = estimate_timestamps(final_sequence, seq_len, fps)
         
-        # Add category information to predicted_timestamps
-        if final_categories and len(final_categories) == len(predicted_timestamps):
-            for i, ts in enumerate(predicted_timestamps):
-                ts['category'] = final_categories[i] if i < len(final_categories) else None
+        # Add confidence and category information to predicted_timestamps
+        for i, ts in enumerate(predicted_timestamps):
+            if i < len(final_confidences):
+                ts['confidence'] = float(final_confidences[i])
+            if final_categories and i < len(final_categories):
+                ts['category'] = final_categories[i]
                 if hasattr(self, 'category_mapping') and ts['category'] is not None:
                     ts['category_label'] = self.category_mapping.get(ts['category'], f"Cat_{ts['category']}")
                 else:
                     ts['category_label'] = ''
+            if i < len(final_category_confidences):
+                ts['category_confidence'] = float(final_category_confidences[i])
         
         result = {
             'file_name': npz_path.name,
@@ -1413,7 +1418,6 @@ class CTCPredictor:
                 result['num_tp'] = metrics_result.num_tp
                 result['num_fp'] = metrics_result.num_fp
                 result['num_fn'] = metrics_result.num_fn
-                result['num_tn'] = metrics_result.num_tn
                 result['num_gt'] = len(gt_gloss_ids)
                 result['precision'] = float(metrics_result.precision)
                 result['recall'] = float(metrics_result.recall)
@@ -1426,7 +1430,6 @@ class CTCPredictor:
                 result['tp_breakdown'] = dict(metrics_result.tp_breakdown)
                 result['fp_breakdown'] = dict(metrics_result.fp_breakdown)
                 result['fn_breakdown'] = dict(metrics_result.fn_breakdown)
-                result['tn_breakdown'] = dict(metrics_result.tn_breakdown)
 
                 # Occlusion split metrics if occlusion flags available
                 if 'ground_truth_occluded' in ground_truth:
@@ -1491,7 +1494,6 @@ class CTCPredictor:
                 result['num_tp'] = 0
                 result['num_fp'] = len(final_sequence)
                 result['num_fn'] = len(gt_gloss_ids)
-                result['num_tn'] = 0
                 result['num_gt'] = len(gt_gloss_ids)
                 result['precision'] = 0.0
                 result['recall'] = 0.0
@@ -1504,7 +1506,6 @@ class CTCPredictor:
                 result['tp_breakdown'] = {"TP": 0}
                 result['fp_breakdown'] = {"FP": 0}
                 result['fn_breakdown'] = {"FN": 0}
-                result['tn_breakdown'] = {"TN": 0}
                 print(f"Warning: Detection metrics calculation failed for {result.get('file_name', 'unknown')}: {str(e)}")
         
         return result

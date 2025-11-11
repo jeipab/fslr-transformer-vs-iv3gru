@@ -1,7 +1,7 @@
 """
 Continuous sequence evaluation helpers.
 
-This module provides the building blocks for computing TP/FP/FN/TN breakdowns
+This module provides the building blocks for computing TP/FP/FN breakdowns
 and precision/recall/F1-style metrics for continuous sign-language recognition
 sequences.  The implementation follows the comprehensive overhaul plan and is
 structured to keep the public API clean, with well-documented helpers that can
@@ -85,7 +85,6 @@ class SequenceEvaluationResult:
     num_tp: int
     num_fp: int
     num_fn: int
-    num_tn: int
     precision: float
     recall: float
     f1_score: float
@@ -93,7 +92,6 @@ class SequenceEvaluationResult:
     tp_breakdown: Dict[str, int] = field(default_factory=dict)
     fp_breakdown: Dict[str, int] = field(default_factory=dict)
     fn_breakdown: Dict[str, int] = field(default_factory=dict)
-    tn_breakdown: Dict[str, int] = field(default_factory=dict)
     matched_pairs: List[Dict[str, float]] = field(default_factory=list)
     tp_indices: List[int] = field(default_factory=list)
     fp_indices: List[int] = field(default_factory=list)
@@ -115,7 +113,7 @@ def split_predictions_by_confidence(
     Args:
         prediction: SequencePrediction instance containing gloss IDs and confidences.
         threshold: Confidence threshold; predictions >= threshold are treated as sign
-                   hypotheses, while those below threshold contribute to TN analysis.
+                   hypotheses, while those below threshold are marked as BLANK.
 
     Returns:
         Tuple of (high_conf_indices, low_conf_indices).
@@ -130,6 +128,35 @@ def split_predictions_by_confidence(
             low_conf.append(idx)
 
     return high_conf, low_conf
+
+
+def mark_low_confidence_predictions_as_blank(
+    prediction: SequencePrediction,
+    low_conf_indices: Sequence[int],
+    *,
+    blank_label: str = "BLANK",
+) -> None:
+    """
+    Mutate prediction labels so low-confidence entries render as BLANK.
+
+    Args:
+        prediction: SequencePrediction to modify in place.
+        low_conf_indices: Indices of predictions below the confidence threshold.
+        blank_label: Label used to indicate abstention.
+    """
+    if not prediction.gloss_ids:
+        return
+
+    if not prediction.labels:
+        prediction.labels = ["" for _ in prediction.gloss_ids]
+    elif len(prediction.labels) < len(prediction.gloss_ids):
+        prediction.labels.extend(
+            [""] * (len(prediction.gloss_ids) - len(prediction.labels))
+        )
+
+    for idx in low_conf_indices:
+        if 0 <= idx < len(prediction.labels):
+            prediction.labels[idx] = blank_label
 
 
 def calculate_temporal_iou(pred: Timestamp, gt: Timestamp) -> float:
@@ -303,124 +330,12 @@ def augment_matches_with_order(
 
 
 # --------------------------------------------------------------------------- #
-# Classification Helpers
-# --------------------------------------------------------------------------- #
-
-
-def _intervals_overlap(a: Timestamp, b: Timestamp) -> bool:
-    return not (a.end_ms <= b.start_ms or a.start_ms >= b.end_ms)
-
-
-def _find_best_gt_match(
-    pred_ts: Timestamp, ground_truth: SequenceGroundTruth
-) -> Tuple[Optional[int], float]:
-    best_idx = None
-    best_iou = 0.0
-    for idx, gt_ts in enumerate(ground_truth.timestamps):
-        iou = calculate_temporal_iou(pred_ts, gt_ts)
-        if iou > best_iou:
-            best_iou = iou
-            best_idx = idx
-    return best_idx, best_iou
-
-
-def check_inactive_region(
-    timestamp: Timestamp,
-    mask: Optional[np.ndarray],
-    timestamps_ms: Optional[np.ndarray],
-    inactive_threshold: float,
-) -> bool:
-    if mask is None or timestamps_ms is None or len(mask) == 0:
-        return False
-    inactive_ratio = 1.0 - compute_active_ratio(timestamp, mask, timestamps_ms)
-    return inactive_ratio >= inactive_threshold
-
-
-def compute_gap_based_tn(
-    pred_indices: Sequence[int],
-    prediction: SequencePrediction,
-    ground_truth: SequenceGroundTruth,
-    mask: Optional[np.ndarray],
-    timestamps_ms: Optional[np.ndarray],
-    min_gap_ms: int,
-    inactive_threshold: float,
-) -> int:
-    if len(pred_indices) < 2 or timestamps_ms is None or mask is None:
-        return 0
-
-    pred_timestamps = sorted(
-        (prediction.timestamps[idx] for idx in pred_indices),
-        key=lambda ts: ts.start_ms,
-    )
-
-    gt_timestamps = ground_truth.timestamps
-
-    def gap_has_gt_overlap(start_ms: float, end_ms: float) -> bool:
-        for gt_ts in gt_timestamps:
-            if not (end_ms <= gt_ts.start_ms or start_ms >= gt_ts.end_ms):
-                return True
-        return False
-
-    tn_count = 0
-    for left, right in zip(pred_timestamps, pred_timestamps[1:]):
-        gap_start = left.end_ms
-        gap_end = right.start_ms
-        if gap_end <= gap_start:
-            continue
-        if (gap_end - gap_start) < min_gap_ms:
-            continue
-        if gap_has_gt_overlap(gap_start, gap_end):
-            continue
-        gap_timestamp = Timestamp(start_ms=gap_start, end_ms=gap_end)
-        if check_inactive_region(gap_timestamp, mask, timestamps_ms, inactive_threshold):
-            tn_count += 1
-
-    return tn_count
-
-
-def compute_true_negatives(
-    high_conf_indices: Sequence[int],
-    low_conf_indices: Sequence[int],
-    prediction: SequencePrediction,
-    ground_truth: SequenceGroundTruth,
-    mask: Optional[np.ndarray],
-    timestamps_ms: Optional[np.ndarray],
-    config: ContinuousEvaluationConfig,
-) -> int:
-    tn_count = 0
-
-    for idx in low_conf_indices:
-        pred_ts = prediction.timestamps[idx]
-        overlaps_gt = any(
-            _intervals_overlap(pred_ts, gt_ts) for gt_ts in ground_truth.timestamps
-        )
-        if overlaps_gt:
-            continue
-        if check_inactive_region(pred_ts, mask, timestamps_ms, config.inactive_threshold):
-            tn_count += 1
-
-    gap_tn = compute_gap_based_tn(
-        pred_indices=sorted(set(high_conf_indices)),
-        prediction=prediction,
-        ground_truth=ground_truth,
-        mask=mask,
-        timestamps_ms=timestamps_ms,
-        min_gap_ms=config.min_gap_duration_ms,
-        inactive_threshold=config.inactive_threshold,
-    )
-    if gap_tn:
-        tn_count += gap_tn
-
-    return tn_count
-
-
-# --------------------------------------------------------------------------- #
 # Evaluation Pipeline
 # --------------------------------------------------------------------------- #
 
 
 def _compute_counts_to_metrics(
-    num_tp: int, num_fp: int, num_fn: int, num_tn: int
+    num_tp: int, num_fp: int, num_fn: int
 ) -> Tuple[float, float, float]:
     precision = num_tp / (num_tp + num_fp) if (num_tp + num_fp) > 0 else 0.0
     recall = num_tp / (num_tp + num_fn) if (num_tp + num_fn) > 0 else 0.0
@@ -445,7 +360,7 @@ def compute_sequence_metrics(
 
     This function handles high-level orchestration: splitting predictions by
     confidence, IoU matching, active-region validation, optional lenient
-    matching, and deferred classification of FP/FN/TN subcases (populated in
+    matching, and deferred classification of FP/FN subcases (populated in
     later phases).
     """
 
@@ -458,6 +373,9 @@ def compute_sequence_metrics(
 
     high_conf_indices, low_conf_indices = split_predictions_by_confidence(
         prediction, config.confidence_threshold
+    )
+    mark_low_confidence_predictions_as_blank(
+        prediction, low_conf_indices, blank_label="BLANK"
     )
     high_conf_glosses = [prediction.gloss_ids[i] for i in high_conf_indices]
     high_conf_timestamps = [prediction.timestamps[i] for i in high_conf_indices]
@@ -563,34 +481,22 @@ def compute_sequence_metrics(
     fp_indices_absolute = sorted(set(fp_indices_absolute))
     fn_indices_absolute = sorted(set(fn_indices_absolute))
 
-    num_tn = compute_true_negatives(
-        high_conf_indices=high_conf_indices,
-        low_conf_indices=low_conf_indices,
-        prediction=prediction,
-        ground_truth=ground_truth,
-        mask=mask,
-        timestamps_ms=timestamps_ms,
-        config=config,
-    )
-
     tp_breakdown = {"TP": len(tp_indices_absolute)}
     fp_breakdown = {"FP": len(fp_indices_absolute)}
     fn_breakdown = {"FN": len(fn_indices_absolute)}
-    tn_breakdown = {"TN": num_tn}
 
     num_tp = len(tp_indices_absolute)
     num_fp = len(fp_indices_absolute)
     num_fn = len(fn_indices_absolute)
 
     precision, recall, f1_score = _compute_counts_to_metrics(
-        num_tp, num_fp, num_fn, num_tn
+        num_tp, num_fp, num_fn
     )
 
     return SequenceEvaluationResult(
         num_tp=num_tp,
         num_fp=num_fp,
         num_fn=num_fn,
-        num_tn=num_tn,
         precision=precision,
         recall=recall,
         f1_score=f1_score,
@@ -598,7 +504,6 @@ def compute_sequence_metrics(
         tp_breakdown=tp_breakdown,
         fp_breakdown=fp_breakdown,
         fn_breakdown=fn_breakdown,
-        tn_breakdown=tn_breakdown,
         matched_pairs=matched_pairs,
         tp_indices=tp_indices_absolute,
         fp_indices=fp_indices_absolute,
@@ -633,7 +538,6 @@ def compute_overall_metrics_micro(
             "total_tp": 0,
             "total_fp": 0,
             "total_fn": 0,
-            "total_tn": 0,
             "total_gt_instances": 0,
             "precision": 0.0,
             "recall": 0.0,
@@ -643,11 +547,10 @@ def compute_overall_metrics_micro(
     total_tp = sum(_extract_int(r, "num_tp", 0) for r in per_sequence_results)
     total_fp = sum(_extract_int(r, "num_fp", 0) for r in per_sequence_results)
     total_fn = sum(_extract_int(r, "num_fn", 0) for r in per_sequence_results)
-    total_tn = sum(_extract_int(r, "num_tn", 0) for r in per_sequence_results)
     total_gt = sum(_extract_int(r, "num_gt", 0) for r in per_sequence_results)
 
     precision, recall, f1_score = _compute_counts_to_metrics(
-        total_tp, total_fp, total_fn, total_tn
+        total_tp, total_fp, total_fn
     )
 
     return {
@@ -656,7 +559,6 @@ def compute_overall_metrics_micro(
         "total_tp": int(total_tp),
         "total_fp": int(total_fp),
         "total_fn": int(total_fn),
-        "total_tn": int(total_tn),
         "total_gt_instances": int(total_gt),
         "precision": float(precision),
         "recall": float(recall),

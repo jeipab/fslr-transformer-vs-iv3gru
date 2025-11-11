@@ -26,7 +26,7 @@ The continuous validator produces a richer confusion matrix than the legacy batc
 
 - **TP (True Positive)**: High-confidence gloss matches that overlap ground truth while the signer is active (hands visible)
 - **FP (False Positive)**: High-confidence glosses that mismatch ground truth or occur during inactive periods (hands hidden)
-- **TN (True Negative)**: Low-confidence outputs that end inside inactive periods with no overlapping ground truth (model abstained correctly)
+- **TN (True Negative)**: Previously tracked for low-confidence abstentions, but omitted from the current metrics dashboard; focus on TP/FP/FN instead.
 - **FN (False Negative)**: Low-confidence outputs that fall inside active regions or overlap the ground truth (missed sign during activity)
 - **Precision**: TP / (TP + FP)
 - **Recall**: TP / (TP + FN)
