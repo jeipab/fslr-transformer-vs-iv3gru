@@ -104,7 +104,6 @@ def render_sequence_comparison(
         'TP': '#22c55e',
         'FP': '#ef4444',
         'FN': '#f97316',
-        'BLANK': '#9ca3af',
     }
     
     if ground_truth_sequence and len(ground_truth_sequence) > 0:
@@ -212,37 +211,25 @@ def render_sequence_chips(
     palette = case_palette or {}
     
     for i, label in enumerate(labels):
-        confidence_value = None
-        if confidence_scores and i < len(confidence_scores):
-            confidence_value = confidence_scores[i]
         confidence_text = ""
-        opacity = 1.0
-        if confidence_value is not None:
-            opacity = 0.5 + (confidence_value * 0.5)
-            confidence_text = f' ({confidence_value*100:.1f}%)'
-
+        if confidence_scores and i < len(confidence_scores):
+            confidence = confidence_scores[i]
+            confidence_text = f' ({confidence*100:.1f}%)'
+            opacity = 0.5 + (confidence * 0.5)
+        else:
+            opacity = 1.0
+        
         # Use red color if occluded, otherwise use provided color
         chip_color = '#ef4444' if (occlusion_flags and i < len(occlusion_flags) and occlusion_flags[i] == 1 and not case_map) else color
-        text_color = 'white'
-        is_blank = str(label).strip().upper() == "BLANK"
-        if not is_blank and confidence_value is not None and confidence_value < confidence_threshold:
-            is_blank = True
-
-        if is_blank:
-            chip_color = palette.get('BLANK', '#9ca3af')
-            text_color = '#111827'
-            confidence_text = ""
-            opacity = 1.0
-
         if case_map and i in case_map:
             chip_color = palette.get(case_map[i], chip_color)
-        elif confidence_value is not None and not is_blank and confidence_value < confidence_threshold:
-            chip_color = low_confidence_color
-            text_color = 'white'
-
+        elif confidence_scores and i < len(confidence_scores):
+            if confidence_scores[i] < confidence_threshold:
+                chip_color = low_confidence_color
+        
         chip_style = f"""
             background-color: {chip_color};
-            color: {text_color};
+            color: white;
             padding: 0.4rem 0.8rem;
             border-radius: 1rem;
             font-size: 0.9rem;
@@ -301,46 +288,36 @@ def render_sequence_with_categories(
 
     for i, gloss_label in enumerate(gloss_labels):
         # Gloss chip
-        gloss_conf = None
+        gloss_conf_text = ""
         if gloss_confidences and i < len(gloss_confidences):
             gloss_conf = gloss_confidences[i]
-        gloss_conf_text = ""
-        gloss_opacity = 1.0
-        if gloss_conf is not None:
-            gloss_opacity = 0.5 + (gloss_conf * 0.5)
             gloss_conf_text = f' ({gloss_conf*100:.1f}%)'
+            gloss_opacity = 0.5 + (gloss_conf * 0.5)
+        else:
+            gloss_opacity = 1.0
         
         # Determine gloss chip color
         is_occluded = occlusion_flags and i < len(occlusion_flags) and occlusion_flags[i] == 1
         gloss_base = case_palette.get('TP', '#22c55e') if is_ground_truth else '#3b82f6'
         gloss_color = gloss_base
         gloss_text_color = 'white'
-        is_blank = str(gloss_label).strip().upper() == "BLANK"
         if gloss_case_map and i in gloss_case_map:
             gloss_color = palette.get(gloss_case_map[i], gloss_color)
-        elif gloss_conf is not None and gloss_conf < confidence_threshold and not is_blank:
+        elif gloss_confidences and i < len(gloss_confidences) and gloss_confidences[i] < confidence_threshold:
             gloss_color = low_confidence_color
-        if is_blank or (gloss_conf is not None and gloss_conf < confidence_threshold):
-            is_blank = True
-            gloss_color = palette.get('BLANK', '#9ca3af')
-            gloss_text_color = '#111827'
-            gloss_conf_text = ""
-            gloss_opacity = 1.0
         
         # Category chip
         cat_label = "N/A"
         cat_conf_text = ""
         cat_opacity = 1.0
-        cat_conf = None
         if i < len(category_ids):
             cat_id = category_ids[i]
             cat_label = category_mapping.get(cat_id, f"Cat_{cat_id}")
             
             if category_confidences and i < len(category_confidences):
                 cat_conf = category_confidences[i]
-                if cat_conf is not None:
-                    cat_opacity = 0.5 + (cat_conf * 0.5)
-                    cat_conf_text = f' ({cat_conf*100:.1f}%)'
+                cat_conf_text = f' ({cat_conf*100:.1f}%)'
+                cat_opacity = 0.5 + (cat_conf * 0.5)
         
         cat_border = '1px solid transparent'
         cat_color = 'white'
@@ -360,24 +337,10 @@ def render_sequence_with_categories(
         else:
             if category_case_map and i in category_case_map:
                 cat_bg = palette.get(category_case_map[i], cat_bg)
-            elif cat_conf is not None and cat_conf < confidence_threshold:
+            elif category_confidences and i < len(category_confidences) and category_confidences[i] < confidence_threshold:
                 cat_bg = low_confidence_color
             if category_case_map and i in category_case_map:
                 cat_border = f'1px solid {palette.get(category_case_map[i], "#0f172a")}'
-
-        cat_is_blank = False
-        if cat_conf is not None and cat_conf < confidence_threshold:
-            cat_is_blank = True
-        if str(cat_label).strip().upper() == "BLANK":
-            cat_is_blank = True
-
-        if cat_is_blank:
-            cat_label = "BLANK"
-            cat_bg = palette.get('BLANK', '#9ca3af')
-            cat_color = '#111827'
-            cat_border = '1px solid rgba(148, 163, 184, 0.45)'
-            cat_conf_text = ""
-            cat_opacity = 1.0
 
         chips_html += (
             '<div style="display: flex; flex-direction: column; gap: 0.25rem;">'
@@ -454,8 +417,6 @@ def smooth_timestamps(timestamps: List[Dict]) -> List[Dict]:
     # Preserve category info from first timestamp in merged segment
     current_category = timestamps[0].get('category', None)
     current_category_label = timestamps[0].get('category_label', '')
-    current_confidence = timestamps[0].get('confidence')
-    current_category_confidence = timestamps[0].get('category_confidence')
     
     for i in range(1, len(timestamps)):
         next_gloss = timestamps[i].get('gloss', timestamps[i].get('index'))
@@ -467,20 +428,6 @@ def smooth_timestamps(timestamps: List[Dict]) -> List[Dict]:
             if current_category is None:
                 current_category = timestamps[i].get('category', None)
                 current_category_label = timestamps[i].get('category_label', '')
-            next_conf = timestamps[i].get('confidence')
-            if next_conf is not None:
-                current_confidence = (
-                    max(current_confidence, next_conf)
-                    if current_confidence is not None
-                    else next_conf
-                )
-            next_cat_conf = timestamps[i].get('category_confidence')
-            if next_cat_conf is not None:
-                current_category_confidence = (
-                    max(current_category_confidence, next_cat_conf)
-                    if current_category_confidence is not None
-                    else next_cat_conf
-                )
         else:
             # Add the current merged segment
             smoothed_ts = {
@@ -495,10 +442,6 @@ def smooth_timestamps(timestamps: List[Dict]) -> List[Dict]:
                 smoothed_ts['category'] = current_category
             if current_category_label:
                 smoothed_ts['category_label'] = current_category_label
-            if current_confidence is not None:
-                smoothed_ts['confidence'] = float(current_confidence)
-            if current_category_confidence is not None:
-                smoothed_ts['category_confidence'] = float(current_category_confidence)
             smoothed.append(smoothed_ts)
             
             # Start new segment
@@ -507,8 +450,6 @@ def smooth_timestamps(timestamps: List[Dict]) -> List[Dict]:
             end_ms = timestamps[i]['end_ms']
             current_category = timestamps[i].get('category', None)
             current_category_label = timestamps[i].get('category_label', '')
-            current_confidence = timestamps[i].get('confidence')
-            current_category_confidence = timestamps[i].get('category_confidence')
     
     # Add the final segment
     final_ts = {
@@ -523,10 +464,6 @@ def smooth_timestamps(timestamps: List[Dict]) -> List[Dict]:
         final_ts['category'] = current_category
     if current_category_label:
         final_ts['category_label'] = current_category_label
-    if current_confidence is not None:
-        final_ts['confidence'] = float(current_confidence)
-    if current_category_confidence is not None:
-        final_ts['category_confidence'] = float(current_category_confidence)
     smoothed.append(final_ts)
     
     return smoothed
@@ -544,7 +481,6 @@ def render_temporal_alignment(
     case_palette: Optional[Dict[str, str]] = None,
     category_prediction_cases: Optional[Dict[int, str]] = None,
     category_ground_truth_cases: Optional[Dict[int, str]] = None,
-    confidence_threshold: float = 0.5,
 ):
     """
     Render temporal alignment visualization.
@@ -556,9 +492,8 @@ def render_temporal_alignment(
         mask: Optional keypoint visibility mask [T, 89] for detecting inactive periods
         timestamps_ms: Optional timestamp array [T] in milliseconds for inactive period detection
         predicted_categories: Optional list of predicted category IDs as fallback if not in timestamps
-        category_prediction_cases: Optional mapping of predicted indices to TP/FP/TN/FN cases for categories
+        category_prediction_cases: Optional mapping of predicted indices to TP/FP/FN cases for categories
         category_ground_truth_cases: Optional mapping of ground truth indices to TP/FN cases for categories
-    confidence_threshold: Confidence level below which predictions are shown as BLANK
     """
     st.markdown("#### Temporal Alignment")
     
@@ -626,7 +561,6 @@ def render_temporal_alignment(
         'TP': 'rgba(34, 197, 94, 0.85)',
         'FP': 'rgba(239, 68, 68, 0.9)',
         'FN': 'rgba(249, 115, 22, 0.9)',
-        'BLANK': 'rgba(156, 163, 175, 0.85)',
     }
     category_prediction_cases = category_prediction_cases or {}
     category_ground_truth_cases = category_ground_truth_cases or {}
@@ -635,7 +569,6 @@ def render_temporal_alignment(
         'TP': 'True Positive',
         'FP': 'False Positive',
         'FN': 'False Negative',
-        'BLANK': 'Blank',
     }
 
     def add_inactive_overlay(fig, row_label, bar_width):
@@ -667,41 +600,28 @@ def render_temporal_alignment(
 
     for i, ts in enumerate(smoothed_predicted):
         gloss_index = ts.get('gloss', ts.get('index'))
-        original_gloss_label = gloss_mapping.get(gloss_index, f"Gloss {gloss_index}")
+        gloss_label = gloss_mapping.get(gloss_index, f"Gloss {gloss_index}")
         category_id = ts.get('category', None)
         category_label = ts.get('category_label', '')
         
-        # Get category label from mapping if category_id is available
         if category_id is not None and not category_label:
             category_label = category_mapping.get(category_id, f"Cat_{category_id}")
         
         case_index = ts.get('index', i)
-        original_case = prediction_cases.get(case_index) if prediction_cases else None
-        gloss_confidence = ts.get('confidence')
-        gloss_low_conf = gloss_confidence is not None and gloss_confidence < confidence_threshold
+        case = prediction_cases.get(case_index) if prediction_cases else None
+        pred_color = palette.get(case, predicted_color) if case else predicted_color
+        case_label = case_label_map.get(case)
         
-        display_case = 'BLANK' if gloss_low_conf else original_case
-        display_label = "BLANK" if gloss_low_conf else original_gloss_label
-        if gloss_low_conf:
-            pred_color = palette.get('BLANK', predicted_color)
-        else:
-            pred_color = palette.get(display_case, predicted_color) if display_case else predicted_color
-        case_label = case_label_map.get(display_case) if display_case else None
-        
-        hover_text = f"<b>{display_label}</b><br>"
-        if gloss_low_conf:
-            hover_text += f"Original Gloss: {original_gloss_label}<br>"
-        hover_text += f"Gloss ID: {gloss_index}<br>"
+        hover_text = (
+            f"<b>{gloss_label}</b><br>"
+            f"Gloss ID: {gloss_index}<br>"
+        )
         if category_label:
             hover_text += f"Category: {category_label}<br>"
-        if gloss_confidence is not None:
-            hover_text += f"Confidence: {gloss_confidence*100:.1f}%<br>"
-            if gloss_low_conf:
-                hover_text += "Marked as BLANK<br>"
         if case_label:
             hover_text += f"Case: {case_label}<br>"
-        elif display_case:
-            hover_text += f"Case: {display_case}<br>"
+        elif case:
+            hover_text += f"Case: {case}<br>"
         hover_text += (
             f"Start: {ts['start_ms']}ms<br>"
             f"End: {ts['end_ms']}ms<br>"
@@ -709,7 +629,7 @@ def render_temporal_alignment(
         )
 
         fig_gloss.add_trace(go.Bar(
-            name=f"Pred Gloss: {display_label}",
+            name=f"Pred Gloss: {gloss_label}",
             x=[ts['duration_ms']],
             y=['Predicted Gloss'],
             orientation='h',
@@ -723,7 +643,7 @@ def render_temporal_alignment(
             width=0.6
         ))
 
-        if original_case and original_case.startswith('FN'):
+        if case and case.startswith('FN'):
             fig_gloss.add_shape(
                 type='rect',
                 x0=ts['start_ms'],
@@ -748,6 +668,7 @@ def render_temporal_alignment(
                 layer='above',
             )
 
+        annotation_text = gloss_label
         duration = ts['duration_ms']
         label_offset = max(duration * 0.05, 40)
         label_x = ts['end_ms'] - label_offset
@@ -757,7 +678,7 @@ def render_temporal_alignment(
         fig_gloss.add_annotation(
             x=label_x,
             y='Predicted Gloss',
-            text=display_label,
+            text=annotation_text,
             showarrow=False,
             xref='x',
             yref='y',
@@ -903,26 +824,13 @@ def render_temporal_alignment(
         if category_id is not None and not category_label:
             category_label = category_mapping.get(category_id, f"Cat_{category_id}")
 
-        raw_label = category_label or (f"Cat_{category_id}" if category_id is not None else "Category")
-        category_case_original = category_prediction_cases.get(case_index) if category_prediction_cases else None
-        category_confidence = ts.get('category_confidence')
-        category_low_conf = category_confidence is not None and category_confidence < confidence_threshold
+        display_label = category_label or (f"Cat_{category_id}" if category_id is not None else "Category")
 
-        category_case = 'BLANK' if category_low_conf else category_case_original
-        display_label = "BLANK" if category_low_conf else raw_label
-        if category_low_conf:
-            category_color = palette.get('BLANK', predicted_category_color)
-        else:
-            category_color = palette.get(category_case, predicted_category_color) if category_case else predicted_category_color
-        category_case_label = case_label_map.get(category_case) if category_case else None
+        category_case = category_prediction_cases.get(case_index) if category_prediction_cases else None
+        category_case_label = case_label_map.get(category_case)
+        category_color = palette.get(category_case, predicted_category_color) if category_case else predicted_category_color
 
         hover_text = f"<b>{display_label}</b><br>"
-        if category_low_conf and raw_label:
-            hover_text += f"Original Category: {raw_label}<br>"
-        if category_confidence is not None:
-            hover_text += f"Confidence: {category_confidence*100:.1f}%<br>"
-            if category_low_conf:
-                hover_text += "Marked as BLANK<br>"
         if category_case_label:
             hover_text += f"Case: {category_case_label}<br>"
         elif category_case:

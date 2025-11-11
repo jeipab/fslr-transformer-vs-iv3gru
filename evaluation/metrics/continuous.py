@@ -113,7 +113,7 @@ def split_predictions_by_confidence(
     Args:
         prediction: SequencePrediction instance containing gloss IDs and confidences.
         threshold: Confidence threshold; predictions >= threshold are treated as sign
-                   hypotheses, while those below threshold are marked as BLANK.
+                   hypotheses, while those below threshold are handled separately.
 
     Returns:
         Tuple of (high_conf_indices, low_conf_indices).
@@ -128,35 +128,6 @@ def split_predictions_by_confidence(
             low_conf.append(idx)
 
     return high_conf, low_conf
-
-
-def mark_low_confidence_predictions_as_blank(
-    prediction: SequencePrediction,
-    low_conf_indices: Sequence[int],
-    *,
-    blank_label: str = "BLANK",
-) -> None:
-    """
-    Mutate prediction labels so low-confidence entries render as BLANK.
-
-    Args:
-        prediction: SequencePrediction to modify in place.
-        low_conf_indices: Indices of predictions below the confidence threshold.
-        blank_label: Label used to indicate abstention.
-    """
-    if not prediction.gloss_ids:
-        return
-
-    if not prediction.labels:
-        prediction.labels = ["" for _ in prediction.gloss_ids]
-    elif len(prediction.labels) < len(prediction.gloss_ids):
-        prediction.labels.extend(
-            [""] * (len(prediction.gloss_ids) - len(prediction.labels))
-        )
-
-    for idx in low_conf_indices:
-        if 0 <= idx < len(prediction.labels):
-            prediction.labels[idx] = blank_label
 
 
 def calculate_temporal_iou(pred: Timestamp, gt: Timestamp) -> float:
@@ -373,9 +344,6 @@ def compute_sequence_metrics(
 
     high_conf_indices, low_conf_indices = split_predictions_by_confidence(
         prediction, config.confidence_threshold
-    )
-    mark_low_confidence_predictions_as_blank(
-        prediction, low_conf_indices, blank_label="BLANK"
     )
     high_conf_glosses = [prediction.gloss_ids[i] for i in high_conf_indices]
     high_conf_timestamps = [prediction.timestamps[i] for i in high_conf_indices]

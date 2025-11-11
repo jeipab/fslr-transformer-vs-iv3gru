@@ -24,8 +24,6 @@ def render_case_legend() -> None:
             "<span style='color:#ef4444;font-weight:600;'>False Positive</span>"
             "<span style='color:white;font-weight:600;'> | </span>"
             "<span style='color:#f97316;font-weight:600;'>False Negative</span>"
-            "<span style='color:white;font-weight:600;'> | </span>"
-            "<span style='color:#9ca3af;font-weight:600;'>Blank</span>"
         ),
         unsafe_allow_html=True,
     )
@@ -1507,7 +1505,6 @@ def render_ctc_validation_results(results: Dict[str, Any]):
                             'TP': '#22c55e',
                             'FP': '#ef4444',
                             'FN': '#f97316',
-                            'BLANK': '#9ca3af',
                         }
                         prediction_case_map: Dict[int, str] = {}
                         ground_truth_case_map: Dict[int, str] = {}
@@ -1694,7 +1691,6 @@ def render_ctc_validation_results(results: Dict[str, Any]):
                                 case_palette=case_palette,
                                 category_prediction_cases=category_prediction_case_map,
                                 category_ground_truth_cases=category_ground_truth_case_map,
-                                confidence_threshold=pred.get('confidence_threshold', 0.5),
                             )
 
     # Download results shown for all tabs
