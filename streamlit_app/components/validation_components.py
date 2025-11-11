@@ -5,13 +5,156 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
-from typing import Dict, List, Optional, Any
+from typing import Dict, List, Optional, Any, Tuple, Set
 import plotly.express as px
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 import json
 from pathlib import Path
 
+
+def render_case_legend() -> None:
+    """Render shared legend for prediction case colors."""
+    st.markdown(
+        (
+            "<span style='color:white;font-weight:600;'>Legend:</span>"
+            "<span style='color:white;font-weight:600;'> </span>"
+            "<span style='color:#22c55e;font-weight:600;'>True Positive</span>"
+            "<span style='color:white;font-weight:600;'> | </span>"
+            "<span style='color:#ef4444;font-weight:600;'>False Positive</span>"
+            "<span style='color:white;font-weight:600;'> | </span>"
+            "<span style='color:#64748b;font-weight:600;'>True Negative</span>"
+            "<span style='color:white;font-weight:600;'> | </span>"
+            "<span style='color:#f97316;font-weight:600;'>False Negative</span>"
+        ),
+        unsafe_allow_html=True,
+    )
+def _augment_matches_with_order_categories(
+    pred_categories: List[int],
+    gt_categories: List[int],
+    pred_indices: List[int],
+    gt_indices: List[int],
+) -> List[Dict[str, int]]:
+    """
+    Order-preserving augmentation of matches based on category equality.
+    Mirrors backend logic used during prediction to keep frontend in sync.
+    """
+    if not pred_indices or not gt_indices:
+        return []
+
+    add_pairs: List[Dict[str, int]] = []
+    p_i = 0
+    g_i = 0
+    while p_i < len(pred_indices) and g_i < len(gt_indices):
+        pi = pred_indices[p_i]
+        gi = gt_indices[g_i]
+        if pi >= len(pred_categories) or gi >= len(gt_categories):
+            break
+        if pred_categories[pi] == gt_categories[gi]:
+            add_pairs.append({'pred_idx': pi, 'gt_idx': gi})
+            p_i += 1
+            g_i += 1
+        else:
+            p_i += 1
+
+    return add_pairs
+
+
+def _derive_category_case_maps(
+    pred: Dict[str, Any],
+    predicted_categories: Optional[List[int]],
+    ground_truth_categories: Optional[List[int]],
+    matched_pairs: List[Dict[str, Any]],
+    pred_len: int,
+    gt_len: int,
+) -> Tuple[Dict[int, str], Dict[int, str]]:
+    """
+    Construct category TP/FP/FN maps for predicted and ground truth indexes.
+    Prefer backend-provided indices; fall back to recomputing locally when absent.
+    """
+    pred_map: Dict[int, str] = {}
+    gt_map: Dict[int, str] = {}
+
+    # Prefer explicit indices provided by backend (newer exports)
+    if pred.get('category_tp_pred_indices') is not None:
+        for idx in pred.get('category_tp_pred_indices') or []:
+            idx = int(idx)
+            if 0 <= idx < pred_len:
+                pred_map[idx] = 'TP'
+    if pred.get('category_fp_pred_indices') is not None:
+        for idx in pred.get('category_fp_pred_indices') or []:
+            idx = int(idx)
+            if 0 <= idx < pred_len:
+                pred_map[idx] = 'FP'
+    if pred.get('category_tp_gt_indices') is not None:
+        for idx in pred.get('category_tp_gt_indices') or []:
+            idx = int(idx)
+            if 0 <= idx < gt_len:
+                gt_map[idx] = 'TP'
+    if pred.get('category_fn_gt_indices') is not None:
+        for idx in pred.get('category_fn_gt_indices') or []:
+            idx = int(idx)
+            if 0 <= idx < gt_len:
+                gt_map[idx] = 'FN'
+
+    # If any maps were populated, return early
+    if pred_map or gt_map:
+        return pred_map, gt_map
+
+    # Fallback: recompute using available sequence information
+    if not predicted_categories or not ground_truth_categories:
+        return pred_map, gt_map
+
+    pred_len = min(pred_len, len(predicted_categories))
+    gt_len = min(gt_len, len(ground_truth_categories))
+
+    matched_pred: Set[int] = set()
+    matched_gt: Set[int] = set()
+
+    for pair in matched_pairs or []:
+        pi = pair.get('pred_idx')
+        gi = pair.get('gt_idx')
+        if pi is None or gi is None:
+            continue
+        pi = int(pi)
+        gi = int(gi)
+        if 0 <= pi < pred_len and 0 <= gi < gt_len:
+            if predicted_categories[pi] == ground_truth_categories[gi]:
+                matched_pred.add(pi)
+                matched_gt.add(gi)
+
+    remaining_pred = [i for i in range(pred_len) if i not in matched_pred]
+    remaining_gt = [j for j in range(gt_len) if j not in matched_gt]
+
+    add_pairs = _augment_matches_with_order_categories(
+        predicted_categories,
+        ground_truth_categories,
+        remaining_pred,
+        remaining_gt,
+    )
+
+    for pair in add_pairs:
+        pi = pair['pred_idx']
+        gi = pair['gt_idx']
+        if 0 <= pi < pred_len:
+            matched_pred.add(pi)
+        if 0 <= gi < gt_len:
+            matched_gt.add(gi)
+
+    for idx in matched_pred:
+        pred_map[idx] = 'TP'
+    for idx in matched_gt:
+        gt_map[idx] = 'TP'
+
+    for idx in range(pred_len):
+        if idx not in matched_pred:
+            pred_map[idx] = 'FP'
+
+    for idx in range(gt_len):
+        if idx not in matched_gt:
+            gt_map[idx] = 'FN'
+
+    return pred_map, gt_map
 from ..core.config import MODEL_CONFIG, is_ctc_model, get_models_by_mode
 from ..components.ctc_visualization import (
     render_sequence_comparison,
@@ -1423,82 +1566,84 @@ def render_ctc_validation_results(results: Dict[str, Any]):
                                     prediction_case_map[idx] = 'FN'
                                     low_conf_fn_count += 1
 
-                        st.markdown("##### Sequence Metrics")
-                        seq_cols = st.columns(4)
-                        with seq_cols[0]:
-                            st.metric("Precision", f"{pred.get('precision', 0)*100:.2f}%")
-                            st.metric("True Positive", pred.get('num_tp', 0))
-                        with seq_cols[1]:
-                            st.metric("Recall", f"{pred.get('recall', 0)*100:.2f}%")
-                            st.metric("False Positive", pred.get('num_fp', 0))
-                        with seq_cols[2]:
-                            st.metric("F1-Score", f"{pred.get('f1_score', 0)*100:.2f}%")
-                            st.metric("False Negative", pred.get('num_fn', 0))
-                        with seq_cols[3]:
-                            st.empty()
-                            st.metric("True Negative", pred.get('num_tn', 0))
-
-                        breakdown_rows: List[Dict[str, Any]] = []
-
-                        def _append_case_rows(group_label: str, mapping: Dict[str, str], counts: Dict[str, Any]):
-                            for key, label in mapping.items():
-                                count = int(counts.get(key, 0)) if counts else 0
-                                breakdown_rows.append({
-                                    'Group': group_label,
-                                    'Case': label,
-                                    'Count': count,
-                                })
-
-                        tp_labels = {
-                            'TP-EXACT': 'True Positive - Exact',
-                            'TP-GOOD': 'True Positive - Good',
-                            'TP-LENIENT': 'True Positive - Lenient',
-                            'TP': 'True Positive (Other)',
-                        }
-                        fp_labels = {
-                            'FP-PREMATURE': 'False Positive - Premature',
-                            'FP-LATE': 'False Positive - Late',
-                            'FP-WRONG-GLOSS': 'False Positive - Wrong Gloss',
-                            'FP-HALLUCINATION-INACTIVE': 'False Positive - Inactive Region',
-                            'FP-HALLUCINATION-GAP': 'False Positive - Gap Region',
-                            'FP-INSUFFICIENT-OVERLAP': 'False Positive - Insufficient Overlap',
-                            'FP-OVER-SEGMENTATION': 'False Positive - Over-Segmentation',
-                            'FP-LOW-CONFIDENCE-ACTIVE': 'False Positive - Low Confidence',
-                        }
-                        fn_labels = {
-                            'FN-COMPLETE-MISS': 'False Negative - Complete Miss',
-                            'FN-WRONG-GLOSS': 'False Negative - Wrong Gloss',
-                            'FN-PREMATURE-ONLY': 'False Negative - Premature Only',
-                            'FN-LATE-ONLY': 'False Negative - Late Only',
-                            'FN-INSUFFICIENT-OVERLAP': 'False Negative - Insufficient Overlap',
-                            'FN-UNDER-SEGMENTATION': 'False Negative - Under-Segmentation',
-                            'FN-LOW-CONFIDENCE': 'False Negative - Low Confidence',
-                            'FN-OCCLUDED': 'False Negative - Occluded',
-                        }
-                        tn_labels = {
-                            'TN-LOW-CONFIDENCE': 'True Negative - Low Confidence',
-                            'TN-GAP-IMPLIED': 'True Negative - Gap',
-                            'TN-FRAME-LEVEL': 'True Negative - Frame Level',
-                        }
-
-                        _append_case_rows('True Positive', tp_labels, pred.get('tp_breakdown') or {})
-                        _append_case_rows('False Positive', fp_labels, pred.get('fp_breakdown') or {})
-                        fn_counts = dict(pred.get('fn_breakdown') or {})
-                        if low_conf_fn_count:
-                            fn_counts['FN-LOW-CONFIDENCE'] = fn_counts.get('FN-LOW-CONFIDENCE', 0) + low_conf_fn_count
-                        _append_case_rows('False Negative', fn_labels, fn_counts)
-                        _append_case_rows('True Negative', tn_labels, pred.get('tn_breakdown') or {})
-
-                        st.markdown("##### Error Breakdown")
-                        breakdown_df = pd.DataFrame(breakdown_rows)
-                        st.dataframe(
-                            breakdown_df.sort_values(['Group', 'Case']),
-                            width='stretch',
-                            hide_index=True,
-                            height=280
+                        category_prediction_case_map, category_ground_truth_case_map = _derive_category_case_maps(
+                            pred=pred,
+                            predicted_categories=predicted_categories,
+                            ground_truth_categories=ground_truth_categories,
+                            matched_pairs=matched_pairs,
+                            pred_len=len_pred,
+                            gt_len=len_gt,
                         )
 
+                        st.markdown("##### Sequence Metrics")
+
+                        def _percent(value: Optional[float]) -> str:
+                            return f"{value*100:.2f}%" if value is not None else "—"
+
+                        def _count(value: Optional[int]) -> Any:
+                            return value if value is not None else "—"
+
+                        category_metrics_present = has_categories and any(
+                            key in pred for key in (
+                                'category_precision',
+                                'category_recall',
+                                'category_f1_score',
+                                'category_num_tp',
+                                'category_num_fp',
+                                'category_num_fn',
+                                'category_num_tn',
+                            )
+                        )
+
+                        if category_metrics_present:
+                            gloss_col, cat_col = st.columns(2, gap="large")
+                        else:
+                            gloss_col = st.container()
+                            cat_col = None
+
+                        with gloss_col:
+                            st.markdown("###### Gloss Metrics")
+                            gloss_metrics_cols = st.columns(3)
+                            with gloss_metrics_cols[0]:
+                                st.metric("Precision", _percent(pred.get('precision')))
+                            with gloss_metrics_cols[1]:
+                                st.metric("Recall", _percent(pred.get('recall')))
+                            with gloss_metrics_cols[2]:
+                                st.metric("F1-Score", _percent(pred.get('f1_score')))
+
+                            gloss_counts_cols = st.columns(4)
+                            with gloss_counts_cols[0]:
+                                st.metric("True Positive", _count(pred.get('num_tp')))
+                            with gloss_counts_cols[1]:
+                                st.metric("False Positive", _count(pred.get('num_fp')))
+                            with gloss_counts_cols[2]:
+                                st.metric("True Negative", _count(pred.get('num_tn')))
+                            with gloss_counts_cols[3]:
+                                st.metric("False Negative", _count(pred.get('num_fn')))
+
+                        if category_metrics_present and cat_col is not None:
+                            with cat_col:
+                                st.markdown("###### Category Metrics")
+                                cat_metrics_cols = st.columns(3)
+                                with cat_metrics_cols[0]:
+                                    st.metric("Precision", _percent(pred.get('category_precision')))
+                                with cat_metrics_cols[1]:
+                                    st.metric("Recall", _percent(pred.get('category_recall')))
+                                with cat_metrics_cols[2]:
+                                    st.metric("F1-Score", _percent(pred.get('category_f1_score')))
+
+                                cat_counts_cols = st.columns(4)
+                                with cat_counts_cols[0]:
+                                    st.metric("True Positive", _count(pred.get('category_num_tp')))
+                                with cat_counts_cols[1]:
+                                    st.metric("False Positive", _count(pred.get('category_num_fp')))
+                                with cat_counts_cols[2]:
+                                    st.metric("True Negative", _count(pred.get('category_num_tn')))
+                                with cat_counts_cols[3]:
+                                    st.metric("False Negative", _count(pred.get('category_num_fn')))
+
                         st.markdown("---")
+                        render_case_legend()
                         render_sequence_comparison(
                             predicted_sequence=predicted_sequence,
                             predicted_labels=pred_gloss_labels or [],
@@ -1512,22 +1657,8 @@ def render_ctc_validation_results(results: Dict[str, Any]):
                             prediction_cases=prediction_case_map,
                             case_palette=case_palette,
                             confidence_threshold=pred.get('confidence_threshold', 0.5),
-                        )
-                        st.markdown(
-                            (
-                                "<span style='color:#22c55e;font-weight:600;'>True Positive - Exact</span>"
-                                "<span style='color:white;font-weight:600;'> | </span>"
-                                "<span style='color:#16a34a;font-weight:600;'>True Positive - Good</span>"
-                                "<span style='color:white;font-weight:600;'> | </span>"
-                                "<span style='color:#0d9488;font-weight:600;'>True Positive - Lenient</span>"
-                                "<span style='color:white;font-weight:600;'> | </span>"
-                                "<span style='color:#ef4444;font-weight:600;'>False Positive</span>"
-                                "<span style='color:white;font-weight:600;'> | </span>"
-                                "<span style='color:#64748b;font-weight:600;'>True Negative</span>"
-                                "<span style='color:white;font-weight:600;'> | </span>"
-                                "<span style='color:#f97316;font-weight:600;'>False Negative</span>"
-                            ),
-                            unsafe_allow_html=True,
+                            category_prediction_cases=category_prediction_case_map,
+                            category_ground_truth_cases=category_ground_truth_case_map,
                         )
 
                         predicted_timestamps = pred.get('predicted_timestamps')
@@ -1578,6 +1709,8 @@ def render_ctc_validation_results(results: Dict[str, Any]):
                                 prediction_cases=prediction_case_map,
                                 ground_truth_cases=ground_truth_case_map,
                                 case_palette=case_palette,
+                                category_prediction_cases=category_prediction_case_map,
+                                category_ground_truth_cases=category_ground_truth_case_map,
                             )
 
     # Download results shown for all tabs

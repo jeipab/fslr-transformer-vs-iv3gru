@@ -257,15 +257,28 @@ def _compute_category_metrics_balanced(
     gt_len: int,
     gloss_fp_indices: List[int],
     gloss_fn_indices: List[int],
-) -> Tuple[int, int, int]:
+) -> Tuple[int, int, int, List[int], List[int], List[int], List[int]]:
     """
     Compute category TP/FP/FN by:
     1) Using gloss matched pairs where categories also match
     2) Then augmenting with order-preserving matches over the remaining
        unmatched predictions and GT purely by category equality
     """
-    if not pred_categories or not gt_categories:
-        return 0, 0, len(gt_categories)
+    has_pred = bool(pred_categories)
+    has_gt = bool(gt_categories)
+
+    if not has_pred and not has_gt:
+        return 0, 0, 0, [], [], [], []
+
+    if not has_pred:
+        gt_len = min(gt_len, len(gt_categories))
+        fn_indices = list(range(gt_len))
+        return 0, 0, gt_len, [], [], [], fn_indices
+
+    if not has_gt:
+        pred_len = min(pred_len, len(pred_categories))
+        fp_indices = list(range(pred_len))
+        return 0, pred_len, 0, [], fp_indices, [], []
 
     # Bound checks
     pred_len = min(pred_len, len(pred_categories))
@@ -302,11 +315,24 @@ def _compute_category_metrics_balanced(
     pred_matched.update(p['pred_idx'] for p in add_pairs)
     gt_matched.update(p['gt_idx'] for p in add_pairs)
 
-    # Remaining unmatched are FP/FN for category
-    cat_fp = len([i for i in range(pred_len) if i not in pred_matched])
-    cat_fn = len([j for j in range(gt_len) if j not in gt_matched])
+    cat_tp_pred_indices = sorted(pred_matched)
+    cat_tp_gt_indices = sorted(gt_matched)
+    cat_fp_pred_indices = sorted(i for i in range(pred_len) if i not in pred_matched)
+    cat_fn_gt_indices = sorted(j for j in range(gt_len) if j not in gt_matched)
 
-    return cat_tp, cat_fp, cat_fn
+    cat_tp = len(cat_tp_pred_indices)
+    cat_fp = len(cat_fp_pred_indices)
+    cat_fn = len(cat_fn_gt_indices)
+
+    return (
+        cat_tp,
+        cat_fp,
+        cat_fn,
+        cat_tp_pred_indices,
+        cat_fp_pred_indices,
+        cat_tp_gt_indices,
+        cat_fn_gt_indices,
+    )
 
 
 def _max_iou_with_gt(pred_ts: Dict, gt_ts_list: List[Dict]) -> Tuple[float, int]:
@@ -1013,7 +1039,15 @@ class CTCPredictor:
                     if predicted_categories and 'ground_truth_categories' in ground_truth:
                         gt_cats = ground_truth['ground_truth_categories']
                         if gt_cats:
-                            cat_tp, cat_fp, cat_fn = _compute_category_metrics_balanced(
+                            (
+                                cat_tp,
+                                cat_fp,
+                                cat_fn,
+                                cat_tp_pred_indices,
+                                cat_fp_pred_indices,
+                                cat_tp_gt_indices,
+                                cat_fn_gt_indices,
+                            ) = _compute_category_metrics_balanced(
                                 pred_categories=predicted_categories,
                                 gt_categories=gt_cats,
                                 matched_pairs=metrics_result.matched_pairs,
@@ -1029,6 +1063,10 @@ class CTCPredictor:
                             result['category_precision'] = float(cat_precision)
                             result['category_recall'] = float(cat_recall)
                             result['category_f1_score'] = float(cat_f1)
+                            result['category_tp_pred_indices'] = cat_tp_pred_indices
+                            result['category_fp_pred_indices'] = cat_fp_pred_indices
+                            result['category_tp_gt_indices'] = cat_tp_gt_indices
+                            result['category_fn_gt_indices'] = cat_fn_gt_indices
                 else:
                     raise ValueError("Ground truth timestamps are missing or empty. Detection metrics require timestamps.")
             except Exception as e:
@@ -1443,7 +1481,15 @@ class CTCPredictor:
                 if final_categories and 'ground_truth_categories' in ground_truth:
                     gt_categories = ground_truth['ground_truth_categories']
                     if gt_categories:
-                        cat_tp, cat_fp, cat_fn = _compute_category_metrics_balanced(
+                        (
+                            cat_tp,
+                            cat_fp,
+                            cat_fn,
+                            cat_tp_pred_indices,
+                            cat_fp_pred_indices,
+                            cat_tp_gt_indices,
+                            cat_fn_gt_indices,
+                        ) = _compute_category_metrics_balanced(
                             pred_categories=final_categories,
                             gt_categories=gt_categories,
                             matched_pairs=metrics_result.matched_pairs,
@@ -1459,6 +1505,10 @@ class CTCPredictor:
                         result['category_precision'] = float(cat_precision)
                         result['category_recall'] = float(cat_recall)
                         result['category_f1_score'] = float(cat_f1)
+                        result['category_tp_pred_indices'] = cat_tp_pred_indices
+                        result['category_fp_pred_indices'] = cat_fp_pred_indices
+                        result['category_tp_gt_indices'] = cat_tp_gt_indices
+                        result['category_fn_gt_indices'] = cat_fn_gt_indices
                 
             except Exception as e:
                 # Fallback: set default values if matching fails

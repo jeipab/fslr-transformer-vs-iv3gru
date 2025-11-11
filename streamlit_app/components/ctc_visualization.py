@@ -80,6 +80,8 @@ def render_sequence_comparison(
     prediction_cases: Optional[Dict[int, str]] = None,
     case_palette: Optional[Dict[str, str]] = None,
     confidence_threshold: float = 0.5,
+    category_prediction_cases: Optional[Dict[int, str]] = None,
+    category_ground_truth_cases: Optional[Dict[int, str]] = None,
 ):
     """
     Render side-by-side comparison of predicted vs ground truth sequences.
@@ -123,12 +125,13 @@ def render_sequence_comparison(
                     occlusion_flags=ground_truth_occluded,
                     is_ground_truth=True,
                     case_palette=case_palette,
+                    category_case_map=category_ground_truth_cases,
                 )
             else:
                 render_sequence_chips(
                     ground_truth_labels,
                     None,
-                    color='#10b981',
+                    color='#1f77b4',
                     occlusion_flags=ground_truth_occluded,
                     case_palette=case_palette,
                 )
@@ -144,6 +147,7 @@ def render_sequence_comparison(
                     case_map=prediction_cases,
                     case_palette=case_palette,
                     confidence_threshold=confidence_threshold,
+                    category_case_map=category_prediction_cases,
                 )
             else:
                 render_sequence_chips(
@@ -170,6 +174,7 @@ def render_sequence_comparison(
                 case_map=prediction_cases,
                 case_palette=case_palette,
                 confidence_threshold=confidence_threshold,
+                category_case_map=category_prediction_cases,
             )
         else:
             render_sequence_chips(
@@ -234,6 +239,7 @@ def render_sequence_chips(
             border-radius: 1rem;
             font-size: 0.9rem;
             font-weight: 500;
+            text-align: center;
             opacity: {opacity};
         """
         
@@ -254,6 +260,7 @@ def render_sequence_with_categories(
     case_palette: Optional[Dict[str, str]] = None,
     confidence_threshold: float = 0.5,
     low_confidence_color: str = '#f97316',
+    category_case_map: Optional[Dict[int, str]] = None,
 ):
     """
     Render sequence with both glosses and categories.
@@ -281,6 +288,8 @@ def render_sequence_with_categories(
     chips_html = '<div style="display: flex; flex-wrap: wrap; gap: 0.8rem; margin: 1rem 0;">'
     
     palette = case_palette or {}
+    gloss_case_map = case_map or {}
+    category_case_map = category_case_map or {}
 
     for i, gloss_label in enumerate(gloss_labels):
         # Gloss chip
@@ -294,10 +303,10 @@ def render_sequence_with_categories(
         
         # Determine gloss chip color
         is_occluded = occlusion_flags and i < len(occlusion_flags) and occlusion_flags[i] == 1
-        gloss_base = '#10b981' if is_ground_truth else '#3b82f6'
+        gloss_base = '#1f77b4' if is_ground_truth else '#3b82f6'
         gloss_color = gloss_base
-        if case_map and i in case_map:
-            gloss_color = palette.get(case_map[i], gloss_color)
+        if gloss_case_map and i in gloss_case_map:
+            gloss_color = palette.get(gloss_case_map[i], gloss_color)
         elif gloss_confidences and i < len(gloss_confidences) and gloss_confidences[i] < confidence_threshold:
             gloss_color = low_confidence_color
         
@@ -314,6 +323,8 @@ def render_sequence_with_categories(
                 cat_conf_text = f' ({cat_conf*100:.1f}%)'
                 cat_opacity = 0.5 + (cat_conf * 0.5)
         
+        cat_border = '1px solid transparent'
+
         if is_ground_truth:
             if is_occluded:
                 cat_bg = '#000000'
@@ -321,17 +332,25 @@ def render_sequence_with_categories(
             else:
                 cat_bg = '#ffffff'
                 cat_color = '#000000'
+            cat_border = '1px solid rgba(148, 163, 184, 0.35)'
+            if category_case_map and i in category_case_map:
+                border_color = palette.get(category_case_map[i], '#22c55e')
+                cat_border = f'2px solid {border_color}'
         else:
             cat_bg = '#10b981'
             cat_color = 'white'
-            if category_confidences and i < len(category_confidences) and category_confidences[i] < confidence_threshold:
+            if category_case_map and i in category_case_map:
+                cat_bg = palette.get(category_case_map[i], cat_bg)
+            elif category_confidences and i < len(category_confidences) and category_confidences[i] < confidence_threshold:
                 cat_bg = low_confidence_color
+            if category_case_map and i in category_case_map:
+                cat_border = f'1px solid {palette.get(category_case_map[i], "#0f172a")}'
 
         chips_html += (
             '<div style="display: flex; flex-direction: column; gap: 0.25rem;">'
-            f'<div style="background-color: {gloss_color}; color: white; padding: 0.4rem 0.8rem; border-radius: 1rem; font-size: 0.9rem; font-weight: 500; opacity: {gloss_opacity};">'
+            f'<div style="background-color: {gloss_color}; color: white; padding: 0.4rem 0.8rem; border-radius: 1rem; font-size: 0.9rem; font-weight: 500; opacity: {gloss_opacity}; text-align: center;">'
             f'{gloss_label}{gloss_conf_text}</div>'
-            f'<div style="background-color: {cat_bg}; color: {cat_color}; padding: 0.3rem 0.6rem; border-radius: 0.8rem; font-size: 0.75rem; font-weight: 500; opacity: {cat_opacity}; text-align: center;">'
+            f'<div style="background-color: {cat_bg}; color: {cat_color}; padding: 0.3rem 0.6rem; border-radius: 0.8rem; font-size: 0.75rem; font-weight: 500; opacity: {cat_opacity}; text-align: center; border: {cat_border};">'
             f'{cat_label}{cat_conf_text}</div></div>'
         )
     
@@ -464,6 +483,8 @@ def render_temporal_alignment(
     prediction_cases: Optional[Dict[int, str]] = None,
     ground_truth_cases: Optional[Dict[int, str]] = None,
     case_palette: Optional[Dict[str, str]] = None,
+    category_prediction_cases: Optional[Dict[int, str]] = None,
+    category_ground_truth_cases: Optional[Dict[int, str]] = None,
 ):
     """
     Render temporal alignment visualization.
@@ -475,6 +496,8 @@ def render_temporal_alignment(
         mask: Optional keypoint visibility mask [T, 89] for detecting inactive periods
         timestamps_ms: Optional timestamp array [T] in milliseconds for inactive period detection
         predicted_categories: Optional list of predicted category IDs as fallback if not in timestamps
+        category_prediction_cases: Optional mapping of predicted indices to TP/FP/TN/FN cases for categories
+        category_ground_truth_cases: Optional mapping of ground truth indices to TP/FN cases for categories
     """
     st.markdown("#### Temporal Alignment")
     
@@ -509,57 +532,35 @@ def render_temporal_alignment(
         smoothed_predicted[-1]['end_ms'] if smoothed_predicted else 0
     )
     
-    # Create timeline comparison
-    fig = go.Figure()
-    
-    # Prepare patterned overlays for inactive periods
-    # Note: Plotly categorical y-axis uses 0-indexed positions
-    y_positions = ['Ground Truth', 'Predicted']
-    y_center = {'Ground Truth': 0, 'Predicted': 1}
+    # Prepare common styling values
     bar_height = 0.3
     ground_truth_color = 'rgba(16, 185, 129, 0.8)'
     predicted_color = 'rgba(59, 130, 246, 0.8)'
+    ground_truth_category_color = 'rgba(148, 163, 184, 0.65)'
+    predicted_category_color = 'rgba(56, 189, 248, 0.7)'
     ground_truth_label_bg = 'rgba(6, 95, 70, 0.92)'
-    predicted_label_bg = 'rgba(30, 64, 175, 0.92)'
 
-    inactive_segments = {row: {'bases': [], 'durations': []} for row in y_positions}
+    inactive_segments = {
+        'Ground Truth Gloss': {'bases': [], 'durations': []},
+        'Ground Truth Category': {'bases': [], 'durations': []},
+    }
     for start_ms, end_ms in inactive_periods:
         if end_ms <= start_ms:
             continue
         duration = end_ms - start_ms
-        inactive_segments['Ground Truth']['bases'].append(start_ms)
-        inactive_segments['Ground Truth']['durations'].append(duration)
+        for row in ['Ground Truth Gloss', 'Ground Truth Category']:
+            inactive_segments[row]['bases'].append(start_ms)
+            inactive_segments[row]['durations'].append(duration)
 
     inactive_pattern = dict(
         shape='/',
-        fgcolor='rgba(248, 250, 252, 0.9)',
+        fgcolor='rgba(14, 17, 23, 0.9)',
         bgcolor='rgba(0, 0, 0, 0)',
         size=8,
         solidity=0.35,
         fillmode='replace'
     )
 
-    inactive_traces = []
-    segments = inactive_segments['Ground Truth']
-    if segments['bases']:
-        inactive_traces.append(go.Bar(
-            name="Ground Truth Inactive",
-            x=segments['durations'],
-            y=['Ground Truth'] * len(segments['durations']),
-            orientation='h',
-            base=segments['bases'],
-            marker=dict(
-                color='rgba(0, 0, 0, 0)',
-                line=dict(width=0),
-                pattern=inactive_pattern
-            ),
-            hoverinfo='skip',
-            showlegend=False,
-            width=0.6,
-            opacity=1.0
-        ))
-    
-    # Ground truth timeline
     palette = case_palette or {
         'TP-EXACT': 'rgba(34, 197, 94, 0.85)',   # lime green
         'TP-GOOD': 'rgba(22, 163, 74, 0.85)',    # green
@@ -569,69 +570,65 @@ def render_temporal_alignment(
         'FN': 'rgba(249, 115, 22, 0.9)',
         'TN': 'rgba(100, 116, 139, 0.85)',
     }
+    category_prediction_cases = category_prediction_cases or {}
+    category_ground_truth_cases = category_ground_truth_cases or {}
 
-    for i, ts in enumerate(ground_truth_timestamps):
-        gloss_label = ts.get('gloss_label', ts.get('gloss', ''))
-        category_id = ts.get('category', None)
-        category_label = ts.get('category_label', '')
-        
-        # Get category label from mapping if not in timestamp
-        if not category_label and category_id is not None:
-            category_label = category_mapping.get(category_id, f"Cat_{category_id}")
-        
-        category_display = category_label or ''
-        
-        hover_text = f"<b>{gloss_label}</b><br>"
-        if category_label:
-            hover_text += f"Category: {category_label}<br>"
-        hover_text += f"Start: {ts['start_ms']}ms<br>End: {ts['end_ms']}ms<br>Duration: {ts['duration_ms']}ms<extra></extra>"
-        
+    case_label_map = {
+        'TP-EXACT': 'True Positive - Exact',
+        'TP-GOOD': 'True Positive - Good',
+        'TP-LENIENT': 'True Positive - Lenient',
+        'TP': 'True Positive',
+        'FP-PREMATURE': 'False Positive - Premature',
+        'FP-LATE': 'False Positive - Late',
+        'FP-WRONG-GLOSS': 'False Positive - Wrong Gloss',
+        'FP-HALLUCINATION-INACTIVE': 'False Positive - Inactive Region',
+        'FP-HALLUCINATION-GAP': 'False Positive - Gap Region',
+        'FP-INSUFFICIENT-OVERLAP': 'False Positive - Insufficient Overlap',
+        'FP-OVER-SEGMENTATION': 'False Positive - Over-Segmentation',
+        'FP-LOW-CONFIDENCE-ACTIVE': 'False Positive - Low Confidence',
+        'FP': 'False Positive',
+        'FN-COMPLETE-MISS': 'False Negative - Complete Miss',
+        'FN-WRONG-GLOSS': 'False Negative - Wrong Gloss',
+        'FN-PREMATURE-ONLY': 'False Negative - Premature Only',
+        'FN-LATE-ONLY': 'False Negative - Late Only',
+        'FN-INSUFFICIENT-OVERLAP': 'False Negative - Insufficient Overlap',
+        'FN-UNDER-SEGMENTATION': 'False Negative - Under-Segmentation',
+        'FN-LOW-CONFIDENCE': 'False Negative - Low Confidence',
+        'FN-OCCLUDED': 'False Negative - Occluded',
+        'FN': 'False Negative',
+        'TN-LOW-CONFIDENCE': 'True Negative - Low Confidence',
+        'TN-GAP-IMPLIED': 'True Negative - Gap',
+        'TN-FRAME-LEVEL': 'True Negative - Frame Level',
+        'TN': 'True Negative',
+    }
+
+    def add_inactive_overlay(fig, row_label, bar_width):
+        segments = inactive_segments.get(row_label)
+        if not segments or not segments['bases']:
+            return
         fig.add_trace(go.Bar(
-            name=f"GT: {gloss_label}",
-            x=[ts['duration_ms']],
-            y=['Ground Truth'],
+            name=f"{row_label} Inactive",
+            x=segments['durations'],
+            y=[row_label] * len(segments['durations']),
             orientation='h',
+            base=segments['bases'],
             marker=dict(
-                color=ground_truth_color,
-                line=dict(color='rgba(6, 78, 59, 0.9)', width=2)
+                color='rgba(0, 0, 0, 0)',
+                line=dict(width=0),
+                pattern=inactive_pattern
             ),
-            textposition='none',
-            hovertemplate=hover_text,
-            base=ts['start_ms'],
-            width=0.6
+            hoverinfo='skip',
+            showlegend=False,
+            width=bar_width,
+            opacity=1.0
         ))
 
-        annotation_text = gloss_label if not category_display else f"{gloss_label}<br>{category_display}"
-        duration = ts['duration_ms']
-        label_offset = max(duration * 0.05, 40)
-        label_x = ts['end_ms'] - label_offset
-        if label_x <= ts['start_ms']:
-            label_x = ts['start_ms'] + duration * 0.5
+    # --- Gloss Comparison chart ---
+    gloss_row_labels = ['Predicted Gloss', 'Ground Truth Gloss']
+    gloss_axis_labels = list(reversed(gloss_row_labels))
+    y_center_gloss = {label: idx for idx, label in enumerate(gloss_axis_labels)}
+    fig_gloss = go.Figure()
 
-        fig.add_annotation(
-            x=label_x,
-            y='Ground Truth',
-            text=annotation_text,
-            showarrow=False,
-            xref='x',
-            yref='y',
-            xanchor='right',
-            yanchor='middle',
-            align='right',
-            bgcolor=ground_truth_label_bg,
-            bordercolor='rgba(15, 118, 110, 0.95)',
-            borderwidth=1,
-            borderpad=3,
-            font=dict(
-                color='white',
-                size=11,
-                family='Arial Black'
-            )
-        )
-
-        # No explicit separator line needed; bar outline handles boundary.
-    
-    # Predicted timeline (smoothed)
     for i, ts in enumerate(smoothed_predicted):
         gloss_index = ts.get('gloss', ts.get('index'))
         # Map gloss index to actual gloss label
@@ -644,66 +641,71 @@ def render_temporal_alignment(
             if not category_label:
                 category_label = category_mapping.get(category_id, f"Cat_{category_id}")
         
-        category_display = category_label or ''
+        case_index = ts.get('index', i)
+        case = prediction_cases.get(case_index) if prediction_cases else None
+        pred_color = palette.get(case, predicted_color) if case else predicted_color
+        case_label = case_label_map.get(case)
         
         hover_text = f"<b>{gloss_label}</b><br>Gloss ID: {gloss_index}<br>"
         if category_label:
             hover_text += f"Category: {category_label}<br>"
+        if case_label:
+            hover_text += f"Case: {case_label}<br>"
+        elif case:
+            hover_text += f"Case: {case}<br>"
         hover_text += f"Start: {ts['start_ms']}ms<br>End: {ts['end_ms']}ms<br>Duration: {ts['duration_ms']}ms<extra></extra>"
-        
-        case_index = ts.get('index', i)
-        case = prediction_cases.get(case_index) if prediction_cases else None
-        pred_color = palette.get(case, predicted_color) if case else predicted_color
-        outline = palette.get(case, predicted_color) if case else predicted_color
 
         bar = go.Bar(
-            name=f"Pred: {gloss_label}",
+            name=f"Pred Gloss: {gloss_label}",
             x=[ts['duration_ms']],
-            y=['Predicted'],
+            y=['Predicted Gloss'],
             orientation='h',
             marker=dict(
                 color=pred_color,
-                line=dict(color=outline, width=2)
+                line=dict(width=0)
             ),
             textposition='none',
             hovertemplate=hover_text,
             base=ts['start_ms'],
             width=0.6
         )
-        fig.add_trace(bar)
+        fig_gloss.add_trace(bar)
 
         if case and case.startswith('FN'):
-            fig.add_shape(
+            fig_gloss.add_shape(
                 type='rect',
                 x0=ts['start_ms'],
                 x1=ts['end_ms'],
-                y0=y_center['Predicted'] - bar_height,
-                y1=y_center['Predicted'] + bar_height,
+                y0=y_center_gloss['Predicted Gloss'] - bar_height,
+                y1=y_center_gloss['Predicted Gloss'] + bar_height,
                 fillcolor='rgba(249, 115, 22, 0.35)',
                 line=dict(color='rgba(249, 115, 22, 0.9)', width=2),
                 layer='above',
             )
 
-        fig.add_shape(
-            type='line',
-            x0=ts['end_ms'],
-            x1=ts['end_ms'],
-            y0=y_center['Predicted'] - bar_height,
-            y1=y_center['Predicted'] + bar_height,
-            line=dict(color='rgba(255,255,255,0.9)', width=2),
-            layer='above',
-        )
+        if ts['duration_ms'] > 0:
+            fig_gloss.add_shape(
+                type='line',
+                x0=ts['end_ms'],
+                x1=ts['end_ms'],
+                y0=y_center_gloss['Predicted Gloss'] - bar_height,
+                y1=y_center_gloss['Predicted Gloss'] + bar_height,
+                xref='x',
+                yref='y',
+                line=dict(color='rgba(255,255,255,0.95)', width=3),
+                layer='above',
+            )
 
-        annotation_text = gloss_label if not category_display else f"{gloss_label}<br>{category_display}"
+        annotation_text = gloss_label
         duration = ts['duration_ms']
         label_offset = max(duration * 0.05, 40)
         label_x = ts['end_ms'] - label_offset
         if label_x <= ts['start_ms']:
             label_x = ts['start_ms'] + duration * 0.5
 
-        fig.add_annotation(
+        fig_gloss.add_annotation(
             x=label_x,
-            y='Predicted',
+            y='Predicted Gloss',
             text=annotation_text,
             showarrow=False,
             xref='x',
@@ -724,38 +726,313 @@ def render_temporal_alignment(
 
         # Bar outline defines separator; no additional shape required.
     
-    # Overlay inactive pattern traces last so they remain visible above bars (while edges/text stay readable)
-    for trace in inactive_traces:
-        fig.add_trace(trace)
+    # Ground truth gloss timeline
+    for i, ts in enumerate(ground_truth_timestamps):
+        gloss_label = ts.get('gloss_label', ts.get('gloss', ''))
+        category_id = ts.get('category', None)
+        category_label = ts.get('category_label', '')
 
-    fig.update_layout(
+        if not category_label and category_id is not None:
+            category_label = category_mapping.get(category_id, f"Cat_{category_id}")
+
+        gloss_case = ground_truth_cases.get(i) if ground_truth_cases else None
+        gloss_case_label = case_label_map.get(gloss_case)
+        gloss_color = palette.get(gloss_case, ground_truth_color) if gloss_case else ground_truth_color
+
+        hover_text = f"<b>{gloss_label}</b><br>"
+        if category_label:
+            hover_text += f"Category: {category_label}<br>"
+        if gloss_case_label:
+            hover_text += f"Case: {gloss_case_label}<br>"
+        elif gloss_case:
+            hover_text += f"Case: {gloss_case}<br>"
+        hover_text += (
+            f"Start: {ts['start_ms']}ms<br>"
+            f"End: {ts['end_ms']}ms<br>"
+            f"Duration: {ts['duration_ms']}ms<extra></extra>"
+        )
+
+        fig_gloss.add_trace(go.Bar(
+            name=f"GT Gloss: {gloss_label}",
+            x=[ts['duration_ms']],
+            y=['Ground Truth Gloss'],
+            orientation='h',
+            marker=dict(
+                color=gloss_color,
+                line=dict(width=0)
+            ),
+            textposition='none',
+            hovertemplate=hover_text,
+            base=ts['start_ms'],
+            width=0.6
+        ))
+
+        if ts['duration_ms'] > 0:
+            fig_gloss.add_shape(
+                type='line',
+                x0=ts['end_ms'],
+                x1=ts['end_ms'],
+                y0=y_center_gloss['Ground Truth Gloss'] - bar_height,
+                y1=y_center_gloss['Ground Truth Gloss'] + bar_height,
+                xref='x',
+                yref='y',
+                line=dict(color='rgba(255,255,255,0.95)', width=3),
+                layer='above',
+            )
+
+        annotation_text = gloss_label
+        duration = ts['duration_ms']
+        label_offset = max(duration * 0.05, 40)
+        label_x = ts['end_ms'] - label_offset
+        if label_x <= ts['start_ms']:
+            label_x = ts['start_ms'] + duration * 0.5
+
+        fig_gloss.add_annotation(
+            x=label_x,
+            y='Ground Truth Gloss',
+            text=annotation_text,
+            showarrow=False,
+            xref='x',
+            yref='y',
+            xanchor='right',
+            yanchor='middle',
+            align='right',
+            bgcolor='white',
+            bordercolor='rgba(15, 23, 42, 0.3)',
+            borderwidth=1,
+            borderpad=3,
+            font=dict(
+                color='black',
+                size=11,
+                family='Arial Black'
+            )
+        )
+    
+    add_inactive_overlay(fig_gloss, 'Ground Truth Gloss', bar_width=0.6)
+
+    fig_gloss.update_layout(
         title=dict(
-            text="Temporal Alignment Comparison",
-            font=dict(size=16, color='white')
+            text="Gloss Comparison",
+            font=dict(size=15, color='white')
         ),
         xaxis=dict(
             title=dict(text="Time (ms)", font=dict(size=12, color='white')),
             tickfont=dict(size=10, color='white'),
-            gridcolor='rgba(255, 255, 255, 0.1)',
+            gridcolor='rgba(255, 255, 255, 0.12)',
             range=[0, max_time]
         ),
         yaxis=dict(
             title="",
             tickfont=dict(size=12, color='white'),
             categoryorder='array',
-            categoryarray=['Ground Truth', 'Predicted']
+            categoryarray=gloss_axis_labels
         ),
         barmode='overlay',
-        height=380,
-        bargap=0.15,
+        height=320,
+        bargap=0.22,
         bargroupgap=0.05,
         showlegend=False,
         plot_bgcolor='rgba(0,0,0,0)',
         paper_bgcolor='rgba(0,0,0,0)',
-        margin=dict(l=45, r=45, t=55, b=40)
+        margin=dict(l=45, r=45, t=50, b=40)
     )
-    
-    st.plotly_chart(fig, use_container_width=True)
+
+    # --- Category Comparison chart ---
+    category_row_labels = ['Predicted Category', 'Ground Truth Category']
+    category_axis_labels = list(reversed(category_row_labels))
+    y_center_category = {label: idx for idx, label in enumerate(category_axis_labels)}
+    fig_category = go.Figure()
+
+    for i, ts in enumerate(smoothed_predicted):
+        case_index = ts.get('index', i)
+        category_id = ts.get('category')
+        category_label = ts.get('category_label', '')
+        if category_id is None and predicted_categories and case_index < len(predicted_categories):
+            category_id = predicted_categories[case_index]
+        if category_id is not None and not category_label:
+            category_label = category_mapping.get(category_id, f"Cat_{category_id}")
+
+        display_label = category_label or (f"Cat_{category_id}" if category_id is not None else "Category")
+
+        category_case = category_prediction_cases.get(case_index) if category_prediction_cases else None
+        category_case_label = case_label_map.get(category_case)
+        category_color = palette.get(category_case, predicted_category_color) if category_case else predicted_category_color
+
+        hover_text = f"<b>{display_label}</b><br>"
+        if category_case_label:
+            hover_text += f"Case: {category_case_label}<br>"
+        elif category_case:
+            hover_text += f"Case: {category_case}<br>"
+        hover_text += (
+            f"Start: {ts['start_ms']}ms<br>"
+            f"End: {ts['end_ms']}ms<br>"
+            f"Duration: {ts['duration_ms']}ms<extra></extra>"
+        )
+
+        fig_category.add_trace(go.Bar(
+            name=f"Pred Cat: {display_label}",
+            x=[ts['duration_ms']],
+            y=['Predicted Category'],
+            orientation='h',
+            marker=dict(
+                color=category_color
+            ),
+            textposition='none',
+            hovertemplate=hover_text,
+            base=ts['start_ms'],
+            width=0.55
+        ))
+
+        if ts['duration_ms'] > 0:
+            fig_category.add_shape(
+                type='line',
+                x0=ts['end_ms'],
+                x1=ts['end_ms'],
+                y0=y_center_category['Predicted Category'] - bar_height,
+                y1=y_center_category['Predicted Category'] + bar_height,
+                xref='x',
+                yref='y',
+                line=dict(color='rgba(255,255,255,0.9)', width=2.5),
+                layer='above',
+            )
+
+        if category_label or category_id is not None:
+            duration = ts['duration_ms']
+            label_offset = max(duration * 0.05, 32)
+            label_x = ts['end_ms'] - label_offset
+            if label_x <= ts['start_ms']:
+                label_x = ts['start_ms'] + duration * 0.5
+
+            fig_category.add_annotation(
+                x=label_x,
+                y='Predicted Category',
+                text=display_label,
+                showarrow=False,
+                xref='x',
+                yref='y',
+                xanchor='right',
+                yanchor='middle',
+                align='right',
+                bgcolor='rgba(255, 255, 255, 0.9)',
+                borderpad=3,
+                font=dict(
+                    color='rgba(15, 23, 42, 0.95)',
+                    size=10,
+                    family='Arial Black'
+                )
+            )
+
+    # Ground truth categories
+    for i, ts in enumerate(ground_truth_timestamps):
+        category_id = ts.get('category')
+        category_label = ts.get('category_label', '')
+        if category_id is not None and not category_label:
+            category_label = category_mapping.get(category_id, f"Cat_{category_id}")
+
+        display_label = category_label or (f"Cat_{category_id}" if category_id is not None else "Category")
+
+        category_case = category_ground_truth_cases.get(i) if category_ground_truth_cases else None
+        category_case_label = case_label_map.get(category_case)
+        category_color = palette.get(category_case, ground_truth_category_color) if category_case else ground_truth_category_color
+
+        hover_text = f"<b>{display_label}</b><br>"
+        if category_case_label:
+            hover_text += f"Case: {category_case_label}<br>"
+        elif category_case:
+            hover_text += f"Case: {category_case}<br>"
+        hover_text += (
+            f"Start: {ts['start_ms']}ms<br>"
+            f"End: {ts['end_ms']}ms<br>"
+            f"Duration: {ts['duration_ms']}ms<extra></extra>"
+        )
+
+        fig_category.add_trace(go.Bar(
+            name=f"GT Cat: {display_label}",
+            x=[ts['duration_ms']],
+            y=['Ground Truth Category'],
+            orientation='h',
+            marker=dict(
+                color=category_color,
+                line=dict(width=0)
+            ),
+            textposition='none',
+            hovertemplate=hover_text,
+            base=ts['start_ms'],
+            width=0.55
+        ))
+
+        if ts['duration_ms'] > 0:
+            fig_category.add_shape(
+                type='line',
+                x0=ts['end_ms'],
+                x1=ts['end_ms'],
+                y0=y_center_category['Ground Truth Category'] - bar_height,
+                y1=y_center_category['Ground Truth Category'] + bar_height,
+                xref='x',
+                yref='y',
+                line=dict(color='rgba(255,255,255,0.9)', width=2.5),
+                layer='above',
+            )
+
+        if category_label or category_id is not None:
+            duration = ts['duration_ms']
+            label_offset = max(duration * 0.05, 32)
+            label_x = ts['end_ms'] - label_offset
+            if label_x <= ts['start_ms']:
+                label_x = ts['start_ms'] + duration * 0.5
+
+            fig_category.add_annotation(
+                x=label_x,
+                y='Ground Truth Category',
+                text=display_label,
+                showarrow=False,
+                xref='x',
+                yref='y',
+                xanchor='right',
+                yanchor='middle',
+                align='right',
+                bgcolor='white',
+                bordercolor='rgba(15, 23, 42, 0.3)',
+                borderwidth=1,
+                borderpad=3,
+                font=dict(
+                    color='black',
+                    size=10,
+                    family='Arial Black'
+                )
+            )
+
+    add_inactive_overlay(fig_category, 'Ground Truth Category', bar_width=0.55)
+
+    fig_category.update_layout(
+        title=dict(
+            text="Category Comparison",
+            font=dict(size=15, color='white')
+        ),
+        xaxis=dict(
+            title=dict(text="Time (ms)", font=dict(size=12, color='white')),
+            tickfont=dict(size=10, color='white'),
+            gridcolor='rgba(255, 255, 255, 0.12)',
+            range=[0, max_time]
+        ),
+        yaxis=dict(
+            title="",
+            tickfont=dict(size=12, color='white'),
+            categoryorder='array',
+            categoryarray=category_axis_labels
+        ),
+        barmode='overlay',
+        height=320,
+        bargap=0.22,
+        bargroupgap=0.05,
+        showlegend=False,
+        plot_bgcolor='rgba(0,0,0,0)',
+        paper_bgcolor='rgba(0,0,0,0)',
+        margin=dict(l=45, r=45, t=50, b=40)
+    )
+
+    st.plotly_chart(fig_gloss, use_container_width=True)
+    st.plotly_chart(fig_category, use_container_width=True)
 
 
 def render_timeline(timestamps: List[Dict], title: str = "Timeline"):
