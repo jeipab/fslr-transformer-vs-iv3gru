@@ -27,10 +27,6 @@ from evaluation.metrics import (
     SequenceGroundTruth,
     SequencePrediction,
     Timestamp as MetricTimestamp,
-    TPCase,
-    FPCase,
-    FNCase,
-    TNCase,
     compute_sequence_metrics,
     compute_overall_metrics_micro,
     compute_overall_metrics_macro,
@@ -996,22 +992,10 @@ class CTCPredictor:
                     result['unmatched_predictions'] = metrics_result.fp_indices
                     result['unmatched_ground_truth'] = metrics_result.fn_indices
                     result['tp_indices'] = metrics_result.tp_indices
-                    result['tp_breakdown'] = {
-                        case.value: count
-                        for case, count in metrics_result.tp_breakdown.items()
-                    }
-                    result['fp_breakdown'] = {
-                        case.value: count
-                        for case, count in metrics_result.fp_breakdown.items()
-                    }
-                    result['fn_breakdown'] = {
-                        case.value: count
-                        for case, count in metrics_result.fn_breakdown.items()
-                    }
-                    result['tn_breakdown'] = {
-                        case.value: count
-                        for case, count in metrics_result.tn_breakdown.items()
-                    }
+                    result['tp_breakdown'] = dict(metrics_result.tp_breakdown)
+                    result['fp_breakdown'] = dict(metrics_result.fp_breakdown)
+                    result['fn_breakdown'] = dict(metrics_result.fn_breakdown)
+                    result['tn_breakdown'] = dict(metrics_result.tn_breakdown)
 
                     if 'ground_truth_occluded' in ground_truth:
                         occ = _compute_occlusion_split_metrics(
@@ -1439,18 +1423,10 @@ class CTCPredictor:
                 result['matched_pairs'] = metrics_result.matched_pairs
                 result['unmatched_predictions'] = metrics_result.fp_indices
                 result['unmatched_ground_truth'] = metrics_result.fn_indices
-                result['tp_breakdown'] = {
-                    case.value: count for case, count in metrics_result.tp_breakdown.items()
-                }
-                result['fp_breakdown'] = {
-                    case.value: count for case, count in metrics_result.fp_breakdown.items()
-                }
-                result['fn_breakdown'] = {
-                    case.value: count for case, count in metrics_result.fn_breakdown.items()
-                }
-                result['tn_breakdown'] = {
-                    case.value: count for case, count in metrics_result.tn_breakdown.items()
-                }
+                result['tp_breakdown'] = dict(metrics_result.tp_breakdown)
+                result['fp_breakdown'] = dict(metrics_result.fp_breakdown)
+                result['fn_breakdown'] = dict(metrics_result.fn_breakdown)
+                result['tn_breakdown'] = dict(metrics_result.tn_breakdown)
 
                 # Occlusion split metrics if occlusion flags available
                 if 'ground_truth_occluded' in ground_truth:
@@ -1525,10 +1501,10 @@ class CTCPredictor:
                 result['unmatched_predictions'] = list(range(len(final_sequence)))
                 result['unmatched_ground_truth'] = list(range(len(gt_gloss_ids)))
                 result['tp_indices'] = []
-                result['tp_breakdown'] = {case.value: 0 for case in TPCase}
-                result['fp_breakdown'] = {case.value: 0 for case in FPCase}
-                result['fn_breakdown'] = {case.value: 0 for case in FNCase}
-                result['tn_breakdown'] = {case.value: 0 for case in TNCase}
+                result['tp_breakdown'] = {"TP": 0}
+                result['fp_breakdown'] = {"FP": 0}
+                result['fn_breakdown'] = {"FN": 0}
+                result['tn_breakdown'] = {"TN": 0}
                 print(f"Warning: Detection metrics calculation failed for {result.get('file_name', 'unknown')}: {str(e)}")
         
         return result

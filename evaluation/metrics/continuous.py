@@ -12,7 +12,6 @@ from __future__ import annotations
 
 from collections import defaultdict
 from dataclasses import dataclass, field
-from enum import Enum
 from typing import Any, Dict, List, Mapping, Optional, Sequence, Tuple
 
 import numpy as np
@@ -21,48 +20,6 @@ import numpy as np
 # --------------------------------------------------------------------------- #
 # Configuration & Data Structures
 # --------------------------------------------------------------------------- #
-
-
-class TPCase(str, Enum):
-    """Enumerates true-positive subcases."""
-
-    EXACT = "TP-EXACT"
-    GOOD = "TP-GOOD"
-    LENIENT = "TP-LENIENT"
-
-
-class FPCase(str, Enum):
-    """Enumerates false-positive subcases."""
-
-    PREMATURE = "FP-PREMATURE"
-    LATE = "FP-LATE"
-    WRONG_GLOSS = "FP-WRONG-GLOSS"
-    HALLUCINATION_INACTIVE = "FP-HALLUCINATION-INACTIVE"
-    HALLUCINATION_GAP = "FP-HALLUCINATION-GAP"
-    INSUFFICIENT_OVERLAP = "FP-INSUFFICIENT-OVERLAP"
-    OVER_SEGMENTATION = "FP-OVER-SEGMENTATION"
-    LOW_CONFIDENCE_ACTIVE = "FP-LOW-CONFIDENCE-ACTIVE"
-
-
-class FNCase(str, Enum):
-    """Enumerates false-negative subcases."""
-
-    COMPLETE_MISS = "FN-COMPLETE-MISS"
-    WRONG_GLOSS = "FN-WRONG-GLOSS"
-    PREMATURE_ONLY = "FN-PREMATURE-ONLY"
-    LATE_ONLY = "FN-LATE-ONLY"
-    INSUFFICIENT_OVERLAP = "FN-INSUFFICIENT-OVERLAP"
-    UNDER_SEGMENTATION = "FN-UNDER-SEGMENTATION"
-    LOW_CONFIDENCE = "FN-LOW-CONFIDENCE"
-    OCCLUDED = "FN-OCCLUDED"
-
-
-class TNCase(str, Enum):
-    """Enumerates true-negative subcases."""
-
-    EXPLICIT_LOW_CONF = "TN-LOW-CONFIDENCE"
-    IMPLICIT_GAP = "TN-GAP-IMPLIED"
-    FRAME_LEVEL = "TN-FRAME-LEVEL"
 
 
 @dataclass
@@ -133,10 +90,10 @@ class SequenceEvaluationResult:
     recall: float
     f1_score: float
     mean_iou: float
-    tp_breakdown: Dict[TPCase, int] = field(default_factory=dict)
-    fp_breakdown: Dict[FPCase, int] = field(default_factory=dict)
-    fn_breakdown: Dict[FNCase, int] = field(default_factory=dict)
-    tn_breakdown: Dict[TNCase, int] = field(default_factory=dict)
+    tp_breakdown: Dict[str, int] = field(default_factory=dict)
+    fp_breakdown: Dict[str, int] = field(default_factory=dict)
+    fn_breakdown: Dict[str, int] = field(default_factory=dict)
+    tn_breakdown: Dict[str, int] = field(default_factory=dict)
     matched_pairs: List[Dict[str, float]] = field(default_factory=list)
     tp_indices: List[int] = field(default_factory=list)
     fp_indices: List[int] = field(default_factory=list)
@@ -367,214 +324,6 @@ def _find_best_gt_match(
     return best_idx, best_iou
 
 
-def classify_tp_cases(
-    matched_pairs: Sequence[Dict[str, float]],
-    iou_threshold: float,
-) -> Dict[TPCase, int]:
-    breakdown = {case: 0 for case in TPCase}
-    for pair in matched_pairs:
-        iou = float(pair.get("iou", 0.0))
-        if iou >= 0.8:
-            breakdown[TPCase.EXACT] += 1
-        elif iou >= iou_threshold:
-            breakdown[TPCase.GOOD] += 1
-        else:
-            breakdown[TPCase.LENIENT] += 1
-    return breakdown
-
-
-def classify_fp_cases(
-    fp_indices: Sequence[int],
-    prediction: SequencePrediction,
-    ground_truth: SequenceGroundTruth,
-    matched_pairs: Sequence[Dict[str, float]],
-    config: ContinuousEvaluationConfig,
-    mask: Optional[np.ndarray],
-    timestamps_ms: Optional[np.ndarray],
-) -> Dict[FPCase, int]:
-    breakdown = {case: 0 for case in FPCase}
-    if not fp_indices:
-        return breakdown
-
-    gt_timestamps = ground_truth.timestamps
-    if gt_timestamps:
-        earliest_gt = min(ts.start_ms for ts in gt_timestamps)
-        latest_gt = max(ts.end_ms for ts in gt_timestamps)
-    else:
-        earliest_gt = float("inf")
-        latest_gt = float("-inf")
-
-    matched_gt_to_preds: Dict[int, List[int]] = {}
-    for pair in matched_pairs:
-        matched_gt_to_preds.setdefault(pair["gt_idx"], []).append(pair["pred_idx"])
-
-    for pred_idx in fp_indices:
-        pred_ts = prediction.timestamps[pred_idx]
-        pred_gloss = prediction.gloss_ids[pred_idx] if prediction.gloss_ids else None
-        confidence = (
-            prediction.confidence_scores[pred_idx]
-            if prediction.confidence_scores
-            else 1.0
-        )
-        active_ratio = compute_active_ratio(pred_ts, mask, timestamps_ms)
-        best_gt_idx, best_iou = _find_best_gt_match(pred_ts, ground_truth)
-        overlaps_any = best_iou > 0.0
-
-        if not overlaps_any:
-            if pred_ts.end_ms <= earliest_gt:
-                breakdown[FPCase.PREMATURE] += 1
-                continue
-            if pred_ts.start_ms >= latest_gt:
-                breakdown[FPCase.LATE] += 1
-                continue
-            inactive_ratio = 1.0 - active_ratio
-            if inactive_ratio >= config.inactive_threshold and confidence >= config.confidence_threshold:
-                breakdown[FPCase.HALLUCINATION_INACTIVE] += 1
-            else:
-                breakdown[FPCase.HALLUCINATION_GAP] += 1
-            continue
-
-        gt_gloss = (
-            ground_truth.gloss_ids[best_gt_idx]
-            if best_gt_idx is not None
-            else None
-        )
-
-        if best_iou >= config.iou_threshold:
-            if pred_gloss != gt_gloss:
-                breakdown[FPCase.WRONG_GLOSS] += 1
-            else:
-                if best_gt_idx is not None and matched_gt_to_preds.get(best_gt_idx):
-                    breakdown[FPCase.OVER_SEGMENTATION] += 1
-                else:
-                    breakdown[FPCase.INSUFFICIENT_OVERLAP] += 1
-            continue
-
-        if gt_gloss is not None and pred_gloss == gt_gloss and best_iou > 0:
-            breakdown[FPCase.INSUFFICIENT_OVERLAP] += 1
-            continue
-
-        if gt_gloss is not None and pred_gloss != gt_gloss and best_iou > 0:
-            breakdown[FPCase.WRONG_GLOSS] += 1
-            continue
-
-        inactive_ratio = 1.0 - active_ratio
-        if inactive_ratio >= config.inactive_threshold and confidence >= config.confidence_threshold:
-            breakdown[FPCase.HALLUCINATION_INACTIVE] += 1
-        else:
-            breakdown[FPCase.HALLUCINATION_GAP] += 1
-
-    return breakdown
-
-
-def classify_fn_cases(
-    fn_indices: Sequence[int],
-    prediction: SequencePrediction,
-    ground_truth: SequenceGroundTruth,
-    high_conf_indices: Sequence[int],
-    low_conf_indices: Sequence[int],
-    fp_indices: Sequence[int],
-    matched_pairs: Sequence[Dict[str, float]],
-    config: ContinuousEvaluationConfig,
-) -> Dict[FNCase, int]:
-    breakdown = {case: 0 for case in FNCase}
-    if not fn_indices:
-        return breakdown
-
-    high_conf_set = set(high_conf_indices)
-    low_conf_set = set(low_conf_indices)
-    pred_count = len(prediction.timestamps)
-    all_pred_indices = range(pred_count)
-
-    matched_pred_to_gt = {pair["pred_idx"]: pair["gt_idx"] for pair in matched_pairs}
-
-    for gt_idx in fn_indices:
-        gt_ts = ground_truth.timestamps[gt_idx]
-        gt_gloss = ground_truth.gloss_ids[gt_idx]
-        occluded_flag = (
-            ground_truth.occlusion_flags[gt_idx]
-            if ground_truth.occlusion_flags
-            and gt_idx < len(ground_truth.occlusion_flags)
-            else 0
-        )
-
-        overlapping_preds = [
-            idx
-            for idx in all_pred_indices
-            if _intervals_overlap(prediction.timestamps[idx], gt_ts)
-        ]
-        overlapping_high = [idx for idx in overlapping_preds if idx in high_conf_set]
-        overlapping_low = [idx for idx in overlapping_preds if idx in low_conf_set]
-
-        if occluded_flag == 1:
-            breakdown[FNCase.OCCLUDED] += 1
-            continue
-
-        low_conf_same_gloss = any(
-            prediction.gloss_ids[idx] == gt_gloss for idx in overlapping_low
-        )
-        if low_conf_same_gloss:
-            breakdown[FNCase.LOW_CONFIDENCE] += 1
-            continue
-
-        insufficient_overlap = False
-        wrong_gloss = False
-        for idx in overlapping_high:
-            pred_ts = prediction.timestamps[idx]
-            pred_gloss = prediction.gloss_ids[idx]
-            iou = calculate_temporal_iou(pred_ts, gt_ts)
-            if pred_gloss == gt_gloss and iou < config.iou_threshold and iou > 0:
-                insufficient_overlap = True
-            if pred_gloss != gt_gloss and iou >= config.iou_threshold:
-                wrong_gloss = True
-
-        if wrong_gloss:
-            breakdown[FNCase.WRONG_GLOSS] += 1
-            continue
-        if insufficient_overlap:
-            breakdown[FNCase.INSUFFICIENT_OVERLAP] += 1
-            continue
-
-        # Detect under-segmentation: prediction matched to another GT but spanning this GT
-        under_segmentation = False
-        for pred_idx, matched_gt_idx in matched_pred_to_gt.items():
-            if matched_gt_idx == gt_idx:
-                continue
-            pred_ts = prediction.timestamps[pred_idx]
-            if pred_ts.start_ms <= gt_ts.start_ms and pred_ts.end_ms >= gt_ts.end_ms:
-                under_segmentation = True
-                break
-        if under_segmentation:
-            breakdown[FNCase.UNDER_SEGMENTATION] += 1
-            continue
-
-        same_gloss_preds = [
-            idx
-            for idx in all_pred_indices
-            if prediction.gloss_ids[idx] == gt_gloss
-        ]
-        premature_only = any(
-            prediction.timestamps[idx].end_ms <= gt_ts.start_ms for idx in same_gloss_preds
-        )
-        late_only = any(
-            prediction.timestamps[idx].start_ms >= gt_ts.end_ms
-            for idx in same_gloss_preds
-        )
-        if premature_only and not overlapping_preds:
-            breakdown[FNCase.PREMATURE_ONLY] += 1
-            continue
-        if late_only and not overlapping_preds:
-            breakdown[FNCase.LATE_ONLY] += 1
-            continue
-
-        if overlapping_preds:
-            breakdown[FNCase.WRONG_GLOSS] += 1
-        else:
-            breakdown[FNCase.COMPLETE_MISS] += 1
-
-    return breakdown
-
-
 def check_inactive_region(
     timestamp: Timestamp,
     mask: Optional[np.ndarray],
@@ -637,8 +386,7 @@ def compute_true_negatives(
     mask: Optional[np.ndarray],
     timestamps_ms: Optional[np.ndarray],
     config: ContinuousEvaluationConfig,
-) -> Tuple[int, Dict[TNCase, int]]:
-    breakdown = {case: 0 for case in TNCase}
+) -> int:
     tn_count = 0
 
     for idx in low_conf_indices:
@@ -650,7 +398,6 @@ def compute_true_negatives(
             continue
         if check_inactive_region(pred_ts, mask, timestamps_ms, config.inactive_threshold):
             tn_count += 1
-            breakdown[TNCase.EXPLICIT_LOW_CONF] += 1
 
     gap_tn = compute_gap_based_tn(
         pred_indices=sorted(set(high_conf_indices)),
@@ -663,9 +410,8 @@ def compute_true_negatives(
     )
     if gap_tn:
         tn_count += gap_tn
-        breakdown[TNCase.IMPLICIT_GAP] += gap_tn
 
-    return tn_count, breakdown
+    return tn_count
 
 
 # --------------------------------------------------------------------------- #
@@ -817,30 +563,7 @@ def compute_sequence_metrics(
     fp_indices_absolute = sorted(set(fp_indices_absolute))
     fn_indices_absolute = sorted(set(fn_indices_absolute))
 
-    tp_breakdown = classify_tp_cases(
-        matched_pairs=matched_pairs,
-        iou_threshold=config.iou_threshold,
-    )
-    fp_breakdown = classify_fp_cases(
-        fp_indices=fp_indices_absolute,
-        prediction=prediction,
-        ground_truth=ground_truth,
-        matched_pairs=matched_pairs,
-        config=config,
-        mask=mask,
-        timestamps_ms=timestamps_ms,
-    )
-    fn_breakdown = classify_fn_cases(
-        fn_indices=fn_indices_absolute,
-        prediction=prediction,
-        ground_truth=ground_truth,
-        high_conf_indices=high_conf_indices,
-        low_conf_indices=low_conf_indices,
-        fp_indices=fp_indices_absolute,
-        matched_pairs=matched_pairs,
-        config=config,
-    )
-    num_tn, tn_breakdown = compute_true_negatives(
+    num_tn = compute_true_negatives(
         high_conf_indices=high_conf_indices,
         low_conf_indices=low_conf_indices,
         prediction=prediction,
@@ -849,6 +572,11 @@ def compute_sequence_metrics(
         timestamps_ms=timestamps_ms,
         config=config,
     )
+
+    tp_breakdown = {"TP": len(tp_indices_absolute)}
+    fp_breakdown = {"FP": len(fp_indices_absolute)}
+    fn_breakdown = {"FN": len(fn_indices_absolute)}
+    tn_breakdown = {"TN": num_tn}
 
     num_tp = len(tp_indices_absolute)
     num_fp = len(fp_indices_absolute)

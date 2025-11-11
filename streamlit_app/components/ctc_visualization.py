@@ -101,9 +101,6 @@ def render_sequence_comparison(
     
     has_categories = predicted_categories is not None and len(predicted_categories) > 0
     case_palette = case_palette or {
-        'TP-EXACT': '#22c55e',   # consistent green for true positives
-        'TP-GOOD': '#22c55e',
-        'TP-LENIENT': '#22c55e',
         'TP': '#22c55e',
         'FP': '#ef4444',
         'FN': '#f97316',
@@ -562,9 +559,6 @@ def render_temporal_alignment(
     )
 
     palette = case_palette or {
-        'TP-EXACT': 'rgba(34, 197, 94, 0.85)',   # lime green
-        'TP-GOOD': 'rgba(22, 163, 74, 0.85)',    # green
-        'TP-LENIENT': 'rgba(13, 148, 136, 0.85)',# teal-ish green
         'TP': 'rgba(34, 197, 94, 0.85)',
         'FP': 'rgba(239, 68, 68, 0.9)',
         'FN': 'rgba(249, 115, 22, 0.9)',
@@ -574,31 +568,9 @@ def render_temporal_alignment(
     category_ground_truth_cases = category_ground_truth_cases or {}
 
     case_label_map = {
-        'TP-EXACT': 'True Positive - Exact',
-        'TP-GOOD': 'True Positive - Good',
-        'TP-LENIENT': 'True Positive - Lenient',
         'TP': 'True Positive',
-        'FP-PREMATURE': 'False Positive - Premature',
-        'FP-LATE': 'False Positive - Late',
-        'FP-WRONG-GLOSS': 'False Positive - Wrong Gloss',
-        'FP-HALLUCINATION-INACTIVE': 'False Positive - Inactive Region',
-        'FP-HALLUCINATION-GAP': 'False Positive - Gap Region',
-        'FP-INSUFFICIENT-OVERLAP': 'False Positive - Insufficient Overlap',
-        'FP-OVER-SEGMENTATION': 'False Positive - Over-Segmentation',
-        'FP-LOW-CONFIDENCE-ACTIVE': 'False Positive - Low Confidence',
         'FP': 'False Positive',
-        'FN-COMPLETE-MISS': 'False Negative - Complete Miss',
-        'FN-WRONG-GLOSS': 'False Negative - Wrong Gloss',
-        'FN-PREMATURE-ONLY': 'False Negative - Premature Only',
-        'FN-LATE-ONLY': 'False Negative - Late Only',
-        'FN-INSUFFICIENT-OVERLAP': 'False Negative - Insufficient Overlap',
-        'FN-UNDER-SEGMENTATION': 'False Negative - Under-Segmentation',
-        'FN-LOW-CONFIDENCE': 'False Negative - Low Confidence',
-        'FN-OCCLUDED': 'False Negative - Occluded',
         'FN': 'False Negative',
-        'TN-LOW-CONFIDENCE': 'True Negative - Low Confidence',
-        'TN-GAP-IMPLIED': 'True Negative - Gap',
-        'TN-FRAME-LEVEL': 'True Negative - Frame Level',
         'TN': 'True Negative',
     }
 

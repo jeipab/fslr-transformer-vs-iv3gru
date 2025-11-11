@@ -1509,9 +1509,6 @@ def render_ctc_validation_results(results: Dict[str, Any]):
                         ground_truth_occluded = pred.get('ground_truth_occluded')
 
                         case_palette = {
-                            'TP-EXACT': '#22c55e',   # lime green
-                            'TP-GOOD': '#16a34a',    # green
-                            'TP-LENIENT': '#0d9488', # teal-ish green
                             'TP': '#22c55e',
                             'FP': '#ef4444',
                             'FN': '#f97316',
@@ -1534,12 +1531,8 @@ def render_ctc_validation_results(results: Dict[str, Any]):
                             if not (0 <= pred_idx < len_pred and 0 <= gt_idx < len_gt):
                                 continue
                             iou = float(pair.get('iou', 0.0))
-                            if iou >= 0.8:
-                                case = 'TP-EXACT'
-                            elif iou >= iou_threshold:
-                                case = 'TP-GOOD'
-                            else:
-                                case = 'TP-LENIENT'
+                            if iou >= 0.0:  # any matched pair counts as TP
+                                case = 'TP'
                             prediction_case_map[pred_idx] = case
                             ground_truth_case_map[gt_idx] = case
 
