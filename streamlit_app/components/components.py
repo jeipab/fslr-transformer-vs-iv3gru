@@ -106,10 +106,64 @@ def set_page() -> None:
         padding: 0 !important;
     }
     
-    /* Compact button spacing */
-    .stButton > button {
-        margin: 1px !important;
-        padding: 0.2rem 0.4rem !important;
+    /* Sidebar action button styling */
+    section[data-testid="stSidebar"] .stButton > button {
+        margin: 0.25rem 0 !important;
+        width: 100% !important;
+        padding: 0.55rem 0.75rem !important;
+        border-radius: 6px !important;
+        border: 1px solid rgba(148, 163, 184, 0.35) !important;
+        background: rgba(15, 23, 42, 0.25) !important;
+        color: #f1f5f9 !important;
+        font-weight: 600 !important;
+        transition: all 0.2s ease !important;
+        box-shadow: none !important;
+    }
+    section[data-testid="stSidebar"] .stButton > button:hover:not(:disabled) {
+        background: rgba(15, 23, 42, 0.35) !important;
+        border-color: rgba(148, 163, 184, 0.6) !important;
+        color: #ffffff !important;
+    }
+    section[data-testid="stSidebar"] .stButton > button:focus,
+    section[data-testid="stSidebar"] .stButton > button:active {
+        outline: none !important;
+        background: rgba(15, 23, 55, 0.45) !important;
+        border-color: rgba(148, 163, 184, 0.8) !important;
+        color: #ffffff !important;
+    }
+    section[data-testid="stSidebar"] .stButton > button:disabled {
+        opacity: 0.75 !important;
+        background: rgba(148, 163, 184, 0.15) !important;
+        border-color: rgba(148, 163, 184, 0.3) !important;
+        color: rgba(226, 232, 240, 0.7) !important;
+    }
+    section[data-testid="stSidebar"] .sidebar-link-button {
+        display: flex !important;
+        justify-content: center !important;
+        align-items: center !important;
+        width: 100% !important;
+        margin: 0.25rem 0 !important;
+        padding: 0.55rem 0.75rem !important;
+        border-radius: 6px !important;
+        border: 1px solid rgba(148, 163, 184, 0.35) !important;
+        background: rgba(15, 23, 42, 0.25) !important;
+        color: #f1f5f9 !important;
+        font-weight: 600 !important;
+        text-decoration: none !important;
+        transition: all 0.2s ease !important;
+        box-shadow: none !important;
+    }
+    section[data-testid="stSidebar"] .sidebar-link-button:hover {
+        background: rgba(15, 23, 42, 0.35) !important;
+        border-color: rgba(148, 163, 184, 0.6) !important;
+        color: #ffffff !important;
+    }
+    section[data-testid="stSidebar"] .sidebar-link-button:focus,
+    section[data-testid="stSidebar"] .sidebar-link-button:active {
+        outline: none !important;
+        background: rgba(15, 23, 55, 0.45) !important;
+        border-color: rgba(148, 163, 184, 0.8) !important;
+        color: #ffffff !important;
     }
     
     /* Compact column layout */
@@ -662,6 +716,47 @@ def set_page() -> None:
             padding-left: 0 !important;
         }
     }
+    
+    /* ===== SIDEBAR SPACING FIXES ===== */
+    section[data-testid="stSidebar"] .element-container {
+        margin-bottom: 0 !important;
+        padding-bottom: 0 !important;
+    }
+
+    section[data-testid="stSidebar"] .stRadio,
+    section[data-testid="stSidebar"] .stExpander,
+    section[data-testid="stSidebar"] .stSelectbox,
+    section[data-testid="stSidebar"] .stMarkdown,
+    section[data-testid="stSidebar"] .stContainer {
+        margin-bottom: 0 !important;
+        padding-bottom: 0 !important;
+    }
+
+    section[data-testid="stSidebar"] .stMarkdown + div,
+    section[data-testid="stSidebar"] .stMarkdown + .stRadio,
+    section[data-testid="stSidebar"] .stMarkdown + .stExpander {
+        margin-top: 1rem !important;
+    }
+
+    section[data-testid="stSidebar"] div[data-testid="stVerticalBlock"] {
+        gap: .09rem !important;
+        margin: 0 !important;
+        padding: 0 !important;
+    }
+
+    /* ===== MANUAL GAPS ABOVE VALIDATE & ANDROID BUTTONS ===== */
+
+    /* Add gap before Validate Models button */
+    section[data-testid="stSidebar"] .stButton:nth-last-of-type(2) {
+        margin-top: 0.75rem !important;
+    }
+
+    /* Add gap before Android button (last button or link) */
+    section[data-testid="stSidebar"] .stButton:last-of-type,
+    section[data-testid="stSidebar"] a.sidebar-link-button {
+        margin-top: 0.75rem !important;
+        display: block !important;
+    }
     </style>
     
     <script>
@@ -780,6 +875,8 @@ def render_sidebar() -> Dict:
         - Category insights with occlusion awareness
         """)
     
+    st.sidebar.markdown("<div style='line-height: 0.5;'><br></div>", unsafe_allow_html=True)
+    
     # About the Name (Expandable)
     with st.sidebar.expander("About the Name", expanded=False):
         st.markdown("""
@@ -873,6 +970,18 @@ def render_sidebar() -> Dict:
             help=help_text,
             key="model_architecture_select"
         )
+    
+    # Resource Section
+    st.sidebar.markdown("""
+    <div style='margin: 0.75rem 0 0;'>
+        <h3 style='color: #e2e8f0; margin: 0; font-size: 1.1rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px;'>Resources</h3>
+    </div>
+    """, unsafe_allow_html=True)
+    st.sidebar.markdown("<div style='height: 0.05rem;'></div>", unsafe_allow_html=True)
+
+    from .demo_video import render_demo_button
+    render_demo_button()
+    render_android_button()
     
     return dict(
         model_choice=model_choice,
@@ -1010,11 +1119,22 @@ def render_model_status():
     if st.sidebar.button("Validate Models", help="Access model validation mode", width='stretch'):
         st.session_state.workflow_stage = 'validation'
         st.rerun()
-    
-    # Add demo video button below validate button
-    st.sidebar.markdown("<div style='height: 0.1rem;'></div>", unsafe_allow_html=True)
-    from .demo_video import render_demo_button
-    render_demo_button()
+
+
+def render_android_button():
+    """Render a styled sidebar button for downloading the Android APK."""
+    apk_url = "https://drive.google.com/uc?export=download&id=1qrjWyIOJNSuDYvkzUncOynkVFoe1yzFk"
+
+    if st.sidebar.button("Android", help="Download the Android APK", use_container_width=True):
+        # Open the APK link in a new tab using JavaScript
+        st.markdown(
+            f"""
+            <script>
+            window.open('{apk_url}', '_blank');
+            </script>
+            """,
+            unsafe_allow_html=True
+        )
 
 
 def get_available_models():
