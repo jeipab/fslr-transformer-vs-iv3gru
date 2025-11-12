@@ -27,7 +27,7 @@ from ..components.visualization import (
 from ..components.components import render_predictions_section
 from ..components.ctc_case_utils import (  # type: ignore[import]
     DEFAULT_CASE_PALETTE,
-    build_case_maps,
+    build_case_maps_for_inference,
     enrich_ground_truth_timestamps,
 )
 from ..components.ctc_visualization import (
@@ -1160,7 +1160,7 @@ def render_continuous_sequence_predictions(filename: str, npz_data: Dict, metada
                 ground_truth_case_map,
                 category_prediction_case_map,
                 category_ground_truth_case_map,
-            ) = build_case_maps(
+            ) = build_case_maps_for_inference(
                 metrics=results,
                 predicted_sequence=predicted_sequence,
                 ground_truth_sequence=ground_truth_sequence,

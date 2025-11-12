@@ -251,6 +251,89 @@ def build_case_maps(
     )
 
 
+def build_case_maps_for_inference(
+    metrics: Dict[str, Any],
+    predicted_sequence: Optional[Sequence[int]] = None,
+    ground_truth_sequence: Optional[Sequence[int]] = None,
+    confidence_scores: Optional[Sequence[Optional[float]]] = None,
+    predicted_categories: Optional[Sequence[int]] = None,
+    ground_truth_categories: Optional[Sequence[int]] = None,
+    category_confidences: Optional[Sequence[Optional[float]]] = None,
+    confidence_threshold: Optional[float] = None,
+) -> Tuple[Dict[int, str], Dict[int, str], Dict[int, str], Dict[int, str]]:
+    """
+    Build case maps for INFERENCE UI using explicit indices only (never mixed with matched_pairs).
+    This matches the logic that makes category work correctly.
+    
+    Validation continues using build_case_maps() which works perfectly.
+    """
+    predicted_sequence = list(predicted_sequence or [])
+    ground_truth_sequence = list(ground_truth_sequence or [])
+    len_pred = len(predicted_sequence)
+    len_gt = len(ground_truth_sequence)
+
+    prediction_case_map: Dict[int, str] = {}
+    ground_truth_case_map: Dict[int, str] = {}
+
+    # Use explicit indices ONLY (like category does) - never touch matched_pairs
+    # This is the authoritative source from backend validation
+
+    # Mirror validation outputs strictly: use only explicit tp/fp/fn indices
+    # Note: backend returns FPs/FNs under "unmatched_*" keys in results; include them.
+    tp_pred_indices = [int(i) for i in (metrics.get("tp_indices") or [])]
+    fp_pred_indices = [
+        int(i)
+        for i in (
+            (metrics.get("fp_indices") or [])
+            + (metrics.get("unmatched_predictions") or [])
+        )
+    ]
+    fn_gt_indices = [
+        int(i)
+        for i in (
+            (metrics.get("fn_indices") or [])
+            + (metrics.get("unmatched_ground_truth") or [])
+        )
+    ]
+
+    # Predicted: assign TP/FP from explicit lists only
+    for idx in tp_pred_indices:
+        if 0 <= idx < len_pred:
+            prediction_case_map[idx] = "TP"
+    for idx in fp_pred_indices:
+        if 0 <= idx < len_pred:
+            prediction_case_map[idx] = "FP"
+
+    # Ground truth: assign FN from explicit list, all other GT entries are TP
+    fn_gt_set = set(i for i in fn_gt_indices if 0 <= i < len_gt)
+    for idx in fn_gt_set:
+        ground_truth_case_map[idx] = "FN"
+    for idx in range(len_gt):
+        if idx not in ground_truth_case_map:
+            ground_truth_case_map[idx] = "TP"
+
+    # Do not override with confidence threshold here; validation has already applied it
+
+    # Derive category case maps using existing logic
+    category_prediction_case_map, category_ground_truth_case_map = derive_category_case_maps(
+        metrics=metrics,
+        predicted_categories=predicted_categories,
+        ground_truth_categories=ground_truth_categories,
+        matched_pairs=metrics.get("matched_pairs", []),
+        pred_len=len_pred,
+        gt_len=len_gt,
+    )
+
+    # Do not apply category confidence threshold; mirror validation-provided indices
+
+    return (
+        prediction_case_map,
+        ground_truth_case_map,
+        category_prediction_case_map,
+        category_ground_truth_case_map,
+    )
+
+
 def enrich_ground_truth_timestamps(
     timestamps: Optional[List[Dict[str, Any]]],
     gloss_labels: Optional[Sequence[str]],
