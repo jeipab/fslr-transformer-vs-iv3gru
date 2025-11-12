@@ -1360,6 +1360,155 @@ def render_ctc_validation_results(results: Dict[str, Any]):
                         confidence_scores = pred.get('confidence_scores')
                         ground_truth_occluded = pred.get('ground_truth_occluded')
 
+                        has_categories = summary.get('has_category_predictions', False)
+                        category_metrics_present = has_categories and any(
+                            key in pred for key in (
+                                'category_precision',
+                                'category_recall',
+                                'category_f1_score',
+                                'category_num_tp',
+                                'category_num_fp',
+                                'category_num_fn',
+                            )
+                        )
+
+                        st.markdown("##### Sequence Metrics")
+
+                        def _percent(value: Optional[float]) -> str:
+                            return f"{value*100:.2f}%" if value is not None else "—"
+
+                        def _count(value: Optional[int]) -> Any:
+                            return value if value is not None else "—"
+
+                        # Load NPZ data for video preview
+                        npz_data_for_preview = None
+                        data_sources = results.get('data_sources') or {}
+                        npz_folder = data_sources.get('npz_folder_path')
+                        
+                        if npz_folder:
+                            npz_path = Path(npz_folder) / selected_file
+                            if npz_path.exists():
+                                try:
+                                    npz_loaded = np.load(npz_path, allow_pickle=False)
+                                    try:
+                                        # Convert to dict format expected by video generation
+                                        # Extract arrays before closing the file
+                                        npz_data_for_preview = {key: np.array(npz_loaded[key]) for key in npz_loaded.keys()}
+                                    finally:
+                                        npz_loaded.close()
+                                except Exception as load_err:
+                                    pass  # Silently fail, video preview will show error
+
+                        # Two-column layout: Metrics (left) | Video Preview (right)
+                        metrics_col, video_col = st.columns([1.2, 1], gap="large")
+
+                        with metrics_col:
+                            # Gloss Metrics (stacked vertically)
+                            st.markdown("###### Gloss Metrics")
+                            gloss_metrics_cols = st.columns(3)
+                            with gloss_metrics_cols[0]:
+                                st.metric("Precision", _percent(pred.get('precision')))
+                            with gloss_metrics_cols[1]:
+                                st.metric("Recall", _percent(pred.get('recall')))
+                            with gloss_metrics_cols[2]:
+                                st.metric("F1-Score", _percent(pred.get('f1_score')))
+
+                            gloss_counts_cols = st.columns(3)
+                            with gloss_counts_cols[0]:
+                                st.metric("True Positive", _count(pred.get('num_tp')))
+                            with gloss_counts_cols[1]:
+                                st.metric("False Positive", _count(pred.get('num_fp')))
+                            with gloss_counts_cols[2]:
+                                st.metric("False Negative", _count(pred.get('num_fn')))
+
+                            # Category Metrics (stacked below Gloss Metrics)
+                            if category_metrics_present:
+                                st.markdown("---")
+                                st.markdown("###### Category Metrics")
+                                cat_metrics_cols = st.columns(3)
+                                with cat_metrics_cols[0]:
+                                    st.metric("Precision", _percent(pred.get('category_precision')))
+                                with cat_metrics_cols[1]:
+                                    st.metric("Recall", _percent(pred.get('category_recall')))
+                                with cat_metrics_cols[2]:
+                                    st.metric("F1-Score", _percent(pred.get('category_f1_score')))
+
+                                cat_counts_cols = st.columns(3)
+                                with cat_counts_cols[0]:
+                                    st.metric("True Positive", _count(pred.get('category_num_tp')))
+                                with cat_counts_cols[1]:
+                                    st.metric("False Positive", _count(pred.get('category_num_fp')))
+                                with cat_counts_cols[2]:
+                                    st.metric("False Negative", _count(pred.get('category_num_fn')))
+
+                        with video_col:
+                            if npz_data_for_preview:
+                                try:
+                                    import os
+                                    # Import from visualization_vast_ai in the same directory
+                                    from visualization_vast_ai import create_keypoint_animation_video
+                                    
+                                    st.markdown("**Video Preview**")
+                                    
+                                    # Extract keypoints
+                                    if 'X' not in npz_data_for_preview:
+                                        st.error("Missing keypoint data")
+                                    else:
+                                        X = npz_data_for_preview['X']
+                                        time_steps = X.shape[0]
+                                        
+                                        # Calculate number of keypoints based on feature dimension
+                                        num_keypoints = X.shape[1] // 2
+                                        
+                                        # Validate that feature_dim is divisible by 2
+                                        if X.shape[1] % 2 != 0:
+                                            st.error(f"Invalid keypoint feature dimension: {X.shape[1]}. Expected even number for (x,y) coordinates.")
+                                        else:
+                                            # Reshape to [T, num_keypoints, 2]
+                                            keypoints_2d = X.reshape(time_steps, num_keypoints, 2)
+                                            mask = npz_data_for_preview.get('mask', None)
+                                            
+                                            # Video settings - use fixed size and Grid background
+                                            fps = 30
+                                            width, height = 360, 360
+                                            show_skeleton = True
+                                            bg_type = "Grid"
+                                            
+                                            # Generate video with auto prefix
+                                            unique_key_suffix = f"validation_{selected_file}"
+                                            video_key = f"auto_preview_{selected_file}_{unique_key_suffix}"
+                                            
+                                            if video_key not in st.session_state:
+                                                with st.spinner("Generating..."):
+                                                    video_path = create_keypoint_animation_video(
+                                                        keypoints_2d, mask, fps, width, height,
+                                                        show_skeleton, bg_type, f"auto_{unique_key_suffix}"
+                                                    )
+                                                    
+                                                    if video_path and os.path.exists(video_path):
+                                                        st.session_state[video_key] = video_path
+                                                    else:
+                                                        st.error("Video generation failed")
+                                            
+                                            # Display video player
+                                            if video_key in st.session_state:
+                                                video_path = st.session_state[video_key]
+                                                if os.path.exists(video_path):
+                                                    try:
+                                                        with open(video_path, 'rb') as f:
+                                                            video_bytes = f.read()
+                                                        
+                                                        # Compact video player with autoplay and loop
+                                                        video_container = st.container(key=f"auto_video_container_{unique_key_suffix}")
+                                                        with video_container:
+                                                            st.video(video_bytes, autoplay=True, loop=True)
+                                                    except Exception as e:
+                                                        st.error(f"Playback error: {str(e)}")
+                                except Exception as e:
+                                    st.warning(f"Video preview unavailable: {str(e)}")
+                            else:
+                                st.info("Video preview unavailable (NPZ file not found)")
+
                         st.markdown("---")
                         render_sequence_comparison(
                             predicted_sequence=predicted_sequence,

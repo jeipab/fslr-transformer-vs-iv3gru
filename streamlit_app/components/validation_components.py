@@ -1356,13 +1356,30 @@ def render_ctc_validation_results(results: Dict[str, Any]):
                             )
                         )
 
-                        if category_metrics_present:
-                            gloss_col, cat_col = st.columns(2, gap="large")
-                        else:
-                            gloss_col = st.container()
-                            cat_col = None
+                        # Load NPZ data for video preview
+                        npz_data_for_preview = None
+                        data_sources = results.get('data_sources') or {}
+                        npz_folder = data_sources.get('npz_folder_path')
+                        
+                        if npz_folder:
+                            npz_path = Path(npz_folder) / selected_file
+                            if npz_path.exists():
+                                try:
+                                    npz_loaded = np.load(npz_path, allow_pickle=False)
+                                    try:
+                                        # Convert to dict format expected by render_inline_video_preview
+                                        # Extract arrays before closing the file
+                                        npz_data_for_preview = {key: np.array(npz_loaded[key]) for key in npz_loaded.keys()}
+                                    finally:
+                                        npz_loaded.close()
+                                except Exception as load_err:
+                                    pass  # Silently fail, video preview will show error
 
-                        with gloss_col:
+                        # Two-column layout: Metrics (left) | Video Preview (right)
+                        metrics_col, video_col = st.columns([1.2, 1], gap="large")
+
+                        with metrics_col:
+                            # Gloss Metrics (stacked vertically)
                             st.markdown("###### Gloss Metrics")
                             gloss_metrics_cols = st.columns(3)
                             with gloss_metrics_cols[0]:
@@ -1380,8 +1397,9 @@ def render_ctc_validation_results(results: Dict[str, Any]):
                             with gloss_counts_cols[2]:
                                 st.metric("False Negative", _count(pred.get('num_fn')))
 
-                        if category_metrics_present and cat_col is not None:
-                            with cat_col:
+                            # Category Metrics (stacked below Gloss Metrics)
+                            if category_metrics_present:
+                                st.markdown("---")
                                 st.markdown("###### Category Metrics")
                                 cat_metrics_cols = st.columns(3)
                                 with cat_metrics_cols[0]:
@@ -1398,6 +1416,22 @@ def render_ctc_validation_results(results: Dict[str, Any]):
                                     st.metric("False Positive", _count(pred.get('category_num_fp')))
                                 with cat_counts_cols[2]:
                                     st.metric("False Negative", _count(pred.get('category_num_fn')))
+
+                        with video_col:
+                            if npz_data_for_preview:
+                                try:
+                                    from ..components.components import render_inline_video_preview
+                                    unique_key_suffix = f"validation_{selected_file}"
+                                    render_inline_video_preview(
+                                        npz_data_for_preview,
+                                        {},
+                                        selected_file,
+                                        unique_key_suffix
+                                    )
+                                except Exception as e:
+                                    st.warning(f"Video preview unavailable: {str(e)}")
+                            else:
+                                st.info("Video preview unavailable (NPZ file not found)")
 
                         st.markdown("---")
                         render_case_legend()
