@@ -569,7 +569,7 @@ class CTCPredictor:
         ground_truth: Dict,
         mask: Optional[np.ndarray],
         timestamps_ms: Optional[np.ndarray],
-        iou_threshold: float = 0.5
+        iou_threshold: float = 0.5,
     ) -> Dict:
         """
         Compute metrics using compute_sequence_metrics() - EXACT SAME as validation.
@@ -900,7 +900,7 @@ class CTCPredictor:
                     ground_truth=ground_truth,
                     mask=mask,
                     timestamps_ms=timestamps_ms,
-                    iou_threshold=iou_threshold
+                    iou_threshold=iou_threshold,
                 )
                 result.update(metrics)
             except Exception as e:
@@ -1197,7 +1197,7 @@ class CTCPredictor:
                     ground_truth=ground_truth,
                     mask=mask,
                     timestamps_ms=timestamps_ms,
-                    iou_threshold=iou_threshold
+                    iou_threshold=iou_threshold,
                 )
                 result.update(metrics)
             except Exception as e:

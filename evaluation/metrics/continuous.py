@@ -29,7 +29,7 @@ class ContinuousEvaluationConfig:
     iou_threshold: float = 0.5
     confidence_threshold: float = 0.5
     inactive_threshold: float = 0.9
-    active_overlap_threshold: float = 0.1
+    active_overlap_threshold: float = 0.5
     min_gap_duration_ms: int = 200
     enable_lenient_matching: bool = True
     fallback_gt_overlap_ratio: float = 0.6
@@ -211,6 +211,45 @@ def match_predictions_to_ground_truth(
     return tp_indices, fp_indices, fn_indices, matched_pairs, mean_iou
 
 
+def _calculate_active_region_overlap(
+    pred_ts: Timestamp,
+    gt_ts: Timestamp,
+    mask: np.ndarray,
+    timestamps_ms: np.ndarray,
+    left_hand_slice: slice = slice(25, 46),
+    right_hand_slice: slice = slice(46, 67),
+) -> float:
+    """Calculate overlap ratio between prediction and GT's active region."""
+    # Find active frames in GT span
+    gt_frame_indices = np.where(
+        (timestamps_ms >= gt_ts.start_ms) & (timestamps_ms <= gt_ts.end_ms)
+    )[0]
+    if len(gt_frame_indices) == 0:
+        return 0.0
+
+    # Identify active frames in GT
+    active_gt_frames = []
+    for frame_idx in gt_frame_indices:
+        if frame_idx < len(mask):
+            frame = mask[frame_idx]
+            left_active = bool(np.any(frame[left_hand_slice]))
+            right_active = bool(np.any(frame[right_hand_slice]))
+            if left_active or right_active:
+                active_gt_frames.append(frame_idx)
+
+    if len(active_gt_frames) == 0:
+        return 0.0
+
+    # Find overlap between prediction and active GT frames
+    pred_frame_indices = np.where(
+        (timestamps_ms >= pred_ts.start_ms) & (timestamps_ms <= pred_ts.end_ms)
+    )[0]
+    pred_active_overlap = len(set(pred_frame_indices) & set(active_gt_frames))
+
+    # Return ratio of active GT frames covered by prediction
+    return pred_active_overlap / len(active_gt_frames) if active_gt_frames else 0.0
+
+
 def match_predictions_by_overlap(
     unmatched_pred_indices: Sequence[int],
     unmatched_gt_indices: Sequence[int],
@@ -218,10 +257,16 @@ def match_predictions_by_overlap(
     prediction_timestamps: Sequence[Timestamp],
     gt_timestamps: Sequence[Timestamp],
     min_overlap_ratio: float,
+    pred_glosses: Optional[Sequence[int]] = None,
+    gt_glosses: Optional[Sequence[int]] = None,
+    mask: Optional[np.ndarray] = None,
+    timestamps_ms: Optional[np.ndarray] = None,
+    active_region_threshold: Optional[float] = None,
 ) -> List[Tuple[int, int, float]]:
     """
     Attempt to pair unmatched predictions with ground-truth spans using relaxed
-    temporal overlap criteria.
+    temporal overlap criteria. Only matches if gloss IDs match (when provided).
+    For early-starting predictions, also checks overlap with GT's active region.
 
     Returns list of tuples (pred_rel_idx, gt_idx, coverage_score).
     """
@@ -240,11 +285,23 @@ def match_predictions_by_overlap(
         if pred_duration <= 0.0:
             continue
 
+        # Get prediction gloss ID if available
+        pred_gloss = None
+        if pred_glosses is not None and pred_rel_idx < len(pred_glosses):
+            pred_gloss = pred_glosses[pred_rel_idx]
+
         best_match: Optional[Tuple[int, float]] = None
 
         for gt_idx in unmatched_gt_indices:
             if gt_idx in used_gt or gt_idx < 0 or gt_idx >= len(gt_timestamps):
                 continue
+
+            # Check gloss ID match if both are provided
+            if pred_glosses is not None and gt_glosses is not None:
+                if pred_gloss is None or gt_idx >= len(gt_glosses):
+                    continue
+                if pred_gloss != gt_glosses[gt_idx]:
+                    continue
 
             gt_ts = gt_timestamps[gt_idx]
             gt_duration = gt_ts.duration()
@@ -260,6 +317,20 @@ def match_predictions_by_overlap(
             pred_ratio = overlap / pred_duration
             gt_ratio = overlap / gt_duration
             coverage = max(pred_ratio, gt_ratio)
+
+            # For early-starting predictions, check active region overlap as alternative
+            started_early = pred_ts.start_ms < gt_ts.start_ms
+            
+            if started_early and mask is not None and timestamps_ms is not None:
+                active_overlap_ratio = _calculate_active_region_overlap(
+                    pred_ts, gt_ts, mask, timestamps_ms
+                )
+                
+                # Use separate threshold for active region overlap (defaults to min_overlap_ratio if not provided)
+                active_threshold = active_region_threshold if active_region_threshold is not None else min_overlap_ratio
+                
+                if active_overlap_ratio >= active_threshold:
+                    coverage = max(coverage, active_overlap_ratio)
 
             if coverage >= min_overlap_ratio:
                 if best_match is None or coverage > best_match[1] or (
@@ -349,6 +420,7 @@ def check_active_overlap(
     fallback_overlap_ratio: float = 0.5,
     early_overlap_threshold: float = 0.75,
     late_overlap_threshold: float = 0.2,
+    active_ratio_threshold: Optional[float] = None,
 ) -> bool:
     """
     Determine whether a prediction overlaps sufficiently with active frames and
@@ -409,19 +481,39 @@ def check_active_overlap(
     if started_early:
         required_gt_ratio = max(fallback_overlap_ratio, early_overlap_threshold)
         temporal_ok = gt_overlap_ratio >= required_gt_ratio
+        
+        # For early-starting predictions, also check active region overlap as alternative
+        validated_via_active_region = False
+        if not temporal_ok and mask is not None and timestamps_ms is not None:
+            active_region_overlap = _calculate_active_region_overlap(
+                pred_timestamp, gt_timestamp, mask, timestamps_ms
+            )
+            # Use active region overlap if it meets the threshold
+            if active_region_overlap >= min_overlap_ratio:
+                temporal_ok = True
+                validated_via_active_region = True
     else:
         temporal_ok = (
             gt_overlap_ratio >= late_overlap_threshold
             or pred_overlap_ratio >= late_overlap_threshold
         )
+        validated_via_active_region = False
 
     if not temporal_ok:
         return False
 
+    # If validated via active region overlap for early-starting predictions, skip active_ratio check
+    # because active_ratio measures frames in prediction span, which may be low for early starts
+    if validated_via_active_region:
+        return True
+
     if mask_reliable:
         if active_ratio is None:
             return False
-        return active_ratio >= min_overlap_ratio
+        # Use separate threshold for active_ratio (active frames in prediction span)
+        # Default to 0.1 if not provided, as this is a different metric than active region overlap
+        active_ratio_thresh = active_ratio_threshold if active_ratio_threshold is not None else 0.1
+        return active_ratio >= active_ratio_thresh
 
     return True
 
@@ -526,6 +618,11 @@ def compute_sequence_metrics(
             prediction_timestamps=prediction.timestamps,
             gt_timestamps=ground_truth.timestamps,
             min_overlap_ratio=config.lenient_overlap_ratio,
+            pred_glosses=high_conf_glosses,
+            gt_glosses=ground_truth.gloss_ids,
+            mask=mask,
+            timestamps_ms=timestamps_ms,
+            active_region_threshold=config.active_overlap_threshold,
         )
         if overlap_matches:
             matched_pred_rel = {m[0] for m in overlap_matches}
@@ -589,7 +686,8 @@ def compute_sequence_metrics(
     for rel_idx in tp_indices_relative:
         pred_idx = high_conf_indices[rel_idx]
         gt_idx = rel_match_lookup.get(rel_idx)
-        if check_active_overlap(
+        
+        validation_result = check_active_overlap(
             prediction.timestamps[pred_idx],
             mask,
             timestamps_ms,
@@ -600,7 +698,10 @@ def compute_sequence_metrics(
             fallback_overlap_ratio=config.fallback_gt_overlap_ratio,
             early_overlap_threshold=config.early_start_gt_overlap_threshold,
             late_overlap_threshold=config.late_start_gt_overlap_threshold,
-        ):
+            active_ratio_threshold=0.1,  # Use lower threshold for active_ratio check
+        )
+        
+        if validation_result:
             validated_tp_indices.append(pred_idx)
         else:
             demoted_fp_indices.append(pred_idx)
@@ -624,6 +725,7 @@ def compute_sequence_metrics(
             continue
         if idx not in fp_indices_absolute:
             fp_indices_absolute.append(idx)
+
 
     if config.enable_lenient_matching:
         matched_gt_indices = {pair["gt_idx"] for pair in matched_pairs}
@@ -659,6 +761,7 @@ def compute_sequence_metrics(
                 fallback_overlap_ratio=config.fallback_gt_overlap_ratio,
                 early_overlap_threshold=config.early_start_gt_overlap_threshold,
                 late_overlap_threshold=config.late_start_gt_overlap_threshold,
+                active_ratio_threshold=0.1,  # Use lower threshold for active_ratio check
             ):
                 tp_indices_absolute.append(pred_idx)
                 matched_pairs.append(

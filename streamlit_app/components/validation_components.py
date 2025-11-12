@@ -13,8 +13,8 @@ import json
 from pathlib import Path
 
 
-DEFAULT_CLASSIFICATION_NPZ_DIR = Path("data") / "processed" / "fsl_val"
-DEFAULT_CONTINUOUS_SEQUENCE_DIR = Path("data") / "processed" / "continuous_sequences"
+DEFAULT_CLASSIFICATION_NPZ_DIR = Path("data") / "processed" / "sample"
+DEFAULT_CONTINUOUS_SEQUENCE_DIR = Path("data") / "processed" / "sample"
 
 
 from ..core.config import MODEL_CONFIG, is_ctc_model, get_models_by_mode
