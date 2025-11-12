@@ -13,6 +13,10 @@ import json
 from pathlib import Path
 
 
+DEFAULT_CLASSIFICATION_NPZ_DIR = Path("data") / "processed" / "fsl_val"
+DEFAULT_CONTINUOUS_SEQUENCE_DIR = Path("data") / "processed" / "continuous_sequences"
+
+
 def render_case_legend() -> None:
     """Render shared legend for prediction case colors."""
     st.markdown(
@@ -24,6 +28,18 @@ def render_case_legend() -> None:
             "<span style='color:#ef4444;font-weight:600;'>False Positive</span>"
             "<span style='color:white;font-weight:600;'> | </span>"
             "<span style='color:#f97316;font-weight:600;'>False Negative</span>"
+            "<span style='color:white;font-weight:600;'> | </span>"
+            "<span style='color:#000;background-color:#fff;"
+            "padding:0 0.3rem;border-radius:0.25rem;font-weight:600;'>"
+            "Not Occluded"
+            "</span>"
+            "<span style='color:white;font-weight:600;'></span>"
+            "<span style='color:white;font-weight:600;'> | </span>"
+            "<span style='color:#fff;background-color:#000;"
+            "padding:0 0.3rem;border-radius:0.25rem;font-weight:600;'>"
+            "Occluded"
+            "</span>"
+            "<span style='color:white;font-weight:600;'></span>"
         ),
         unsafe_allow_html=True,
     )
@@ -268,9 +284,10 @@ def render_dataset_upload():
     
     # NPZ folder selection
     st.markdown("**Validation NPZ Folder**")
+    default_npz_dir = str(DEFAULT_CLASSIFICATION_NPZ_DIR)
     npz_folder_path = st.text_input(
-        "Enter path to folder containing NPZ files (default: data\\processed\\fsl_val)",
-        placeholder="e.g., data\\processed\\fsl_val",
+        f"Enter path to folder containing NPZ files (default: {default_npz_dir})",
+        placeholder=f"e.g., {default_npz_dir}",
         help="Path to directory containing NPZ files for validation"
     )
     
@@ -290,17 +307,18 @@ def render_ctc_dataset_upload():
     
     # NPZ folder selection
     st.markdown("**Continuous Sequences Folder**")
+    default_continuous_dir = str(DEFAULT_CONTINUOUS_SEQUENCE_DIR)
     npz_folder_path = st.text_input(
-        "Enter path to folder containing continuous sequence NPZ files (default: data\\processed\\continuous_sequences)",
-        placeholder="e.g., data\\processed\\continuous_sequences",
+        f"Enter path to folder containing continuous sequence NPZ files (default: {default_continuous_dir})",
+        placeholder=f"e.g., {default_continuous_dir}",
         help="Path to directory containing continuous sequence NPZ files"
     )
     
     # Ground truth folder
     st.markdown("**Ground Truth Folder**")
     gt_folder_path = st.text_input(
-        "Enter path to folder containing ground truth JSON files (default: data\\processed\\continuous_sequences)",
-        placeholder="e.g., data\\processed\\continuous_sequences (same as NPZ folder if JSON files are there)",
+        f"Enter path to folder containing ground truth JSON files (default: {default_continuous_dir})",
+        placeholder=f"e.g., {default_continuous_dir} (same as NPZ folder if JSON files are there)",
         help="Path to directory containing *_gt.json files"
     )
     
@@ -1541,15 +1559,12 @@ def render_ctc_validation_results(results: Dict[str, Any]):
                             if 0 <= idx < len_gt:
                                 ground_truth_case_map[idx] = 'FN'
 
-                        low_conf_fn_count = 0
                         threshold = pred.get('confidence_threshold', 0.5)
                         for idx, conf in enumerate(confidence_scores or []):
                             if conf is None:
                                 continue
                             if 0 <= idx < len_pred and conf < threshold:
-                                if idx not in prediction_case_map:
-                                    prediction_case_map[idx] = 'FN'
-                                    low_conf_fn_count += 1
+                                prediction_case_map.setdefault(idx, 'FP')
 
                         category_prediction_case_map, category_ground_truth_case_map = _derive_category_case_maps(
                             pred=pred,
@@ -1559,6 +1574,16 @@ def render_ctc_validation_results(results: Dict[str, Any]):
                             pred_len=len_pred,
                             gt_len=len_gt,
                         )
+                        if (
+                            predicted_categories
+                            and category_prediction_case_map is not None
+                            and category_confidences is not None
+                        ):
+                            for idx, cat_conf in enumerate(category_confidences):
+                                if cat_conf is None:
+                                    continue
+                                if 0 <= idx < len_pred and cat_conf < threshold:
+                                    category_prediction_case_map.setdefault(idx, 'FP')
 
                         st.markdown("##### Sequence Metrics")
 
@@ -1634,6 +1659,7 @@ def render_ctc_validation_results(results: Dict[str, Any]):
                             category_confidences=category_confidences,
                             ground_truth_categories=ground_truth_categories,
                             ground_truth_occluded=ground_truth_occluded,
+                            ground_truth_cases=ground_truth_case_map,
                             prediction_cases=prediction_case_map,
                             case_palette=case_palette,
                             confidence_threshold=pred.get('confidence_threshold', 0.5),

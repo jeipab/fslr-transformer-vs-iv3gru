@@ -77,6 +77,7 @@ def render_sequence_comparison(
     category_confidences: Optional[List[float]] = None,
     ground_truth_categories: Optional[List[int]] = None,
     ground_truth_occluded: Optional[List[int]] = None,
+    ground_truth_cases: Optional[Dict[int, str]] = None,
     prediction_cases: Optional[Dict[int, str]] = None,
     case_palette: Optional[Dict[str, str]] = None,
     confidence_threshold: float = 0.5,
@@ -120,6 +121,7 @@ def render_sequence_comparison(
                     None,
                     occlusion_flags=ground_truth_occluded,
                     is_ground_truth=True,
+                    case_map=ground_truth_cases,
                     case_palette=case_palette,
                     category_case_map=category_ground_truth_cases,
                 )
@@ -129,6 +131,7 @@ def render_sequence_comparison(
                     None,
                     color=case_palette.get('TP', '#22c55e'),
                     occlusion_flags=ground_truth_occluded,
+                    case_map=ground_truth_cases,
                     case_palette=case_palette,
                 )
         

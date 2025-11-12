@@ -280,6 +280,13 @@ def _compute_category_metrics_balanced(
     pred_len = min(pred_len, len(pred_categories))
     gt_len = min(gt_len, len(gt_categories))
 
+    blocked_pred = {
+        idx for idx in gloss_fp_indices if 0 <= idx < pred_len
+    }
+    blocked_gt = {
+        idx for idx in gloss_fn_indices if 0 <= idx < gt_len
+    }
+
     pred_matched = set()
     gt_matched = set()
     cat_tp = 0
@@ -291,14 +298,22 @@ def _compute_category_metrics_balanced(
         if pi is None or gi is None:
             continue
         if 0 <= pi < pred_len and 0 <= gi < gt_len:
+            if pi in blocked_pred or gi in blocked_gt:
+                continue
             if pred_categories[pi] == gt_categories[gi]:
                 cat_tp += 1
                 pred_matched.add(pi)
                 gt_matched.add(gi)
 
     # Step 2: order-preserving augmentation by category on remaining indices
-    remaining_pred = [i for i in range(pred_len) if i not in pred_matched]
-    remaining_gt = [j for j in range(gt_len) if j not in gt_matched]
+    remaining_pred = [
+        i for i in range(pred_len)
+        if i not in pred_matched and i not in blocked_pred
+    ]
+    remaining_gt = [
+        j for j in range(gt_len)
+        if j not in gt_matched and j not in blocked_gt
+    ]
 
     # Build additional matches by treating categories as sequences
     add_pairs = _augment_matches_with_order(
@@ -313,8 +328,12 @@ def _compute_category_metrics_balanced(
 
     cat_tp_pred_indices = sorted(pred_matched)
     cat_tp_gt_indices = sorted(gt_matched)
-    cat_fp_pred_indices = sorted(i for i in range(pred_len) if i not in pred_matched)
-    cat_fn_gt_indices = sorted(j for j in range(gt_len) if j not in gt_matched)
+    cat_fp_pred_indices = sorted(
+        i for i in range(pred_len) if i not in pred_matched
+    )
+    cat_fn_gt_indices = sorted(
+        j for j in range(gt_len) if j not in gt_matched
+    )
 
     cat_tp = len(cat_tp_pred_indices)
     cat_fp = len(cat_fp_pred_indices)

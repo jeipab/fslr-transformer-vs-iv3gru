@@ -32,6 +32,10 @@ class ContinuousEvaluationConfig:
     active_overlap_threshold: float = 0.1
     min_gap_duration_ms: int = 200
     enable_lenient_matching: bool = True
+    fallback_gt_overlap_ratio: float = 0.6
+    lenient_overlap_ratio: float = 0.1
+    early_start_gt_overlap_threshold: float = 0.75
+    late_start_gt_overlap_threshold: float = 0.1
 
 
 @dataclass
@@ -207,6 +211,70 @@ def match_predictions_to_ground_truth(
     return tp_indices, fp_indices, fn_indices, matched_pairs, mean_iou
 
 
+def match_predictions_by_overlap(
+    unmatched_pred_indices: Sequence[int],
+    unmatched_gt_indices: Sequence[int],
+    high_conf_indices: Sequence[int],
+    prediction_timestamps: Sequence[Timestamp],
+    gt_timestamps: Sequence[Timestamp],
+    min_overlap_ratio: float,
+) -> List[Tuple[int, int, float]]:
+    """
+    Attempt to pair unmatched predictions with ground-truth spans using relaxed
+    temporal overlap criteria.
+
+    Returns list of tuples (pred_rel_idx, gt_idx, coverage_score).
+    """
+    if min_overlap_ratio <= 0.0:
+        return []
+
+    matches: List[Tuple[int, int, float]] = []
+    used_gt: set[int] = set()
+
+    for pred_rel_idx in unmatched_pred_indices:
+        if pred_rel_idx < 0 or pred_rel_idx >= len(high_conf_indices):
+            continue
+        pred_idx = high_conf_indices[pred_rel_idx]
+        pred_ts = prediction_timestamps[pred_idx]
+        pred_duration = pred_ts.duration()
+        if pred_duration <= 0.0:
+            continue
+
+        best_match: Optional[Tuple[int, float]] = None
+
+        for gt_idx in unmatched_gt_indices:
+            if gt_idx in used_gt or gt_idx < 0 or gt_idx >= len(gt_timestamps):
+                continue
+
+            gt_ts = gt_timestamps[gt_idx]
+            gt_duration = gt_ts.duration()
+            if gt_duration <= 0.0:
+                continue
+
+            overlap_start = max(pred_ts.start_ms, gt_ts.start_ms)
+            overlap_end = min(pred_ts.end_ms, gt_ts.end_ms)
+            overlap = overlap_end - overlap_start
+            if overlap <= 0.0:
+                continue
+
+            pred_ratio = overlap / pred_duration
+            gt_ratio = overlap / gt_duration
+            coverage = max(pred_ratio, gt_ratio)
+
+            if coverage >= min_overlap_ratio:
+                if best_match is None or coverage > best_match[1] or (
+                    coverage == best_match[1] and gt_idx < best_match[0]
+                ):
+                    best_match = (gt_idx, coverage)
+
+        if best_match is not None:
+            gt_idx, coverage = best_match
+            matches.append((pred_rel_idx, gt_idx, coverage))
+            used_gt.add(gt_idx)
+
+    return matches
+
+
 def compute_active_ratio(
     pred_timestamp: Timestamp,
     mask: Optional[np.ndarray],
@@ -238,6 +306,38 @@ def compute_active_ratio(
     return active_count / len(frame_indices)
 
 
+def _is_mask_reliable(
+    mask: Optional[np.ndarray],
+    frame_indices: np.ndarray,
+    left_hand_slice: slice,
+    right_hand_slice: slice,
+) -> Tuple[bool, float]:
+    """
+    Determine whether the visibility mask provides enough signal for activity checks.
+
+    Returns (is_reliable, active_ratio). When unreliable, active_ratio is set to 0.0.
+    """
+    if (
+        mask is None
+        or len(mask) == 0
+        or frame_indices.size == 0
+        or frame_indices.size < 3
+    ):
+        return False, 0.0
+
+    segment = mask[frame_indices]
+    total_active_frames = 0
+    for frame in segment:
+        if bool(np.any(frame[left_hand_slice])) or bool(np.any(frame[right_hand_slice])):
+            total_active_frames += 1
+
+    if total_active_frames == 0:
+        return False, 0.0
+
+    active_ratio = total_active_frames / frame_indices.size
+    return True, active_ratio
+
+
 def check_active_overlap(
     pred_timestamp: Timestamp,
     mask: Optional[np.ndarray],
@@ -245,9 +345,14 @@ def check_active_overlap(
     min_overlap_ratio: float,
     left_hand_slice: slice = slice(25, 46),
     right_hand_slice: slice = slice(46, 67),
+    gt_timestamp: Optional[Timestamp] = None,
+    fallback_overlap_ratio: float = 0.5,
+    early_overlap_threshold: float = 0.75,
+    late_overlap_threshold: float = 0.2,
 ) -> bool:
     """
-    Determine whether a prediction overlaps sufficiently with active frames.
+    Determine whether a prediction overlaps sufficiently with active frames and
+    the matched ground-truth window.
 
     Args:
         pred_timestamp: Timestamp describing the prediction span.
@@ -256,18 +361,69 @@ def check_active_overlap(
         min_overlap_ratio: Minimal ratio of active frames within prediction span.
         left_hand_slice/right_hand_slice: Slices pointing to left/right hand
             keypoints inside mask; defaults align with Mediapipe layout.
+        gt_timestamp: Optional ground-truth timestamp matched to prediction. Used
+            to assess temporal overlap when activity data is inconclusive.
+        fallback_overlap_ratio: Minimum proportion of the prediction duration
+            that must overlap with the matched ground-truth span for early
+            predictions when activity data is insufficient.
+        early_overlap_threshold: Required overlap ratio (relative to ground truth)
+            for predictions that start before the ground-truth window.
+        late_overlap_threshold: Minimal overlap ratio (relative to ground truth)
+            for predictions that start at or after the ground-truth window.
     """
-    if mask is None or timestamps_ms is None or len(mask) == 0:
-        return True  # Graceful fallback when activity data is unavailable.
+    frame_indices = np.array([], dtype=int)
+    active_ratio: Optional[float] = None
+    mask_reliable = False
+    if mask is not None and timestamps_ms is not None and len(mask) > 0:
+        frame_indices = np.where(
+            (timestamps_ms >= pred_timestamp.start_ms)
+            & (timestamps_ms <= pred_timestamp.end_ms)
+        )[0]
+        mask_reliable, active_ratio = _is_mask_reliable(
+            mask, frame_indices, left_hand_slice, right_hand_slice
+        )
+        if not mask_reliable:
+            active_ratio = None
 
-    overlap_ratio = compute_active_ratio(
-        pred_timestamp,
-        mask,
-        timestamps_ms,
-        left_hand_slice=left_hand_slice,
-        right_hand_slice=right_hand_slice,
-    )
-    return overlap_ratio >= min_overlap_ratio
+    if gt_timestamp is None:
+        if active_ratio is None:
+            return True
+        return active_ratio >= min_overlap_ratio
+
+    pred_duration = pred_timestamp.duration()
+    gt_duration = gt_timestamp.duration()
+    if pred_duration <= 0.0 or gt_duration <= 0.0:
+        return False
+
+    overlap_start = max(pred_timestamp.start_ms, gt_timestamp.start_ms)
+    overlap_end = min(pred_timestamp.end_ms, gt_timestamp.end_ms)
+    overlap = overlap_end - overlap_start
+    if overlap <= 0.0:
+        return False
+
+    pred_overlap_ratio = overlap / pred_duration
+    gt_overlap_ratio = overlap / gt_duration
+
+    started_early = pred_timestamp.start_ms < gt_timestamp.start_ms
+
+    if started_early:
+        required_gt_ratio = max(fallback_overlap_ratio, early_overlap_threshold)
+        temporal_ok = gt_overlap_ratio >= required_gt_ratio
+    else:
+        temporal_ok = (
+            gt_overlap_ratio >= late_overlap_threshold
+            or pred_overlap_ratio >= late_overlap_threshold
+        )
+
+    if not temporal_ok:
+        return False
+
+    if mask_reliable:
+        if active_ratio is None:
+            return False
+        return active_ratio >= min_overlap_ratio
+
+    return True
 
 
 def augment_matches_with_order(
@@ -362,9 +518,59 @@ def compute_sequence_metrics(
         iou_threshold=config.iou_threshold,
     )
 
+    if config.lenient_overlap_ratio > 0.0:
+        overlap_matches = match_predictions_by_overlap(
+            unmatched_pred_indices=fp_indices_relative,
+            unmatched_gt_indices=fn_indices,
+            high_conf_indices=high_conf_indices,
+            prediction_timestamps=prediction.timestamps,
+            gt_timestamps=ground_truth.timestamps,
+            min_overlap_ratio=config.lenient_overlap_ratio,
+        )
+        if overlap_matches:
+            matched_pred_rel = {m[0] for m in overlap_matches}
+            matched_gt_indices = {m[1] for m in overlap_matches}
+
+            tp_indices_relative.extend(matched_pred_rel)
+            matched_pairs_relative.extend(
+                [
+                    {"pred_idx": pred_rel_idx, "gt_idx": gt_idx, "iou": coverage}
+                    for pred_rel_idx, gt_idx, coverage in overlap_matches
+                ]
+            )
+            fp_indices_relative = [
+                idx for idx in fp_indices_relative if idx not in matched_pred_rel
+            ]
+            fn_indices = [idx for idx in fn_indices if idx not in matched_gt_indices]
+
     rel_match_lookup = {
         pair["pred_idx"]: pair["gt_idx"] for pair in matched_pairs_relative
     }
+
+    pair_ious: List[float] = []
+    for pair in matched_pairs_relative:
+        rel_idx = pair.get("pred_idx")
+        gt_idx = pair.get("gt_idx")
+        if (
+            rel_idx is None
+            or gt_idx is None
+            or rel_idx < 0
+            or rel_idx >= len(high_conf_indices)
+            or gt_idx < 0
+            or gt_idx >= len(ground_truth.timestamps)
+        ):
+            pair["iou"] = 0.0
+            continue
+        pred_abs_idx = high_conf_indices[rel_idx]
+        if pred_abs_idx < 0 or pred_abs_idx >= len(prediction.timestamps):
+            pair["iou"] = 0.0
+            continue
+        iou_value = calculate_temporal_iou(
+            prediction.timestamps[pred_abs_idx], ground_truth.timestamps[gt_idx]
+        )
+        pair["iou"] = iou_value
+        pair_ious.append(iou_value)
+    mean_iou = float(np.mean(pair_ious)) if pair_ious else 0.0
 
     matched_pairs = [
         {
@@ -388,6 +594,12 @@ def compute_sequence_metrics(
             mask,
             timestamps_ms,
             config.active_overlap_threshold,
+            gt_timestamp=ground_truth.timestamps[gt_idx]
+            if gt_idx is not None and 0 <= gt_idx < len(ground_truth.timestamps)
+            else None,
+            fallback_overlap_ratio=config.fallback_gt_overlap_ratio,
+            early_overlap_threshold=config.early_start_gt_overlap_threshold,
+            late_overlap_threshold=config.late_start_gt_overlap_threshold,
         ):
             validated_tp_indices.append(pred_idx)
         else:
@@ -404,6 +616,12 @@ def compute_sequence_metrics(
     fp_indices_absolute = [high_conf_indices[i] for i in fp_indices_relative]
 
     for idx in demoted_fp_indices:
+        if idx not in fp_indices_absolute:
+            fp_indices_absolute.append(idx)
+
+    for idx in low_conf_indices:
+        if idx in tp_indices_absolute:
+            continue
         if idx not in fp_indices_absolute:
             fp_indices_absolute.append(idx)
 
@@ -435,6 +653,12 @@ def compute_sequence_metrics(
                 mask,
                 timestamps_ms,
                 config.active_overlap_threshold,
+                gt_timestamp=ground_truth.timestamps[gt_idx]
+                if 0 <= gt_idx < len(ground_truth.timestamps)
+                else None,
+                fallback_overlap_ratio=config.fallback_gt_overlap_ratio,
+                early_overlap_threshold=config.early_start_gt_overlap_threshold,
+                late_overlap_threshold=config.late_start_gt_overlap_threshold,
             ):
                 tp_indices_absolute.append(pred_idx)
                 matched_pairs.append(
