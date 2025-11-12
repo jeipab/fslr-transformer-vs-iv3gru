@@ -216,10 +216,13 @@ def render_ground_truth_preview(ground_truth: Dict):
         )
     
     # Show timestamps if available
-    if 'ground_truth_timestamps' in ground_truth and ground_truth['ground_truth_timestamps']:
+    raw_timestamps = ground_truth.get('ground_truth_timestamps') or []
+    if raw_timestamps:
         st.markdown("**Timestamps:**")
         timestamp_data = []
-        for ts in ground_truth['ground_truth_timestamps']:
+        for ts in raw_timestamps:
+            if not isinstance(ts, dict):
+                continue
             timestamp_data.append({
                 'Position': ts.get('index', 0) + 1,
                 'Gloss': ts.get('gloss_label', 'N/A'),
@@ -1133,7 +1136,12 @@ def render_continuous_sequence_predictions(filename: str, npz_data: Dict, metada
                 predicted_categories=results.get('predicted_categories'),
                 category_confidences=results.get('category_confidences'),
                 ground_truth_categories=results.get('ground_truth_categories'),
-                ground_truth_occluded=results.get('ground_truth_occluded')
+                ground_truth_occluded=results.get('ground_truth_occluded'),
+                prediction_gloss_color_override='#3b82f6',
+                prediction_category_color_override='#10b981',
+                prediction_allow_case_colors=False,
+                prediction_allow_low_confidence_color=False,
+                prediction_allow_occlusion_color=False,
             )
             
             # Temporal alignment

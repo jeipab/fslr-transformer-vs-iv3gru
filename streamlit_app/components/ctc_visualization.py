@@ -83,6 +83,11 @@ def render_sequence_comparison(
     confidence_threshold: float = 0.5,
     category_prediction_cases: Optional[Dict[int, str]] = None,
     category_ground_truth_cases: Optional[Dict[int, str]] = None,
+    prediction_gloss_color_override: Optional[str] = None,
+    prediction_category_color_override: Optional[str] = None,
+    prediction_allow_case_colors: bool = True,
+    prediction_allow_low_confidence_color: bool = True,
+    prediction_allow_occlusion_color: bool = True,
 ):
     """
     Render side-by-side comparison of predicted vs ground truth sequences.
@@ -143,19 +148,23 @@ def render_sequence_comparison(
                     predicted_categories,
                     confidence_scores,
                     category_confidences,
-                    case_map=prediction_cases,
+                    case_map=prediction_cases if prediction_allow_case_colors else None,
                     case_palette=case_palette,
-                    confidence_threshold=confidence_threshold,
+                    confidence_threshold=confidence_threshold if prediction_allow_low_confidence_color else 0.0,
                     category_case_map=category_prediction_cases,
+                    highlight_low_confidence=prediction_allow_low_confidence_color,
+                    default_gloss_color=prediction_gloss_color_override or '#3b82f6',
+                    default_category_color=prediction_category_color_override or '#10b981',
                 )
             else:
                 render_sequence_chips(
                     predicted_labels,
                     confidence_scores,
-                    color='#3b82f6',
-                    case_map=prediction_cases,
+                    color=prediction_gloss_color_override or '#3b82f6',
+                    case_map=prediction_cases if prediction_allow_case_colors else None,
                     case_palette=case_palette,
-                    confidence_threshold=confidence_threshold,
+                    confidence_threshold=confidence_threshold if prediction_allow_low_confidence_color else 0.0,
+                    highlight_low_confidence=prediction_allow_low_confidence_color,
                 )
         
     else:
@@ -170,19 +179,23 @@ def render_sequence_comparison(
                 predicted_categories,
                 confidence_scores,
                 category_confidences,
-                case_map=prediction_cases,
+                case_map=prediction_cases if prediction_allow_case_colors else None,
                 case_palette=case_palette,
-                confidence_threshold=confidence_threshold,
+                confidence_threshold=confidence_threshold if prediction_allow_low_confidence_color else 0.0,
                 category_case_map=category_prediction_cases,
+                highlight_low_confidence=prediction_allow_low_confidence_color,
+                default_gloss_color=prediction_gloss_color_override or '#3b82f6',
+                default_category_color=prediction_category_color_override or '#10b981',
             )
         else:
             render_sequence_chips(
                 predicted_labels,
                 confidence_scores,
-                color='#3b82f6',
-                case_map=prediction_cases,
+                color=prediction_gloss_color_override or '#3b82f6',
+                case_map=prediction_cases if prediction_allow_case_colors else None,
                 case_palette=case_palette,
-                confidence_threshold=confidence_threshold,
+                confidence_threshold=confidence_threshold if prediction_allow_low_confidence_color else 0.0,
+                highlight_low_confidence=prediction_allow_low_confidence_color,
             )
 
 
@@ -195,6 +208,7 @@ def render_sequence_chips(
     case_palette: Optional[Dict[str, str]] = None,
     confidence_threshold: float = 0.5,
     low_confidence_color: str = '#f97316',
+    highlight_low_confidence: bool = True,
 ):
     """
     Render sequence as colored chips/badges.
@@ -204,6 +218,7 @@ def render_sequence_chips(
         confidence_scores: Optional confidence scores
         color: Hex color for chips
         occlusion_flags: Optional list of occlusion flags (0 or 1) - if 1, use red color
+        highlight_low_confidence: Whether to recolor low-confidence chips
     """
     if not labels:
         st.info("Empty sequence")
@@ -226,7 +241,7 @@ def render_sequence_chips(
         chip_color = '#ef4444' if (occlusion_flags and i < len(occlusion_flags) and occlusion_flags[i] == 1 and not case_map) else color
         if case_map and i in case_map:
             chip_color = palette.get(case_map[i], chip_color)
-        elif confidence_scores and i < len(confidence_scores):
+        elif highlight_low_confidence and confidence_scores and i < len(confidence_scores):
             if confidence_scores[i] < confidence_threshold:
                 chip_color = low_confidence_color
         
@@ -259,6 +274,9 @@ def render_sequence_with_categories(
     confidence_threshold: float = 0.5,
     low_confidence_color: str = '#f97316',
     category_case_map: Optional[Dict[int, str]] = None,
+    highlight_low_confidence: bool = True,
+    default_gloss_color: Optional[str] = None,
+    default_category_color: Optional[str] = None,
 ):
     """
     Render sequence with both glosses and categories.
@@ -270,6 +288,7 @@ def render_sequence_with_categories(
         category_confidences: Optional category confidence scores
         occlusion_flags: Optional list of occlusion flags (0 or 1) - if 1, use red color for ground truth
         is_ground_truth: Whether this is ground truth (affects color when occluded)
+        highlight_low_confidence: Whether to recolor low-confidence predictions
     """
     if not gloss_labels:
         st.info("Empty sequence")
@@ -301,12 +320,19 @@ def render_sequence_with_categories(
         
         # Determine gloss chip color
         is_occluded = occlusion_flags and i < len(occlusion_flags) and occlusion_flags[i] == 1
-        gloss_base = case_palette.get('TP', '#22c55e') if is_ground_truth else '#3b82f6'
+        gloss_base = (
+            (case_palette or {}).get('TP', '#22c55e') if is_ground_truth else (default_gloss_color or '#3b82f6')
+        )
         gloss_color = gloss_base
         gloss_text_color = 'white'
         if gloss_case_map and i in gloss_case_map:
             gloss_color = palette.get(gloss_case_map[i], gloss_color)
-        elif gloss_confidences and i < len(gloss_confidences) and gloss_confidences[i] < confidence_threshold:
+        elif (
+            highlight_low_confidence
+            and gloss_confidences
+            and i < len(gloss_confidences)
+            and gloss_confidences[i] < confidence_threshold
+        ):
             gloss_color = low_confidence_color
         
         # Category chip
@@ -324,7 +350,7 @@ def render_sequence_with_categories(
         
         cat_border = '1px solid transparent'
         cat_color = 'white'
-        cat_bg = '#10b981' if not is_ground_truth else '#ffffff'
+        cat_bg = (default_category_color or '#10b981') if not is_ground_truth else '#ffffff'
 
         if is_ground_truth:
             if is_occluded:
@@ -340,7 +366,12 @@ def render_sequence_with_categories(
         else:
             if category_case_map and i in category_case_map:
                 cat_bg = palette.get(category_case_map[i], cat_bg)
-            elif category_confidences and i < len(category_confidences) and category_confidences[i] < confidence_threshold:
+            elif (
+                highlight_low_confidence
+                and category_confidences
+                and i < len(category_confidences)
+                and category_confidences[i] < confidence_threshold
+            ):
                 cat_bg = low_confidence_color
             if category_case_map and i in category_case_map:
                 cat_border = f'1px solid {palette.get(category_case_map[i], "#0f172a")}'
@@ -1189,9 +1220,20 @@ def render_ctc_prediction_card(
         return
     
     if has_categories:
-        render_sequence_with_categories(predicted_labels, predicted_categories, confidence_scores, category_confidences)
+        render_sequence_with_categories(
+            predicted_labels,
+            predicted_categories,
+            confidence_scores,
+            category_confidences,
+            highlight_low_confidence=False,
+        )
     else:
-        render_sequence_chips(predicted_labels, confidence_scores, color='#3b82f6')
+        render_sequence_chips(
+            predicted_labels,
+            confidence_scores,
+            color='#3b82f6',
+            highlight_low_confidence=False,
+        )
 
 
 def render_ctc_batch_summary(predictions: List[Dict]):
