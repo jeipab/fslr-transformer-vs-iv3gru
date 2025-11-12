@@ -1,0 +1,82 @@
+{
+  "file_name": "continuous_0008_S4_strategy2.npz",
+  "signer": "S4",
+  "strategy": 2,
+  "strategy_name": "different_categories",
+  "total_duration_sec": 25.36,
+  "num_segments": 6,
+  "segments": [
+    {
+      "index": 0,
+      "timestamp_start_ms": 0,
+      "timestamp_end_ms": 4265,
+      "gloss": 28,
+      "gloss_label": "NINE",
+      "category": 2,
+      "category_label": "NUMBER",
+      "signer": "S4",
+      "occluded": 1,
+      "original_file": "C2/clip_03424_nine_S4.npz"
+    },
+    {
+      "index": 1,
+      "timestamp_start_ms": 4265,
+      "timestamp_end_ms": 8431,
+      "gloss": 55,
+      "gloss_label": "DAUGHTER",
+      "category": 5,
+      "category_label": "FAMILY",
+      "signer": "S4",
+      "occluded": 1,
+      "original_file": "C5/clip_06739_daughter_S4.npz"
+    },
+    {
+      "index": 2,
+      "timestamp_start_ms": 8431,
+      "timestamp_end_ms": 12630,
+      "gloss": 1,
+      "gloss_label": "GOOD AFTERNOON",
+      "category": 0,
+      "category_label": "GREETING",
+      "signer": "S4",
+      "occluded": 1,
+      "original_file": "C0/clip_00166_good_afternoon_S4.npz"
+    },
+    {
+      "index": 3,
+      "timestamp_start_ms": 12630,
+      "timestamp_end_ms": 16995,
+      "gloss": 39,
+      "gloss_label": "OCTOBER",
+      "category": 3,
+      "category_label": "CALENDAR",
+      "signer": "S4",
+      "occluded": 1,
+      "original_file": "C3/clip_04782_october_S4.npz"
+    },
+    {
+      "index": 4,
+      "timestamp_start_ms": 16995,
+      "timestamp_end_ms": 21060,
+      "gloss": 42,
+      "gloss_label": "MONDAY",
+      "category": 4,
+      "category_label": "DAYS",
+      "signer": "S4",
+      "occluded": 1,
+      "original_file": "C4/clip_05158_monday_S4.npz"
+    },
+    {
+      "index": 5,
+      "timestamp_start_ms": 21060,
+      "timestamp_end_ms": 25359,
+      "gloss": 86,
+      "gloss_label": "EGG",
+      "category": 8,
+      "category_label": "FOOD",
+      "signer": "S4",
+      "occluded": 1,
+      "original_file": "C8/clip_10507_egg_S4.npz"
+    }
+  ]
+}

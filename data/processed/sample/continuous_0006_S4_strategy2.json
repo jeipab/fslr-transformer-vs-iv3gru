@@ -1,0 +1,94 @@
+{
+  "file_name": "continuous_0006_S4_strategy2.npz",
+  "signer": "S4",
+  "strategy": 2,
+  "strategy_name": "different_categories",
+  "total_duration_sec": 30.99,
+  "num_segments": 7,
+  "segments": [
+    {
+      "index": 0,
+      "timestamp_start_ms": 0,
+      "timestamp_end_ms": 4299,
+      "gloss": 92,
+      "gloss_label": "LONGANISA",
+      "category": 8,
+      "category_label": "FOOD",
+      "signer": "S4",
+      "occluded": 0,
+      "original_file": "C8/clip_11198_longanisa_S4.npz"
+    },
+    {
+      "index": 1,
+      "timestamp_start_ms": 4299,
+      "timestamp_end_ms": 8764,
+      "gloss": 6,
+      "gloss_label": "NICE TO MEET YOU",
+      "category": 0,
+      "category_label": "GREETING",
+      "signer": "S4",
+      "occluded": 1,
+      "original_file": "C0/clip_00776_nice_to_meet_you_S4.npz"
+    },
+    {
+      "index": 2,
+      "timestamp_start_ms": 8764,
+      "timestamp_end_ms": 13163,
+      "gloss": 29,
+      "gloss_label": "TEN",
+      "category": 2,
+      "category_label": "NUMBER",
+      "signer": "S4",
+      "occluded": 1,
+      "original_file": "C2/clip_03548_ten_S4.npz"
+    },
+    {
+      "index": 3,
+      "timestamp_start_ms": 13163,
+      "timestamp_end_ms": 17528,
+      "gloss": 57,
+      "gloss_label": "GRANDMOTHER",
+      "category": 5,
+      "category_label": "FAMILY",
+      "signer": "S4",
+      "occluded": 1,
+      "original_file": "C5/clip_06984_grandmother_S4.npz"
+    },
+    {
+      "index": 4,
+      "timestamp_start_ms": 17528,
+      "timestamp_end_ms": 21860,
+      "gloss": 35,
+      "gloss_label": "JUNE",
+      "category": 3,
+      "category_label": "CALENDAR",
+      "signer": "S4",
+      "occluded": 1,
+      "original_file": "C3/clip_04304_june_S4.npz"
+    },
+    {
+      "index": 5,
+      "timestamp_start_ms": 21860,
+      "timestamp_end_ms": 26593,
+      "gloss": 10,
+      "gloss_label": "UNDERSTAND",
+      "category": 1,
+      "category_label": "SURVIVAL",
+      "signer": "S4",
+      "occluded": 0,
+      "original_file": "C1/clip_01264_understand_S4.npz"
+    },
+    {
+      "index": 6,
+      "timestamp_start_ms": 26593,
+      "timestamp_end_ms": 30992,
+      "gloss": 78,
+      "gloss_label": "YELLOW",
+      "category": 7,
+      "category_label": "COLOR",
+      "signer": "S4",
+      "occluded": 0,
+      "original_file": "C7/clip_09541_yellow_S4.npz"
+    }
+  ]
+}

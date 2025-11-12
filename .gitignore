@@ -67,6 +67,8 @@ data/splitting/**/*.pyc
 !data/processed/training/
 !data/processed/training/train.csv
 !data/processed/training/val.csv
+!data/processed/sample/
+!data/processed/sample/**
 
 # ------------------------------
 # Allow raw fix script only

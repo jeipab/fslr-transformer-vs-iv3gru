@@ -1,0 +1,70 @@
+{
+  "file_name": "continuous_0002_S4_strategy2.npz",
+  "signer": "S4",
+  "strategy": 2,
+  "strategy_name": "different_categories",
+  "total_duration_sec": 21.29,
+  "num_segments": 5,
+  "segments": [
+    {
+      "index": 0,
+      "timestamp_start_ms": 0,
+      "timestamp_end_ms": 4165,
+      "gloss": 14,
+      "gloss_label": "NO",
+      "category": 1,
+      "category_label": "SURVIVAL",
+      "signer": "S4",
+      "occluded": 1,
+      "original_file": "C1/clip_01777_no_S4.npz"
+    },
+    {
+      "index": 1,
+      "timestamp_start_ms": 4165,
+      "timestamp_end_ms": 8364,
+      "gloss": 92,
+      "gloss_label": "LONGANISA",
+      "category": 8,
+      "category_label": "FOOD",
+      "signer": "S4",
+      "occluded": 0,
+      "original_file": "C8/clip_11209_longanisa_S4.npz"
+    },
+    {
+      "index": 2,
+      "timestamp_start_ms": 8364,
+      "timestamp_end_ms": 12563,
+      "gloss": 35,
+      "gloss_label": "JUNE",
+      "category": 3,
+      "category_label": "CALENDAR",
+      "signer": "S4",
+      "occluded": 1,
+      "original_file": "C3/clip_04294_june_S4.npz"
+    },
+    {
+      "index": 3,
+      "timestamp_start_ms": 12563,
+      "timestamp_end_ms": 16962,
+      "gloss": 1,
+      "gloss_label": "GOOD AFTERNOON",
+      "category": 0,
+      "category_label": "GREETING",
+      "signer": "S4",
+      "occluded": 1,
+      "original_file": "C0/clip_00161_good_afternoon_S4.npz"
+    },
+    {
+      "index": 4,
+      "timestamp_start_ms": 16962,
+      "timestamp_end_ms": 21292,
+      "gloss": 47,
+      "gloss_label": "SATURDAY",
+      "category": 4,
+      "category_label": "DAYS",
+      "signer": "S4",
+      "occluded": 0,
+      "original_file": "C4/clip_05759_saturday_S4.npz"
+    }
+  ]
+}

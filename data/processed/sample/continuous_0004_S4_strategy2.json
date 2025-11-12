@@ -1,0 +1,70 @@
+{
+  "file_name": "continuous_0004_S4_strategy2.npz",
+  "signer": "S4",
+  "strategy": 2,
+  "strategy_name": "different_categories",
+  "total_duration_sec": 21.13,
+  "num_segments": 5,
+  "segments": [
+    {
+      "index": 0,
+      "timestamp_start_ms": 0,
+      "timestamp_end_ms": 4199,
+      "gloss": 59,
+      "gloss_label": "AUNTIE",
+      "category": 5,
+      "category_label": "FAMILY",
+      "signer": "S4",
+      "occluded": 1,
+      "original_file": "C5/clip_07234_auntie_S4.npz"
+    },
+    {
+      "index": 1,
+      "timestamp_start_ms": 4199,
+      "timestamp_end_ms": 8431,
+      "gloss": 19,
+      "gloss_label": "FAST",
+      "category": 1,
+      "category_label": "SURVIVAL",
+      "signer": "S4",
+      "occluded": 1,
+      "original_file": "C1/clip_02398_fast_S4.npz"
+    },
+    {
+      "index": 2,
+      "timestamp_start_ms": 8431,
+      "timestamp_end_ms": 12463,
+      "gloss": 33,
+      "gloss_label": "APRIL",
+      "category": 3,
+      "category_label": "CALENDAR",
+      "signer": "S4",
+      "occluded": 1,
+      "original_file": "C3/clip_04026_april_S4.npz"
+    },
+    {
+      "index": 3,
+      "timestamp_start_ms": 12463,
+      "timestamp_end_ms": 16862,
+      "gloss": 3,
+      "gloss_label": "HELLO",
+      "category": 0,
+      "category_label": "GREETING",
+      "signer": "S4",
+      "occluded": 1,
+      "original_file": "C0/clip_00415_hello_S4.npz"
+    },
+    {
+      "index": 4,
+      "timestamp_start_ms": 16862,
+      "timestamp_end_ms": 21127,
+      "gloss": 91,
+      "gloss_label": "RICE",
+      "category": 8,
+      "category_label": "FOOD",
+      "signer": "S4",
+      "occluded": 1,
+      "original_file": "C8/clip_11078_rice_S4.npz"
+    }
+  ]
+}

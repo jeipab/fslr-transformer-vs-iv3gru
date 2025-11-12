@@ -1,0 +1,70 @@
+{
+  "file_name": "continuous_0009_S4_strategy2.npz",
+  "signer": "S4",
+  "strategy": 2,
+  "strategy_name": "different_categories",
+  "total_duration_sec": 21.39,
+  "num_segments": 5,
+  "segments": [
+    {
+      "index": 0,
+      "timestamp_start_ms": 0,
+      "timestamp_end_ms": 4599,
+      "gloss": 101,
+      "gloss_label": "BEER",
+      "category": 9,
+      "category_label": "DRINK",
+      "signer": "S4",
+      "occluded": 1,
+      "original_file": "C9/clip_11675_beer_S4.npz"
+    },
+    {
+      "index": 1,
+      "timestamp_start_ms": 4599,
+      "timestamp_end_ms": 8765,
+      "gloss": 55,
+      "gloss_label": "DAUGHTER",
+      "category": 5,
+      "category_label": "FAMILY",
+      "signer": "S4",
+      "occluded": 1,
+      "original_file": "C5/clip_06740_daughter_S4.npz"
+    },
+    {
+      "index": 2,
+      "timestamp_start_ms": 8765,
+      "timestamp_end_ms": 12930,
+      "gloss": 41,
+      "gloss_label": "DECEMBER",
+      "category": 3,
+      "category_label": "CALENDAR",
+      "signer": "S4",
+      "occluded": 1,
+      "original_file": "C3/clip_05033_december_S4.npz"
+    },
+    {
+      "index": 3,
+      "timestamp_start_ms": 12930,
+      "timestamp_end_ms": 17295,
+      "gloss": 79,
+      "gloss_label": "ORANGE",
+      "category": 7,
+      "category_label": "COLOR",
+      "signer": "S4",
+      "occluded": 0,
+      "original_file": "C7/clip_09657_orange_S4.npz"
+    },
+    {
+      "index": 4,
+      "timestamp_start_ms": 17295,
+      "timestamp_end_ms": 21394,
+      "gloss": 92,
+      "gloss_label": "LONGANISA",
+      "category": 8,
+      "category_label": "FOOD",
+      "signer": "S4",
+      "occluded": 0,
+      "original_file": "C8/clip_11192_longanisa_S4.npz"
+    }
+  ]
+}

@@ -1,0 +1,70 @@
+{
+  "file_name": "continuous_0005_S4_strategy2.npz",
+  "signer": "S4",
+  "strategy": 2,
+  "strategy_name": "different_categories",
+  "total_duration_sec": 20.93,
+  "num_segments": 5,
+  "segments": [
+    {
+      "index": 0,
+      "timestamp_start_ms": 0,
+      "timestamp_end_ms": 4399,
+      "gloss": 83,
+      "gloss_label": "LIGHT",
+      "category": 7,
+      "category_label": "COLOR",
+      "signer": "S4",
+      "occluded": 1,
+      "original_file": "C7/clip_10160_light_S4.npz"
+    },
+    {
+      "index": 1,
+      "timestamp_start_ms": 4399,
+      "timestamp_end_ms": 8398,
+      "gloss": 85,
+      "gloss_label": "BREAD",
+      "category": 8,
+      "category_label": "FOOD",
+      "signer": "S4",
+      "occluded": 1,
+      "original_file": "C8/clip_10384_bread_S4.npz"
+    },
+    {
+      "index": 2,
+      "timestamp_start_ms": 8398,
+      "timestamp_end_ms": 12564,
+      "gloss": 37,
+      "gloss_label": "AUGUST",
+      "category": 3,
+      "category_label": "CALENDAR",
+      "signer": "S4",
+      "occluded": 1,
+      "original_file": "C3/clip_04546_august_S4.npz"
+    },
+    {
+      "index": 3,
+      "timestamp_start_ms": 12564,
+      "timestamp_end_ms": 16763,
+      "gloss": 16,
+      "gloss_label": "WRONG",
+      "category": 1,
+      "category_label": "SURVIVAL",
+      "signer": "S4",
+      "occluded": 1,
+      "original_file": "C1/clip_02028_wrong_S4.npz"
+    },
+    {
+      "index": 4,
+      "timestamp_start_ms": 16763,
+      "timestamp_end_ms": 20928,
+      "gloss": 6,
+      "gloss_label": "NICE TO MEET YOU",
+      "category": 0,
+      "category_label": "GREETING",
+      "signer": "S4",
+      "occluded": 1,
+      "original_file": "C0/clip_00792_nice_to_meet_you_S4.npz"
+    }
+  ]
+}

@@ -1,0 +1,94 @@
+{
+  "file_name": "continuous_0007_S4_strategy2.npz",
+  "signer": "S4",
+  "strategy": 2,
+  "strategy_name": "different_categories",
+  "total_duration_sec": 30.13,
+  "num_segments": 7,
+  "segments": [
+    {
+      "index": 0,
+      "timestamp_start_ms": 0,
+      "timestamp_end_ms": 4299,
+      "gloss": 98,
+      "gloss_label": "MILK",
+      "category": 9,
+      "category_label": "DRINK",
+      "signer": "S4",
+      "occluded": 1,
+      "original_file": "C9/clip_12527_milk_S4.npz"
+    },
+    {
+      "index": 1,
+      "timestamp_start_ms": 4299,
+      "timestamp_end_ms": 8639,
+      "gloss": 90,
+      "gloss_label": "SPAGHETTI",
+      "category": 8,
+      "category_label": "FOOD",
+      "signer": "S4",
+      "occluded": 1,
+      "original_file": "C8/clip_10973_spaghetti_S4.npz"
+    },
+    {
+      "index": 2,
+      "timestamp_start_ms": 8639,
+      "timestamp_end_ms": 12738,
+      "gloss": 53,
+      "gloss_label": "MOTHER",
+      "category": 5,
+      "category_label": "FAMILY",
+      "signer": "S4",
+      "occluded": 0,
+      "original_file": "C5/clip_06496_mother_S4.npz"
+    },
+    {
+      "index": 3,
+      "timestamp_start_ms": 12738,
+      "timestamp_end_ms": 16904,
+      "gloss": 1,
+      "gloss_label": "GOOD AFTERNOON",
+      "category": 0,
+      "category_label": "GREETING",
+      "signer": "S4",
+      "occluded": 1,
+      "original_file": "C0/clip_00159_good_afternoon_S4.npz"
+    },
+    {
+      "index": 4,
+      "timestamp_start_ms": 16904,
+      "timestamp_end_ms": 21436,
+      "gloss": 29,
+      "gloss_label": "TEN",
+      "category": 2,
+      "category_label": "NUMBER",
+      "signer": "S4",
+      "occluded": 1,
+      "original_file": "C2/clip_03545_ten_S4.npz"
+    },
+    {
+      "index": 5,
+      "timestamp_start_ms": 21436,
+      "timestamp_end_ms": 25935,
+      "gloss": 66,
+      "gloss_label": "DEAF",
+      "category": 6,
+      "category_label": "RELATIONSHIPS",
+      "signer": "S4",
+      "occluded": 1,
+      "original_file": "C6/clip_08086_deaf_S4.npz"
+    },
+    {
+      "index": 6,
+      "timestamp_start_ms": 25935,
+      "timestamp_end_ms": 30134,
+      "gloss": 15,
+      "gloss_label": "YES",
+      "category": 1,
+      "category_label": "SURVIVAL",
+      "signer": "S4",
+      "occluded": 1,
+      "original_file": "C1/clip_01891_yes_S4.npz"
+    }
+  ]
+}

@@ -1,0 +1,94 @@
+{
+  "file_name": "continuous_0003_S4_strategy2.npz",
+  "signer": "S4",
+  "strategy": 2,
+  "strategy_name": "different_categories",
+  "total_duration_sec": 29.02,
+  "num_segments": 7,
+  "segments": [
+    {
+      "index": 0,
+      "timestamp_start_ms": 0,
+      "timestamp_end_ms": 4265,
+      "gloss": 48,
+      "gloss_label": "SUNDAY",
+      "category": 4,
+      "category_label": "DAYS",
+      "signer": "S4",
+      "occluded": 1,
+      "original_file": "C4/clip_05889_sunday_S4.npz"
+    },
+    {
+      "index": 1,
+      "timestamp_start_ms": 4265,
+      "timestamp_end_ms": 8530,
+      "gloss": 90,
+      "gloss_label": "SPAGHETTI",
+      "category": 8,
+      "category_label": "FOOD",
+      "signer": "S4",
+      "occluded": 1,
+      "original_file": "C8/clip_10972_spaghetti_S4.npz"
+    },
+    {
+      "index": 2,
+      "timestamp_start_ms": 8530,
+      "timestamp_end_ms": 12795,
+      "gloss": 27,
+      "gloss_label": "EIGHT",
+      "category": 2,
+      "category_label": "NUMBER",
+      "signer": "S4",
+      "occluded": 1,
+      "original_file": "C2/clip_03324_eight_S4.npz"
+    },
+    {
+      "index": 3,
+      "timestamp_start_ms": 12795,
+      "timestamp_end_ms": 16894,
+      "gloss": 34,
+      "gloss_label": "MAY",
+      "category": 3,
+      "category_label": "CALENDAR",
+      "signer": "S4",
+      "occluded": 1,
+      "original_file": "C3/clip_04178_may_S4.npz"
+    },
+    {
+      "index": 4,
+      "timestamp_start_ms": 16894,
+      "timestamp_end_ms": 21226,
+      "gloss": 72,
+      "gloss_label": "BLUE",
+      "category": 7,
+      "category_label": "COLOR",
+      "signer": "S4",
+      "occluded": 0,
+      "original_file": "C7/clip_08816_blue_S4.npz"
+    },
+    {
+      "index": 5,
+      "timestamp_start_ms": 21226,
+      "timestamp_end_ms": 25725,
+      "gloss": 65,
+      "gloss_label": "WOMAN",
+      "category": 6,
+      "category_label": "RELATIONSHIPS",
+      "signer": "S4",
+      "occluded": 1,
+      "original_file": "C6/clip_07973_woman_S4.npz"
+    },
+    {
+      "index": 6,
+      "timestamp_start_ms": 25725,
+      "timestamp_end_ms": 29025,
+      "gloss": 4,
+      "gloss_label": "HOW ARE YOU",
+      "category": 0,
+      "category_label": "GREETING",
+      "signer": "S4",
+      "occluded": 1,
+      "original_file": "C0/clip_00522_how_are_you_S4.npz"
+    }
+  ]
+}
