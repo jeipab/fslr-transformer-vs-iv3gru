@@ -17,216 +17,17 @@ DEFAULT_CLASSIFICATION_NPZ_DIR = Path("data") / "processed" / "fsl_val"
 DEFAULT_CONTINUOUS_SEQUENCE_DIR = Path("data") / "processed" / "continuous_sequences"
 
 
-def render_case_legend() -> None:
-    """Render shared legend for prediction case colors."""
-    st.markdown(
-        (
-            "<span style='color:white;font-weight:600;'>Legend:</span>"
-            "<span style='color:white;font-weight:600;'> </span>"
-            "<span style='color:#22c55e;font-weight:600;'>True Positive</span>"
-            "<span style='color:white;font-weight:600;'> | </span>"
-            "<span style='color:#ef4444;font-weight:600;'>False Positive</span>"
-            "<span style='color:white;font-weight:600;'> | </span>"
-            "<span style='color:#f97316;font-weight:600;'>False Negative</span>"
-            "<span style='color:white;font-weight:600;'> | </span>"
-            "<span style='color:#000;background-color:#fff;"
-            "padding:0 0.3rem;border-radius:0.25rem;font-weight:600;'>"
-            "Not Occluded"
-            "</span>"
-            "<span style='color:white;font-weight:600;'></span>"
-            "<span style='color:white;font-weight:600;'> | </span>"
-            "<span style='color:#fff;background-color:#000;"
-            "padding:0 0.3rem;border-radius:0.25rem;font-weight:600;'>"
-            "Occluded"
-            "</span>"
-            "<span style='color:white;font-weight:600;'></span>"
-        ),
-        unsafe_allow_html=True,
-    )
-def _augment_matches_with_order_categories(
-    pred_categories: List[int],
-    gt_categories: List[int],
-    pred_indices: List[int],
-    gt_indices: List[int],
-) -> List[Dict[str, int]]:
-    """
-    Order-preserving augmentation of matches based on category equality.
-    Mirrors backend logic used during prediction to keep frontend in sync.
-    """
-    if not pred_indices or not gt_indices:
-        return []
-
-    add_pairs: List[Dict[str, int]] = []
-    p_i = 0
-    g_i = 0
-    while p_i < len(pred_indices) and g_i < len(gt_indices):
-        pi = pred_indices[p_i]
-        gi = gt_indices[g_i]
-        if pi >= len(pred_categories) or gi >= len(gt_categories):
-            break
-        if pred_categories[pi] == gt_categories[gi]:
-            add_pairs.append({'pred_idx': pi, 'gt_idx': gi})
-            p_i += 1
-            g_i += 1
-        else:
-            p_i += 1
-
-    return add_pairs
-
-
-def _derive_category_case_maps(
-    pred: Dict[str, Any],
-    predicted_categories: Optional[List[int]],
-    ground_truth_categories: Optional[List[int]],
-    matched_pairs: List[Dict[str, Any]],
-    pred_len: int,
-    gt_len: int,
-) -> Tuple[Dict[int, str], Dict[int, str]]:
-    """
-    Construct category TP/FP/FN maps for predicted and ground truth indexes.
-    Prefer backend-provided indices; fall back to recomputing locally when absent.
-    """
-    pred_map: Dict[int, str] = {}
-    gt_map: Dict[int, str] = {}
-
-    # Prefer explicit indices provided by backend (newer exports)
-    if pred.get('category_tp_pred_indices') is not None:
-        for idx in pred.get('category_tp_pred_indices') or []:
-            idx = int(idx)
-            if 0 <= idx < pred_len:
-                pred_map[idx] = 'TP'
-    if pred.get('category_fp_pred_indices') is not None:
-        for idx in pred.get('category_fp_pred_indices') or []:
-            idx = int(idx)
-            if 0 <= idx < pred_len:
-                pred_map[idx] = 'FP'
-    if pred.get('category_tp_gt_indices') is not None:
-        for idx in pred.get('category_tp_gt_indices') or []:
-            idx = int(idx)
-            if 0 <= idx < gt_len:
-                gt_map[idx] = 'TP'
-    if pred.get('category_fn_gt_indices') is not None:
-        for idx in pred.get('category_fn_gt_indices') or []:
-            idx = int(idx)
-            if 0 <= idx < gt_len:
-                gt_map[idx] = 'FN'
-
-    # If any maps were populated, return early
-    if pred_map or gt_map:
-        return pred_map, gt_map
-
-    # Fallback: recompute using available sequence information
-    if not predicted_categories or not ground_truth_categories:
-        return pred_map, gt_map
-
-    pred_len = min(pred_len, len(predicted_categories))
-    gt_len = min(gt_len, len(ground_truth_categories))
-
-    matched_pred: Set[int] = set()
-    matched_gt: Set[int] = set()
-
-    for pair in matched_pairs or []:
-        pi = pair.get('pred_idx')
-        gi = pair.get('gt_idx')
-        if pi is None or gi is None:
-            continue
-        pi = int(pi)
-        gi = int(gi)
-        if 0 <= pi < pred_len and 0 <= gi < gt_len:
-            if predicted_categories[pi] == ground_truth_categories[gi]:
-                matched_pred.add(pi)
-                matched_gt.add(gi)
-
-    remaining_pred = [i for i in range(pred_len) if i not in matched_pred]
-    remaining_gt = [j for j in range(gt_len) if j not in matched_gt]
-
-    add_pairs = _augment_matches_with_order_categories(
-        predicted_categories,
-        ground_truth_categories,
-        remaining_pred,
-        remaining_gt,
-    )
-
-    for pair in add_pairs:
-        pi = pair['pred_idx']
-        gi = pair['gt_idx']
-        if 0 <= pi < pred_len:
-            matched_pred.add(pi)
-        if 0 <= gi < gt_len:
-            matched_gt.add(gi)
-
-    for idx in matched_pred:
-        pred_map[idx] = 'TP'
-    for idx in matched_gt:
-        gt_map[idx] = 'TP'
-
-    for idx in range(pred_len):
-        if idx not in matched_pred:
-            pred_map[idx] = 'FP'
-
-    for idx in range(gt_len):
-        if idx not in matched_gt:
-            gt_map[idx] = 'FN'
-
-    return pred_map, gt_map
 from ..core.config import MODEL_CONFIG, is_ctc_model, get_models_by_mode
+from ..components.ctc_case_utils import (  # type: ignore[import]
+    DEFAULT_CASE_PALETTE,
+    build_case_maps,
+    enrich_ground_truth_timestamps,
+)
 from ..components.ctc_visualization import (
+    render_case_legend,
     render_sequence_comparison,
     render_temporal_alignment,
 )
-def _enrich_ground_truth_timestamps(
-    timestamps: List[Dict[str, Any]],
-    gloss_labels: List[str],
-    gloss_sequence: List[int],
-    category_ids: Optional[List[int]],
-    category_labels: Optional[List[str]],
-    gloss_mapping: Dict[int, str],
-    category_mapping: Dict[int, str],
-) -> List[Dict[str, Any]]:
-    """Ensure ground truth timestamps include gloss/category labels for visualization."""
-    if not timestamps:
-        return []
-
-    enriched: List[Dict[str, Any]] = []
-    for idx, ts in enumerate(timestamps):
-        ts_copy = dict(ts)
-
-        # Determine gloss id & label
-        gloss_id: Optional[int] = ts_copy.get('gloss')
-        if gloss_id is None and gloss_sequence and idx < len(gloss_sequence):
-            gloss_id = gloss_sequence[idx]
-            ts_copy['gloss'] = gloss_id
-
-        gloss_label = ts_copy.get('gloss_label')
-        if not gloss_label:
-            if gloss_labels and idx < len(gloss_labels):
-                gloss_label = gloss_labels[idx]
-            elif gloss_id is not None:
-                gloss_label = gloss_mapping.get(int(gloss_id), str(gloss_id))
-            else:
-                gloss_label = ''
-            ts_copy['gloss_label'] = gloss_label
-
-        # Determine category id & label
-        cat_id = ts_copy.get('category')
-        if cat_id is None and category_ids and idx < len(category_ids):
-            cat_id = category_ids[idx]
-            ts_copy['category'] = cat_id
-
-        cat_label = ts_copy.get('category_label')
-        if not cat_label:
-            if category_labels and idx < len(category_labels) and category_labels[idx]:
-                cat_label = category_labels[idx]
-            elif cat_id is not None:
-                cat_label = category_mapping.get(int(cat_id), f"Cat_{cat_id}")
-            else:
-                cat_label = ''
-            if cat_label:
-                ts_copy['category_label'] = cat_label
-
-        enriched.append(ts_copy)
-
-    return enriched
 
 
 
@@ -1519,71 +1320,22 @@ def render_ctc_validation_results(results: Dict[str, Any]):
                         confidence_scores = pred.get('confidence_scores')
                         ground_truth_occluded = pred.get('ground_truth_occluded')
 
-                        case_palette = {
-                            'TP': '#22c55e',
-                            'FP': '#ef4444',
-                            'FN': '#f97316',
-                        }
-                        prediction_case_map: Dict[int, str] = {}
-                        ground_truth_case_map: Dict[int, str] = {}
-                        iou_threshold = pred.get('iou_threshold', 0.5)
-                        matched_pairs = pred.get('matched_pairs') or []
-                        len_pred = len(predicted_sequence)
-                        len_gt = len(ground_truth_sequence)
-
-                        for pair in matched_pairs:
-                            pred_idx = pair.get('pred_idx')
-                            gt_idx = pair.get('gt_idx')
-                            if pred_idx is None or gt_idx is None:
-                                continue
-                            pred_idx = int(pred_idx)
-                            gt_idx = int(gt_idx)
-                            if not (0 <= pred_idx < len_pred and 0 <= gt_idx < len_gt):
-                                continue
-                            iou = float(pair.get('iou', 0.0))
-                            if iou >= 0.0:  # any matched pair counts as TP
-                                case = 'TP'
-                            prediction_case_map[pred_idx] = case
-                            ground_truth_case_map[gt_idx] = case
-
-                        for idx in pred.get('tp_indices', []) or []:
-                            idx = int(idx)
-                            if 0 <= idx < len_pred:
-                                prediction_case_map.setdefault(idx, 'TP')
-                        for idx in pred.get('unmatched_predictions', []) or []:
-                            idx = int(idx)
-                            if 0 <= idx < len_pred:
-                                prediction_case_map[idx] = 'FP'
-                        for idx in pred.get('unmatched_ground_truth', []) or []:
-                            idx = int(idx)
-                            if 0 <= idx < len_gt:
-                                ground_truth_case_map[idx] = 'FN'
-
-                        threshold = pred.get('confidence_threshold', 0.5)
-                        for idx, conf in enumerate(confidence_scores or []):
-                            if conf is None:
-                                continue
-                            if 0 <= idx < len_pred and conf < threshold:
-                                prediction_case_map.setdefault(idx, 'FP')
-
-                        category_prediction_case_map, category_ground_truth_case_map = _derive_category_case_maps(
-                            pred=pred,
+                        case_palette = DEFAULT_CASE_PALETTE.copy()
+                        (
+                            prediction_case_map,
+                            ground_truth_case_map,
+                            category_prediction_case_map,
+                            category_ground_truth_case_map,
+                        ) = build_case_maps(
+                            metrics=pred,
+                            predicted_sequence=predicted_sequence,
+                            ground_truth_sequence=ground_truth_sequence,
+                            confidence_scores=confidence_scores,
                             predicted_categories=predicted_categories,
                             ground_truth_categories=ground_truth_categories,
-                            matched_pairs=matched_pairs,
-                            pred_len=len_pred,
-                            gt_len=len_gt,
+                            category_confidences=category_confidences,
+                            confidence_threshold=pred.get('confidence_threshold'),
                         )
-                        if (
-                            predicted_categories
-                            and category_prediction_case_map is not None
-                            and category_confidences is not None
-                        ):
-                            for idx, cat_conf in enumerate(category_confidences):
-                                if cat_conf is None:
-                                    continue
-                                if 0 <= idx < len_pred and cat_conf < threshold:
-                                    category_prediction_case_map.setdefault(idx, 'FP')
 
                         st.markdown("##### Sequence Metrics")
 
@@ -1670,14 +1422,12 @@ def render_ctc_validation_results(results: Dict[str, Any]):
                         predicted_timestamps = pred.get('predicted_timestamps')
                         ground_truth_timestamps = pred.get('ground_truth_timestamps')
                         if ground_truth_timestamps:
-                            ground_truth_timestamps = _enrich_ground_truth_timestamps(
+                            ground_truth_timestamps = enrich_ground_truth_timestamps(
                                 timestamps=ground_truth_timestamps,
                                 gloss_labels=gt_gloss_labels or [],
                                 gloss_sequence=ground_truth_sequence,
                                 category_ids=ground_truth_categories,
                                 category_labels=pred.get('ground_truth_category_labels'),
-                                gloss_mapping=gloss_mapping,
-                                category_mapping=category_mapping,
                             )
                         if predicted_timestamps and ground_truth_timestamps:
                             data_sources = results.get('data_sources') or {}

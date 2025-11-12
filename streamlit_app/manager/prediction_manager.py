@@ -25,7 +25,13 @@ from ..components.visualization import (
     render_summary_stats_horizontal
 )
 from ..components.components import render_predictions_section
+from ..components.ctc_case_utils import (  # type: ignore[import]
+    DEFAULT_CASE_PALETTE,
+    build_case_maps,
+    enrich_ground_truth_timestamps,
+)
 from ..components.ctc_visualization import (
+    render_case_legend,
     render_sequence_comparison,
     render_temporal_alignment,
     render_ctc_prediction_card,
@@ -1127,21 +1133,60 @@ def render_continuous_sequence_predictions(filename: str, npz_data: Dict, metada
         # Sequence comparison and temporal alignment below
         if ground_truth:
             st.markdown("---")
+            predicted_sequence = results.get('predicted_sequence', []) or []
+            ground_truth_sequence = (
+                results.get('ground_truth_sequence')
+                or ground_truth.get('ground_truth_sequence', [])
+                or []
+            )
+            confidence_scores = results.get('confidence_scores')
+            predicted_categories = results.get('predicted_categories')
+            category_confidences = results.get('category_confidences')
+            ground_truth_categories = (
+                results.get('ground_truth_categories')
+                or ground_truth.get('ground_truth_categories', [])
+            )
+            ground_truth_occluded = (
+                results.get('ground_truth_occluded')
+                or ground_truth.get('ground_truth_occluded', [])
+            )
+            ground_truth_labels = (
+                results.get('ground_truth_labels')
+                or ground_truth.get('ground_truth_labels', [])
+            )
+            case_palette = DEFAULT_CASE_PALETTE.copy()
+            (
+                prediction_case_map,
+                ground_truth_case_map,
+                category_prediction_case_map,
+                category_ground_truth_case_map,
+            ) = build_case_maps(
+                metrics=results,
+                predicted_sequence=predicted_sequence,
+                ground_truth_sequence=ground_truth_sequence,
+                confidence_scores=confidence_scores,
+                predicted_categories=predicted_categories,
+                ground_truth_categories=ground_truth_categories,
+                category_confidences=category_confidences,
+                confidence_threshold=results.get('confidence_threshold'),
+            )
+            render_case_legend()
             render_sequence_comparison(
-                predicted_sequence=results.get('predicted_sequence', []),
+                predicted_sequence=predicted_sequence,
                 predicted_labels=results.get('predicted_labels', []),
-                ground_truth_sequence=results.get('ground_truth_sequence'),
-                ground_truth_labels=results.get('ground_truth_labels'),
-                confidence_scores=results.get('confidence_scores'),
-                predicted_categories=results.get('predicted_categories'),
-                category_confidences=results.get('category_confidences'),
-                ground_truth_categories=results.get('ground_truth_categories'),
-                ground_truth_occluded=results.get('ground_truth_occluded'),
-                prediction_gloss_color_override='#3b82f6',
-                prediction_category_color_override='#10b981',
-                prediction_allow_case_colors=False,
-                prediction_allow_low_confidence_color=False,
-                prediction_allow_occlusion_color=False,
+                ground_truth_sequence=ground_truth_sequence,
+                ground_truth_labels=ground_truth_labels,
+                confidence_scores=confidence_scores,
+                predicted_categories=predicted_categories,
+                category_confidences=category_confidences,
+                ground_truth_categories=ground_truth_categories,
+                ground_truth_occluded=ground_truth_occluded,
+                ground_truth_cases=ground_truth_case_map,
+                prediction_cases=prediction_case_map,
+                case_palette=case_palette,
+                confidence_threshold=results.get('confidence_threshold', 0.5),
+                category_prediction_cases=category_prediction_case_map,
+                category_ground_truth_cases=category_ground_truth_case_map,
             )
             
             # Temporal alignment
@@ -1150,14 +1195,27 @@ def render_continuous_sequence_predictions(filename: str, npz_data: Dict, metada
                 # Extract mask and timestamps from npz_data for inactive period detection
                 mask = npz_data.get('mask', None)
                 timestamps_ms = npz_data.get('timestamps_ms', None)
+                if mask is not None and getattr(mask, "dtype", None) is not None and mask.dtype != bool:
+                    mask = mask.astype(bool)
                 
                 render_temporal_alignment(
                     predicted_timestamps=results['predicted_timestamps'],
-                    ground_truth_timestamps=results['ground_truth_timestamps'],
+                    ground_truth_timestamps=enrich_ground_truth_timestamps(
+                        timestamps=results.get('ground_truth_timestamps'),
+                        gloss_labels=ground_truth_labels,
+                        gloss_sequence=ground_truth_sequence,
+                        category_ids=ground_truth_categories,
+                        category_labels=ground_truth.get('ground_truth_category_labels'),
+                    ),
                     temporal_alignment_accuracy=results.get('temporal_alignment_accuracy'),
                     mask=mask,
                     timestamps_ms=timestamps_ms,
-                    predicted_categories=results.get('predicted_categories')
+                    predicted_categories=predicted_categories,
+                    prediction_cases=prediction_case_map,
+                    ground_truth_cases=ground_truth_case_map,
+                    case_palette=case_palette,
+                    category_prediction_cases=category_prediction_case_map,
+                    category_ground_truth_cases=category_ground_truth_case_map,
                 )
 
 

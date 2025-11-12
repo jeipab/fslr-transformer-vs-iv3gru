@@ -7,6 +7,8 @@ import pandas as pd
 import numpy as np
 from typing import List, Dict, Optional, Tuple
 
+from .ctc_case_utils import DEFAULT_CASE_PALETTE  # type: ignore[import]
+
 
 def detect_inactive_hand_periods(
     mask: np.ndarray,
@@ -67,6 +69,34 @@ def detect_inactive_hand_periods(
     return inactive_periods
 
 
+def render_case_legend() -> None:
+    """Render shared legend for prediction case colors."""
+    st.markdown(
+        (
+            "<span style='color:white;font-weight:600;'>Legend:</span>"
+            "<span style='color:white;font-weight:600;'> </span>"
+            "<span style='color:#22c55e;font-weight:600;'>True Positive</span>"
+            "<span style='color:white;font-weight:600;'> | </span>"
+            "<span style='color:#ef4444;font-weight:600;'>False Positive</span>"
+            "<span style='color:white;font-weight:600;'> | </span>"
+            "<span style='color:#f97316;font-weight:600;'>False Negative</span>"
+            "<span style='color:white;font-weight:600;'> | </span>"
+            "<span style='color:#000;background-color:#fff;"
+            "padding:0 0.3rem;border-radius:0.25rem;font-weight:600;'>"
+            "Not Occluded"
+            "</span>"
+            "<span style='color:white;font-weight:600;'></span>"
+            "<span style='color:white;font-weight:600;'> | </span>"
+            "<span style='color:#fff;background-color:#000;"
+            "padding:0 0.3rem;border-radius:0.25rem;font-weight:600;'>"
+            "Occluded"
+            "</span>"
+            "<span style='color:white;font-weight:600;'></span>"
+        ),
+        unsafe_allow_html=True,
+    )
+
+
 def render_sequence_comparison(
     predicted_sequence: List[int],
     predicted_labels: List[str],
@@ -106,11 +136,7 @@ def render_sequence_comparison(
     st.markdown("#### Sequence Comparison")
     
     has_categories = predicted_categories is not None and len(predicted_categories) > 0
-    case_palette = case_palette or {
-        'TP': '#22c55e',
-        'FP': '#ef4444',
-        'FN': '#f97316',
-    }
+    case_palette = case_palette or DEFAULT_CASE_PALETTE
     
     if ground_truth_sequence and len(ground_truth_sequence) > 0:
         # Side-by-side comparison
