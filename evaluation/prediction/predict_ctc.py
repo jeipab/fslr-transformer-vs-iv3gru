@@ -2,7 +2,7 @@
 CTC Prediction for Continuous Sign Language Recognition
 
 Predicts gloss sequences from continuous sign language videos using CTC models.
-Supports batch prediction, ground truth comparison, and comprehensive metrics.
+Uses the exact same TP/FP/FN assignment logic as validation via compute_sequence_metrics().
 """
 
 import argparse
@@ -68,164 +68,71 @@ def estimate_timestamps(predicted_sequence: List[int], total_frames: int, fps: i
     return timestamps
 
 
-def calculate_temporal_alignment_accuracy(
-    pred_timestamps: List[Dict],
-    gt_timestamps: List[Dict],
-    tolerance_ms: int = 500
-) -> float:
+def smooth_sequence(
+    sequence: List[int],
+    confidences: Optional[List[float]] = None,
+    categories: Optional[List[int]] = None,
+    category_confidences: Optional[List[float]] = None
+) -> Tuple[List[int], List[float], List[int], List[float]]:
     """
-    Calculate temporal alignment accuracy.
+    Remove consecutive duplicate glosses from a sequence, keeping only the first occurrence.
     
-    Matches predicted glosses with ground truth glosses (same gloss ID) and checks
-    if both start and end times are within tolerance.
+    This helps reduce repeated predictions that occur due to sliding window overlap.
+    For example: [good, morning, good, morning] -> [good, morning]
     """
-    if len(gt_timestamps) == 0:
-        return 0.0
+    if not sequence:
+        return [], [], [], []
     
-    aligned = 0
-    for gt_ts in gt_timestamps:
-        for pred_ts in pred_timestamps:
-            if (gt_ts['gloss'] == pred_ts['gloss'] and
-                abs(gt_ts['start_ms'] - pred_ts['start_ms']) <= tolerance_ms and
-                abs(gt_ts['end_ms'] - pred_ts['end_ms']) <= tolerance_ms):
-                aligned += 1
-                break
+    smoothed_seq = []
+    smoothed_conf = []
+    smoothed_cats = []
+    smoothed_cat_conf = []
     
-    return aligned / len(gt_timestamps)
+    prev_gloss = None
+    
+    for i, gloss in enumerate(sequence):
+        if gloss != prev_gloss:
+            # New gloss, add it
+            smoothed_seq.append(gloss)
+            
+            if confidences and i < len(confidences):
+                smoothed_conf.append(confidences[i])
+            else:
+                smoothed_conf.append(1.0)
+            
+            if categories and i < len(categories):
+                smoothed_cats.append(categories[i])
+            else:
+                smoothed_cats.append(0)
+            
+            if category_confidences and i < len(category_confidences):
+                smoothed_cat_conf.append(category_confidences[i])
+            else:
+                smoothed_cat_conf.append(0.0)
+            
+            prev_gloss = gloss
+        else:
+            # Consecutive duplicate - merge confidences (take max)
+            if confidences and i < len(confidences):
+                if smoothed_conf:
+                    smoothed_conf[-1] = max(smoothed_conf[-1], confidences[i])
+            
+            # Merge category confidences (take max)
+            if category_confidences and i < len(category_confidences):
+                if smoothed_cat_conf:
+                    smoothed_cat_conf[-1] = max(smoothed_cat_conf[-1], category_confidences[i])
+    
+    return smoothed_seq, smoothed_conf, smoothed_cats, smoothed_cat_conf
 
 
-def calculate_temporal_iou(pred_start: float, pred_end: float, gt_start: float, gt_end: float) -> float:
-    """
-    Calculate temporal IoU (Intersection over Union) between two time intervals.
-    
-    Args:
-        pred_start: Prediction start time (ms)
-        pred_end: Prediction end time (ms)
-        gt_start: Ground truth start time (ms)
-        gt_end: Ground truth end time (ms)
-    
-    Returns:
-        IoU value between 0.0 and 1.0
-    """
-    # Calculate intersection
-    overlap_start = max(pred_start, gt_start)
-    overlap_end = min(pred_end, gt_end)
-    overlap_duration = max(0.0, overlap_end - overlap_start)
-    
-    # Calculate union
-    union_start = min(pred_start, gt_start)
-    union_end = max(pred_end, gt_end)
-    union_duration = union_end - union_start
-    
-    if union_duration == 0:
-        return 0.0
-    
-    return overlap_duration / union_duration
-
-
-def match_predictions_to_ground_truth(
-    pred_glosses: List[int],
-    pred_timestamps: List[Dict],
-    gt_glosses: List[int],
-    gt_timestamps: List[Dict],
-    iou_threshold: float = 0.5
-) -> Tuple[List[int], List[int], List[int], List[Dict], float]:
-    """
-    Match predictions to ground truth using temporal IoU.
-    
-    Args:
-        pred_glosses: List of predicted gloss IDs
-        pred_timestamps: List of timestamp dicts with 'start_ms' and 'end_ms'
-        gt_glosses: List of ground truth gloss IDs
-        gt_timestamps: List of timestamp dicts with 'start_ms' and 'end_ms'
-        iou_threshold: Minimum IoU required for a match (default: 0.5)
-    
-    Returns:
-        Tuple of:
-        - tp_indices: Indices of true positive predictions (prediction index)
-        - fp_indices: Indices of false positive predictions (prediction index)
-        - fn_indices: Indices of false negative ground truths (ground truth index)
-        - matched_pairs: List of match info dicts with keys: pred_idx, gt_idx, iou, gloss
-        - mean_iou: Average IoU for all TP matches
-    """
-    if len(pred_timestamps) != len(pred_glosses):
-        raise ValueError(f"Mismatch: {len(pred_timestamps)} timestamps for {len(pred_glosses)} predictions")
-    if len(gt_timestamps) != len(gt_glosses):
-        raise ValueError(f"Mismatch: {len(gt_timestamps)} timestamps for {len(gt_glosses)} ground truth")
-    
-    num_pred = len(pred_glosses)
-    num_gt = len(gt_glosses)
-    
-    # Edge cases
-    if num_pred == 0:
-        return [], [], list(range(num_gt)), [], 0.0
-    if num_gt == 0:
-        return [], list(range(num_pred)), [], [], 0.0
-    
-    # Calculate IoU matrix (num_pred x num_gt)
-    iou_matrix = np.zeros((num_pred, num_gt))
-    for i, pred_ts in enumerate(pred_timestamps):
-        for j, gt_ts in enumerate(gt_timestamps):
-            iou = calculate_temporal_iou(
-                pred_ts['start_ms'], pred_ts['end_ms'],
-                gt_ts['start_ms'], gt_ts['end_ms']
-            )
-            iou_matrix[i, j] = iou
-    
-    # Match predictions to ground truth (one-to-one matching)
-    # Strategy: Greedy matching - match highest IoU first, but only if:
-    #   1. IoU >= threshold
-    #   2. Gloss IDs match
-    #   3. Not already matched
-    
-    matched_pairs = []
-    pred_matched = [False] * num_pred
-    gt_matched = [False] * num_gt
-    
-    # Create list of candidate matches (pred_idx, gt_idx, iou)
-    candidates = []
-    for i in range(num_pred):
-        for j in range(num_gt):
-            if pred_glosses[i] == gt_glosses[j] and iou_matrix[i, j] >= iou_threshold:
-                candidates.append((i, j, iou_matrix[i, j]))
-    
-    # Sort by IoU (highest first)
-    candidates.sort(key=lambda x: x[2], reverse=True)
-    
-    # Greedy matching
-    for pred_idx, gt_idx, iou in candidates:
-        if not pred_matched[pred_idx] and not gt_matched[gt_idx]:
-            matched_pairs.append({
-                'pred_idx': pred_idx,
-                'gt_idx': gt_idx,
-                'iou': float(iou),
-                'gloss': pred_glosses[pred_idx]
-            })
-            pred_matched[pred_idx] = True
-            gt_matched[gt_idx] = True
-    
-    # Classify predictions and ground truth
-    tp_indices = [pair['pred_idx'] for pair in matched_pairs]
-    fp_indices = [i for i in range(num_pred) if not pred_matched[i]]
-    fn_indices = [j for j in range(num_gt) if not gt_matched[j]]
-    
-    # Calculate mean IoU for TP matches
-    mean_iou = float(np.mean([pair['iou'] for pair in matched_pairs])) if matched_pairs else 0.0
-    
-    return tp_indices, fp_indices, fn_indices, matched_pairs, mean_iou
-
-
+# Helper functions for category and occlusion metrics (used after compute_sequence_metrics)
 def _augment_matches_with_order(
     pred_glosses: List[int],
     gt_glosses: List[int],
     unmatched_pred: List[int],
     unmatched_gt: List[int],
 ) -> List[Dict]:
-    """
-    Lenient, order-preserving greedy matcher to augment strict temporal matches.
-    Pairs remaining unmatched predictions and ground-truth by label equality
-    while preserving sequence order. Does not use timestamps.
-    """
+    """Order-preserving matcher for category metrics augmentation."""
     if not unmatched_pred or not unmatched_gt:
         return []
 
@@ -240,7 +147,6 @@ def _augment_matches_with_order(
             p_i += 1
             g_i += 1
         else:
-            # Advance predictions pointer first to be more permissive on extra predictions
             p_i += 1
     return add_pairs
 
@@ -254,12 +160,7 @@ def _compute_category_metrics_balanced(
     gloss_fp_indices: List[int],
     gloss_fn_indices: List[int],
 ) -> Tuple[int, int, int, List[int], List[int], List[int], List[int]]:
-    """
-    Compute category TP/FP/FN by:
-    1) Using gloss matched pairs where categories also match
-    2) Then augmenting with order-preserving matches over the remaining
-       unmatched predictions and GT purely by category equality
-    """
+    """Compute category TP/FP/FN using gloss-matched pairs and order-preserving augmentation."""
     has_pred = bool(pred_categories)
     has_gt = bool(gt_categories)
 
@@ -276,16 +177,11 @@ def _compute_category_metrics_balanced(
         fp_indices = list(range(pred_len))
         return 0, pred_len, 0, [], fp_indices, [], []
 
-    # Bound checks
     pred_len = min(pred_len, len(pred_categories))
     gt_len = min(gt_len, len(gt_categories))
 
-    blocked_pred = {
-        idx for idx in gloss_fp_indices if 0 <= idx < pred_len
-    }
-    blocked_gt = {
-        idx for idx in gloss_fn_indices if 0 <= idx < gt_len
-    }
+    blocked_pred = {idx for idx in gloss_fp_indices if 0 <= idx < pred_len}
+    blocked_gt = {idx for idx in gloss_fn_indices if 0 <= idx < gt_len}
 
     pred_matched = set()
     gt_matched = set()
@@ -306,16 +202,9 @@ def _compute_category_metrics_balanced(
                 gt_matched.add(gi)
 
     # Step 2: order-preserving augmentation by category on remaining indices
-    remaining_pred = [
-        i for i in range(pred_len)
-        if i not in pred_matched and i not in blocked_pred
-    ]
-    remaining_gt = [
-        j for j in range(gt_len)
-        if j not in gt_matched and j not in blocked_gt
-    ]
+    remaining_pred = [i for i in range(pred_len) if i not in pred_matched and i not in blocked_pred]
+    remaining_gt = [j for j in range(gt_len) if j not in gt_matched and j not in blocked_gt]
 
-    # Build additional matches by treating categories as sequences
     add_pairs = _augment_matches_with_order(
         pred_categories,
         gt_categories,
@@ -328,12 +217,8 @@ def _compute_category_metrics_balanced(
 
     cat_tp_pred_indices = sorted(pred_matched)
     cat_tp_gt_indices = sorted(gt_matched)
-    cat_fp_pred_indices = sorted(
-        i for i in range(pred_len) if i not in pred_matched
-    )
-    cat_fn_gt_indices = sorted(
-        j for j in range(gt_len) if j not in gt_matched
-    )
+    cat_fp_pred_indices = sorted(i for i in range(pred_len) if i not in pred_matched)
+    cat_fn_gt_indices = sorted(j for j in range(gt_len) if j not in gt_matched)
 
     cat_tp = len(cat_tp_pred_indices)
     cat_fp = len(cat_fp_pred_indices)
@@ -355,9 +240,15 @@ def _max_iou_with_gt(pred_ts: Dict, gt_ts_list: List[Dict]) -> Tuple[float, int]
     best_iou = 0.0
     best_idx = -1
     for j, gt_ts in enumerate(gt_ts_list):
-        iou = calculate_temporal_iou(
-            pred_ts['start_ms'], pred_ts['end_ms'], gt_ts['start_ms'], gt_ts['end_ms']
-        )
+        overlap_start = max(pred_ts['start_ms'], gt_ts['start_ms'])
+        overlap_end = min(pred_ts['end_ms'], gt_ts['end_ms'])
+        overlap = max(0.0, overlap_end - overlap_start)
+        
+        union_start = min(pred_ts['start_ms'], gt_ts['start_ms'])
+        union_end = max(pred_ts['end_ms'], gt_ts['end_ms'])
+        union = union_end - union_start
+        
+        iou = overlap / union if union > 0 else 0.0
         if iou > best_iou:
             best_iou = iou
             best_idx = j
@@ -372,27 +263,21 @@ def _compute_occlusion_split_metrics(
     fp_indices: List[int],
     fn_indices: List[int]
 ) -> Dict:
-    """
-    Compute TP/FP/FN split by occlusion (without=0, with=1).
-    FP assignment uses max IoU to nearest GT; FPs with no overlap are excluded.
-    """
+    """Compute TP/FP/FN split by occlusion (without=0, with=1)."""
     if not gt_occluded or not gt_timestamps:
         return {
             'without_occlusion': {'tp': 0, 'fp': 0, 'fn': 0},
             'with_occlusion': {'tp': 0, 'fp': 0, 'fn': 0},
         }
 
-    # TPs by matched pair GT occlusion
     tp_without = sum(1 for p in matched_pairs if 0 <= p['gt_idx'] < len(gt_occluded) and gt_occluded[p['gt_idx']] == 0)
     tp_with = sum(1 for p in matched_pairs if 0 <= p['gt_idx'] < len(gt_occluded) and gt_occluded[p['gt_idx']] == 1)
 
     matched_gt_indices = {p['gt_idx'] for p in matched_pairs if 0 <= p['gt_idx'] < len(gt_occluded)}
 
-    # FNs are unmatched GTs
     fn_without = sum(1 for j in range(len(gt_occluded)) if gt_occluded[j] == 0 and j in fn_indices)
     fn_with = sum(1 for j in range(len(gt_occluded)) if gt_occluded[j] == 1 and j in fn_indices)
 
-    # FPs assigned by nearest overlapping GT (if any)
     fp_without = 0
     fp_with = 0
     for i in fp_indices:
@@ -404,7 +289,6 @@ def _compute_occlusion_split_metrics(
                 fp_without += 1
             else:
                 fp_with += 1
-        # else: ignore FP in gaps
 
     return {
         'without_occlusion': {'tp': tp_without, 'fp': fp_without, 'fn': fn_without},
@@ -422,12 +306,7 @@ def _compute_category_occlusion_split_metrics(
     pred_timestamps: List[Dict],
     gt_timestamps: List[Dict],
 ) -> Dict:
-    """
-    Category TP/FP/FN split by GT occlusion, using:
-    1) Strict gloss-matched pairs where categories match (split by GT occlusion)
-    2) Order-preserving augmentation on categories for remaining indices
-    3) FPs assigned to split by nearest overlapping GT (if any). FNs by GT flags
-    """
+    """Category TP/FP/FN split by GT occlusion."""
     if not pred_categories or not gt_categories or not gt_occluded:
         return {
             'without_occlusion': {'tp': 0, 'fp': 0, 'fn': 0},
@@ -509,88 +388,11 @@ def _compute_category_occlusion_split_metrics(
 def calculate_detection_metrics(
     num_tp: int, num_fp: int, num_fn: int
 ) -> Tuple[float, float, float]:
-    """
-    Calculate precision, recall, and F1-score from TP/FP/FN counts.
-    
-    Args:
-        num_tp: Number of true positives
-        num_fp: Number of false positives
-        num_fn: Number of false negatives
-    
-    Returns:
-        Tuple of (precision, recall, f1_score)
-    """
+    """Calculate precision, recall, and F1-score from TP/FP/FN counts."""
     precision = num_tp / (num_tp + num_fp) if (num_tp + num_fp) > 0 else 0.0
     recall = num_tp / (num_tp + num_fn) if (num_tp + num_fn) > 0 else 0.0
     f1_score = 2 * precision * recall / (precision + recall) if (precision + recall) > 0 else 0.0
-    
     return precision, recall, f1_score
-
-
-def smooth_sequence(
-    sequence: List[int],
-    confidences: Optional[List[float]] = None,
-    categories: Optional[List[int]] = None,
-    category_confidences: Optional[List[float]] = None
-) -> Tuple[List[int], List[float], List[int], List[float]]:
-    """
-    Remove consecutive duplicate glosses from a sequence, keeping only the first occurrence.
-    
-    This helps reduce repeated predictions that occur due to sliding window overlap.
-    For example: [good, morning, good, morning] -> [good, morning]
-    
-    Args:
-        sequence: List of gloss IDs
-        confidences: Optional list of confidence scores (take max for consecutive duplicates)
-        categories: Optional list of category IDs (keep first occurrence)
-        category_confidences: Optional list of category confidence scores (take max for consecutive duplicates)
-    
-    Returns:
-        Tuple of (smoothed_sequence, smoothed_confidences, smoothed_categories, smoothed_category_confidences)
-    """
-    if not sequence:
-        return [], [], [], []
-    
-    smoothed_seq = []
-    smoothed_conf = []
-    smoothed_cats = []
-    smoothed_cat_conf = []
-    
-    prev_gloss = None
-    
-    for i, gloss in enumerate(sequence):
-        if gloss != prev_gloss:
-            # New gloss, add it
-            smoothed_seq.append(gloss)
-            
-            if confidences and i < len(confidences):
-                smoothed_conf.append(confidences[i])
-            else:
-                smoothed_conf.append(1.0)
-            
-            if categories and i < len(categories):
-                smoothed_cats.append(categories[i])
-            else:
-                smoothed_cats.append(0)
-            
-            if category_confidences and i < len(category_confidences):
-                smoothed_cat_conf.append(category_confidences[i])
-            else:
-                smoothed_cat_conf.append(0.0)
-            
-            prev_gloss = gloss
-        else:
-            # Consecutive duplicate - merge confidences (take max)
-            if confidences and i < len(confidences):
-                if smoothed_conf:
-                    smoothed_conf[-1] = max(smoothed_conf[-1], confidences[i])
-            
-            # Merge category confidences (take max)
-            if category_confidences and i < len(category_confidences):
-                if smoothed_cat_conf:
-                    smoothed_cat_conf[-1] = max(smoothed_cat_conf[-1], category_confidences[i])
-    
-    return smoothed_seq, smoothed_conf, smoothed_cats, smoothed_cat_conf
 
 
 class CTCPredictor:
@@ -605,14 +407,12 @@ class CTCPredictor:
         if blank_id is not None:
             self.blank_id = blank_id
         else:
-            # Check if this is a subset model (e.g., GREETINGS-only)
             if self.model_type in MODEL_CONFIG and 'ctc_config' in MODEL_CONFIG[self.model_type]:
                 if MODEL_CONFIG[self.model_type]['ctc_config'] == 'subset':
                     self.blank_id = CTC_CONFIG_SUBSET['blank_token_id']
                 else:
                     self.blank_id = CTC_CONFIG['blank_token_id']
             else:
-                # Fallback to default CTC config
                 self.blank_id = CTC_CONFIG['blank_token_id']
         
         self.model, self.input_dim = self._load_model()
@@ -627,20 +427,15 @@ class CTCPredictor:
                 state_dict = checkpoint.get('model_state_dict', checkpoint.get('state_dict', checkpoint.get('model', checkpoint)))
                 input_dim = state_dict['embedding.weight'].shape[1] if 'embedding.weight' in state_dict else 178
                 
-                # Extract CTC class count from CTC head weights
                 if 'ctc_head.weight' in state_dict:
                     num_ctc_classes = state_dict['ctc_head.weight'].shape[0]
                 else:
-                    # Fallback to trained model defaults
                     num_ctc_classes = 11
                 
-                # Extract category class count from category head weights (if present)
                 num_cat = None
                 if 'category_head.weight' in state_dict:
                     num_cat = state_dict['category_head.weight'].shape[0]
-                    
             except:
-                # Fallback to trained model defaults if checkpoint loading fails
                 input_dim = 178
                 num_ctc_classes = 11
                 num_cat = None
@@ -653,33 +448,28 @@ class CTCPredictor:
                 checkpoint = torch.load(self.checkpoint_path, map_location='cpu')
                 state_dict = checkpoint.get('model_state_dict', checkpoint.get('state_dict', checkpoint.get('model', checkpoint)))
                 
-                # Extract CTC class count from checkpoint
                 if 'ctc_head.weight' in state_dict:
                     num_ctc_classes = state_dict['ctc_head.weight'].shape[0]
                 else:
-                    # Use subset config for GREETINGS models
                     if self.blank_id == CTC_CONFIG_SUBSET['blank_token_id']:
                         num_ctc_classes = CTC_CONFIG_SUBSET['num_ctc_classes']
                     else:
                         num_ctc_classes = CTC_CONFIG['num_ctc_classes']
                 
-                # Check for category head in checkpoint
                 num_cat = None
                 if 'category_head.weight' in state_dict:
                     num_cat = state_dict['category_head.weight'].shape[0]
                 
                 if 'gru1.weight_hh_l0' in state_dict and 'gru2.weight_hh_l0' in state_dict:
-                    # For bidirectional GRU: [3*hidden*2, hidden] -> hidden = shape[1]
                     gru1_hidden = state_dict['gru1.weight_hh_l0'].shape[1]
                     gru2_hidden = state_dict['gru2.weight_hh_l0'].shape[1]
                 else:
                     gru1_hidden = 256
                     gru2_hidden = 128
             except:
-                # Use subset config for GREETINGS models
                 if self.blank_id == CTC_CONFIG_SUBSET['blank_token_id']:
                     num_ctc_classes = CTC_CONFIG_SUBSET['num_ctc_classes']
-                    num_cat = 1  # GREETINGS subset has 1 category
+                    num_cat = 1
                 else:
                     num_ctc_classes = CTC_CONFIG['num_ctc_classes']
                     num_cat = None
@@ -691,60 +481,48 @@ class CTCPredictor:
                 num_ctc_classes=num_ctc_classes,
                 hidden1=gru1_hidden, 
                 hidden2=gru2_hidden,
-                num_cat=num_cat  # Pass category classes to enable category head
+                num_cat=num_cat
             )
         
         elif self.model_type == 'iv3_gru_ctc':
-            # InceptionV3GRUCtc uses 2048-D features
             input_dim = 2048
             try:
                 checkpoint = torch.load(self.checkpoint_path, map_location='cpu')
                 state_dict = checkpoint.get('model_state_dict', checkpoint.get('state_dict', checkpoint.get('model', checkpoint)))
                 
-                # Extract CTC class count from checkpoint
                 if 'ctc_head.weight' in state_dict:
                     num_ctc_classes = state_dict['ctc_head.weight'].shape[0]
                 else:
-                    # Use subset config for GREETINGS models
                     if self.blank_id == CTC_CONFIG_SUBSET['blank_token_id']:
                         num_ctc_classes = CTC_CONFIG_SUBSET['num_ctc_classes']
                     else:
                         num_ctc_classes = CTC_CONFIG['num_ctc_classes']
                 
-                # Check for category head in checkpoint
                 num_cat = None
                 if 'category_head.weight' in state_dict:
                     num_cat = state_dict['category_head.weight'].shape[0]
                 
-                # Try to extract hidden dimensions from checkpoint
                 if 'gru1.weight_hh_l0' in state_dict and 'gru2.weight_hh_l0' in state_dict:
-                    # For bidirectional GRU: weight_hh_l0 has shape [3*hidden_size*2, hidden_size]
-                    # The hidden_size is actually shape[1], not shape[0] // 3 // 2
-                    gru1_shape = state_dict['gru1.weight_hh_l0'].shape
-                    gru2_shape = state_dict['gru2.weight_hh_l0'].shape
-                    
-                    # For bidirectional GRU: [3*hidden*2, hidden] -> hidden = shape[1]
                     gru1_hidden = state_dict['gru1.weight_hh_l0'].shape[1]
                     gru2_hidden = state_dict['gru2.weight_hh_l0'].shape[1]
                 else:
                     gru1_hidden = 256
                     gru2_hidden = 128
             except:
-                # Use subset config for GREETINGS models
+                gru1_hidden = 256
+                gru2_hidden = 128
                 if self.blank_id == CTC_CONFIG_SUBSET['blank_token_id']:
                     num_ctc_classes = CTC_CONFIG_SUBSET['num_ctc_classes']
-                    num_cat = 1  # GREETINGS subset has 1 category
+                    num_cat = 1
                 else:
                     num_ctc_classes = CTC_CONFIG['num_ctc_classes']
                     num_cat = None
-                gru1_hidden = 256
-                gru2_hidden = 128
             
             model = InceptionV3GRUCtc(
                 num_ctc_classes=num_ctc_classes,
                 hidden1=gru1_hidden,
                 hidden2=gru2_hidden,
-                num_cat=num_cat  # Pass category classes to enable category head
+                num_cat=num_cat
             )
         
         else:
@@ -760,36 +538,205 @@ class CTCPredictor:
         checkpoint = torch.load(self.checkpoint_path, map_location=self.device)
         state_dict = checkpoint.get('model_state_dict', checkpoint.get('state_dict', checkpoint.get('model', checkpoint)))
         
-        # Get current model state dict
         model_state_dict = self.model.state_dict()
         
-        # Filter state dict to only include keys that exist in current model
         filtered_state_dict = {}
         for key, value in state_dict.items():
             if key in model_state_dict:
-                # Handle positional encoding size mismatch
                 if key == 'pos_encoder.pe':
                     current_shape = model_state_dict[key].shape
                     checkpoint_shape = value.shape
                     
                     if current_shape != checkpoint_shape:
-                        # Always expand to the current model's max_len (1000)
                         if current_shape[1] > checkpoint_shape[1]:
-                            # Need to expand - pad with zeros (match device and dtype)
                             padding = value.new_zeros(current_shape[0], current_shape[1] - checkpoint_shape[1], current_shape[2])
                             value = torch.cat([value, padding], dim=1)
                         else:
-                            # Need to truncate
                             value = value[:, :current_shape[1], :]
                 
                 filtered_state_dict[key] = value
-            else:
-                pass
         
-        # Load the filtered state dict
         self.model.load_state_dict(filtered_state_dict, strict=False)
         self.model.eval()
     
+    def _compute_metrics_with_gt(
+        self,
+        predicted_sequence: List[int],
+        predicted_labels: List[str],
+        predicted_timestamps: List[Dict],
+        confidence_scores: List[float],
+        predicted_categories: Optional[List[int]],
+        ground_truth: Dict,
+        mask: Optional[np.ndarray],
+        timestamps_ms: Optional[np.ndarray],
+        iou_threshold: float = 0.5
+    ) -> Dict:
+        """
+        Compute metrics using compute_sequence_metrics() - EXACT SAME as validation.
+        This is the unified metrics computation used by both predict_sequence and predict_sequence_sliding_window.
+        """
+        # Extract GT data
+        if 'segments' in ground_truth:
+            segments = ground_truth.get('segments', [])
+            gt_labels = [seg.get('gloss_label', f"GLOSS_{seg.get('gloss', '?')}") for seg in segments]
+            gt_timestamps = []
+            gt_gloss_ids = []
+            gt_categories = []
+            gt_occluded = []
+            for seg in segments:
+                gt_gloss_ids.append(seg.get('gloss', 0))
+                gt_timestamps.append({
+                    'start_ms': seg.get('timestamp_start_ms', 0),
+                    'end_ms': seg.get('timestamp_end_ms', 0),
+                    'duration_ms': seg.get('timestamp_end_ms', 0) - seg.get('timestamp_start_ms', 0)
+                })
+                if 'category' in seg:
+                    gt_categories.append(seg.get('category'))
+                if 'occluded' in seg:
+                    gt_occluded.append(int(seg.get('occluded', 0)))
+            if gt_categories:
+                ground_truth['ground_truth_categories'] = gt_categories
+            if gt_occluded:
+                ground_truth['ground_truth_occluded'] = gt_occluded
+        else:
+            gt_labels = ground_truth.get('ground_truth_labels', [])
+            gt_timestamps = ground_truth.get('ground_truth_timestamps', [])
+            gt_gloss_ids = ground_truth.get('ground_truth_sequence', [])
+
+        if not gt_timestamps:
+            raise ValueError("Ground truth timestamps are missing or empty. Detection metrics require timestamps.")
+
+        # Create metric objects
+        pred_ts_objects = [
+            MetricTimestamp(
+                start_ms=float(ts.get('start_ms', 0.0)),
+                end_ms=float(ts.get('end_ms', 0.0)),
+                gloss=int(predicted_sequence[i]) if i < len(predicted_sequence) else None,
+            )
+            for i, ts in enumerate(predicted_timestamps)
+        ]
+        gt_ts_objects = [
+            MetricTimestamp(
+                start_ms=float(ts.get('start_ms', 0.0)),
+                end_ms=float(ts.get('end_ms', 0.0)),
+                gloss=int(gt_gloss_ids[idx]) if idx < len(gt_gloss_ids) else ts.get('gloss'),
+            )
+            for idx, ts in enumerate(gt_timestamps)
+        ]
+
+        seq_prediction = SequencePrediction(
+            gloss_ids=[int(g) for g in predicted_sequence],
+            labels=predicted_labels,
+            timestamps=pred_ts_objects,
+            confidence_scores=[float(c) for c in confidence_scores],
+        )
+        seq_ground_truth = SequenceGroundTruth(
+            gloss_ids=[int(g) for g in gt_gloss_ids],
+            labels=gt_labels,
+            timestamps=gt_ts_objects,
+            occlusion_flags=ground_truth.get('ground_truth_occluded'),
+        )
+
+        # Use EXACT SAME config as validation - no adaptive thresholds
+        metrics_result = compute_sequence_metrics(
+            prediction=seq_prediction,
+            ground_truth=seq_ground_truth,
+            config=ContinuousEvaluationConfig(
+                iou_threshold=iou_threshold,
+                confidence_threshold=self.metrics_config.confidence_threshold,
+                inactive_threshold=self.metrics_config.inactive_threshold,
+                active_overlap_threshold=self.metrics_config.active_overlap_threshold,
+                min_gap_duration_ms=self.metrics_config.min_gap_duration_ms,
+                enable_lenient_matching=self.metrics_config.enable_lenient_matching,
+                fallback_gt_overlap_ratio=self.metrics_config.fallback_gt_overlap_ratio,
+                lenient_overlap_ratio=self.metrics_config.lenient_overlap_ratio,
+                early_start_gt_overlap_threshold=self.metrics_config.early_start_gt_overlap_threshold,
+                late_start_gt_overlap_threshold=self.metrics_config.late_start_gt_overlap_threshold,
+            ),
+            mask=mask,
+            timestamps_ms=timestamps_ms,
+        )
+
+        # Build result dict
+        result = {
+            'num_tp': metrics_result.num_tp,
+            'num_fp': metrics_result.num_fp,
+            'num_fn': metrics_result.num_fn,
+            'num_gt': len(gt_gloss_ids),
+            'precision': float(metrics_result.precision),
+            'recall': float(metrics_result.recall),
+            'f1_score': float(metrics_result.f1_score),
+            'iou_threshold': iou_threshold,
+            'matched_pairs': metrics_result.matched_pairs,
+            'unmatched_predictions': metrics_result.fp_indices,
+            'unmatched_ground_truth': metrics_result.fn_indices,
+            'tp_indices': metrics_result.tp_indices,
+            'tp_breakdown': dict(metrics_result.tp_breakdown),
+            'fp_breakdown': dict(metrics_result.fp_breakdown),
+            'fn_breakdown': dict(metrics_result.fn_breakdown),
+        }
+
+        # Occlusion split metrics
+        if 'ground_truth_occluded' in ground_truth:
+            occ = _compute_occlusion_split_metrics(
+                pred_timestamps=predicted_timestamps,
+                gt_timestamps=gt_timestamps,
+                gt_occluded=ground_truth['ground_truth_occluded'],
+                matched_pairs=metrics_result.matched_pairs,
+                fp_indices=metrics_result.fp_indices,
+                fn_indices=metrics_result.fn_indices,
+            )
+            result['occlusion_metrics'] = occ
+            
+            # Category occlusion split
+            if predicted_categories and 'ground_truth_categories' in ground_truth:
+                occ_cat = _compute_category_occlusion_split_metrics(
+                    pred_categories=predicted_categories,
+                    gt_categories=ground_truth['ground_truth_categories'],
+                    gt_occluded=ground_truth['ground_truth_occluded'],
+                    matched_pairs=metrics_result.matched_pairs,
+                    fp_indices=metrics_result.fp_indices,
+                    fn_indices=metrics_result.fn_indices,
+                    pred_timestamps=predicted_timestamps,
+                    gt_timestamps=gt_timestamps,
+                )
+                result['occlusion_metrics_category'] = occ_cat
+
+        # Category-level detection metrics
+        if predicted_categories and 'ground_truth_categories' in ground_truth:
+            gt_categories = ground_truth['ground_truth_categories']
+            if gt_categories:
+                (
+                    cat_tp,
+                    cat_fp,
+                    cat_fn,
+                    cat_tp_pred_indices,
+                    cat_fp_pred_indices,
+                    cat_tp_gt_indices,
+                    cat_fn_gt_indices,
+                ) = _compute_category_metrics_balanced(
+                    pred_categories=predicted_categories,
+                    gt_categories=gt_categories,
+                    matched_pairs=metrics_result.matched_pairs,
+                    pred_len=len(predicted_sequence),
+                    gt_len=len(gt_gloss_ids),
+                    gloss_fp_indices=metrics_result.fp_indices,
+                    gloss_fn_indices=metrics_result.fn_indices,
+                )
+                cat_precision, cat_recall, cat_f1 = calculate_detection_metrics(cat_tp, cat_fp, cat_fn)
+                result['category_num_tp'] = cat_tp
+                result['category_num_fp'] = cat_fp
+                result['category_num_fn'] = cat_fn
+                result['category_precision'] = float(cat_precision)
+                result['category_recall'] = float(cat_recall)
+                result['category_f1_score'] = float(cat_f1)
+                result['category_tp_pred_indices'] = cat_tp_pred_indices
+                result['category_fp_pred_indices'] = cat_fp_pred_indices
+                result['category_tp_gt_indices'] = cat_tp_gt_indices
+                result['category_fn_gt_indices'] = cat_fn_gt_indices
+
+        return result
+
     def predict_sequence(
         self,
         npz_path: Path,
@@ -810,6 +757,7 @@ class CTCPredictor:
         if 'timestamps_ms' in data:
             timestamps_ms = np.asarray(data['timestamps_ms']).astype(float)
         
+        # Load input data
         if self.input_dim == 2048:
             if 'X2048' not in data:
                 raise ValueError(f"NPZ file missing 'X2048' key")
@@ -835,70 +783,60 @@ class CTCPredictor:
         input_length = torch.tensor([X.shape[1]], dtype=torch.long).to(self.device)
         
         with torch.no_grad():
-            # InceptionV3GRUCtc requires features_already parameter
             if self.model_type == 'iv3_gru_ctc':
                 output = self.model(X, features_already=True)
             else:
                 output = self.model(X)
             
-            # Handle dual-task models (CTC + Category)
             cat_logits = None
             if isinstance(output, tuple):
-                log_probs, cat_logits = output  # [B,T,num_ctc], [B,T,num_cat]
+                log_probs, cat_logits = output
             else:
                 log_probs = output
-            
+        
         # Decode gloss sequence
         if decode_method == 'greedy':
             predicted_sequence = greedy_ctc_decoder(log_probs, self.blank_id, input_length)[0]
             probs = torch.exp(log_probs[0])
             confidence_scores = [float(probs[:, g].max()) for g in predicted_sequence] if len(predicted_sequence) > 0 else []
-            
         else:
             predicted_sequence, log_prob = beam_search_ctc_decoder(log_probs, self.blank_id, beam_width, input_length)[0]
             avg_conf = np.exp(log_prob / max(len(predicted_sequence), 1))
             confidence_scores = [float(avg_conf)] * len(predicted_sequence)
         
-        # Decode category sequence (per-frame predictions -> per-sign categories)
+        # Decode category sequence
         predicted_categories = []
         category_confidences = []
         if cat_logits is not None:
-            # Get per-frame category predictions [T, num_cat]
             cat_probs = torch.softmax(cat_logits[0, :input_length[0]], dim=1)
             
             if len(predicted_sequence) > 0:
-                # Assign categories to each predicted sign based on frame distribution
                 frames_per_sign = X.shape[1] / len(predicted_sequence)
                 for idx in range(len(predicted_sequence)):
                     start_frame = int(idx * frames_per_sign)
                     end_frame = int((idx + 1) * frames_per_sign)
-                    # Majority vote for this sign's frames
                     sign_cat_probs = cat_probs[start_frame:end_frame].mean(dim=0)
                     pred_cat = sign_cat_probs.argmax().item()
                     cat_conf = sign_cat_probs[pred_cat].item()
                     predicted_categories.append(pred_cat)
                     category_confidences.append(float(cat_conf))
-                
         else:
-            # No category head available - provide fallback
-            # Fallback: assign categories based on gloss predictions
             if len(predicted_sequence) > 0:
                 for gloss_id in predicted_sequence:
-                    # Simple fallback: assign category based on gloss ID
-                    if 0 <= gloss_id <= 9:  # Greetings
-                        predicted_categories.append(0)  # GREETING
-                        category_confidences.append(0.8)  # High confidence for greetings
-                    elif 10 <= gloss_id <= 19:  # Survival
-                        predicted_categories.append(1)  # SURVIVAL
+                    if 0 <= gloss_id <= 9:
+                        predicted_categories.append(0)
+                        category_confidences.append(0.8)
+                    elif 10 <= gloss_id <= 19:
+                        predicted_categories.append(1)
                         category_confidences.append(0.7)
-                    elif 20 <= gloss_id <= 29:  # Numbers
-                        predicted_categories.append(2)  # NUMBER
+                    elif 20 <= gloss_id <= 29:
+                        predicted_categories.append(2)
                         category_confidences.append(0.7)
                     else:
-                        predicted_categories.append(0)  # Default to GREETING
-                        category_confidences.append(0.5)  # Lower confidence for unknown
+                        predicted_categories.append(0)
+                        category_confidences.append(0.5)
         
-        # Smooth sequence by removing consecutive duplicates
+        # Smooth sequence
         predicted_sequence, confidence_scores, predicted_categories, category_confidences = smooth_sequence(
             predicted_sequence,
             confidence_scores,
@@ -934,13 +872,12 @@ class CTCPredictor:
         }
         
         if ground_truth:
-            result['signer'] = ground_truth['signer']
-            result['strategy'] = ground_truth['strategy']
-            result['ground_truth_sequence'] = ground_truth['ground_truth_sequence']
-            result['ground_truth_labels'] = ground_truth['ground_truth_labels']
+            result['signer'] = ground_truth.get('signer')
+            result['strategy'] = ground_truth.get('strategy')
+            result['ground_truth_sequence'] = ground_truth.get('ground_truth_sequence', [])
+            result['ground_truth_labels'] = ground_truth.get('ground_truth_labels', [])
             result['ground_truth_timestamps'] = ground_truth.get('ground_truth_timestamps', [])
             
-            # Ground truth categories if available
             if 'ground_truth_categories' in ground_truth:
                 result['ground_truth_categories'] = ground_truth['ground_truth_categories']
             
@@ -953,139 +890,35 @@ class CTCPredictor:
                         for i in range(len(predicted_sequence))
                     ]
 
-            gt_timestamps = ground_truth.get('ground_truth_timestamps', [])
-
             try:
-                if gt_timestamps:
-                    pred_ts_objects = [
-                        MetricTimestamp(
-                            start_ms=float(ts.get('start_ms', 0.0)),
-                            end_ms=float(ts.get('end_ms', 0.0)),
-                            gloss=int(predicted_sequence[i]) if i < len(predicted_sequence) else None,
-                        )
-                        for i, ts in enumerate(predicted_timestamps)
-                    ]
-                    gt_ts_objects = [
-                        MetricTimestamp(
-                            start_ms=float(ts.get('start_ms', 0.0)),
-                            end_ms=float(ts.get('end_ms', 0.0)),
-                            gloss=int(ts.get('gloss', ground_truth['ground_truth_sequence'][idx])),
-                        )
-                        for idx, ts in enumerate(gt_timestamps)
-                    ]
-
-                    seq_prediction = SequencePrediction(
-                        gloss_ids=[int(g) for g in predicted_sequence],
-                        labels=predicted_labels,
-                        timestamps=pred_ts_objects,
-                        confidence_scores=[float(c) for c in confidence_scores],
-                    )
-                    seq_ground_truth = SequenceGroundTruth(
-                        gloss_ids=[int(g) for g in ground_truth['ground_truth_sequence']],
-                        labels=ground_truth.get('ground_truth_labels', []),
-                        timestamps=gt_ts_objects,
-                        occlusion_flags=ground_truth.get('ground_truth_occluded'),
-                    )
-
-                    metrics_result = compute_sequence_metrics(
-                        prediction=seq_prediction,
-                        ground_truth=seq_ground_truth,
-                        config=ContinuousEvaluationConfig(
-                            iou_threshold=iou_threshold,
-                            confidence_threshold=self.metrics_config.confidence_threshold,
-                            inactive_threshold=self.metrics_config.inactive_threshold,
-                            active_overlap_threshold=self.metrics_config.active_overlap_threshold,
-                            min_gap_duration_ms=self.metrics_config.min_gap_duration_ms,
-                            enable_lenient_matching=self.metrics_config.enable_lenient_matching,
-                        ),
-                        mask=mask,
-                        timestamps_ms=timestamps_ms,
-                    )
-
-                    result['num_tp'] = metrics_result.num_tp
-                    result['num_fp'] = metrics_result.num_fp
-                    result['num_fn'] = metrics_result.num_fn
-                    result['num_gt'] = len(ground_truth['ground_truth_sequence'])
-                    result['precision'] = float(metrics_result.precision)
-                    result['recall'] = float(metrics_result.recall)
-                    result['f1_score'] = float(metrics_result.f1_score)
-                    result['iou_threshold'] = iou_threshold
-                    result['matched_pairs'] = metrics_result.matched_pairs
-                    result['unmatched_predictions'] = metrics_result.fp_indices
-                    result['unmatched_ground_truth'] = metrics_result.fn_indices
-                    result['tp_indices'] = metrics_result.tp_indices
-                    result['tp_breakdown'] = dict(metrics_result.tp_breakdown)
-                    result['fp_breakdown'] = dict(metrics_result.fp_breakdown)
-                    result['fn_breakdown'] = dict(metrics_result.fn_breakdown)
-
-                    if 'ground_truth_occluded' in ground_truth:
-                        occ = _compute_occlusion_split_metrics(
-                            pred_timestamps=predicted_timestamps,
-                            gt_timestamps=gt_timestamps,
-                            gt_occluded=ground_truth['ground_truth_occluded'],
-                            matched_pairs=metrics_result.matched_pairs,
-                            fp_indices=metrics_result.fp_indices,
-                            fn_indices=metrics_result.fn_indices,
-                        )
-                        result['occlusion_metrics'] = occ
-                        if predicted_categories and 'ground_truth_categories' in ground_truth:
-                            occ_cat = _compute_category_occlusion_split_metrics(
-                                pred_categories=predicted_categories,
-                                gt_categories=ground_truth['ground_truth_categories'],
-                                gt_occluded=ground_truth['ground_truth_occluded'],
-                                matched_pairs=metrics_result.matched_pairs,
-                                fp_indices=metrics_result.fp_indices,
-                                fn_indices=metrics_result.fn_indices,
-                                pred_timestamps=predicted_timestamps,
-                                gt_timestamps=gt_timestamps,
-                            )
-                            result['occlusion_metrics_category'] = occ_cat
-
-                    if predicted_categories and 'ground_truth_categories' in ground_truth:
-                        gt_cats = ground_truth['ground_truth_categories']
-                        if gt_cats:
-                            (
-                                cat_tp,
-                                cat_fp,
-                                cat_fn,
-                                cat_tp_pred_indices,
-                                cat_fp_pred_indices,
-                                cat_tp_gt_indices,
-                                cat_fn_gt_indices,
-                            ) = _compute_category_metrics_balanced(
-                                pred_categories=predicted_categories,
-                                gt_categories=gt_cats,
-                                matched_pairs=metrics_result.matched_pairs,
-                                pred_len=len(predicted_sequence),
-                                gt_len=len(ground_truth['ground_truth_sequence']),
-                                gloss_fp_indices=metrics_result.fp_indices,
-                                gloss_fn_indices=metrics_result.fn_indices,
-                            )
-                            cat_precision, cat_recall, cat_f1 = calculate_detection_metrics(cat_tp, cat_fp, cat_fn)
-                            result['category_num_tp'] = cat_tp
-                            result['category_num_fp'] = cat_fp
-                            result['category_num_fn'] = cat_fn
-                            result['category_precision'] = float(cat_precision)
-                            result['category_recall'] = float(cat_recall)
-                            result['category_f1_score'] = float(cat_f1)
-                            result['category_tp_pred_indices'] = cat_tp_pred_indices
-                            result['category_fp_pred_indices'] = cat_fp_pred_indices
-                            result['category_tp_gt_indices'] = cat_tp_gt_indices
-                            result['category_fn_gt_indices'] = cat_fn_gt_indices
-                else:
-                    raise ValueError("Ground truth timestamps are missing or empty. Detection metrics require timestamps.")
+                metrics = self._compute_metrics_with_gt(
+                    predicted_sequence=predicted_sequence,
+                    predicted_labels=predicted_labels,
+                    predicted_timestamps=predicted_timestamps,
+                    confidence_scores=confidence_scores,
+                    predicted_categories=predicted_categories if predicted_categories else None,
+                    ground_truth=ground_truth,
+                    mask=mask,
+                    timestamps_ms=timestamps_ms,
+                    iou_threshold=iou_threshold
+                )
+                result.update(metrics)
             except Exception as e:
                 result['num_tp'] = 0
                 result['num_fp'] = len(predicted_sequence)
-                result['num_fn'] = len(ground_truth['ground_truth_sequence'])
-                result['num_gt'] = len(ground_truth['ground_truth_sequence'])
+                result['num_fn'] = len(ground_truth.get('ground_truth_sequence', []))
+                result['num_gt'] = len(ground_truth.get('ground_truth_sequence', []))
                 result['precision'] = 0.0
                 result['recall'] = 0.0
                 result['f1_score'] = 0.0
                 result['iou_threshold'] = iou_threshold
                 result['matched_pairs'] = []
                 result['unmatched_predictions'] = list(range(len(predicted_sequence)))
-                result['unmatched_ground_truth'] = list(range(len(ground_truth['ground_truth_sequence'])))
+                result['unmatched_ground_truth'] = list(range(len(ground_truth.get('ground_truth_sequence', []))))
+                result['tp_indices'] = []
+                result['tp_breakdown'] = {"TP": 0}
+                result['fp_breakdown'] = {"FP": 0}
+                result['fn_breakdown'] = {"FN": 0}
                 print(f"Warning: Detection metrics calculation failed: {str(e)}")
         
         return result
@@ -1095,26 +928,16 @@ class CTCPredictor:
                                       decode_method: str = 'greedy', beam_width: int = 10, 
                                       fps: int = 30, temporal_tolerance: int = 500,
                                       iou_threshold: float = 0.5) -> Dict:
-        """
-        Predict continuous sequence using sliding window approach.
-        
-        This method applies the CTC model to overlapping windows of the input sequence,
-        then aggregates the predictions to get the final continuous sequence.
-        
-        Args:
-            npz_path: Path to NPZ file
-            ground_truth: Optional ground truth dictionary
-            window_size: Size of each window in frames
-            stride: Step size between windows
-            decode_method: Decoding method ('greedy' or 'beam_search')
-            beam_width: Beam width for beam search
-            fps: Frames per second for timestamp estimation
-            temporal_tolerance: Temporal tolerance for alignment (ms)
-            
-        Returns:
-            Dictionary with sliding window prediction results
-        """
+        """Predict continuous sequence using sliding window approach."""
         data = np.load(npz_path)
+
+        # Load optional activity mask and frame timestamps when available
+        mask = None
+        timestamps_ms = None
+        if 'mask' in data:
+            mask = np.asarray(data['mask']).astype(bool)
+        if 'timestamps_ms' in data:
+            timestamps_ms = np.asarray(data['timestamps_ms']).astype(float)
         
         # Load input data
         if self.input_dim == 2048:
@@ -1149,42 +972,35 @@ class CTCPredictor:
         
         # Handle sequences shorter than window_size
         if seq_len < window_size:
-            # Use the entire sequence as a single window
-            window_data = X.unsqueeze(0).to(self.device)  # [1, seq_len, features]
+            window_data = X.unsqueeze(0).to(self.device)
             input_length = torch.tensor([seq_len], dtype=torch.long).to(self.device)
-            
             windows.append((0, seq_len))
             
-            # Get model prediction for this single window
             with torch.no_grad():
                 if self.model_type == 'iv3_gru_ctc':
                     output = self.model(window_data, features_already=True)
                 else:
                     output = self.model(window_data)
                 
-                # Handle dual-task models
                 cat_logits = None
                 if isinstance(output, tuple):
                     log_probs, cat_logits = output
                 else:
                     log_probs = output
             
-            # Decode window prediction
             if decode_method == 'greedy':
                 window_pred = greedy_ctc_decoder(log_probs, self.blank_id, input_length)[0]
                 probs = torch.exp(log_probs[0])
                 window_conf = [float(probs[:, g].max()) for g in window_pred] if len(window_pred) > 0 else []
-                
             else:
                 window_pred, log_prob = beam_search_ctc_decoder(log_probs, self.blank_id, beam_width, input_length)[0]
                 avg_conf = np.exp(log_prob / max(len(window_pred), 1))
                 window_conf = [float(avg_conf)] * len(window_pred)
             
-            # Process category predictions
             window_cat_preds = []
             window_cat_confs = []
             if cat_logits is not None:
-                cat_probs = torch.softmax(cat_logits[0], dim=1)  # [T, num_categories]
+                cat_probs = torch.softmax(cat_logits[0], dim=1)
                 for i, pred_token in enumerate(window_pred):
                     if i < cat_probs.shape[0]:
                         cat_pred = torch.argmax(cat_probs[i]).item()
@@ -1192,7 +1008,7 @@ class CTCPredictor:
                         window_cat_preds.append(cat_pred)
                         window_cat_confs.append(cat_conf)
                     else:
-                        window_cat_preds.append(0)  # Default category
+                        window_cat_preds.append(0)
                         window_cat_confs.append(0.0)
             
             window_predictions.append(window_pred)
@@ -1200,29 +1016,25 @@ class CTCPredictor:
             window_categories.append(window_cat_preds)
             window_category_confidences.append(window_cat_confs)
         else:
-            # Normal sliding window processing for longer sequences
+            # Normal sliding window processing
             for start_idx in range(0, seq_len - window_size + 1, stride):
                 end_idx = start_idx + window_size
-                window_data = X[start_idx:end_idx].unsqueeze(0).to(self.device)  # [1, window_size, features]
+                window_data = X[start_idx:end_idx].unsqueeze(0).to(self.device)
                 input_length = torch.tensor([window_size], dtype=torch.long).to(self.device)
-                
                 windows.append((start_idx, end_idx))
                 
-                # Get model prediction for this window
                 with torch.no_grad():
                     if self.model_type == 'iv3_gru_ctc':
                         output = self.model(window_data, features_already=True)
                     else:
                         output = self.model(window_data)
                     
-                    # Handle dual-task models
                     cat_logits = None
                     if isinstance(output, tuple):
                         log_probs, cat_logits = output
                     else:
                         log_probs = output
                 
-                # Decode window prediction
                 if decode_method == 'greedy':
                     window_pred = greedy_ctc_decoder(log_probs, self.blank_id, input_length)[0]
                     probs = torch.exp(log_probs[0])
@@ -1232,11 +1044,10 @@ class CTCPredictor:
                     avg_conf = np.exp(log_prob / max(len(window_pred), 1))
                     window_conf = [float(avg_conf)] * len(window_pred)
                 
-                # Process category predictions
                 window_cat_preds = []
                 window_cat_confs = []
                 if cat_logits is not None:
-                    cat_probs = torch.softmax(cat_logits[0], dim=1)  # [T, num_categories]
+                    cat_probs = torch.softmax(cat_logits[0], dim=1)
                     for i, pred_token in enumerate(window_pred):
                         if i < cat_probs.shape[0]:
                             cat_pred = torch.argmax(cat_probs[i]).item()
@@ -1244,7 +1055,7 @@ class CTCPredictor:
                             window_cat_preds.append(cat_pred)
                             window_cat_confs.append(cat_conf)
                         else:
-                            window_cat_preds.append(0)  # Default category
+                            window_cat_preds.append(0)
                             window_cat_confs.append(0.0)
                 
                 window_predictions.append(window_pred)
@@ -1255,20 +1066,20 @@ class CTCPredictor:
         # Aggregate predictions across windows
         all_predictions = []
         all_categories = []
+        all_confidences = []
         frame_positions = []
         
         for i, (window_pred, window_conf, window_cats, window_cat_confs, (start_idx, end_idx)) in enumerate(zip(window_predictions, window_confidences, window_categories, window_category_confidences, windows)):
             for j, (pred_token, conf) in enumerate(zip(window_pred, window_conf)):
-                # Estimate frame position within the window
                 if len(window_pred) > 1:
                     frame_pos = start_idx + int((j / len(window_pred)) * window_size)
                 else:
                     frame_pos = start_idx + window_size // 2
                 
                 all_predictions.append(pred_token)
+                all_confidences.append(conf)
                 frame_positions.append(frame_pos)
                 
-                # Get corresponding category prediction
                 if j < len(window_cats):
                     all_categories.append((window_cats[j], window_cat_confs[j]))
                 else:
@@ -1276,13 +1087,11 @@ class CTCPredictor:
         
         # Remove duplicates and sort by frame position
         if all_predictions:
-            # Group predictions by frame position and take the most confident
             position_groups = {}
-            for pred, cat_info, pos, conf in zip(all_predictions, all_categories, frame_positions, [max(c) if c else 0.0 for c in window_confidences]):
+            for pred, cat_info, pos, conf in zip(all_predictions, all_categories, frame_positions, all_confidences):
                 if pos not in position_groups or conf > position_groups[pos][1]:
                     position_groups[pos] = (pred, conf, cat_info)
             
-            # Sort by frame position and extract final sequence
             sorted_positions = sorted(position_groups.keys())
             final_sequence = [position_groups[pos][0] for pos in sorted_positions]
             final_confidences = [position_groups[pos][1] for pos in sorted_positions]
@@ -1294,7 +1103,7 @@ class CTCPredictor:
             final_categories = []
             final_category_confidences = []
         
-        # Smooth sequence by removing consecutive duplicates
+        # Smooth sequence
         final_sequence, final_confidences, final_categories, final_category_confidences = smooth_sequence(
             final_sequence,
             final_confidences,
@@ -1339,14 +1148,11 @@ class CTCPredictor:
         if ground_truth:
             # Handle both metadata format (with segments) and ground truth format
             if 'segments' in ground_truth:
-                # Original metadata format - segments is a list
                 segments = ground_truth.get('segments', [])
                 gt_labels = [seg.get('gloss_label', f"GLOSS_{seg.get('gloss', '?')}") for seg in segments]
                 gt_timestamps = []
                 gt_gloss_ids = []
-                # Also extract per-segment categories if available
                 gt_categories = []
-                gt_category_labels = []
                 gt_occluded = []
                 for seg in segments:
                     gt_gloss_ids.append(seg.get('gloss', 0))
@@ -1357,19 +1163,13 @@ class CTCPredictor:
                     })
                     if 'category' in seg:
                         gt_categories.append(seg.get('category'))
-                    if 'category_label' in seg:
-                        gt_category_labels.append(seg.get('category_label'))
                     if 'occluded' in seg:
                         gt_occluded.append(int(seg.get('occluded', 0)))
-                # Expose flattened GT categories/labels for UI and metrics
                 if gt_categories:
                     ground_truth['ground_truth_categories'] = gt_categories
-                if gt_category_labels:
-                    ground_truth['ground_truth_category_labels'] = gt_category_labels
                 if gt_occluded:
                     ground_truth['ground_truth_occluded'] = gt_occluded
             else:
-                # Converted ground truth format
                 gt_labels = ground_truth.get('ground_truth_labels', [])
                 gt_timestamps = ground_truth.get('ground_truth_timestamps', [])
                 gt_gloss_ids = ground_truth.get('ground_truth_sequence', [])
@@ -1377,7 +1177,6 @@ class CTCPredictor:
             result['ground_truth_sequence'] = gt_gloss_ids
             result['ground_truth_labels'] = gt_labels
             result['ground_truth_timestamps'] = gt_timestamps
-            # Pass through per-segment categories if present
             if 'ground_truth_category_labels' in ground_truth:
                 result['ground_truth_category_labels'] = ground_truth['ground_truth_category_labels']
             if 'ground_truth_categories' in ground_truth:
@@ -1389,127 +1188,19 @@ class CTCPredictor:
             
             # Calculate detection metrics using unified evaluation pipeline
             try:
-                pred_ts_objects = [
-                    MetricTimestamp(
-                        start_ms=float(ts.get('start_ms', 0.0)),
-                        end_ms=float(ts.get('end_ms', 0.0)),
-                        gloss=int(final_sequence[i]) if i < len(final_sequence) else None,
-                    )
-                    for i, ts in enumerate(predicted_timestamps)
-                ]
-                gt_ts_objects = [
-                    MetricTimestamp(
-                        start_ms=float(ts.get('start_ms', 0.0)),
-                        end_ms=float(ts.get('end_ms', 0.0)),
-                        gloss=int(gt_gloss_ids[idx]) if idx < len(gt_gloss_ids) else ts.get('gloss'),
-                    )
-                    for idx, ts in enumerate(gt_timestamps)
-                ]
-
-                seq_prediction = SequencePrediction(
-                    gloss_ids=list(final_sequence),
-                    labels=predicted_labels,
-                    timestamps=pred_ts_objects,
-                    confidence_scores=[float(c) for c in final_confidences],
+                metrics = self._compute_metrics_with_gt(
+                    predicted_sequence=final_sequence,
+                    predicted_labels=predicted_labels,
+                    predicted_timestamps=predicted_timestamps,
+                    confidence_scores=final_confidences,
+                    predicted_categories=final_categories if final_categories else None,
+                    ground_truth=ground_truth,
+                    mask=mask,
+                    timestamps_ms=timestamps_ms,
+                    iou_threshold=iou_threshold
                 )
-                seq_ground_truth = SequenceGroundTruth(
-                    gloss_ids=list(gt_gloss_ids),
-                    labels=gt_labels,
-                    timestamps=gt_ts_objects,
-                    occlusion_flags=ground_truth.get('ground_truth_occluded'),
-                )
-
-                metrics_result = compute_sequence_metrics(
-                    prediction=seq_prediction,
-                    ground_truth=seq_ground_truth,
-                    config=ContinuousEvaluationConfig(
-                        iou_threshold=iou_threshold,
-                        confidence_threshold=self.metrics_config.confidence_threshold,
-                        inactive_threshold=self.metrics_config.inactive_threshold,
-                        active_overlap_threshold=self.metrics_config.active_overlap_threshold,
-                        min_gap_duration_ms=self.metrics_config.min_gap_duration_ms,
-                        enable_lenient_matching=self.metrics_config.enable_lenient_matching,
-                    ),
-                    mask=None,
-                    timestamps_ms=None,
-                )
-
-                result['num_tp'] = metrics_result.num_tp
-                result['num_fp'] = metrics_result.num_fp
-                result['num_fn'] = metrics_result.num_fn
-                result['num_gt'] = len(gt_gloss_ids)
-                result['precision'] = float(metrics_result.precision)
-                result['recall'] = float(metrics_result.recall)
-                result['f1_score'] = float(metrics_result.f1_score)
-                result['confidence_threshold'] = float(self.metrics_config.confidence_threshold)
-                result['tp_indices'] = metrics_result.tp_indices
-                result['matched_pairs'] = metrics_result.matched_pairs
-                result['unmatched_predictions'] = metrics_result.fp_indices
-                result['unmatched_ground_truth'] = metrics_result.fn_indices
-                result['tp_breakdown'] = dict(metrics_result.tp_breakdown)
-                result['fp_breakdown'] = dict(metrics_result.fp_breakdown)
-                result['fn_breakdown'] = dict(metrics_result.fn_breakdown)
-
-                # Occlusion split metrics if occlusion flags available
-                if 'ground_truth_occluded' in ground_truth:
-                    occ = _compute_occlusion_split_metrics(
-                        pred_timestamps=predicted_timestamps,
-                        gt_timestamps=gt_timestamps,
-                        gt_occluded=ground_truth['ground_truth_occluded'],
-                        matched_pairs=metrics_result.matched_pairs,
-                        fp_indices=metrics_result.fp_indices,
-                        fn_indices=metrics_result.fn_indices,
-                    )
-                    result['occlusion_metrics'] = occ
-                    # Category occlusion split (if categories available)
-                    if final_categories and 'ground_truth_categories' in ground_truth:
-                        occ_cat = _compute_category_occlusion_split_metrics(
-                            pred_categories=final_categories,
-                            gt_categories=gt_categories,
-                            gt_occluded=ground_truth['ground_truth_occluded'],
-                            matched_pairs=metrics_result.matched_pairs,
-                            fp_indices=metrics_result.fp_indices,
-                            fn_indices=metrics_result.fn_indices,
-                            pred_timestamps=predicted_timestamps,
-                            gt_timestamps=gt_timestamps,
-                        )
-                        result['occlusion_metrics_category'] = occ_cat
-                
-                # Category-level detection metrics (balanced, independent of gloss identity)
-                if final_categories and 'ground_truth_categories' in ground_truth:
-                    gt_categories = ground_truth['ground_truth_categories']
-                    if gt_categories:
-                        (
-                            cat_tp,
-                            cat_fp,
-                            cat_fn,
-                            cat_tp_pred_indices,
-                            cat_fp_pred_indices,
-                            cat_tp_gt_indices,
-                            cat_fn_gt_indices,
-                        ) = _compute_category_metrics_balanced(
-                            pred_categories=final_categories,
-                            gt_categories=gt_categories,
-                            matched_pairs=metrics_result.matched_pairs,
-                            pred_len=len(final_sequence),
-                            gt_len=len(gt_gloss_ids),
-                            gloss_fp_indices=metrics_result.fp_indices,
-                            gloss_fn_indices=metrics_result.fn_indices,
-                        )
-                        cat_precision, cat_recall, cat_f1 = calculate_detection_metrics(cat_tp, cat_fp, cat_fn)
-                        result['category_num_tp'] = cat_tp
-                        result['category_num_fp'] = cat_fp
-                        result['category_num_fn'] = cat_fn
-                        result['category_precision'] = float(cat_precision)
-                        result['category_recall'] = float(cat_recall)
-                        result['category_f1_score'] = float(cat_f1)
-                        result['category_tp_pred_indices'] = cat_tp_pred_indices
-                        result['category_fp_pred_indices'] = cat_fp_pred_indices
-                        result['category_tp_gt_indices'] = cat_tp_gt_indices
-                        result['category_fn_gt_indices'] = cat_fn_gt_indices
-                
+                result.update(metrics)
             except Exception as e:
-                # Fallback: set default values if matching fails
                 result['num_tp'] = 0
                 result['num_fp'] = len(final_sequence)
                 result['num_fn'] = len(gt_gloss_ids)
@@ -1594,7 +1285,6 @@ class CTCPredictor:
         if not predictions:
             return {'total_sequences': 0}
         
-        # Filter predictions with ground truth (detection metrics required)
         predictions_with_gt = [p for p in predictions if 'f1_score' in p]
         has_gt = len(predictions_with_gt) > 0
         has_categories = 'predicted_categories' in predictions[0] and len(predictions[0].get('predicted_categories', [])) > 0
@@ -1634,7 +1324,6 @@ class CTCPredictor:
                 for strategy, metrics in stratified_metrics.get('per_strategy', {}).items()
             }
             
-            # Category-level metrics (if available)
             if has_categories:
                 cat_tp_total = sum(p.get('category_num_tp', 0) for p in predictions_with_gt if 'category_num_tp' in p)
                 cat_fp_total = sum(p.get('category_num_fp', 0) for p in predictions_with_gt if 'category_num_fp' in p)
@@ -1651,134 +1340,48 @@ class CTCPredictor:
                     summary['overall_metrics']['category_overall_recall'] = float(cat_recall)
                     summary['overall_metrics']['category_overall_f1_score'] = float(cat_f1)
 
-                # Mean per-sequence category metrics (macro) if present on sequences
-                cat_precisions = [p.get('category_precision') for p in predictions_with_gt if 'category_precision' in p]
-                cat_recalls = [p.get('category_recall') for p in predictions_with_gt if 'category_recall' in p]
-                cat_f1s = [p.get('category_f1_score') for p in predictions_with_gt if 'category_f1_score' in p]
-                if cat_precisions:
-                    summary['overall_metrics']['category_mean_precision'] = float(np.mean(cat_precisions))
-                if cat_recalls:
-                    summary['overall_metrics']['category_mean_recall'] = float(np.mean(cat_recalls))
-                if cat_f1s:
-                    summary['overall_metrics']['category_mean_f1_score'] = float(np.mean(cat_f1s))
-
-            # Occlusion split metrics aggregation (if present on sequences)
-            occ_with = {'tp': 0, 'fp': 0, 'fn': 0}
-            occ_without = {'tp': 0, 'fp': 0, 'fn': 0}
-            occ_cat_with = {'tp': 0, 'fp': 0, 'fn': 0}
-            occ_cat_without = {'tp': 0, 'fp': 0, 'fn': 0}
-            for p in predictions_with_gt:
-                occ = p.get('occlusion_metrics')
-                if not occ:
-                    continue
-                wout = occ.get('without_occlusion') or {}
-                wth = occ.get('with_occlusion') or {}
-                occ_without['tp'] += int(wout.get('tp', 0))
-                occ_without['fp'] += int(wout.get('fp', 0))
-                occ_without['fn'] += int(wout.get('fn', 0))
-                occ_with['tp'] += int(wth.get('tp', 0))
-                occ_with['fp'] += int(wth.get('fp', 0))
-                occ_with['fn'] += int(wth.get('fn', 0))
-
-                occ_cat = p.get('occlusion_metrics_category')
-                if occ_cat:
-                    cwout = occ_cat.get('without_occlusion') or {}
-                    cwth = occ_cat.get('with_occlusion') or {}
-                    occ_cat_without['tp'] += int(cwout.get('tp', 0))
-                    occ_cat_without['fp'] += int(cwout.get('fp', 0))
-                    occ_cat_without['fn'] += int(cwout.get('fn', 0))
-                    occ_cat_with['tp'] += int(cwth.get('tp', 0))
-                    occ_cat_with['fp'] += int(cwth.get('fp', 0))
-                    occ_cat_with['fn'] += int(cwth.get('fn', 0))
-
-            def _prf(c):
-                return calculate_detection_metrics(c['tp'], c['fp'], c['fn'])
-
-            if any(v > 0 for v in occ_without.values()) or any(v > 0 for v in occ_with.values()):
-                p0, r0, f0 = _prf(occ_without)
-                p1, r1, f1 = _prf(occ_with)
-                summary['overall_metrics']['occlusion'] = {
-                    'without_occlusion': {
-                        'tp': occ_without['tp'], 'fp': occ_without['fp'], 'fn': occ_without['fn'],
-                        'precision': float(p0), 'recall': float(r0), 'f1_score': float(f0)
-                    },
-                    'with_occlusion': {
-                        'tp': occ_with['tp'], 'fp': occ_with['fp'], 'fn': occ_with['fn'],
-                        'precision': float(p1), 'recall': float(r1), 'f1_score': float(f1)
-                    }
-                }
-
-            if any(v > 0 for v in occ_cat_without.values()) or any(v > 0 for v in occ_cat_with.values()):
-                cp0, cr0, cf0 = _prf(occ_cat_without)
-                cp1, cr1, cf1 = _prf(occ_cat_with)
-                summary['overall_metrics']['occlusion_category'] = {
-                    'without_occlusion': {
-                        'tp': occ_cat_without['tp'], 'fp': occ_cat_without['fp'], 'fn': occ_cat_without['fn'],
-                        'precision': float(cp0), 'recall': float(cr0), 'f1_score': float(cf0)
-                    },
-                    'with_occlusion': {
-                        'tp': occ_cat_with['tp'], 'fp': occ_cat_with['fp'], 'fn': occ_cat_with['fn'],
-                        'precision': float(cp1), 'recall': float(cr1), 'f1_score': float(cf1)
-                    }
-                }
-        
         return summary
     
     def _generate_confusion_matrices(self, predictions: List[Dict], output_dir: Path):
-        """Generate confusion matrices."""
-        if not predictions or 'ground_truth_sequence' not in predictions[0]:
+        """Generate confusion matrices for predictions."""
+        from sklearn.metrics import confusion_matrix
+        import matplotlib.pyplot as plt
+        import seaborn as sns
+        
+        predictions_with_gt = [p for p in predictions if 'ground_truth_sequence' in p and 'predicted_sequence' in p]
+        
+        if not predictions_with_gt:
             return
         
-        num_classes = 105
-        
-        all_gt = []
         all_pred = []
-        for p in predictions:
-            all_gt.extend(p['ground_truth_sequence'])
+        all_gt = []
+        
+        for p in predictions_with_gt:
             all_pred.extend(p['predicted_sequence'])
+            all_gt.extend(p['ground_truth_sequence'])
         
-        global_cm = np.zeros((num_classes, num_classes), dtype=int)
-        for gt, pred in zip(all_gt, all_pred):
-            if 0 <= gt < num_classes and 0 <= pred < num_classes:
-                global_cm[gt, pred] += 1
+        if not all_pred or not all_gt:
+            return
         
-        cm_path = output_dir / 'confusion_matrix_global.json'
-        with open(cm_path, 'w', encoding='utf-8') as f:
-            json.dump(global_cm.tolist(), f)
+        cm = confusion_matrix(all_gt, all_pred)
         
-        per_signer_cm = defaultdict(lambda: np.zeros((num_classes, num_classes), dtype=int))
-        per_strategy_cm = defaultdict(lambda: np.zeros((num_classes, num_classes), dtype=int))
-        
-        for p in predictions:
-            signer = p.get('signer')
-            strategy = p.get('strategy')
-            
-            for gt, pred in zip(p['ground_truth_sequence'], p['predicted_sequence']):
-                if 0 <= gt < num_classes and 0 <= pred < num_classes:
-                    if signer:
-                        per_signer_cm[signer][gt, pred] += 1
-                    if strategy:
-                        per_strategy_cm[strategy][gt, pred] += 1
-        
-        if per_signer_cm:
-            signer_cm_data = {s: cm.tolist() for s, cm in per_signer_cm.items()}
-            with open(output_dir / 'confusion_matrix_per_signer.json', 'w', encoding='utf-8') as f:
-                json.dump(signer_cm_data, f)
-        
-        if per_strategy_cm:
-            strategy_cm_data = {s: cm.tolist() for s, cm in per_strategy_cm.items()}
-            with open(output_dir / 'confusion_matrix_per_strategy.json', 'w', encoding='utf-8') as f:
-                json.dump(strategy_cm_data, f)
+        plt.figure(figsize=(12, 10))
+        sns.heatmap(cm, annot=True, fmt='d', cmap='Blues', cbar=True)
+        plt.title('Confusion Matrix - Gloss Predictions')
+        plt.ylabel('Ground Truth')
+        plt.xlabel('Predicted')
+        plt.tight_layout()
+        plt.savefig(output_dir / 'confusion_matrix.png', dpi=150, bbox_inches='tight')
+        plt.close()
 
 
-def main():
-    parser = argparse.ArgumentParser(description='CTC Continuous Sign Language Prediction')
-    
-    parser.add_argument('--model', choices=['transformer_ctc', 'mediapipe_gru_ctc'], required=True)
+if __name__ == '__main__':
+    parser = argparse.ArgumentParser(description='CTC Prediction for Continuous Sign Language Recognition')
+    parser.add_argument('--model', choices=['transformer_ctc', 'mediapipe_gru_ctc', 'iv3_gru_ctc'], required=True)
     parser.add_argument('--checkpoint', type=Path, required=True)
     parser.add_argument('--input-dir', type=Path, required=True, help='Directory with continuous sequence NPZ files')
     parser.add_argument('--ground-truth-dir', type=Path, help='Directory with ground truth JSON files')
-    parser.add_argument('--output-dir', type=Path, required=True, help='Output directory for predictions')
+    parser.add_argument('--output-dir', type=Path, help='Directory to save prediction results')
     parser.add_argument('--decode-method', choices=['greedy', 'beam_search'], default='greedy')
     parser.add_argument('--beam-width', type=int, default=10)
     parser.add_argument('--fps', type=int, default=30, help='FPS for timestamp estimation')
@@ -1787,16 +1390,8 @@ def main():
     
     args = parser.parse_args()
     
-    if args.device == 'auto':
-        device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-    else:
-        device = torch.device(args.device)
+    device = torch.device(args.device) if args.device != 'auto' else torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     
-    args.output_dir.mkdir(parents=True, exist_ok=True)
-    
-    print("=" * 80)
-    print("CTC CONTINUOUS SIGN PREDICTION")
-    print("=" * 80)
     print(f"Model:              {args.model}")
     print(f"Checkpoint:         {args.checkpoint}")
     print(f"Input directory:    {args.input_dir}")
@@ -1807,52 +1402,32 @@ def main():
     print(f"FPS:                {args.fps}")
     print()
     
-    predictor = CTCPredictor(args.model, str(args.checkpoint), device=device)
-    
-    results = predictor.predict_batch(
-        args.input_dir,
-        args.ground_truth_dir,
-        args.output_dir,
-        args.decode_method,
-        args.beam_width,
-        args.fps,
-        args.temporal_tolerance
+    predictor = CTCPredictor(
+        model_type=args.model,
+        checkpoint_path=str(args.checkpoint),
+        device=device
     )
     
-    summary = results['summary']
+    results = predictor.predict_batch(
+        input_dir=args.input_dir,
+        ground_truth_dir=args.ground_truth_dir,
+        output_dir=args.output_dir,
+        decode_method=args.decode_method,
+        beam_width=args.beam_width,
+        fps=args.fps,
+        temporal_tolerance=args.temporal_tolerance
+    )
     
-    print("\n" + "=" * 80)
-    print("PREDICTION SUMMARY")
-    print("=" * 80)
-    print(f"Total sequences:    {summary['total_sequences']}")
-    
-    # Print detection metrics summary
-    if 'overall_metrics' in summary:
-        om = summary['overall_metrics']
-        print(f"\n=== Detection Metrics Summary ===")
+    if 'summary' in results and 'overall_metrics' in results['summary']:
+        om = results['summary']['overall_metrics']
         print(f"Overall Precision:  {om['overall_precision']:.4f} ({om['overall_precision']*100:.2f}%)")
         print(f"Overall Recall:     {om['overall_recall']:.4f} ({om['overall_recall']*100:.2f}%)")
         print(f"Overall F1-Score:   {om['overall_f1_score']:.4f} ({om['overall_f1_score']*100:.2f}%)")
         print(f"Total TP:           {om['total_tp']}")
         print(f"Total FP:           {om['total_fp']}")
         print(f"Total FN:           {om['total_fn']}")
-        # Mean IoU no longer reported in summary
         
-        if summary.get('per_signer_metrics'):
-            print(f"\nPer-signer F1-Score:")
-            for signer, metrics in sorted(summary['per_signer_metrics'].items()):
-                print(f"  {signer}: {metrics['f1_score']:.4f} (P:{metrics['precision']:.3f}, R:{metrics['recall']:.3f})")
-        
-        if summary.get('per_strategy_metrics'):
-            print(f"\nPer-strategy F1-Score:")
-            for strategy, metrics in sorted(summary['per_strategy_metrics'].items()):
-                print(f"  {strategy}: {metrics['f1_score']:.4f} (P:{metrics['precision']:.3f}, R:{metrics['recall']:.3f})")
-    
-    print(f"\nOutput saved to: {args.output_dir}")
-    print("=" * 80)
-    
-    return 0
-
-
-if __name__ == '__main__':
-    sys.exit(main())
+        if results['summary'].get('per_signer_metrics'):
+            print("\nPer-Signer Metrics:")
+            for signer, metrics in results['summary']['per_signer_metrics'].items():
+                print(f"  {signer}: P={metrics.get('precision', 0):.4f}, R={metrics.get('recall', 0):.4f}, F1={metrics.get('f1_score', 0):.4f}")
