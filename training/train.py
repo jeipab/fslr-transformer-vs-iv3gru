@@ -1173,14 +1173,14 @@ def log_comprehensive_config(args, device, model=None):
     # Data Source Information
     if args.features_train or args.keypoints_train:
         print(f"  - Data source: Real data files")
-        if args.model == "iv3_gru":
+        if args.model.startswith("iv3_gru"):
             print(f"  - Training folder: {args.features_train}")
             print(f"  - Validation folder: {args.features_val}")
             print(f"  - Feature key: {args.feature_key}")
-        elif args.model in ["transformer", "transformer_ctc", "mediapipe_gru", "mediapipe_gru_ctc"]:
+        elif args.model.startswith("transformer") or args.model.startswith("mediapipe_gru"):
             print(f"  - Training folder: {args.keypoints_train}")
             print(f"  - Validation folder: {args.keypoints_val}")
-            if args.combine_features and args.model == "transformer":
+            if args.combine_features and args.model == "transformer_isolated":
                 print(f"  - Mode: Combined (Keypoints + Features)")
                 print(f"  - Keypoint key: {args.kp_key} (178-dim)")
                 print(f"  - Feature key: {args.feature_key} (2048-dim)")
@@ -2657,7 +2657,7 @@ def train_ctc(
             # Forward pass with AMP
             with torch.amp.autocast(device_type=device.type, enabled=amp_enabled):
                 # Model returns log_probs [B,T,C] or (log_probs, cat_logits) for dual-task
-                # Handle iv3_gru_ctc model which needs features_already=True
+                # Handle iv3_gru_continuous model which needs features_already=True
                 if hasattr(model, '__class__') and 'InceptionV3GRUCtc' in model.__class__.__name__:
                     output = model(X, features_already=True)
                 else:
@@ -2994,8 +2994,8 @@ Examples:
     # ============================================================================
     # BASIC TRAINING CONFIGURATION
     # ============================================================================
-    parser.add_argument("--model", choices=["transformer", "mediapipe_gru", "iv3_gru", "transformer_ctc", "mediapipe_gru_ctc", "iv3_gru_ctc"], default="transformer", 
-                       help="Model architecture: 'transformer' (keypoints), 'mediapipe_gru' (keypoints, lightweight), 'iv3_gru' (features, offline baseline), 'transformer_ctc' (CTC), 'mediapipe_gru_ctc' (CTC), 'iv3_gru_ctc' (CTC)")
+    parser.add_argument("--model", choices=["transformer_isolated", "mediapipe_gru_isolated", "iv3_gru_isolated", "transformer_continuous", "mediapipe_gru_continuous", "iv3_gru_continuous"], default="transformer_isolated", 
+                       help="Model architecture: 'transformer_isolated' (keypoints), 'mediapipe_gru_isolated' (keypoints, lightweight), 'iv3_gru_isolated' (features, offline baseline), 'transformer_continuous' (CTC), 'mediapipe_gru_continuous' (CTC), 'iv3_gru_continuous' (CTC)")
     parser.add_argument("--training-mode", type=str, choices=["classification", "ctc"], default="classification",
                        help="Training mode: 'classification' (isolated signs) or 'ctc' (continuous recognition)")
     parser.add_argument("--epochs", type=int, default=20, 
@@ -3168,7 +3168,7 @@ if __name__ == "__main__":
     # Optional smoke test (only if comparable path exists for Transformer already)
     if args.smoke_test:
         torch.manual_seed(args.seed)
-        if args.model == "iv3_gru":
+        if args.model.startswith("iv3_gru"):
             # Random [B, T, 2048] features
             B = args.smoke_batch_size
             T = args.smoke_T
@@ -3224,8 +3224,8 @@ if __name__ == "__main__":
             # Guess best from output-dir based on model name
             def _guess_best(output_dir: str, model_name: str) -> str:
                 mapping = {
-                    'transformer_ctc': 'SignTransformerCtc',
-                    'mediapipe_gru_ctc': 'MediaPipeGRUCtc',
+                    'transformer_continuous': 'SignTransformerCtc',
+                    'mediapipe_gru_continuous': 'MediaPipeGRUCtc',
                 }
                 stem = mapping.get(model_name)
                 if not stem:
@@ -3264,10 +3264,10 @@ if __name__ == "__main__":
     try:
         # If dataset directories are provided, use file-based datasets; otherwise synthetic
         use_feature_files = (
-            args.model in ["iv3_gru", "iv3_gru_ctc"] and args.features_train is not None and args.features_val is not None
+            args.model.startswith("iv3_gru") and args.features_train is not None and args.features_val is not None
         )
         use_keypoint_files = (
-            args.model in ["transformer", "transformer_ctc", "mediapipe_gru", "mediapipe_gru_ctc"] and 
+            (args.model.startswith("transformer") or args.model.startswith("mediapipe_gru")) and 
             args.keypoints_train is not None and args.keypoints_val is not None
         )
         if not (use_feature_files or use_keypoint_files):
@@ -3280,7 +3280,7 @@ if __name__ == "__main__":
         
         # Check for combined features mode (Transformer only)
         use_combined_features = (
-            args.model == "transformer" and args.combine_features and 
+            args.model == "transformer_isolated" and args.combine_features and 
             args.keypoints_train is not None and args.keypoints_val is not None
         )
         
@@ -3332,7 +3332,7 @@ if __name__ == "__main__":
         }
 
     # Auto-detect training mode from model name if not explicitly specified
-    if args.training_mode == "classification" and args.model in ["transformer_ctc", "mediapipe_gru_ctc"]:
+    if args.training_mode == "classification" and (args.model == "transformer_continuous" or args.model == "mediapipe_gru_continuous"):
         args.training_mode = "ctc"
         print(f"⚠ Auto-detected CTC training mode from model name: {args.model}")
     
@@ -3467,15 +3467,15 @@ if __name__ == "__main__":
     
     print("Available models:")
     print("Classification models (isolated signs):")
-    print("  - transformer: Multi-head attention transformer (keypoints)")
-    print("  - mediapipe_gru: Lightweight GRU (keypoints, mobile-friendly)")
-    print("  - iv3_gru: InceptionV3 + GRU hybrid (features, offline baseline)")
+    print("  - transformer_isolated: Multi-head attention transformer (keypoints)")
+    print("  - mediapipe_gru_isolated: Lightweight GRU (keypoints, mobile-friendly)")
+    print("  - iv3_gru_isolated: InceptionV3 + GRU hybrid (features, offline baseline)")
     print("CTC models (continuous recognition):")
-    print("  - transformer_ctc: Transformer with CTC (keypoints)")
-    print("  - mediapipe_gru_ctc: Lightweight GRU with CTC (keypoints)")
-    print("  - iv3_gru_ctc: InceptionV3 + GRU with CTC (features, offline baseline)")
+    print("  - transformer_continuous: Transformer with CTC (keypoints)")
+    print("  - mediapipe_gru_continuous: Lightweight GRU with CTC (keypoints)")
+    print("  - iv3_gru_continuous: InceptionV3 + GRU with CTC (features, offline baseline)")
     
-    if args.model == "transformer":
+    if args.model == "transformer_isolated":
         # Determine input dimension based on the data mode being used
         if use_combined_features:
             input_dim = 2226  # 178 keypoints + 2048 features
@@ -3491,7 +3491,7 @@ if __name__ == "__main__":
         ).to(device)
         print(f"✓ Using SignTransformer model (input_dim={input_dim})")
     
-    elif args.model == "transformer_ctc":
+    elif args.model == "transformer_continuous":
         # Determine input dimension
         if use_combined_features:
             input_dim = 2226
@@ -3530,7 +3530,7 @@ if __name__ == "__main__":
         ).to(device)
         print(f"✓ Using MediaPipeGRU model (input_dim={input_dim}, hidden1={args.hidden1}, hidden2={args.hidden2})")
     
-    elif args.model == "mediapipe_gru_ctc":
+    elif args.model == "mediapipe_gru_continuous":
         # MediaPipeGRUCtc always uses keypoints (178D)
         if use_feature_files or args.kp_key == "X2048":
             raise ValueError(
@@ -3551,7 +3551,7 @@ if __name__ == "__main__":
         ).to(device)
         print(f"✓ Using MediaPipeGRUCtc model (input_dim={input_dim}, num_ctc_classes={args.num_ctc_classes})")
     
-    elif args.model == "iv3_gru":
+    elif args.model == "iv3_gru_isolated":
         model = InceptionV3GRU(
             num_gloss=args.num_gloss,
             num_cat=args.num_cat,
@@ -3563,7 +3563,7 @@ if __name__ == "__main__":
         ).to(device)
         print("✓ Using InceptionV3GRU model")
     
-    elif args.model == "iv3_gru_ctc":
+    elif args.model == "iv3_gru_continuous":
         # InceptionV3GRUCtc uses 2048-D features (precomputed or extracted)
         if use_keypoint_files and not use_feature_files:
             raise ValueError(
@@ -3637,7 +3637,7 @@ if __name__ == "__main__":
             print(f"Training mode: Classification (Isolated Sign Recognition)")
             
             # Forward adapter per model (unifies calling convention)
-            if args.model == "transformer":
+            if args.model.startswith("transformer") and args.model.endswith("_isolated"):
                 def forward_fn(m, X, lengths=None):
                     # Build attention mask from lengths if provided
                     if lengths is not None:
@@ -3649,12 +3649,12 @@ if __name__ == "__main__":
                         mask = None
                     return m(X, mask=mask)
             
-            elif args.model == "mediapipe_gru":
+            elif args.model.startswith("mediapipe_gru") and args.model.endswith("_isolated"):
                 def forward_fn(m, X, lengths=None):
                     # MediaPipeGRU accepts keypoint sequences directly
                     return m(X, lengths=lengths)
             
-            else:  # iv3_gru
+            else:  # iv3_gru_isolated
                 def forward_fn(m, X, lengths=None):
                     return m(X, lengths=lengths, features_already=True)
             
@@ -3707,12 +3707,12 @@ if __name__ == "__main__":
             from training.export_mobile import export_model_for_android
             # Determine best checkpoint path
             mapping = {
-                'transformer_ctc': 'SignTransformerCtc',
-                'mediapipe_gru_ctc': 'MediaPipeGRUCtc',
+                'transformer_continuous': 'SignTransformerCtc',
+                'mediapipe_gru_continuous': 'MediaPipeGRUCtc',
             }
             stem = mapping.get(args.model)
             if stem is None:
-                print(f"Export skipped: --export-mobile supports only transformer_ctc and mediapipe_gru_ctc")
+                print(f"Export skipped: --export-mobile supports only transformer_continuous and mediapipe_gru_continuous")
             else:
                 best_ckpt = os.path.join(args.output_dir, f"{stem}_best.pt")
                 if not os.path.exists(best_ckpt):

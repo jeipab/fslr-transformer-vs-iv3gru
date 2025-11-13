@@ -254,7 +254,7 @@ def analyze_results(results: List[Dict], output_dir: Path, num_classes: int):
 
 def load_model(model_type, checkpoint_path, device, num_classes):
     """Loads a CTC model from a checkpoint."""
-    if model_type == 'transformer_ctc':
+    if model_type == 'transformer_continuous':
         try:
             ckpt = torch.load(checkpoint_path, map_location='cpu')
             state_dict = ckpt.get('model', ckpt.get('model_state_dict', ckpt))
@@ -262,9 +262,9 @@ def load_model(model_type, checkpoint_path, device, num_classes):
         except Exception:
             input_dim = 156 # Default if detection fails
         model = SignTransformerCtc(input_dim=input_dim, num_ctc_classes=num_classes, max_len=1000)
-    elif model_type == 'mediapipe_gru_ctc':
+    elif model_type == 'mediapipe_gru_continuous':
         model = MediaPipeGRUCtc(num_ctc_classes=num_classes)
-    elif model_type == 'iv3_gru_ctc':
+    elif model_type == 'iv3_gru_continuous':
         from models.iv3_gru import InceptionV3GRUCtc
         model = InceptionV3GRUCtc(num_ctc_classes=num_classes)
     else:
@@ -277,7 +277,7 @@ def load_model(model_type, checkpoint_path, device, num_classes):
 
 def main():
     parser = argparse.ArgumentParser(description="Evaluate Continuous CTC Sign Language Models")
-    parser.add_argument('--model', choices=['transformer_ctc', 'mediapipe_gru_ctc'], required=True)
+    parser.add_argument('--model', choices=['transformer_continuous', 'mediapipe_gru_continuous', 'iv3_gru_continuous'], required=True)
     parser.add_argument('--checkpoint', type=str, required=True)
     parser.add_argument('--test-data', type=str, required=True, help='Directory with continuous .npz files')
     parser.add_argument('--ground-truth-dir', type=str, required=True, help='Directory with ground truth .json files')

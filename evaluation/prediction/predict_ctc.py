@@ -435,7 +435,7 @@ class CTCPredictor:
         self.metrics_config = ContinuousEvaluationConfig()
     
     def _load_model(self) -> Tuple[torch.nn.Module, int]:
-        if self.model_type == 'transformer_ctc':
+        if self.model_type == 'transformer_continuous':
             try:
                 checkpoint = torch.load(self.checkpoint_path, map_location='cpu')
                 state_dict = checkpoint.get('model_state_dict', checkpoint.get('state_dict', checkpoint.get('model', checkpoint)))
@@ -456,7 +456,7 @@ class CTCPredictor:
             
             model = SignTransformerCtc(input_dim=input_dim, num_ctc_classes=num_ctc_classes, num_cat=num_cat, max_len=1000)
         
-        elif self.model_type == 'mediapipe_gru_ctc':
+        elif self.model_type == 'mediapipe_gru_continuous':
             input_dim = 178
             try:
                 checkpoint = torch.load(self.checkpoint_path, map_location='cpu')
@@ -498,7 +498,7 @@ class CTCPredictor:
                 num_cat=num_cat
             )
         
-        elif self.model_type == 'iv3_gru_ctc':
+        elif self.model_type == 'iv3_gru_continuous':
             input_dim = 2048
             try:
                 checkpoint = torch.load(self.checkpoint_path, map_location='cpu')
@@ -805,7 +805,7 @@ class CTCPredictor:
         input_length = torch.tensor([X.shape[1]], dtype=torch.long).to(self.device)
         
         with torch.no_grad():
-            if self.model_type == 'iv3_gru_ctc':
+            if self.model_type == 'iv3_gru_continuous':
                 output = self.model(X, features_already=True)
             else:
                 output = self.model(X)
@@ -999,7 +999,7 @@ class CTCPredictor:
             windows.append((0, seq_len))
             
             with torch.no_grad():
-                if self.model_type == 'iv3_gru_ctc':
+                if self.model_type == 'iv3_gru_continuous':
                     output = self.model(window_data, features_already=True)
                 else:
                     output = self.model(window_data)
@@ -1046,7 +1046,7 @@ class CTCPredictor:
                 windows.append((start_idx, end_idx))
                 
                 with torch.no_grad():
-                    if self.model_type == 'iv3_gru_ctc':
+                    if self.model_type == 'iv3_gru_continuous':
                         output = self.model(window_data, features_already=True)
                     else:
                         output = self.model(window_data)
@@ -1522,7 +1522,7 @@ class CTCPredictor:
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='CTC Prediction for Continuous Sign Language Recognition')
-    parser.add_argument('--model', choices=['transformer_ctc', 'mediapipe_gru_ctc', 'iv3_gru_ctc'], required=True)
+    parser.add_argument('--model', choices=['transformer_continuous', 'mediapipe_gru_continuous', 'iv3_gru_continuous'], required=True)
     parser.add_argument('--checkpoint', type=Path, required=True)
     parser.add_argument('--input-dir', type=Path, required=True, help='Directory with continuous sequence NPZ files')
     parser.add_argument('--ground-truth-dir', type=Path, help='Directory with ground truth JSON files')

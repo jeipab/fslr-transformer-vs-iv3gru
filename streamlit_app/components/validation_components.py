@@ -32,31 +32,53 @@ from ..components.ctc_visualization import (
 
 
 def render_model_selection():
-    """Render model selection interface."""
-    import os
+    """Render model selection interface based on current recognition mode."""
+    from ..components.components import get_available_models_for_mode
+    from ..core.config import RECOGNITION_MODES
     
-    # Get all enabled models (both classification and CTC)
-    available_models = []
-    for model_name, config in MODEL_CONFIG.items():
-        if config['enabled'] and os.path.exists(config['checkpoint_path']):
-            available_models.append((model_name, config['display_name']))
+    # Get current recognition mode (default to 'continuous' if not set)
+    recognition_mode = st.session_state.get('recognition_mode', 'continuous')
+    
+    # Get available models for the current mode using the helper function
+    available_model_names = get_available_models_for_mode(recognition_mode)
+    
+    # Get mode display name
+    mode_display = RECOGNITION_MODES.get(recognition_mode, recognition_mode)
+    
+    # Build list of (model_name, display_name) tuples
+    available_models = [
+        (model_name, MODEL_CONFIG[model_name]['display_name'])
+        for model_name in available_model_names
+        if MODEL_CONFIG.get(model_name, {}).get('enabled', False)
+    ]
     
     if not available_models:
-        st.error("No models are available for validation.")
+        st.error(f"No models are available for validation in {mode_display} mode.")
         return None
     
     # Model selection with font styling
-    st.markdown("**Choose Model to Validate**")
+    st.markdown(f"**Choose Model to Validate**")
     model_options = [f"{name} ({model_type})" for model_type, name in available_models]
+    
+    # Set default index to first model (or prefer transformer_isolated/transformer_continuous if available)
     default_index = 0
     for idx, (model_type, _) in enumerate(available_models):
-        if model_type == 'transformer_ctc':
+        if recognition_mode == 'continuous' and model_type == 'transformer_continuous':
             default_index = idx
             break
+        elif recognition_mode == 'isolated' and model_type == 'transformer_isolated':
+            default_index = idx
+            break
+    
+    help_text = (
+        f"Select the model architecture for validation in {mode_display} mode. "
+        f"Only models compatible with {mode_display} are shown."
+    )
+    
     selected_option = st.selectbox(
         "Select model architecture",
         model_options,
-        help="Select the model architecture for validation (includes both classification and CTC models)",
+        help=help_text,
         key="model_selection_selectbox",
         index=default_index
     )
@@ -1178,7 +1200,20 @@ def render_ctc_validation_results(results: Dict[str, Any]):
         # Detailed predictions
         st.markdown("#### Detailed Predictions")
         has_categories = summary.get('has_category_predictions', False)
-        # Gloss mean metrics + optional category mean metrics (3)
+        
+        # Detection counts first (TP, FP, FN, GT Instances)
+        count_cols = st.columns(4)
+        with count_cols[0]:
+            st.metric("True Positives (TP)", overall_metrics.get('total_tp', 0))
+        with count_cols[1]:
+            st.metric("False Positives (FP)", overall_metrics.get('total_fp', 0))
+        with count_cols[2]:
+            st.metric("False Negatives (FN)", overall_metrics.get('total_fn', 0))
+        with count_cols[3]:
+            st.metric("Total GT Instances", overall_metrics.get('total_gt_instances', 0))
+        
+        # Mean metrics second (Precision, Recall, F1-Score)
+        # Gloss mean metrics + optional category mean metrics (3 each)
         num_cols = 3 + (3 if has_categories else 0)
         cols = st.columns(num_cols)
 
@@ -1211,19 +1246,6 @@ def render_ctc_validation_results(results: Dict[str, Any]):
                 cat_mean_f1 = overall_metrics.get('category_mean_f1_score', overall_metrics.get('category_overall_f1_score', 0))
                 st.metric("Category Mean F1-Score", f"{cat_mean_f1*100:.2f}%")
 
-        # Integrated detection counts
-        count_cols = st.columns(5)
-        with count_cols[0]:
-            st.metric("True Positives (TP)", overall_metrics.get('total_tp', 0))
-        with count_cols[1]:
-            st.metric("False Positives (FP)", overall_metrics.get('total_fp', 0))
-        with count_cols[2]:
-            st.metric("False Negatives (FN)", overall_metrics.get('total_fn', 0))
-        with count_cols[3]:
-            st.metric("Total GT Instances", overall_metrics.get('total_gt_instances', 0))
-        with count_cols[4]:
-            st.empty()
-
         # Detailed predictions table
         st.markdown("---")
         # Table
@@ -1246,46 +1268,47 @@ def render_ctc_validation_results(results: Dict[str, Any]):
                         'File': pred['file_name'],
                         'GT Length': len(pred.get('ground_truth_sequence', [])),
                         'Pred Length': pred.get('num_predicted', 0),
+                        'TP': pred.get('num_tp', 0),
+                        'FP': pred.get('num_fp', 0),
+                        'FN': pred.get('num_fn', 0),
                         'Precision': f"{pred.get('precision', 0)*100:.2f}%",
                         'Recall': f"{pred.get('recall', 0)*100:.2f}%",
                         'F1-Score': f"{pred.get('f1_score', 0)*100:.2f}%",
-                        'TP': pred.get('num_tp', 0),
-                        'FP': pred.get('num_fp', 0),
-                        'FN': pred.get('num_fn', 0)
                     }
                     if has_cat_metrics and 'category_f1_score' in pred:
-                        row['Cat F1-Score'] = f"{pred['category_f1_score']*100:.2f}%"
-                        if 'category_precision' in pred:
-                            row['Cat Precision'] = f"{pred['category_precision']*100:.2f}%"
-                        if 'category_recall' in pred:
-                            row['Cat Recall'] = f"{pred['category_recall']*100:.2f}%"
                         if 'category_num_tp' in pred:
                             row['Cat TP'] = pred['category_num_tp']
                         if 'category_num_fp' in pred:
                             row['Cat FP'] = pred['category_num_fp']
                         if 'category_num_fn' in pred:
                             row['Cat FN'] = pred['category_num_fn']
+                        if 'category_precision' in pred:
+                            row['Cat Precision'] = f"{pred['category_precision']*100:.2f}%"
+                        if 'category_recall' in pred:
+                            row['Cat Recall'] = f"{pred['category_recall']*100:.2f}%"
+                        if 'category_f1_score' in pred:
+                            row['Cat F1-Score'] = f"{pred['category_f1_score']*100:.2f}%"
                     pred_rows.append(row)
                 else:
                     row = {
                         'File': pred['file_name'],
                         'GT Length': len(pred.get('ground_truth_sequence', [])),
                         'Pred Length': pred.get('num_predicted', 0),
+                        'TP': 'N/A',
+                        'FP': 'N/A',
+                        'FN': 'N/A',
                         'Precision': 'N/A',
                         'Recall': 'N/A',
                         'F1-Score': 'N/A',
-                        'TP': 'N/A',
-                        'FP': 'N/A',
-                        'FN': 'N/A'
                     }
                     if has_cat_metrics:
                         row.update({
-                            'Cat Precision': 'N/A',
-                            'Cat Recall': 'N/A',
-                            'Cat F1-Score': 'N/A',
                             'Cat TP': 'N/A',
                             'Cat FP': 'N/A',
                             'Cat FN': 'N/A',
+                            'Cat Precision': 'N/A',
+                            'Cat Recall': 'N/A',
+                            'Cat F1-Score': 'N/A',
                         })
                     pred_rows.append(row)
 
@@ -1294,18 +1317,18 @@ def render_ctc_validation_results(results: Dict[str, Any]):
                 base_df = pd.DataFrame(pred_rows)
                 # Rename metrics to include group labels
                 rename_map = {
-                    'Precision': 'Gloss: Precision',
-                    'Recall': 'Gloss: Recall',
-                    'F1-Score': 'Gloss: F1-Score',
                     'TP': 'Gloss: TP',
                     'FP': 'Gloss: FP',
                     'FN': 'Gloss: FN',
-                    'Cat Precision': 'Category: Precision',
-                    'Cat Recall': 'Category: Recall',
-                    'Cat F1-Score': 'Category: F1-Score',
+                    'Precision': 'Gloss: Precision',
+                    'Recall': 'Gloss: Recall',
+                    'F1-Score': 'Gloss: F1-Score',
                     'Cat TP': 'Category: TP',
                     'Cat FP': 'Category: FP',
                     'Cat FN': 'Category: FN',
+                    'Cat Precision': 'Category: Precision',
+                    'Cat Recall': 'Category: Recall',
+                    'Cat F1-Score': 'Category: F1-Score',
                 }
                 for k, v in rename_map.items():
                     if k in base_df.columns:
@@ -1315,11 +1338,12 @@ def render_ctc_validation_results(results: Dict[str, Any]):
                 selected_file = st.session_state.get('ctc_selected_file')
                 base_df.insert(0, 'Details', base_df['File'] == selected_file)
 
-                # Define column order
+                # Define column order: TP, FP, FN before Precision, Recall, F1-Score
                 ordered_cols = ['Details', 'File', 'GT Length', 'Pred Length',
-                                'Gloss: Precision', 'Gloss: Recall', 'Gloss: F1-Score',
-                                'Gloss: TP', 'Gloss: FP', 'Gloss: FN']
-                cat_cols = ['Category: Precision', 'Category: Recall', 'Category: F1-Score', 'Category: TP', 'Category: FP', 'Category: FN']
+                                'Gloss: TP', 'Gloss: FP', 'Gloss: FN',
+                                'Gloss: Precision', 'Gloss: Recall', 'Gloss: F1-Score']
+                cat_cols = ['Category: TP', 'Category: FP', 'Category: FN',
+                            'Category: Precision', 'Category: Recall', 'Category: F1-Score']
                 for c in cat_cols:
                     if c in base_df.columns:
                         ordered_cols.append(c)
@@ -1443,14 +1467,7 @@ def render_ctc_validation_results(results: Dict[str, Any]):
                         with metrics_col:
                             # Gloss Metrics (stacked vertically)
                             st.markdown("###### Gloss Metrics")
-                            gloss_metrics_cols = st.columns(3)
-                            with gloss_metrics_cols[0]:
-                                st.metric("Precision", _percent(pred.get('precision')))
-                            with gloss_metrics_cols[1]:
-                                st.metric("Recall", _percent(pred.get('recall')))
-                            with gloss_metrics_cols[2]:
-                                st.metric("F1-Score", _percent(pred.get('f1_score')))
-
+                            # Detection counts first (TP, FP, FN)
                             gloss_counts_cols = st.columns(3)
                             with gloss_counts_cols[0]:
                                 st.metric("True Positive", _count(pred.get('num_tp')))
@@ -1459,18 +1476,20 @@ def render_ctc_validation_results(results: Dict[str, Any]):
                             with gloss_counts_cols[2]:
                                 st.metric("False Negative", _count(pred.get('num_fn')))
 
+                            # Performance metrics second (Precision, Recall, F1-Score)
+                            gloss_metrics_cols = st.columns(3)
+                            with gloss_metrics_cols[0]:
+                                st.metric("Precision", _percent(pred.get('precision')))
+                            with gloss_metrics_cols[1]:
+                                st.metric("Recall", _percent(pred.get('recall')))
+                            with gloss_metrics_cols[2]:
+                                st.metric("F1-Score", _percent(pred.get('f1_score')))
+
                             # Category Metrics (stacked below Gloss Metrics)
                             if category_metrics_present:
                                 st.markdown("---")
                                 st.markdown("###### Category Metrics")
-                                cat_metrics_cols = st.columns(3)
-                                with cat_metrics_cols[0]:
-                                    st.metric("Precision", _percent(pred.get('category_precision')))
-                                with cat_metrics_cols[1]:
-                                    st.metric("Recall", _percent(pred.get('category_recall')))
-                                with cat_metrics_cols[2]:
-                                    st.metric("F1-Score", _percent(pred.get('category_f1_score')))
-
+                                # Detection counts first (TP, FP, FN)
                                 cat_counts_cols = st.columns(3)
                                 with cat_counts_cols[0]:
                                     st.metric("True Positive", _count(pred.get('category_num_tp')))
@@ -1478,6 +1497,15 @@ def render_ctc_validation_results(results: Dict[str, Any]):
                                     st.metric("False Positive", _count(pred.get('category_num_fp')))
                                 with cat_counts_cols[2]:
                                     st.metric("False Negative", _count(pred.get('category_num_fn')))
+
+                                # Performance metrics second (Precision, Recall, F1-Score)
+                                cat_metrics_cols = st.columns(3)
+                                with cat_metrics_cols[0]:
+                                    st.metric("Precision", _percent(pred.get('category_precision')))
+                                with cat_metrics_cols[1]:
+                                    st.metric("Recall", _percent(pred.get('category_recall')))
+                                with cat_metrics_cols[2]:
+                                    st.metric("F1-Score", _percent(pred.get('category_f1_score')))
 
                         with video_col:
                             if npz_data_for_preview:

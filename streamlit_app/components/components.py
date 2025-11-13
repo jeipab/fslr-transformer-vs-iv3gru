@@ -991,134 +991,91 @@ def render_sidebar() -> Dict:
 
 
 def render_model_status():
-    """Render model availability status in sidebar."""
-    import os
+    """Render model availability status in sidebar based on current recognition mode."""
+    from ..core.config import MODEL_CONFIG, RECOGNITION_MODES
     
-    # Check model availability and file existence
-    transformer_available = MODEL_CONFIG['transformer']['enabled']
-    iv3_gru_available = MODEL_CONFIG['iv3_gru']['enabled']
-    mediapipe_gru_available = MODEL_CONFIG['mediapipe_gru']['enabled']
+    # Get current recognition mode (default to 'continuous' if not set)
+    recognition_mode = st.session_state.get('recognition_mode', 'continuous')
     
-    # Verify checkpoint files actually exist
-    transformer_exists = False
-    iv3_gru_exists = False
-    mediapipe_gru_exists = False
+    # Get available models for the current mode using the helper function
+    available_models = get_available_models_for_mode(recognition_mode)
     
-    if transformer_available:
-        transformer_path = MODEL_CONFIG['transformer']['checkpoint_path']
-        transformer_exists = os.path.exists(transformer_path)
+    # Get display names for available models
+    available_display_names = [
+        MODEL_CONFIG.get(model_name, {}).get('display_name', model_name)
+        for model_name in available_models
+        if MODEL_CONFIG.get(model_name)
+    ]
     
-    if iv3_gru_available:
-        iv3_gru_path = MODEL_CONFIG['iv3_gru']['checkpoint_path']
-        iv3_gru_exists = os.path.exists(iv3_gru_path)
+    # Determine status based on available models
+    num_available = len(available_models)
     
-    if mediapipe_gru_available:
-        mediapipe_gru_path = MODEL_CONFIG['mediapipe_gru']['checkpoint_path']
-        mediapipe_gru_exists = os.path.exists(mediapipe_gru_path)
-    
-    # Create clean, elegant status display based on actual file existence
-    if transformer_exists and iv3_gru_exists and mediapipe_gru_exists:
-        st.sidebar.markdown("""
-        <div style='background: rgba(16, 185, 129, 0.1); border: 1px solid #10b981; border-radius: 8px; padding: 0.75rem; margin-bottom: 0;'>
-            <div style='display: flex; align-items: center; color: #ffffff; font-weight: 500; margin-bottom: 0.3rem;'>
-                <div style='width: 8px; height: 8px; background: #10b981; border-radius: 50%; margin-right: 0.75rem;'></div>
-                <span style='font-size: 1rem;'>All Models Ready</span>
-            </div>
-            <div style='font-size: 0.9rem; color: #a0aec0; line-height: 1.4;'>
-                SignTransformer, InceptionV3+GRU & MediaPipe-GRU
-            </div>
-        </div>
-        """, unsafe_allow_html=True)
-    elif transformer_exists and iv3_gru_exists:
-        st.sidebar.markdown("""
-        <div style='background: rgba(16, 185, 129, 0.1); border: 1px solid #10b981; border-radius: 8px; padding: 0.75rem; margin-bottom: 0;'>
-            <div style='display: flex; align-items: center; color: #ffffff; font-weight: 500; margin-bottom: 0.3rem;'>
-                <div style='width: 8px; height: 8px; background: #10b981; border-radius: 50%; margin-right: 0.75rem;'></div>
-                <span style='font-size: 1rem;'>All Models Ready</span>
-            </div>
-            <div style='font-size: 0.9rem; color: #a0aec0; line-height: 1.4;'>
-                SignTransformer & InceptionV3+GRU
-            </div>
-        </div>
-        """, unsafe_allow_html=True)
-    elif transformer_exists and mediapipe_gru_exists:
-        st.sidebar.markdown("""
-        <div style='background: rgba(245, 158, 11, 0.1); border: 1px solid #f59e0b; border-radius: 8px; padding: 0.75rem; margin-bottom: 0;'>
-            <div style='display: flex; align-items: center; color: #ffffff; font-weight: 500; margin-bottom: 0.3rem;'>
-                <div style='width: 8px; height: 8px; background: #f59e0b; border-radius: 50%; margin-right: 0.75rem;'></div>
-                <span style='font-size: 1rem;'>Partial Availability</span>
-            </div>
-            <div style='font-size: 0.9rem; color: #a0aec0; line-height: 1.4;'>
-                SignTransformer & MediaPipe-GRU
-            </div>
-        </div>
-        """, unsafe_allow_html=True)
-    elif iv3_gru_exists and mediapipe_gru_exists:
-        st.sidebar.markdown("""
-        <div style='background: rgba(245, 158, 11, 0.1); border: 1px solid #f59e0b; border-radius: 8px; padding: 0.75rem; margin-bottom: 0;'>
-            <div style='display: flex; align-items: center; color: #ffffff; font-weight: 500; margin-bottom: 0.3rem;'>
-                <div style='width: 8px; height: 8px; background: #f59e0b; border-radius: 50%; margin-right: 0.75rem;'></div>
-                <span style='font-size: 1rem;'>Partial Availability</span>
-            </div>
-            <div style='font-size: 0.9rem; color: #a0aec0; line-height: 1.4;'>
-                InceptionV3+GRU & MediaPipe-GRU
-            </div>
-        </div>
-        """, unsafe_allow_html=True)
-    elif transformer_exists:
-        st.sidebar.markdown("""
-        <div style='background: rgba(245, 158, 11, 0.1); border: 1px solid #f59e0b; border-radius: 8px; padding: 0.75rem; margin-bottom: 0;'>
-            <div style='display: flex; align-items: center; color: #ffffff; font-weight: 500; margin-bottom: 0.3rem;'>
-                <div style='width: 8px; height: 8px; background: #f59e0b; border-radius: 50%; margin-right: 0.75rem;'></div>
-                <span style='font-size: 1rem;'>Partial Availability</span>
-            </div>
-            <div style='font-size: 0.9rem; color: #a0aec0; line-height: 1.4;'>
-                SignTransformer model only
-            </div>
-        </div>
-        """, unsafe_allow_html=True)
-    elif iv3_gru_exists:
-        st.sidebar.markdown("""
-        <div style='background: rgba(245, 158, 11, 0.1); border: 1px solid #f59e0b; border-radius: 8px; padding: 0.75rem; margin-bottom: 0;'>
-            <div style='display: flex; align-items: center; color: #ffffff; font-weight: 500; margin-bottom: 0.3rem;'>
-                <div style='width: 8px; height: 8px; background: #f59e0b; border-radius: 50%; margin-right: 0.75rem;'></div>
-                <span style='font-size: 1rem;'>Partial Availability</span>
-            </div>
-            <div style='font-size: 0.9rem; color: #a0aec0; line-height: 1.4;'>
-                InceptionV3+GRU model only
-            </div>
-        </div>
-        """, unsafe_allow_html=True)
-    elif mediapipe_gru_exists:
-        st.sidebar.markdown("""
-        <div style='background: rgba(245, 158, 11, 0.1); border: 1px solid #f59e0b; border-radius: 8px; padding: 0.75rem; margin-bottom: 0;'>
-            <div style='display: flex; align-items: center; color: #ffffff; font-weight: 500; margin-bottom: 0.3rem;'>
-                <div style='width: 8px; height: 8px; background: #f59e0b; border-radius: 50%; margin-right: 0.75rem;'></div>
-                <span style='font-size: 1rem;'>Partial Availability</span>
-            </div>
-            <div style='font-size: 0.9rem; color: #a0aec0; line-height: 1.4;'>
-                MediaPipe-GRU model only
-            </div>
-        </div>
-        """, unsafe_allow_html=True)
+    if num_available == 0:
+        # No models available for current mode
+        mode_display = RECOGNITION_MODES.get(recognition_mode, recognition_mode)
+        _render_status_card(
+            status_text='No Models Available',
+            detail_text=f'Checkpoint files not found for {mode_display}',
+            status_color='#ef4444',
+            status_bg='rgba(239, 68, 68, 0.1)'
+        )
+    elif num_available == 1:
+        # Only one model available
+        _render_status_card(
+            status_text='Partial Availability',
+            detail_text=f'{available_display_names[0]} only',
+            status_color='#f59e0b',
+            status_bg='rgba(245, 158, 11, 0.1)'
+        )
     else:
-        st.sidebar.markdown("""
-        <div style='background: rgba(239, 68, 68, 0.1); border: 1px solid #ef4444; border-radius: 8px; padding: 0.75rem; margin-bottom: 0;'>
-            <div style='display: flex; align-items: center; color: #ffffff; font-weight: 500; margin-bottom: 0.3rem;'>
-                <div style='width: 8px; height: 8px; background: #ef4444; border-radius: 50%; margin-right: 0.75rem;'></div>
-                <span style='font-size: 1rem;'>No Models Available</span>
-            </div>
-            <div style='font-size: 0.9rem; color: #a0aec0; line-height: 1.4;'>
-                Checkpoint files not found
-            </div>
-        </div>
-        """, unsafe_allow_html=True)
+        # Multiple models available - determine if all expected models are present
+        expected_models = (
+            {'transformer_isolated', 'iv3_gru_isolated'} if recognition_mode == 'isolated'
+            else {'transformer_continuous', 'iv3_gru_continuous'}
+        )
+        has_all_expected = expected_models.issubset(set(available_models))
+        
+        # Format model list: "A & B" for 2 models, "A, B & C" for 3+
+        if len(available_display_names) == 2:
+            model_list = ' & '.join(available_display_names)
+        else:
+            model_list = ', '.join(available_display_names[:-1]) + ' & ' + available_display_names[-1]
+        
+        if has_all_expected:
+            _render_status_card(
+                status_text='All Models Ready',
+                detail_text=model_list,
+                status_color='#10b981',
+                status_bg='rgba(16, 185, 129, 0.1)'
+            )
+        else:
+            _render_status_card(
+                status_text='Partial Availability',
+                detail_text=model_list,
+                status_color='#f59e0b',
+                status_bg='rgba(245, 158, 11, 0.1)'
+            )
     
     # Add validation button below model status
     st.sidebar.markdown("<div style='height: 0.2rem;'></div>", unsafe_allow_html=True)
     if st.sidebar.button("Validate Models", help="Access model validation mode", width='stretch'):
         st.session_state.workflow_stage = 'validation'
         st.rerun()
+
+
+def _render_status_card(status_text: str, detail_text: str, status_color: str, status_bg: str):
+    """Helper function to render a status card in the sidebar."""
+    st.sidebar.markdown(f"""
+    <div style='background: {status_bg}; border: 1px solid {status_color}; border-radius: 8px; padding: 0.75rem; margin-bottom: 0;'>
+        <div style='display: flex; align-items: center; color: #ffffff; font-weight: 500; margin-bottom: 0.3rem;'>
+            <div style='width: 8px; height: 8px; background: {status_color}; border-radius: 50%; margin-right: 0.75rem;'></div>
+            <span style='font-size: 1rem;'>{status_text}</span>
+        </div>
+        <div style='font-size: 0.9rem; color: #a0aec0; line-height: 1.4;'>
+            {detail_text}
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
 
 
 def render_android_button():

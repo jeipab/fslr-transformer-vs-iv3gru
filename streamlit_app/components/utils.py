@@ -200,7 +200,8 @@ def check_npz_compatibility(npz_data: Dict[str, np.ndarray], model_configs: Dict
             features_valid = X2048.ndim == 2 and X2048.shape[1] == 2048
         
         # Check compatibility for each model based on their capabilities
-        for model_name in ['transformer', 'iv3_gru', 'mediapipe_gru']:
+        # Check isolated models (classification mode)
+        for model_name in ['transformer_isolated', 'iv3_gru_isolated', 'mediapipe_gru_isolated']:
             model_config = MODEL_CONFIG.get(model_name, {})
             
             # Get model capabilities
@@ -209,7 +210,7 @@ def check_npz_compatibility(npz_data: Dict[str, np.ndarray], model_configs: Dict
             input_dim = get_model_input_dim(model_name)
             
             # Check compatibility based on model capabilities and available data
-            if model_name == 'transformer':
+            if model_name == 'transformer_isolated':
                 # Transformer can use either keypoints or features depending on its configuration
                 if supports_keypoints and keypoints_valid:
                     compatibility['transformer'] = True
@@ -222,12 +223,12 @@ def check_npz_compatibility(npz_data: Dict[str, np.ndarray], model_configs: Dict
                     elif input_dim == 2048 and features_valid:
                         compatibility['transformer'] = True
             
-            elif model_name == 'iv3_gru':
+            elif model_name == 'iv3_gru_isolated':
                 # IV3-GRU always needs 2048-D features
                 if supports_features and features_valid:
                     compatibility['iv3_gru'] = True
             
-            elif model_name == 'mediapipe_gru':
+            elif model_name == 'mediapipe_gru_isolated':
                 # MediaPipe GRU needs 178-D keypoints (MediaPipe format)
                 if supports_keypoints and has_keypoints:
                     X = npz_data['X']

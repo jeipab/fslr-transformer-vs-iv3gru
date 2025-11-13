@@ -69,7 +69,9 @@ class ValidationDataset:
         """
         self.data_dir = Path(data_dir)
         self.labels_csv = labels_csv
-        self.model_type = model_type
+        self.model_type = model_type.lower()
+        # Strip _isolated or _continuous suffix to get base model name
+        self.base_model_type = self.model_type.replace('_isolated', '').replace('_continuous', '')
         self.model = model
         self.signer_filter = signer_filter
         self.category_filter = category_filter
@@ -142,7 +144,7 @@ class ValidationDataset:
         # Step 1: Load NPZ data from disk
         data = np.load(sample['npz_path'])
         
-        if self.model_type == 'transformer':
+        if self.base_model_type == 'transformer':
             # Step 2: Extract features for transformer model (178-D keypoints)
             if 'X' not in data:
                 raise ValueError(f"NPZ file {sample['npz_path']} missing 'X' key for transformer model (expected 178-D keypoints)")
@@ -154,14 +156,14 @@ class ValidationDataset:
             
             return X, sample['gloss'], sample['cat'], sample['occluded'], sample['file'], sample['signer'], sample['duration']
         
-        elif self.model_type == 'iv3_gru':
+        elif self.base_model_type == 'iv3_gru':
             # Step 2: Extract features for IV3-GRU model (requires 2048-D InceptionV3 features)
             if 'X2048' not in data:
                 raise ValueError(f"NPZ file {sample['npz_path']} missing 'X2048' key for IV3-GRU model (expected 2048-D features)")
             X = torch.from_numpy(data['X2048']).float()
             return X, sample['gloss'], sample['cat'], sample['occluded'], sample['file'], sample['signer'], sample['duration']
         
-        elif self.model_type == 'mediapipe_gru':
+        elif self.base_model_type == 'mediapipe_gru':
             # Step 2: Extract features for MediaPipe-GRU model (requires 178-D keypoint features)
             if 'X' not in data:
                 raise ValueError(f"NPZ file {sample['npz_path']} missing 'X' key for MediaPipe-GRU model (expected 178-D keypoints)")
@@ -197,6 +199,8 @@ class ModelValidator:
             device: Device to use ('cpu', 'cuda', or 'auto')
         """
         self.model_type = model_type.lower()
+        # Strip _isolated or _continuous suffix to get base model name
+        self.base_model_type = self.model_type.replace('_isolated', '').replace('_continuous', '')
         self.checkpoint_path = checkpoint_path
         
         # Step 1: Set device (GPU if available and not forced to CPU)
@@ -236,7 +240,7 @@ class ModelValidator:
         checkpoint = torch.load(self.checkpoint_path, map_location='cpu')
         state_dict = checkpoint.get('model_state_dict', checkpoint.get('state_dict', checkpoint.get('model', checkpoint)))
         
-        if self.model_type == 'transformer':
+        if self.base_model_type == 'transformer':
             # Step 3: Use input dimension from Streamlit config
             input_dim = model_config.get('input_dim', 178)
             print(f"Using input_dim={input_dim} from Streamlit config")
@@ -254,7 +258,7 @@ class ModelValidator:
                 pooling_method='mean'                # Fixed: pooling method
             )
             
-        elif self.model_type == 'iv3_gru':
+        elif self.base_model_type == 'iv3_gru':
             # Step 3: Auto-detect GRU hidden sizes from checkpoint weights
             if 'gru1.weight_hh_l0' in state_dict and 'gru2.weight_hh_l0' in state_dict:
                 # GRU weight_hh has shape [3*hidden, hidden] for each layer
@@ -362,7 +366,7 @@ class ModelValidator:
         Returns:
             Tuple of (gloss_logits, category_logits) with shape [batch_size, num_classes]
         """
-        if self.model_type == 'transformer':
+        if self.base_model_type == 'transformer':
             # Step 1: Pad sequences to same length for transformer
             max_len = max(x.shape[0] for x in batch_data)
             padded_batch = []
@@ -390,7 +394,7 @@ class ModelValidator:
             with torch.no_grad():
                 gloss_logits, cat_logits = self.model(X, mask)
         
-        elif self.model_type == 'iv3_gru':
+        elif self.base_model_type == 'iv3_gru':
             # Step 1: Get sequence lengths and pad sequences for GRU
             lengths = torch.tensor([x.shape[0] for x in batch_data], dtype=torch.long)
             max_len = max(x.shape[0] for x in batch_data)
@@ -413,7 +417,7 @@ class ModelValidator:
             with torch.no_grad():
                 gloss_logits, cat_logits = self.model(X, lengths, features_already=True)
         
-        elif self.model_type == 'mediapipe_gru':
+        elif self.base_model_type == 'mediapipe_gru':
             # Step 1: Get sequence lengths and pad sequences for GRU
             lengths = torch.tensor([x.shape[0] for x in batch_data], dtype=torch.long)
             max_len = max(x.shape[0] for x in batch_data)
@@ -1056,8 +1060,8 @@ def main():
     )
     
     # Required arguments
-    parser.add_argument('--model', choices=['transformer', 'iv3_gru', 'mediapipe_gru'], required=True,
-                       help='Model type to validate')
+    parser.add_argument('--model', choices=['transformer_isolated', 'iv3_gru_isolated', 'mediapipe_gru_isolated', 'transformer_continuous', 'iv3_gru_continuous', 'mediapipe_gru_continuous'], required=True,
+                       help='Model type to validate (use _isolated for classification, _continuous for CTC)')
     parser.add_argument('--checkpoint', type=str, required=True,
                        help='Path to model checkpoint (.pt file)')
     

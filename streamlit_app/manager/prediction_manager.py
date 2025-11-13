@@ -351,16 +351,16 @@ def make_real_prediction(npz_data: Dict[str, np.ndarray], model_name: str) -> Di
     
     Args:
         npz_data: NPZ data dictionary
-        model_name: Name of the model to use ('transformer' or 'iv3_gru')
+        model_name: Name of the model to use (e.g., 'transformer_isolated', 'iv3_gru_isolated')
         
     Returns:
         Dictionary with prediction results
     """
     # Check if model is available
     if not MODEL_CONFIG[model_name]['enabled']:
-        if model_name == 'iv3_gru':
+        if model_name.startswith('iv3_gru'):
             st.toast("IV3-GRU model is not available. Using placeholder data.", icon="⚠️", duration=3000)
-            return DUMMY_DATA['iv3_gru'].copy()
+            return DUMMY_DATA.get('iv3_gru_isolated', {}).copy()
         else:
             st.error(f"Model {model_name} is not available.")
             return None
@@ -418,7 +418,7 @@ def make_ctc_prediction(npz_data: Dict[str, np.ndarray], model_name: str,
     
     Args:
         npz_data: NPZ data dictionary
-        model_name: Name of CTC model ('transformer_ctc' or 'iv3_gru_ctc')
+        model_name: Name of CTC model ('transformer_continuous' or 'iv3_gru_continuous')
         ground_truth: Optional ground truth dictionary
         decode_method: Decoding method ('greedy' or 'beam_search')
         beam_width: Beam width for beam search

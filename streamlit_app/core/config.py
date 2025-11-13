@@ -38,62 +38,62 @@ CTC_CONFIG_SUBSET = {
 
 # Model configuration
 MODEL_CONFIG = {
-    'transformer': {
+    'transformer_isolated': {
         'enabled': True,
         'checkpoint_path': 'trained_models/transformer/FSL105_classification/SignTransformer_best.pt',
-        'model_type': 'transformer',
+        'model_type': 'transformer_isolated',
         'num_gloss_classes': 105,
         'num_category_classes': 10,
-        'display_name': 'SignTransformer',
+        'display_name': 'Transformer',
         'input_dim': 178,  # MediaPipe keypoints (89 keypoints × 2 coordinates)
         'supports_keypoints': True,  
         'supports_features': True,
         'training_mode': 'classification'  # 'classification' or 'ctc'
     },
-    'transformer_ctc': {
+    'transformer_continuous': {
         'enabled': True,  # Enabled for continuous sign recognition
         'checkpoint_path': 'trained_models/transformer/FSL105_ctc/SignTransformerCtc_best.pt',
-        'model_type': 'transformer_ctc',
+        'model_type': 'transformer_continuous',
         'num_gloss_classes': 105,
         'num_ctc_classes': 106,
         'num_category_classes': 10,
         'max_len': 1000,  # Support longer continuous sequences
-        'display_name': 'SignTransformer-CTC',
+        'display_name': 'Transformer',
         'input_dim': 178,  # MediaPipe keypoints (89 keypoints × 2 coordinates)
         'supports_keypoints': True,
         'supports_features': True,
         'training_mode': 'ctc'
     },
-    'iv3_gru': {
+    'iv3_gru_isolated': {
         'enabled': True,
         'checkpoint_path': 'trained_models/iv3_gru/FSL105_classification/InceptionV3GRU_best.pt',
-        'model_type': 'iv3_gru',
+        'model_type': 'iv3_gru_isolated',
         'num_gloss_classes': 105,
         'num_category_classes': 10,
-        'display_name': 'InceptionV3+GRU',
+        'display_name': 'InceptionV3-GRU',
         'input_dim': 2048, 
         'supports_keypoints': False,  
         'supports_features': True,
         'training_mode': 'classification'
     },
-    'iv3_gru_ctc': {
+    'iv3_gru_continuous': {
         'enabled': True,  # Enabled for continuous sign recognition
         'checkpoint_path': 'trained_models/iv3_gru/FSL105_ctc/InceptionV3GRUCtc_best.pt',
-        'model_type': 'iv3_gru_ctc',
+        'model_type': 'iv3_gru_continuous',
         'num_gloss_classes': 105,
         'num_ctc_classes': 106,
         'num_category_classes': 10,
         'blank_token_id': 105,
-        'display_name': 'InceptionV3+GRU-CTC',
+        'display_name': 'InceptionV3-GRU',
         'input_dim': 2048,
         'supports_keypoints': False,
         'supports_features': True,
         'training_mode': 'ctc'
     },
-    'mediapipe_gru': {
+    'mediapipe_gru_isolated': {
         'enabled': False,  # TODO: REMOVE THIS - Hidden from Streamlit app, only transformer and iv3 remain visible
         'checkpoint_path': 'trained_models/mediapipe_gru/FSL105_classification/MediaPipeGRU_best.pt',
-        'model_type': 'mediapipe_gru',
+        'model_type': 'mediapipe_gru_isolated',
         'num_gloss_classes': 105,
         'num_category_classes': 10,
         'display_name': 'MediaPipe-GRU',
@@ -102,15 +102,15 @@ MODEL_CONFIG = {
         'supports_features': False,
         'training_mode': 'classification'
     },
-    'mediapipe_gru_ctc': {
+    'mediapipe_gru_continuous': {
         'enabled': False,  # TODO: REMOVE THIS - Hidden from Streamlit app, only transformer and iv3 remain visible
         'checkpoint_path': 'trained_models/mediapipe_gru/FSL105_ctc/MediaPipeGRUCtc_best.pt',
-        'model_type': 'mediapipe_gru_ctc',
+        'model_type': 'mediapipe_gru_continuous',
         'num_gloss_classes': 105,
         'num_ctc_classes': 106,
         'num_category_classes': 10,
         'blank_token_id': 105,
-        'display_name': 'MediaPipe-GRU CTC',
+        'display_name': 'MediaPipe-GRU',
         'input_dim': 178,  # MediaPipe keypoints
         'supports_keypoints': True,
         'supports_features': False,
@@ -171,7 +171,7 @@ UI_CONFIG = {
 
 # Dummy data for testing
 DUMMY_DATA = {
-    'iv3_gru': {
+    'iv3_gru_isolated': {
         'gloss_prediction': 4,
         'category_prediction': 0,
         'gloss_probability': 0.882,

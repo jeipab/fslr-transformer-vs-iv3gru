@@ -45,13 +45,15 @@ class ModelPredictor:
     """
     def __init__(self, model_type, checkpoint_path, device=None):
         self.model_type = model_type.lower()
+        # Strip _isolated or _continuous suffix to get base model name
+        self.base_model_type = self.model_type.replace('_isolated', '').replace('_continuous', '')
         self.checkpoint_path = checkpoint_path
         self.device = device or torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         self.model, self.input_dim = self._load_model()
         self._load_checkpoint()
 
     def _load_model(self):
-        if self.model_type == 'transformer':
+        if self.base_model_type == 'transformer':
             try:
                 checkpoint = torch.load(self.checkpoint_path, map_location='cpu')
                 state_dict = checkpoint.get('model_state_dict', checkpoint.get('state_dict', checkpoint.get('model', checkpoint)))
@@ -72,7 +74,7 @@ class ModelPredictor:
                 num_cat = 10
             
             model = SignTransformer(input_dim=input_dim, num_gloss=num_gloss, num_cat=num_cat)
-        elif self.model_type == 'iv3_gru':
+        elif self.base_model_type == 'iv3_gru':
             input_dim = 2048
             # Try to detect hidden dimensions and class counts from checkpoint
             try:
@@ -106,7 +108,7 @@ class ModelPredictor:
                 num_cat = 1
             
             model = InceptionV3GRU(num_gloss=num_gloss, num_cat=num_cat, hidden1=gru1_hidden, hidden2=gru2_hidden)
-        elif self.model_type == 'mediapipe_gru':
+        elif self.base_model_type == 'mediapipe_gru':
             input_dim = 178
             # Try to detect hidden dimensions and class counts from checkpoint
             try:
@@ -160,7 +162,7 @@ class ModelPredictor:
         data = np.load(npz_path)
         
         # Determine which key to use based on model type and input dimension
-        if self.model_type == 'transformer':
+        if self.base_model_type == 'transformer':
             # Transformer models use keypoint features (X) not InceptionV3 features (X2048)
             if self.input_dim == 178:  # Keypoint features
                 feature_key = 'X'
@@ -186,13 +188,13 @@ class ModelPredictor:
             with torch.no_grad():
                 gloss_logits, cat_logits = self.model(X)
 
-        elif self.model_type == 'iv3_gru':
+        elif self.base_model_type == 'iv3_gru':
             X2048 = torch.from_numpy(data['X2048']).float().unsqueeze(0).to(self.device)
             lengths = torch.tensor([X2048.shape[1]], dtype=torch.long).to(self.device)
             with torch.no_grad():
                 gloss_logits, cat_logits = self.model(X2048, lengths, features_already=True)
         
-        elif self.model_type == 'mediapipe_gru':
+        elif self.base_model_type == 'mediapipe_gru':
             X = torch.from_numpy(data['X']).float().unsqueeze(0).to(self.device)
             lengths = torch.tensor([X.shape[1]], dtype=torch.long).to(self.device)
             with torch.no_grad():
@@ -226,7 +228,7 @@ class ModelPredictor:
         data = np.load(npz_path)
         
         # Determine which key to use based on model type and input dimension
-        if self.model_type == 'transformer':
+        if self.base_model_type == 'transformer':
             # Transformer models use keypoint features (X) not InceptionV3 features (X2048)
             if self.input_dim == 178:  # Keypoint features
                 feature_key = 'X'
@@ -252,13 +254,13 @@ class ModelPredictor:
             with torch.no_grad():
                 gloss_logits, cat_logits = self.model(X)
 
-        elif self.model_type == 'iv3_gru':
+        elif self.base_model_type == 'iv3_gru':
             X2048 = torch.from_numpy(data['X2048']).float().unsqueeze(0).to(self.device)
             lengths = torch.tensor([X2048.shape[1]], dtype=torch.long).to(self.device)
             with torch.no_grad():
                 gloss_logits, cat_logits = self.model(X2048, lengths, features_already=True)
         
-        elif self.model_type == 'mediapipe_gru':
+        elif self.base_model_type == 'mediapipe_gru':
             X = torch.from_numpy(data['X']).float().unsqueeze(0).to(self.device)
             lengths = torch.tensor([X.shape[1]], dtype=torch.long).to(self.device)
             with torch.no_grad():

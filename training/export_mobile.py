@@ -55,9 +55,9 @@ def _build_model(
     hidden2: Optional[int] = None,
     projection_dim: Optional[int] = None,
 ) -> torch.nn.Module:
-    if model_name == 'transformer_ctc':
+    if model_name == 'transformer_continuous':
         return SignTransformerCtc(input_dim=input_dim, num_ctc_classes=num_ctc_classes, num_cat=num_cat)
-    elif model_name == 'mediapipe_gru_ctc':
+    elif model_name == 'mediapipe_gru_continuous':
         kwargs = {
             'input_dim': input_dim,
             'num_ctc_classes': num_ctc_classes,
@@ -217,7 +217,7 @@ def export_model_for_android(
     effective_num_cat = int(num_cat if num_cat is not None else (inferred_num_cat or 1))
 
     hidden1 = hidden2 = projection_dim = None
-    if model_name == 'mediapipe_gru_ctc':
+    if model_name == 'mediapipe_gru_continuous':
         hidden1, hidden2, projection_dim = _infer_mediapipe_hidden_sizes(state_dict)
 
     model = _build_model(
@@ -320,8 +320,8 @@ def export_model_for_android(
 def _guess_best_checkpoint(output_dir: str, model_name: str) -> Optional[str]:
     # Map CLI model name to Python class name used in checkpoint files
     name_map = {
-        'transformer_ctc': 'SignTransformerCtc',
-        'mediapipe_gru_ctc': 'MediaPipeGRUCtc',
+        'transformer_continuous': 'SignTransformerCtc',
+        'mediapipe_gru_continuous': 'MediaPipeGRUCtc',
     }
     stem = name_map.get(model_name)
     if not stem:
@@ -334,7 +334,7 @@ def main():
     import argparse
 
     parser = argparse.ArgumentParser(description='Export TorchScript .pt for Android (Full Runtime)')
-    parser.add_argument('--model', type=str, required=True, choices=['transformer_ctc', 'mediapipe_gru_ctc'])
+    parser.add_argument('--model', type=str, required=True, choices=['transformer_continuous', 'mediapipe_gru_continuous'])
     parser.add_argument('--resume-path', type=str, default=None, help='Path to checkpoint to export')
     parser.add_argument('--output-dir', type=str, default='android_artifacts')
     parser.add_argument('--input-dim', type=int, default=178)
