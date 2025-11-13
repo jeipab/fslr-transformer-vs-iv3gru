@@ -1057,20 +1057,33 @@ def render_ctc_validation_results(results: Dict[str, Any]):
     with tab4:
         # Occlusion Analysis for CTC
         occlusion = overall_metrics.get('occlusion') if overall_metrics else None
-        without = (occlusion or {}).get('without_occlusion', {})
-        with_occ = (occlusion or {}).get('with_occlusion', {})
+        
+        # Check if occlusion data is available
+        if not occlusion:
+            st.warning("Occlusion analysis data is not available.")
+            st.info("""
+            **To enable occlusion analysis:**
+            - Ensure your ground truth JSON files contain a `ground_truth_occluded` field
+            - This field should be a list of integers (0 or 1) indicating occlusion status for each ground truth sign
+            - The length must match the number of ground truth signs in the sequence
+            """)
+            return
+        
+        without = occlusion.get('without_occlusion', {})
+        with_occ = occlusion.get('with_occlusion', {})
 
         # Performance Analysis (no accuracy)
         st.markdown("#### Performance Analysis")
         metrics_index = ['Precision', 'Recall', 'F1-Score']
 
         def safe(d, k):
-            return d.get(k, 0.0)
+            """Safely get metric value, returning 0.0 if not available."""
+            return float(d.get(k, 0.0)) if d else 0.0
 
         # Build multi-index table with Gloss and Category under Occluded/Non-Occluded
         occ_cat = overall_metrics.get('occlusion_category') if overall_metrics else None
-        cat_without = (occ_cat or {}).get('without_occlusion', {})
-        cat_with = (occ_cat or {}).get('with_occlusion', {})
+        cat_without = (occ_cat or {}).get('without_occlusion', {}) if occ_cat else {}
+        cat_with = (occ_cat or {}).get('with_occlusion', {}) if occ_cat else {}
 
         # Columns multiindex
         columns = pd.MultiIndex.from_tuples([
@@ -1088,6 +1101,55 @@ def render_ctc_validation_results(results: Dict[str, Any]):
 
         perf_df = pd.DataFrame(table_values, index=metrics_index, columns=columns)
         st.dataframe(perf_df, width='stretch')
+
+        # Show detection counts (TP/FP/FN) in an improved format
+        if 'tp' in with_occ or 'tp' in without:
+            st.markdown("#### Detection Counts")
+            
+            # Gloss level counts
+            tp_with_gloss = with_occ.get('tp', 0)
+            fp_with_gloss = with_occ.get('fp', 0)
+            fn_with_gloss = with_occ.get('fn', 0)
+            total_with_gloss = tp_with_gloss + fp_with_gloss + fn_with_gloss
+            
+            tp_without_gloss = without.get('tp', 0)
+            fp_without_gloss = without.get('fp', 0)
+            fn_without_gloss = without.get('fn', 0)
+            total_without_gloss = tp_without_gloss + fp_without_gloss + fn_without_gloss
+            
+            # Category level counts
+            tp_with_cat = cat_with.get('tp', 0)
+            fp_with_cat = cat_with.get('fp', 0)
+            fn_with_cat = cat_with.get('fn', 0)
+            total_with_cat = tp_with_cat + fp_with_cat + fn_with_cat
+            
+            tp_without_cat = cat_without.get('tp', 0)
+            fp_without_cat = cat_without.get('fp', 0)
+            fn_without_cat = cat_without.get('fn', 0)
+            total_without_cat = tp_without_cat + fp_without_cat + fn_without_cat
+            
+            # Build multi-index table matching Performance Analysis structure
+            # Columns: (Occluded, Gloss Recognition), (Occluded, Category Classification), 
+            #          (Non-Occluded, Gloss Recognition), (Non-Occluded, Category Classification)
+            counts_columns = pd.MultiIndex.from_tuples([
+                ('Occluded', 'Gloss Recognition'),
+                ('Occluded', 'Category Classification'),
+                ('Non-Occluded', 'Gloss Recognition'),
+                ('Non-Occluded', 'Category Classification'),
+            ])
+            
+            # Rows: TP, FP, FN, Total
+            counts_index = ['TP', 'FP', 'FN', 'Total']
+            
+            counts_table_values = [
+                [tp_with_gloss, tp_with_cat, tp_without_gloss, tp_without_cat],
+                [fp_with_gloss, fp_with_cat, fp_without_gloss, fp_without_cat],
+                [fn_with_gloss, fn_with_cat, fn_without_gloss, fn_without_cat],
+                [total_with_gloss, total_with_cat, total_without_gloss, total_without_cat],
+            ]
+            
+            counts_df = pd.DataFrame(counts_table_values, index=counts_index, columns=counts_columns)
+            st.dataframe(counts_df, width='stretch')
 
         # Bar chart: Occlusion Impact (no accuracy)
         fig = go.Figure()

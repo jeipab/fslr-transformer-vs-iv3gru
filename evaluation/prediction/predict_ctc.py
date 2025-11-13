@@ -264,7 +264,21 @@ def _compute_occlusion_split_metrics(
     fn_indices: List[int]
 ) -> Dict:
     """Compute TP/FP/FN split by occlusion (without=0, with=1)."""
-    if not gt_occluded or not gt_timestamps:
+    # Validate inputs: check if data is present and lengths match
+    if not gt_occluded or len(gt_occluded) == 0:
+        return {
+            'without_occlusion': {'tp': 0, 'fp': 0, 'fn': 0},
+            'with_occlusion': {'tp': 0, 'fp': 0, 'fn': 0},
+        }
+    if not gt_timestamps or len(gt_timestamps) == 0:
+        return {
+            'without_occlusion': {'tp': 0, 'fp': 0, 'fn': 0},
+            'with_occlusion': {'tp': 0, 'fp': 0, 'fn': 0},
+        }
+    # Validate that occlusion data length matches timestamps length
+    if len(gt_occluded) != len(gt_timestamps):
+        # Length mismatch - return zeros but log warning
+        print(f"Warning: Occlusion data length ({len(gt_occluded)}) doesn't match timestamps length ({len(gt_timestamps)})")
         return {
             'without_occlusion': {'tp': 0, 'fp': 0, 'fn': 0},
             'with_occlusion': {'tp': 0, 'fp': 0, 'fn': 0},
@@ -592,12 +606,20 @@ class CTCPredictor:
                 })
                 if 'category' in seg:
                     gt_categories.append(seg.get('category'))
-                if 'occluded' in seg:
-                    gt_occluded.append(int(seg.get('occluded', 0)))
+                # Always append occlusion value - default to 0 if not present
+                # This ensures gt_occluded has same length as gt_timestamps and gt_gloss_ids
+                occluded_value = int(seg.get('occluded', 0))
+                gt_occluded.append(occluded_value)
             if gt_categories:
                 ground_truth['ground_truth_categories'] = gt_categories
-            if gt_occluded:
+            # Always store occlusion data when we have segments
+            # Since we always append one occlusion value per segment, gt_occluded should have same length as gt_gloss_ids
+            # Store occlusion data if lengths match (safety check)
+            if len(gt_occluded) == len(gt_gloss_ids) and len(gt_occluded) > 0:
                 ground_truth['ground_truth_occluded'] = gt_occluded
+            elif len(segments) > 0:
+                # This should not happen since we always append, but log if it does
+                print(f"Warning: Occlusion data length mismatch - segments: {len(segments)}, occluded: {len(gt_occluded)}, gloss_ids: {len(gt_gloss_ids)}")
         else:
             gt_labels = ground_truth.get('ground_truth_labels', [])
             gt_timestamps = ground_truth.get('ground_truth_timestamps', [])
@@ -1163,12 +1185,20 @@ class CTCPredictor:
                     })
                     if 'category' in seg:
                         gt_categories.append(seg.get('category'))
-                    if 'occluded' in seg:
-                        gt_occluded.append(int(seg.get('occluded', 0)))
+                    # Always append occlusion value - default to 0 if not present
+                    # This ensures gt_occluded has same length as gt_timestamps and gt_gloss_ids
+                    occluded_value = int(seg.get('occluded', 0))
+                    gt_occluded.append(occluded_value)
                 if gt_categories:
                     ground_truth['ground_truth_categories'] = gt_categories
-                if gt_occluded:
+                # Always store occlusion data when we have segments
+                # Since we always append one occlusion value per segment, gt_occluded should have same length as gt_gloss_ids
+                # Store occlusion data if lengths match (safety check)
+                if len(gt_occluded) == len(gt_gloss_ids) and len(gt_occluded) > 0:
                     ground_truth['ground_truth_occluded'] = gt_occluded
+                elif len(segments) > 0:
+                    # This should not happen since we always append, but log if it does
+                    print(f"Warning: Occlusion data length mismatch - segments: {len(segments)}, occluded: {len(gt_occluded)}, gloss_ids: {len(gt_gloss_ids)}")
             else:
                 gt_labels = ground_truth.get('ground_truth_labels', [])
                 gt_timestamps = ground_truth.get('ground_truth_timestamps', [])
@@ -1339,6 +1369,121 @@ class CTCPredictor:
                     summary['overall_metrics']['category_overall_precision'] = float(cat_precision)
                     summary['overall_metrics']['category_overall_recall'] = float(cat_recall)
                     summary['overall_metrics']['category_overall_f1_score'] = float(cat_f1)
+            
+            # Aggregate occlusion metrics from all predictions
+            predictions_with_occlusion = [p for p in predictions_with_gt if 'occlusion_metrics' in p]
+            if predictions_with_occlusion:
+                # Aggregate gloss-level occlusion metrics
+                tp_without = sum(
+                    p['occlusion_metrics'].get('without_occlusion', {}).get('tp', 0)
+                    for p in predictions_with_occlusion
+                )
+                fp_without = sum(
+                    p['occlusion_metrics'].get('without_occlusion', {}).get('fp', 0)
+                    for p in predictions_with_occlusion
+                )
+                fn_without = sum(
+                    p['occlusion_metrics'].get('without_occlusion', {}).get('fn', 0)
+                    for p in predictions_with_occlusion
+                )
+                
+                tp_with = sum(
+                    p['occlusion_metrics'].get('with_occlusion', {}).get('tp', 0)
+                    for p in predictions_with_occlusion
+                )
+                fp_with = sum(
+                    p['occlusion_metrics'].get('with_occlusion', {}).get('fp', 0)
+                    for p in predictions_with_occlusion
+                )
+                fn_with = sum(
+                    p['occlusion_metrics'].get('with_occlusion', {}).get('fn', 0)
+                    for p in predictions_with_occlusion
+                )
+                
+                # Compute precision/recall/f1 for each occlusion category
+                prec_without, recall_without, f1_without = calculate_detection_metrics(
+                    tp_without, fp_without, fn_without
+                )
+                prec_with, recall_with, f1_with = calculate_detection_metrics(
+                    tp_with, fp_with, fn_with
+                )
+                
+                # Store in the format expected by Streamlit UI
+                summary['overall_metrics']['occlusion'] = {
+                    'without_occlusion': {
+                        'precision': float(prec_without),
+                        'recall': float(recall_without),
+                        'f1_score': float(f1_without),
+                        'tp': int(tp_without),
+                        'fp': int(fp_without),
+                        'fn': int(fn_without),
+                    },
+                    'with_occlusion': {
+                        'precision': float(prec_with),
+                        'recall': float(recall_with),
+                        'f1_score': float(f1_with),
+                        'tp': int(tp_with),
+                        'fp': int(fp_with),
+                        'fn': int(fn_with),
+                    },
+                }
+                
+                # Aggregate category-level occlusion metrics if available
+                predictions_with_occ_cat = [p for p in predictions_with_occlusion if 'occlusion_metrics_category' in p]
+                if predictions_with_occ_cat:
+                    cat_tp_without = sum(
+                        p['occlusion_metrics_category'].get('without_occlusion', {}).get('tp', 0)
+                        for p in predictions_with_occ_cat
+                    )
+                    cat_fp_without = sum(
+                        p['occlusion_metrics_category'].get('without_occlusion', {}).get('fp', 0)
+                        for p in predictions_with_occ_cat
+                    )
+                    cat_fn_without = sum(
+                        p['occlusion_metrics_category'].get('without_occlusion', {}).get('fn', 0)
+                        for p in predictions_with_occ_cat
+                    )
+                    
+                    cat_tp_with = sum(
+                        p['occlusion_metrics_category'].get('with_occlusion', {}).get('tp', 0)
+                        for p in predictions_with_occ_cat
+                    )
+                    cat_fp_with = sum(
+                        p['occlusion_metrics_category'].get('with_occlusion', {}).get('fp', 0)
+                        for p in predictions_with_occ_cat
+                    )
+                    cat_fn_with = sum(
+                        p['occlusion_metrics_category'].get('with_occlusion', {}).get('fn', 0)
+                        for p in predictions_with_occ_cat
+                    )
+                    
+                    # Compute precision/recall/f1 for category occlusion metrics
+                    cat_prec_without, cat_recall_without, cat_f1_without = calculate_detection_metrics(
+                        cat_tp_without, cat_fp_without, cat_fn_without
+                    )
+                    cat_prec_with, cat_recall_with, cat_f1_with = calculate_detection_metrics(
+                        cat_tp_with, cat_fp_with, cat_fn_with
+                    )
+                    
+                    # Store in the format expected by Streamlit UI
+                    summary['overall_metrics']['occlusion_category'] = {
+                        'without_occlusion': {
+                            'precision': float(cat_prec_without),
+                            'recall': float(cat_recall_without),
+                            'f1_score': float(cat_f1_without),
+                            'tp': int(cat_tp_without),
+                            'fp': int(cat_fp_without),
+                            'fn': int(cat_fn_without),
+                        },
+                        'with_occlusion': {
+                            'precision': float(cat_prec_with),
+                            'recall': float(cat_recall_with),
+                            'f1_score': float(cat_f1_with),
+                            'tp': int(cat_tp_with),
+                            'fp': int(cat_fp_with),
+                            'fn': int(cat_fn_with),
+                        },
+                    }
 
         return summary
     

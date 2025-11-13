@@ -135,7 +135,7 @@ gdown 1E9sfkdRaJYwFMdOAMShAGBCxsv660XyI
 # Fix Occluded item in JSON for Continuous Vids
 python preprocessing/utils/fix_occlusion.py
 
-# Different Category - NPZ
+# Different Category - NPZ (Use this)
 gdown 1_QfNMFIIhNxvzOEsDOqNzQP1PkXEHpMh
 
 # Same Category - NPZ
@@ -152,6 +152,12 @@ unzip '*.zip'
 
 ```bash
 rm -f *.zip
+```
+
+**Rename folder:**
+
+```bash
+mv diff_cat_npz-seq-400 continuous_sequences
 ```
 
 ---
