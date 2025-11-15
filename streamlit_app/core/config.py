@@ -11,7 +11,7 @@ from typing import Dict, Any
 # Page configuration
 PAGE_CONFIG = {
     'page_title': 'PANSINAYAN',
-    'page_icon': '🤟',
+    'page_icon': 'Pansinayan Icon.svg',
     'layout': 'wide',
     'initial_sidebar_state': 'expanded'
 }
