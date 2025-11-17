@@ -3,7 +3,12 @@
 import streamlit as st
 from typing import List, Dict
 from pathlib import Path
-from ..components.utils import detect_file_type, format_file_size
+from ..components.utils import (
+    detect_file_type,
+    format_file_size,
+    is_continuous_sequence,
+    extract_continuous_metadata,
+)
 from ..components.data_processing import process_videos_unified
 from .upload_manager import remove_file_from_stage
 from ..core.config import PROCESSING_CONFIG
@@ -323,9 +328,9 @@ def preprocess_single_video(uploaded_file, filename: str):
                 out_size=options['out_size'],
                 write_keypoints=options['write_keypoints'],
                 write_iv3_features=options['write_iv3_features'],
-                occ_detailed=options['occ_detailed']
+                occ_detailed=options['occ_detailed'],
             )
-            # Extract single result
+            # Extract single result (NPZ derived from this video)
             npz_data = processed_results.get(Path(uploaded_file.name).stem, {})
         
         # Check compatibility
@@ -337,7 +342,7 @@ def preprocess_single_video(uploaded_file, filename: str):
             st.toast(f"{filename}: Preprocessing failed - incompatible output", icon="❌", duration=5000)
             return
         
-        # Store processed data
+        # Store processed data (NPZ created from this specific video)
         st.session_state.processed_data[filename] = npz_data
         
         # Store original file data for reset functionality
@@ -348,6 +353,14 @@ def preprocess_single_video(uploaded_file, filename: str):
             'size': uploaded_file.size
         }
         
+        # Derive continuous sequence metadata from the generated NPZ when in continuous mode
+        recognition_mode_is_continuous = (
+            st.session_state.get('recognition_mode', 'isolated') == 'continuous'
+        )
+        continuous_meta = (
+            extract_continuous_metadata(npz_data) if recognition_mode_is_continuous else None
+        )
+
         # Update metadata
         existing_metadata = st.session_state.file_metadata.get(filename, {})
         st.session_state.file_metadata[filename] = {
@@ -358,8 +371,8 @@ def preprocess_single_video(uploaded_file, filename: str):
             'source_type': 'video',
             'preprocessing_options': options,
             # Respect the user's selected mode at preprocessing time
-            'is_continuous': st.session_state.get('recognition_mode', 'isolated') == 'continuous',
-            'continuous_metadata': None
+            'is_continuous': recognition_mode_is_continuous,
+            'continuous_metadata': continuous_meta,
         }
         
         # Move from video_files to preprocessed_files
@@ -440,7 +453,7 @@ def preprocess_multiple_videos_batch(uploaded_files):
                 out_size=options['out_size'],
                 write_keypoints=options['write_keypoints'],
                 write_iv3_features=options['write_iv3_features'],
-                occ_detailed=options['occ_detailed']
+                occ_detailed=options['occ_detailed'],
             )
         
         # Process results and update session state
@@ -460,7 +473,7 @@ def preprocess_multiple_videos_batch(uploaded_files):
                     st.toast(f"{filename}: Preprocessing failed - incompatible output", icon="❌", duration=5000)
                     continue
                 
-                # Store processed data
+                # Store processed data (NPZ created from this specific video)
                 st.session_state.processed_data[filename] = npz_data
                 
                 # Store original file data for reset functionality
@@ -471,6 +484,16 @@ def preprocess_multiple_videos_batch(uploaded_files):
                     'size': uploaded_file.size
                 }
                 
+                # Derive continuous sequence metadata from the generated NPZ when in continuous mode
+                recognition_mode_is_continuous = (
+                    st.session_state.get('recognition_mode', 'isolated') == 'continuous'
+                )
+                continuous_meta = (
+                    extract_continuous_metadata(npz_data)
+                    if recognition_mode_is_continuous
+                    else None
+                )
+
                 # Update metadata
                 existing_metadata = st.session_state.file_metadata.get(filename, {})
                 st.session_state.file_metadata[filename] = {
@@ -481,8 +504,8 @@ def preprocess_multiple_videos_batch(uploaded_files):
                     'source_type': 'video',
                     'preprocessing_options': options,
                     # Respect the user's selected mode at preprocessing time
-                    'is_continuous': st.session_state.get('recognition_mode', 'isolated') == 'continuous',
-                    'continuous_metadata': None
+                    'is_continuous': recognition_mode_is_continuous,
+                    'continuous_metadata': continuous_meta,
                 }
                 
                 # Move from video_files to preprocessed_files

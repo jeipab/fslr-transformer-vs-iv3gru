@@ -165,14 +165,19 @@ def render_file_details_horizontal(filename: str, npz_data: Dict, metadata: Dict
     if is_continuous_global:
         # Continuous: render Segments and Duration in their own equal-width columns
         with detail_col4:
-            continuous_meta = metadata.get('continuous_metadata', {})
+            continuous_meta = metadata.get('continuous_metadata') or {}
             st.markdown("<div style='text-align: center;'>", unsafe_allow_html=True)
             st.metric("Segments", continuous_meta.get('num_segments', 'N/A'))
             st.markdown("</div>", unsafe_allow_html=True)
         with detail_col5:
-            continuous_meta = metadata.get('continuous_metadata', {})
+            continuous_meta = metadata.get('continuous_metadata') or {}
             st.markdown("<div style='text-align: center;'>", unsafe_allow_html=True)
-            st.metric("Duration", f"{continuous_meta.get('total_duration_sec', 0):.1f}s")
+            duration_sec = continuous_meta.get('total_duration_sec', 0) or 0
+            try:
+                duration_value = float(duration_sec)
+            except (TypeError, ValueError):
+                duration_value = 0.0
+            st.metric("Duration", f"{duration_value:.1f}s")
             st.markdown("</div>", unsafe_allow_html=True)
     else:
         with detail_col4:
