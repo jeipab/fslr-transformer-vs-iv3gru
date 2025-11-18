@@ -787,7 +787,7 @@ def compute_occlusion_detection_from_keypoints(
                     
                     # Aggregate detection results across all methods
                     for region_name, confidence in region_results.items():
-                        if confidence > 0.4:  # Balanced confidence threshold for sensitivity
+                        if confidence > 0.65:  # Balanced confidence threshold for sensitivity
                             occlusion_detected = True
                             if region_name not in occluded_regions:
                                 occluded_regions.append(region_name)
@@ -878,7 +878,7 @@ def _create_enhanced_face_regions(face_coords: List[Tuple[float, float]],
             forehead = landmarks['forehead']
             regions['forehead'] = {
                 'center': forehead,
-                'radius': 0.12 * face_scale,  # Increased and adaptive
+                'radius': 0.11 * face_scale,  # Increased and adaptive
                 'type': 'circle'
             }
         
@@ -889,14 +889,14 @@ def _create_enhanced_face_regions(face_coords: List[Tuple[float, float]],
             cheek_center = ((left_eye[0] + right_eye[0]) / 2, (left_eye[1] + right_eye[1]) / 2)
             regions['cheeks'] = {
                 'center': cheek_center,
-                'radius': 0.15 * face_scale,  # Increased and adaptive
+                'radius': 0.14 * face_scale,  # Increased and adaptive
                 'type': 'circle'
             }
         
         # Nose region (central face) - adaptive radius
         regions['nose'] = {
             'center': nose,
-            'radius': 0.10 * face_scale,  # Increased and adaptive
+            'radius': 0.09 * face_scale,  # Increased and adaptive
             'type': 'circle'
         }
         
@@ -907,7 +907,7 @@ def _create_enhanced_face_regions(face_coords: List[Tuple[float, float]],
             mouth_center = ((mouth_left[0] + mouth_right[0]) / 2, (mouth_left[1] + mouth_right[1]) / 2)
             regions['mouth'] = {
                 'center': mouth_center,
-                'radius': 0.12 * face_scale,  # Increased and adaptive
+                'radius': 0.11 * face_scale,  # Increased and adaptive
                 'type': 'circle'
             }
         
@@ -917,7 +917,7 @@ def _create_enhanced_face_regions(face_coords: List[Tuple[float, float]],
             neck_center = (chin[0], chin[1] + 0.05 * face_scale)  # Adaptive offset
             regions['neck'] = {
                 'center': neck_center,
-                'radius': 0.15 * face_scale,  # Increased and adaptive
+                'radius': 0.14 * face_scale,  # Increased and adaptive
                 'type': 'circle'
             }
     
@@ -960,7 +960,7 @@ def _detect_occlusions_multi_method(palm_center: Optional[Tuple[float, float]],
                                   trajectory: List[Tuple[int, Tuple[float, float]]],
                                   current_frame: int,
                                   min_fingertips_inside: int = 1,
-                                  proximity_multiplier: float = 1.5) -> Dict[str, float]:
+                                  proximity_multiplier: float = 1.2) -> Dict[str, float]:
     """
     Detect occlusions using multiple methods for each region with balanced weighting.
     
