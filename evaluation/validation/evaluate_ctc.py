@@ -48,6 +48,7 @@ sys.path.insert(0, str(project_root))
 # Local imports
 from models import SignTransformerCtc, MediaPipeGRUCtc
 from evaluation.ctc_utils import greedy_ctc_decoder, beam_search_ctc_decoder, calculate_wer_and_errors
+from evaluation.prediction.predict_ctc import filter_low_confidence_segments, estimate_timestamps
 from streamlit_app.core.config import CTC_CONFIG
 
 class ContinuousSignDataset(Dataset):
@@ -108,10 +109,11 @@ class CTCEvaluator:
     """
     Evaluator for CTC-based continuous sign language recognition models.
     """
-    def __init__(self, model, blank_id, device):
+    def __init__(self, model, blank_id, device, model_type=None):
         self.model = model
         self.blank_id = blank_id
         self.device = device
+        self.model_type = model_type
         self.model.to(self.device)
         self.model.eval()
 
@@ -137,9 +139,42 @@ class CTCEvaluator:
 
                 if decode_method == 'greedy':
                     predicted_sequences = greedy_ctc_decoder(log_probs, self.blank_id, input_lengths)
+                    # Extract confidence scores for greedy decoding
+                    probs = torch.exp(log_probs)
+                    confidence_scores_list = []
+                    for j, seq in enumerate(predicted_sequences):
+                        if len(seq) > 0:
+                            actual_length = input_lengths[j].item()
+                            seq_probs = probs[j, :actual_length]
+                            # Get confidence for each predicted token
+                            # For CTC, we need to map decoded sequence back to frame-level predictions
+                            # Use max probability of the predicted token across frames
+                            confidences = []
+                            frames_per_token = actual_length / len(seq) if len(seq) > 0 else 1
+                            for token_idx, gloss_id in enumerate(seq):
+                                start_frame = int(token_idx * frames_per_token)
+                                end_frame = int((token_idx + 1) * frames_per_token)
+                                if end_frame > actual_length:
+                                    end_frame = actual_length
+                                if start_frame < end_frame:
+                                    token_conf = float(seq_probs[start_frame:end_frame, gloss_id].max())
+                                else:
+                                    token_conf = float(seq_probs[min(start_frame, actual_length-1), gloss_id])
+                                confidences.append(token_conf)
+                            confidence_scores_list.append(confidences)
+                        else:
+                            confidence_scores_list.append([])
                 else:
                     beam_results = beam_search_ctc_decoder(log_probs, self.blank_id, beam_width, input_lengths)
                     predicted_sequences = [seq for seq, score in beam_results]
+                    # For beam search, use average confidence from beam score
+                    confidence_scores_list = []
+                    for j, (seq, log_score) in enumerate(beam_results):
+                        if len(seq) > 0:
+                            avg_conf = float(np.exp(log_score / max(len(seq), 1)))
+                            confidence_scores_list.append([avg_conf] * len(seq))
+                        else:
+                            confidence_scores_list.append([])
 
                 reference_sequences = self._parse_targets(targets, target_lengths)
 
@@ -147,6 +182,25 @@ class CTCEvaluator:
                     pred_seq = predicted_sequences[j]
                     ref_seq = reference_sequences[j]
                     meta = metas[j]
+                    confidence_scores = confidence_scores_list[j]
+                    
+                    # Apply low-confidence filtering for Transformer models only
+                    if self.model_type == 'transformer_continuous' and len(pred_seq) > 0 and len(confidence_scores) == len(pred_seq):
+                        # Estimate timestamps for filtering
+                        actual_length = input_lengths[j].item()
+                        predicted_timestamps = estimate_timestamps(pred_seq, actual_length, fps=30)
+                        predicted_labels = [f"GLOSS_{g}" for g in pred_seq]
+                        
+                        # Apply filtering
+                        filtered_seq, filtered_labels, filtered_timestamps, filtered_confidences, _, _ = \
+                            filter_low_confidence_segments(
+                                predicted_sequence=pred_seq,
+                                predicted_labels=predicted_labels,
+                                predicted_timestamps=predicted_timestamps,
+                                confidence_scores=confidence_scores,
+                                confidence_threshold=0.50
+                            )
+                        pred_seq = filtered_seq
                     
                     wer, errors = calculate_wer_and_errors(ref_seq, pred_seq)
                     
@@ -317,7 +371,7 @@ def main():
 
     # Evaluate
     print("\nStarting evaluation...")
-    evaluator = CTCEvaluator(model, CTC_CONFIG['blank_token_id'], device)
+    evaluator = CTCEvaluator(model, CTC_CONFIG['blank_token_id'], device, model_type=args.model)
     results = evaluator.evaluate(
         dataloader,
         decode_method=args.decode_method,
