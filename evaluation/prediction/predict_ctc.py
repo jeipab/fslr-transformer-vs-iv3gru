@@ -125,6 +125,72 @@ def smooth_sequence(
     return smoothed_seq, smoothed_conf, smoothed_cats, smoothed_cat_conf
 
 
+def filter_low_confidence_segments(
+    predicted_sequence: List[int],
+    predicted_labels: List[str],
+    predicted_timestamps: List[Dict],
+    confidence_scores: List[float],
+    predicted_categories: Optional[List[int]] = None,
+    category_confidences: Optional[List[float]] = None,
+    confidence_threshold: float = 0.50
+) -> Tuple[List[int], List[str], List[Dict], List[float], Optional[List[int]], Optional[List[float]]]:
+    """
+    Filter out segments with gloss confidence below threshold and extend previous segments.
+    
+    When a segment is removed, the previous segment's end_ms is extended to fill the gap.
+    This helps reduce false positives by removing low-confidence predictions.
+    
+    Args:
+        predicted_sequence: List of predicted gloss IDs
+        predicted_labels: List of predicted gloss labels
+        predicted_timestamps: List of timestamp dicts with start_ms, end_ms, and other fields
+        confidence_scores: List of gloss confidence scores
+        predicted_categories: Optional list of category IDs
+        category_confidences: Optional list of category confidence scores
+        confidence_threshold: Minimum confidence threshold (default: 0.50)
+    
+    Returns:
+        Tuple of filtered (sequence, labels, timestamps, confidences, categories, category_confidences)
+    """
+    if not predicted_sequence or not confidence_scores:
+        return predicted_sequence, predicted_labels, predicted_timestamps, confidence_scores, predicted_categories, category_confidences
+    
+    # Identify segments to remove (confidence < threshold)
+    segments_to_remove = [i for i, conf in enumerate(confidence_scores) if conf < confidence_threshold]
+    
+    if not segments_to_remove:
+        return predicted_sequence, predicted_labels, predicted_timestamps, confidence_scores, predicted_categories, category_confidences
+    
+    # Process in reverse order to extend previous segments before removal
+    for idx in reversed(segments_to_remove):
+        if idx > 0:
+            # Extend previous segment's end_ms to current segment's end_ms
+            prev_end = predicted_timestamps[idx - 1]['end_ms']
+            curr_end = predicted_timestamps[idx]['end_ms']
+            predicted_timestamps[idx - 1]['end_ms'] = curr_end
+            predicted_timestamps[idx - 1]['duration_ms'] = curr_end - predicted_timestamps[idx - 1]['start_ms']
+    
+    # Remove filtered segments
+    filtered_sequence = [predicted_sequence[i] for i in range(len(predicted_sequence)) if i not in segments_to_remove]
+    filtered_labels = [predicted_labels[i] for i in range(len(predicted_labels)) if i not in segments_to_remove]
+    filtered_timestamps = [predicted_timestamps[i] for i in range(len(predicted_timestamps)) if i not in segments_to_remove]
+    filtered_confidences = [confidence_scores[i] for i in range(len(confidence_scores)) if i not in segments_to_remove]
+    
+    # Update indices in timestamps
+    for new_idx, ts in enumerate(filtered_timestamps):
+        ts['index'] = new_idx
+    
+    # Handle categories if present
+    filtered_categories = None
+    filtered_category_confidences = None
+    if predicted_categories:
+        filtered_categories = [predicted_categories[i] for i in range(len(predicted_categories)) if i not in segments_to_remove]
+    if category_confidences:
+        filtered_category_confidences = [category_confidences[i] for i in range(len(category_confidences)) if i not in segments_to_remove]
+    
+    return filtered_sequence, filtered_labels, filtered_timestamps, filtered_confidences, filtered_categories, filtered_category_confidences
+
+
 # Helper functions for category and occlusion metrics (used after compute_sequence_metrics)
 def _augment_matches_with_order(
     pred_glosses: List[int],
@@ -882,6 +948,19 @@ class CTCPredictor:
             if i < len(category_confidences):
                 ts['category_confidence'] = float(category_confidences[i])
         
+        # Apply low-confidence filtering for Transformer models only
+        if self.model_type == 'transformer_continuous':
+            predicted_sequence, predicted_labels, predicted_timestamps, confidence_scores, \
+            predicted_categories, category_confidences = filter_low_confidence_segments(
+                predicted_sequence=predicted_sequence,
+                predicted_labels=predicted_labels,
+                predicted_timestamps=predicted_timestamps,
+                confidence_scores=confidence_scores,
+                predicted_categories=predicted_categories if predicted_categories else None,
+                category_confidences=category_confidences if category_confidences else None,
+                confidence_threshold=0.50
+            )
+        
         result = {
             'file_name': npz_path.name,
             'predicted_sequence': predicted_sequence,
@@ -1149,6 +1228,19 @@ class CTCPredictor:
                     ts['category_label'] = ''
             if i < len(final_category_confidences):
                 ts['category_confidence'] = float(final_category_confidences[i])
+        
+        # Apply low-confidence filtering for Transformer models only
+        if self.model_type == 'transformer_continuous':
+            final_sequence, predicted_labels, predicted_timestamps, final_confidences, \
+            final_categories, final_category_confidences = filter_low_confidence_segments(
+                predicted_sequence=final_sequence,
+                predicted_labels=predicted_labels,
+                predicted_timestamps=predicted_timestamps,
+                confidence_scores=final_confidences,
+                predicted_categories=final_categories if final_categories else None,
+                category_confidences=final_category_confidences if final_category_confidences else None,
+                confidence_threshold=0.50
+            )
         
         result = {
             'file_name': npz_path.name,
