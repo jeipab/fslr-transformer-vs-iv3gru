@@ -198,7 +198,7 @@ class CTCEvaluator:
                                 predicted_labels=predicted_labels,
                                 predicted_timestamps=predicted_timestamps,
                                 confidence_scores=confidence_scores,
-                                confidence_threshold=0.50
+                                confidence_threshold=0.55
                             )
                         pred_seq = filtered_seq
                     

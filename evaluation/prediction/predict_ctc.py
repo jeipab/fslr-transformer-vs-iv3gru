@@ -132,7 +132,7 @@ def filter_low_confidence_segments(
     confidence_scores: List[float],
     predicted_categories: Optional[List[int]] = None,
     category_confidences: Optional[List[float]] = None,
-    confidence_threshold: float = 0.50
+    confidence_threshold: float = 0.55
 ) -> Tuple[List[int], List[str], List[Dict], List[float], Optional[List[int]], Optional[List[float]]]:
     """
     Filter out segments with gloss confidence below threshold and extend previous segments.
@@ -147,7 +147,7 @@ def filter_low_confidence_segments(
         confidence_scores: List of gloss confidence scores
         predicted_categories: Optional list of category IDs
         category_confidences: Optional list of category confidence scores
-        confidence_threshold: Minimum confidence threshold (default: 0.50)
+        confidence_threshold: Minimum confidence threshold (default: 0.55)
     
     Returns:
         Tuple of filtered (sequence, labels, timestamps, confidences, categories, category_confidences)
@@ -958,7 +958,7 @@ class CTCPredictor:
                 confidence_scores=confidence_scores,
                 predicted_categories=predicted_categories if predicted_categories else None,
                 category_confidences=category_confidences if category_confidences else None,
-                confidence_threshold=0.50
+                confidence_threshold=0.55
             )
         
         result = {
@@ -1239,7 +1239,7 @@ class CTCPredictor:
                 confidence_scores=final_confidences,
                 predicted_categories=final_categories if final_categories else None,
                 category_confidences=final_category_confidences if final_category_confidences else None,
-                confidence_threshold=0.50
+                confidence_threshold=0.55
             )
         
         result = {

@@ -136,7 +136,7 @@ gdown 1E9sfkdRaJYwFMdOAMShAGBCxsv660XyI
 python preprocessing/utils/fix_occlusion.py
 
 # Different Category - NPZ (Use this)
-gdown 1_QfNMFIIhNxvzOEsDOqNzQP1PkXEHpMh
+gdown 1mas_eCy9wyp3aSqrEB-eCUjXFkXM4zkY
 
 # Same Category - NPZ
 gdown 1cM2JyRrlr45OncZLFMBEHO1rj1Lq82a_
