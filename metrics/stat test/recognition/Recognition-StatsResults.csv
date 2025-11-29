@@ -1,0 +1,7 @@
+metric,n,transformer_mean,gru_mean,difference,normality_p,test_used,test_statistic,p_value,effect_size,effect_size_type,direction,decision
+Occluded Precision,105,0.482629,0.406076,0.076552,0.0,Wilcoxon Signed-Rank,1140.5,3.8e-05,0.424725,r (from z),Transformer > IV3-GRU,Reject H0
+Occluded Recall,105,0.784429,0.481333,0.303095,4e-06,Wilcoxon Signed-Rank,30.5,0.0,0.85622,r (from z),Transformer > IV3-GRU,Reject H0
+Occluded F1-score,105,0.561124,0.419848,0.141276,0.0,Wilcoxon Signed-Rank,305.5,0.0,0.749492,r (from z),Transformer > IV3-GRU,Reject H0
+Nonoccluded Precision,105,0.933333,0.87619,0.057143,0.0,Wilcoxon Signed-Rank,0.0,0.014306,,N/A,Transformer > IV3-GRU,Reject H0
+Nonoccluded Recall,105,0.813171,0.526714,0.286457,8.4e-05,Wilcoxon Signed-Rank,126.5,0.0,0.818077,r (from z),Transformer > IV3-GRU,Reject H0
+Nonoccluded F1-score,105,0.864905,0.629314,0.23559,0.0,Wilcoxon Signed-Rank,111.5,0.0,0.824037,r (from z),Transformer > IV3-GRU,Reject H0
