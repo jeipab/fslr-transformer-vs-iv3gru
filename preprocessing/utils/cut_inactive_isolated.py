@@ -1,43 +1,37 @@
 """
-Script to remove inactive sections from continuous sign language NPZ files.
+Script to remove inactive sections from isolated sign language NPZ files.
 
 This script detects and removes periods where keypoints are inactive (e.g., both hands
-not visible), then updates timestamps and segment information in the corresponding JSON file.
+not visible) from individual sign clips, then updates the duration in the corresponding CSV file.
 
 Usage Examples:
-    # Basic usage (auto-detects JSON file, overwrites input files)
-    python preprocessing/continuous/cut_inactive_continuous.py data/processed/diff_cat_npz-seq-400/continuous_0001_S4_strategy2.npz
+    # Basic usage (auto-detects CSV file, overwrites input files)
+    python preprocessing/utils/cut_inactive_isolated.py data/processed/FSL105_val/clip_00001_good_morning_S0.npz
     
-    # Process entire folder (overwrites all NPZ files in folder)
-    python preprocessing/continuous/cut_inactive_continuous.py data/processed/diff_cat_npz-seq-400/
+    # Process entire folder (overwrites all NPZ files in folder and updates CSV)
+    python preprocessing/utils/cut_inactive_isolated.py data/processed/FSL105_val/
     
-    # Save to new files instead of overwriting (single file only)
-    python preprocessing/continuous/cut_inactive_continuous.py data/processed/diff_cat_npz-seq-400/continuous_0001_S4_strategy2.npz \\
-      --output-npz output.npz \\
-      --output-json output.json
+    # Specify CSV file explicitly
+    python preprocessing/utils/cut_inactive_isolated.py data/processed/FSL105_val/ --csv-file data/processed/FSL105_val.csv
     
     # Adjust visibility threshold (higher = more lenient, lower = more strict)
-    python preprocessing/continuous/cut_inactive_continuous.py input.npz --min-visible-ratio 0.2
+    python preprocessing/utils/cut_inactive_isolated.py input.npz --min-visible-ratio 0.2
     
     # Process folder with custom threshold
-    python preprocessing/continuous/cut_inactive_continuous.py data/processed/diff_cat_npz-seq-400/ --min-visible-ratio 0.2
+    python preprocessing/utils/cut_inactive_isolated.py data/processed/FSL105_val/ --min-visible-ratio 0.2
     
     # Use minimum keypoint count instead of ratio
-    python preprocessing/continuous/cut_inactive_continuous.py input.npz --min-visible-keypoints 10
-    
-    # Keep inactive frames between segments
-    python preprocessing/continuous/cut_inactive_continuous.py input.npz --keep-between-segments
-    
-    # Specify JSON file explicitly (single file only)
-    python preprocessing/continuous/cut_inactive_continuous.py input.npz --json-file metadata.json
+    python preprocessing/utils/cut_inactive_isolated.py input.npz --min-visible-keypoints 10
 """
 
 import argparse
 import json
+import re
 from pathlib import Path
 from typing import Dict, List, Tuple, Optional
 
 import numpy as np
+import pandas as pd
 
 
 def detect_inactive_frames(
@@ -93,86 +87,105 @@ def detect_inactive_frames(
     return inactive
 
 
-def update_segment_timestamps(
-    segments: List[Dict],
-    original_timestamps_ms: np.ndarray,
-    active_frame_indices: np.ndarray,
-    new_timestamps_ms: np.ndarray
-) -> List[Dict]:
-    """
-    Update segment timestamps after removing inactive frames.
+def normalize_file_path(file_path: str) -> str:
+    """Normalize file path for CSV matching.
+    
+    Removes subdirectory prefix (e.g., 'C0/') and .npz extension.
     
     Args:
-        segments: List of segment dictionaries with timestamp_start_ms and timestamp_end_ms
-        original_timestamps_ms: Original timestamps [T] before filtering
-        active_frame_indices: Indices of frames that were kept [N]
-        new_timestamps_ms: New timestamps [N] after filtering
+        file_path: File path from CSV or filename (e.g., 'C0/clip_00001_good_morning_S0.npz')
         
     Returns:
-        Updated list of segments with adjusted timestamps
+        Normalized filename (e.g., 'clip_00001_good_morning_S0')
     """
-    # Create mapping from original timestamp to new frame index
-    timestamp_to_orig_idx = {ts: i for i, ts in enumerate(original_timestamps_ms)}
+    # Remove .npz extension if present
+    if file_path.endswith('.npz'):
+        file_path = file_path[:-4]
     
-    updated_segments = []
-    for seg in segments:
-        start_ms = seg['timestamp_start_ms']
-        end_ms = seg['timestamp_end_ms']
-        
-        # Find the closest active frames for segment boundaries
-        start_idx = None
-        end_idx = None
-        
-        # Find start: search for first active frame >= start_ms
-        for i, orig_idx in enumerate(active_frame_indices):
-            if original_timestamps_ms[orig_idx] >= start_ms:
-                start_idx = i
-                break
-        
-        # Find end: search for last active frame <= end_ms
-        for i in range(len(active_frame_indices) - 1, -1, -1):
-            orig_idx = active_frame_indices[i]
-            if original_timestamps_ms[orig_idx] <= end_ms:
-                end_idx = i
-                break
-        
-        # If segment has valid active frames, update timestamps
-        if start_idx is not None and end_idx is not None and start_idx <= end_idx:
-            new_start_ms = int(new_timestamps_ms[start_idx])
-            new_end_ms = int(new_timestamps_ms[end_idx])
-            
-            updated_seg = seg.copy()
-            updated_seg['timestamp_start_ms'] = new_start_ms
-            updated_seg['timestamp_end_ms'] = new_end_ms
-            updated_segments.append(updated_seg)
-        # If segment has no active frames, skip it (but warn)
-        elif start_idx is None or end_idx is None:
-            print(f"Warning: Segment {seg.get('gloss_label', seg.get('index', 'unknown'))} "
-                  f"has no active frames, removing from output.")
+    # Remove subdirectory prefix if present (e.g., 'C0/', 'C1/')
+    parts = file_path.split('/')
+    if len(parts) > 1:
+        return parts[-1]
     
-    return updated_segments
+    return file_path
+
+
+def update_csv_duration(
+    csv_path: Path,
+    filename: str,
+    new_duration_sec: float
+) -> bool:
+    """
+    Update duration in CSV file for a specific NPZ file.
+    
+    Args:
+        csv_path: Path to CSV file
+        filename: NPZ filename (with or without extension, may have subdirectory prefix)
+        new_duration_sec: New duration in seconds
+        
+    Returns:
+        True if updated, False if not found
+    """
+    try:
+        # Load CSV with encoding fallback
+        try:
+            df = pd.read_csv(csv_path, encoding='utf-8')
+        except UnicodeDecodeError:
+            try:
+                df = pd.read_csv(csv_path, encoding='latin-1')
+            except UnicodeDecodeError:
+                df = pd.read_csv(csv_path, encoding='cp1252')
+    except Exception as e:
+        print(f"  Warning: Failed to load CSV: {e}")
+        return False
+    
+    if 'file' not in df.columns:
+        print(f"  Warning: CSV missing 'file' column")
+        return False
+    
+    if 'duration' not in df.columns:
+        print(f"  Warning: CSV missing 'duration' column, adding it")
+        df['duration'] = 0.0
+    
+    # Normalize the input filename for matching
+    normalized_input = normalize_file_path(filename)
+    
+    # Find matching row(s)
+    matched = False
+    for idx, row in df.iterrows():
+        csv_file_path = str(row['file'])
+        normalized_csv = normalize_file_path(csv_file_path)
+        
+        if normalized_csv == normalized_input:
+            old_duration = row['duration']
+            df.at[idx, 'duration'] = new_duration_sec
+            matched = True
+            print(f"  Updated CSV: {csv_file_path}: {old_duration:.3f}s -> {new_duration_sec:.3f}s")
+    
+    if not matched:
+        return False
+    
+    # Save updated CSV
+    df.to_csv(csv_path, index=False)
+    return True
 
 
 def cut_inactive_sections(
     npz_path: Path,
-    json_path: Optional[Path] = None,
+    csv_path: Optional[Path] = None,
     output_npz_path: Optional[Path] = None,
-    output_json_path: Optional[Path] = None,
     min_visible_keypoints: Optional[int] = None,
-    min_visible_ratio: float = 0.1,
-    remove_between_segments: bool = True
+    min_visible_ratio: float = 0.1
 ) -> Dict:
     """
-    Remove inactive sections from NPZ file and update JSON metadata.
+    Remove inactive sections from isolated NPZ file and update CSV duration.
     
     Args:
         npz_path: Path to input NPZ file
-        json_path: Optional path to input JSON file (auto-detected if None)
+        csv_path: Optional path to CSV file (auto-detected if None)
         output_npz_path: Optional output NPZ path (overwrites input if None)
-        output_json_path: Optional output JSON path (overwrites input if None)
         min_visible_keypoints: Minimum visible keypoints per frame (overrides ratio if set)
         min_visible_ratio: Minimum ratio of visible keypoints (0.0-1.0)
-        remove_between_segments: If True, also remove inactive periods between segments
         
     Returns:
         Dictionary with statistics about removed frames
@@ -198,29 +211,6 @@ def cut_inactive_sections(
         min_visible_keypoints=min_visible_keypoints,
         min_visible_ratio=min_visible_ratio
     )
-    
-    # If JSON file exists, also consider gaps between segments
-    segments_to_keep = None
-    if json_path and json_path.exists():
-        with open(json_path, 'r', encoding='utf-8') as f:
-            json_data = json.load(f)
-        segments = json_data.get('segments', [])
-        
-        if remove_between_segments and segments:
-            # Mark frames between segments as inactive
-            segment_times = []
-            for seg in segments:
-                segment_times.append((seg['timestamp_start_ms'], seg['timestamp_end_ms']))
-            
-            # Sort segments by start time
-            segment_times.sort(key=lambda x: x[0])
-            
-            # Mark frames outside all segments as inactive
-            for t in range(T_original):
-                ts = timestamps_ms[t]
-                in_segment = any(start <= ts <= end for start, end in segment_times)
-                if not in_segment:
-                    inactive_mask[t] = True
     
     # Get active frame indices
     active_mask = ~inactive_mask
@@ -257,10 +247,36 @@ def cut_inactive_sections(
     else:
         timestamps_new = np.array([0], dtype=np.int64)
     
+    # Calculate new duration in seconds
+    new_duration_sec = timestamps_new[-1] / 1000.0 if len(timestamps_new) > 0 else 0.0
+    original_duration_sec = timestamps_ms[-1] / 1000.0 if len(timestamps_ms) > 0 else 0.0
+    
     # Filter X2048 if present
     X2048_filtered = None
     if X2048 is not None:
         X2048_filtered = X2048[active_indices].astype(np.float32)
+    
+    # Update metadata duration if present
+    if meta is not None:
+        try:
+            if isinstance(meta, (np.ndarray, np.generic)):
+                meta_content = meta.item()
+            else:
+                meta_content = meta
+            
+            if isinstance(meta_content, str):
+                meta_dict = json.loads(meta_content)
+            elif isinstance(meta_content, dict):
+                meta_dict = meta_content.copy()
+            else:
+                meta_dict = {}
+            
+            meta_dict['duration_sec'] = new_duration_sec
+            meta = json.dumps(meta_dict)
+        except Exception as e:
+            print(f"  Warning: Failed to update metadata duration: {e}")
+            # Keep original meta if update fails
+            pass
     
     # Save updated NPZ file
     output_npz = output_npz_path or npz_path
@@ -278,35 +294,10 @@ def cut_inactive_sections(
     
     np.savez_compressed(output_npz, **save_dict)
     
-    # Update JSON file if provided
-    if json_path and json_path.exists():
-        with open(json_path, 'r', encoding='utf-8') as f:
-            json_data = json.load(f)
-        
-        # Update segment timestamps
-        segments = json_data.get('segments', [])
-        if segments:
-            updated_segments = update_segment_timestamps(
-                segments,
-                timestamps_ms,
-                active_indices,
-                timestamps_new
-            )
-            
-            json_data['segments'] = updated_segments
-            json_data['num_segments'] = len(updated_segments)
-            
-            # Update total duration
-            if timestamps_new.size > 0:
-                json_data['total_duration_sec'] = timestamps_new[-1] / 1000.0
-            else:
-                json_data['total_duration_sec'] = 0.0
-        
-        # Save updated JSON
-        output_json = output_json_path or json_path
-        print(f"Saving updated JSON file: {output_json}")
-        with open(output_json, 'w', encoding='utf-8') as f:
-            json.dump(json_data, f, indent=2, ensure_ascii=False)
+    # Update CSV file if provided
+    if csv_path and csv_path.exists():
+        print(f"Updating CSV file: {csv_path}")
+        update_csv_duration(csv_path, npz_path.name, new_duration_sec)
     
     # Return statistics
     return {
@@ -314,25 +305,54 @@ def cut_inactive_sections(
         'removed_frames': n_removed,
         'remaining_frames': len(active_indices),
         'removal_percentage': n_removed / T_original * 100,
-        'original_duration_sec': timestamps_ms[-1] / 1000.0 if len(timestamps_ms) > 0 else 0.0,
-        'new_duration_sec': timestamps_new[-1] / 1000.0 if len(timestamps_new) > 0 else 0.0
+        'original_duration_sec': original_duration_sec,
+        'new_duration_sec': new_duration_sec
     }
+
+
+def find_csv_file(npz_path: Path) -> Optional[Path]:
+    """Try to find CSV file in parent directories.
+    
+    Looks for common CSV filenames in the same directory or parent directory.
+    
+    Args:
+        npz_path: Path to NPZ file
+        
+    Returns:
+        Path to CSV file if found, None otherwise
+    """
+    # Common CSV filenames to check
+    csv_names = ['FSL105_val.csv', 'FSL105_train.csv', 'labels.csv']
+    
+    # Check same directory
+    for csv_name in csv_names:
+        csv_path = npz_path.parent / csv_name
+        if csv_path.exists():
+            return csv_path
+    
+    # Check parent directory
+    for csv_name in csv_names:
+        csv_path = npz_path.parent.parent / csv_name
+        if csv_path.exists():
+            return csv_path
+    
+    return None
 
 
 def process_folder(
     folder_path: Path,
+    csv_path: Optional[Path] = None,
     min_visible_keypoints: Optional[int] = None,
-    min_visible_ratio: float = 0.1,
-    remove_between_segments: bool = True
+    min_visible_ratio: float = 0.1
 ) -> Dict:
     """
-    Process all NPZ files in a folder, overwriting originals.
+    Process all NPZ files in a folder, overwriting originals and updating CSV.
     
     Args:
         folder_path: Path to folder containing NPZ files
+        csv_path: Optional path to CSV file (auto-detected if None)
         min_visible_keypoints: Minimum visible keypoints per frame
         min_visible_ratio: Minimum ratio of visible keypoints
-        remove_between_segments: Whether to remove frames between segments
         
     Returns:
         Dictionary with processing statistics
@@ -343,7 +363,18 @@ def process_folder(
         print(f"No NPZ files found in {folder_path}")
         return {'processed': 0, 'failed': 0, 'total_removed_frames': 0}
     
+    # Auto-detect CSV if not provided
+    if csv_path is None:
+        # Try to find CSV in folder or parent
+        csv_path = find_csv_file(npz_files[0])
+        if csv_path:
+            print(f"Auto-detected CSV file: {csv_path}")
+        else:
+            print(f"Warning: No CSV file found, duration updates will be skipped")
+    
     print(f"Found {len(npz_files)} NPZ file(s) in {folder_path}")
+    if csv_path:
+        print(f"CSV file: {csv_path}")
     print("="*70)
     
     stats = {
@@ -358,21 +389,13 @@ def process_folder(
         print(f"\nProcessing: {npz_file.name}")
         print("-"*70)
         
-        # Auto-detect JSON file
-        json_file = npz_file.with_suffix('.json')
-        if not json_file.exists():
-            json_file = None
-            print(f"  No JSON file found for {npz_file.name}, skipping JSON update")
-        
         try:
             file_stats = cut_inactive_sections(
                 npz_path=npz_file,
-                json_path=json_file,
+                csv_path=csv_path,
                 output_npz_path=npz_file,  # Overwrite original
-                output_json_path=json_file if json_file else None,  # Overwrite original
                 min_visible_keypoints=min_visible_keypoints,
-                min_visible_ratio=min_visible_ratio,
-                remove_between_segments=remove_between_segments
+                min_visible_ratio=min_visible_ratio
             )
             
             stats['processed'] += 1
@@ -389,7 +412,7 @@ def process_folder(
 
 def main():
     parser = argparse.ArgumentParser(
-        description='Remove inactive sections from continuous sign language NPZ files'
+        description='Remove inactive sections from isolated sign language NPZ files'
     )
     parser.add_argument(
         'path',
@@ -397,22 +420,16 @@ def main():
         help='Path to input NPZ file or folder containing NPZ files'
     )
     parser.add_argument(
-        '--json-file',
+        '--csv-file',
         type=str,
         default=None,
-        help='Path to input JSON file (auto-detected if not provided)'
+        help='Path to CSV file (auto-detected if not provided)'
     )
     parser.add_argument(
         '--output-npz',
         type=str,
         default=None,
-        help='Output NPZ path (overwrites input if not provided)'
-    )
-    parser.add_argument(
-        '--output-json',
-        type=str,
-        default=None,
-        help='Output JSON path (overwrites input if not provided)'
+        help='Output NPZ path (overwrites input if not provided, single file only)'
     )
     parser.add_argument(
         '--min-visible-keypoints',
@@ -426,11 +443,6 @@ def main():
         default=0.1,
         help='Minimum ratio of visible keypoints (0.0-1.0, default: 0.1)'
     )
-    parser.add_argument(
-        '--keep-between-segments',
-        action='store_true',
-        help='Keep inactive frames between segments (default: remove them)'
-    )
     
     args = parser.parse_args()
     
@@ -438,15 +450,17 @@ def main():
     if not path.exists():
         raise FileNotFoundError(f"Path not found: {path}")
     
+    csv_path = Path(args.csv_file) if args.csv_file else None
+    
     # Check if path is a directory or file
     if path.is_dir():
         # Process folder
         print(f"Processing folder: {path}")
         stats = process_folder(
             folder_path=path,
+            csv_path=csv_path,
             min_visible_keypoints=args.min_visible_keypoints,
-            min_visible_ratio=args.min_visible_ratio,
-            remove_between_segments=not args.keep_between_segments
+            min_visible_ratio=args.min_visible_ratio
         )
         
         print("\n" + "="*70)
@@ -465,29 +479,23 @@ def main():
         if not npz_path.suffix == '.npz':
             raise ValueError(f"Expected NPZ file, got: {npz_path}")
         
-        # Auto-detect JSON file if not provided
-        json_path = None
-        if args.json_file:
-            json_path = Path(args.json_file)
-        else:
-            # Try to find JSON file with same stem
-            json_path = npz_path.with_suffix('.json')
-            if not json_path.exists():
-                print(f"Warning: JSON file not found at {json_path}, skipping JSON update")
-                json_path = None
+        # Auto-detect CSV file if not provided
+        if csv_path is None:
+            csv_path = find_csv_file(npz_path)
+            if csv_path:
+                print(f"Auto-detected CSV file: {csv_path}")
+            else:
+                print(f"Warning: No CSV file found, duration updates will be skipped")
         
         output_npz = Path(args.output_npz) if args.output_npz else None
-        output_json = Path(args.output_json) if args.output_json else None
         
         # Process file
         stats = cut_inactive_sections(
             npz_path=npz_path,
-            json_path=json_path,
+            csv_path=csv_path,
             output_npz_path=output_npz,
-            output_json_path=output_json,
             min_visible_keypoints=args.min_visible_keypoints,
-            min_visible_ratio=args.min_visible_ratio,
-            remove_between_segments=not args.keep_between_segments
+            min_visible_ratio=args.min_visible_ratio
         )
         
         print("\n" + "="*50)
