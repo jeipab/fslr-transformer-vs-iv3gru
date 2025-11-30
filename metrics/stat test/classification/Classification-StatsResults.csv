@@ -1,7 +1,7 @@
-metric,n,transformer_mean,gru_mean,difference,normality_p,test_used,test_statistic,p_value,effect_size,effect_size_type,direction,decision
-Occluded Precision,10,0.5228,0.4553,0.0675,0.158036,Paired t-test,1.809764,0.103774,0.572298,Cohen's d,Transformer > IV3-GRU,Fail to Reject H0
-Occluded Recall,10,0.8655,0.5251,0.3404,0.054272,Paired t-test,5.921553,0.000223,1.87256,Cohen's d,Transformer > IV3-GRU,Reject H0
-Occluded F1-score,10,0.6298,0.4857,0.1441,0.059484,Paired t-test,3.6313,0.005475,1.148318,Cohen's d,Transformer > IV3-GRU,Reject H0
-Nonoccluded Precision,10,1.0,1.0,0.0,1.0,Paired t-test (N/A - no variance),,,,N/A,Equal,N/A
-Nonoccluded Recall,10,0.8829,0.6099,0.273,0.065873,Paired t-test,5.247672,0.000529,1.659459,Cohen's d,Transformer > IV3-GRU,Reject H0
-Nonoccluded F1-score,10,0.9377,0.7456,0.1921,0.016167,Wilcoxon Signed-Rank,0.0,0.001953,0.886405,r (from z),Transformer > IV3-GRU,Reject H0
+metric,transformer_mean,gru_mean,difference,normality,test_used,test_statistic,p_value,effect_size,direction,decision
+Occluded Precision,0.5228,0.4553,0.0675,Normal (Shapiro–Wilk p = .1580),Paired Samples t-Test (two-tailed),t(df = 9) = 1.81,p = .1038 (ns),d = 0.57 (medium),Transformer > IV3-GRU,Fail to Reject Null Hypothesis 2
+Occluded Recall,0.8655,0.5251,0.3404,Normal (Shapiro–Wilk p = .0543),Paired Samples t-Test (two-tailed),t(df = 9) = 5.92,p < .001,d = 1.87 (large),Transformer > IV3-GRU,Reject Null Hypothesis 2
+Occluded F1-score,0.6298,0.4857,0.1441,Normal (Shapiro–Wilk p = .0595),Paired Samples t-Test (two-tailed),t(df = 9) = 3.63,p = .0055,d = 1.15 (large),Transformer > IV3-GRU,Reject Null Hypothesis 2
+Nonoccluded Precision,1.0,1.0,0.0,Normality cannot be assessed (no variance),Test not applicable — no variance,N/A,N/A,N/A,Equal performance,Fail to Reject Null Hypothesis 2
+Nonoccluded Recall,0.8829,0.6099,0.273,Normal (Shapiro–Wilk p = .0659),Paired Samples t-Test (two-tailed),t(df = 9) = 5.25,p < .001,d = 1.66 (large),Transformer > IV3-GRU,Reject Null Hypothesis 2
+Nonoccluded F1-score,0.9377,0.7456,0.1921,Non-normal (Shapiro–Wilk p = .0162),Wilcoxon Signed-Rank Test (two-tailed),z = -2.803,p = .0020,r = 0.89 (large),Transformer > IV3-GRU,Reject Null Hypothesis 2
