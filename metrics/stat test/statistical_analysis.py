@@ -100,8 +100,11 @@ def sci_notation_str(p, sig=2):
     return f"{round(mant, sig)}×10^{exp}"
 
 
-def format_pvalue(p):
-    """Format p-value according to rules."""
+def format_pvalue_exact(p):
+    """
+    Format p-value as exact value (academic standard).
+    Uses scientific notation for very small values.
+    """
     if p is None or p == "N/A" or (isinstance(p, float) and np.isnan(p)):
         return "N/A"
     try:
@@ -109,18 +112,41 @@ def format_pvalue(p):
     except:
         return str(p)
 
-    if p == 0:
-        return "p < .00001"
-    if p < 1e-5:
-        return "p < .00001"
+    # For very small p-values, use scientific notation
     if p < 1e-4:
         exp = int(math.floor(math.log10(p)))
         mant = p / (10**exp)
-        # Use superscript notation if possible, otherwise use ^
-        return f"p = {mant:.2f}×10⁻{abs(exp)}"
-    if p < 0.05:
-        return f"p = {p:.4f}".replace("0.", ".")
-    return f"p = {p:.4f} (ns)".replace("0.", ".")
+        return f"{mant:.2f}×10⁻{abs(exp)}"
+    else:
+        # For larger p-values, use decimal notation (remove leading zero)
+        return f"{p:.4f}".replace("0.", ".")
+
+
+def format_pvalue(p):
+    """
+    Format p-value for p_value column (includes significance indicator).
+    Always shows exact value.
+    """
+    if p is None or p == "N/A" or (isinstance(p, float) and np.isnan(p)):
+        return "N/A"
+    try:
+        p = float(p)
+    except:
+        return str(p)
+
+    # Format exact p-value
+    if p < 1e-4:
+        exp = int(math.floor(math.log10(p)))
+        mant = p / (10**exp)
+        p_str = f"{mant:.2f}×10⁻{abs(exp)}"
+    else:
+        p_str = f"{p:.4f}".replace("0.", ".")
+    
+    # Add significance indicator
+    if p >= 0.05:
+        return f"p = {p_str} (ns)"
+    else:
+        return f"p = {p_str}"
 
 
 def effect_label_r(r):
@@ -409,23 +435,16 @@ def format_statistic_row(metric, n, transformer_mean, gru_mean, diff,
     --------
     dict : Formatted result dictionary
     """
-    # Normality formatting (don't add (ns) to normality p-values)
+    # Normality formatting (always show exact p-values)
     if normality_p is None or (isinstance(normality_p, float) and np.isnan(normality_p)):
         normality_text = "Normality cannot be assessed (no variance)"
     else:
         p = float(normality_p)
-        if p < 1e-5:
-            normality_text = "Non-normal (Shapiro–Wilk p < .00001)"
-        elif p < 0.05:
-            # Format without (ns) for normality
-            if p < 1e-4:
-                exp = int(math.floor(math.log10(p)))
-                mant = p / (10**exp)
-                normality_text = f"Non-normal (Shapiro–Wilk p = {mant:.2f}×10⁻{abs(exp)})"
-            else:
-                normality_text = f"Non-normal (Shapiro–Wilk p = {p:.4f}".replace("0.", ".") + ")"
+        p_exact = format_pvalue_exact(p)
+        if p < 0.05:
+            normality_text = f"Non-normal (Shapiro–Wilk p = {p_exact})"
         else:
-            normality_text = f"Normal (Shapiro–Wilk p = {p:.4f}".replace("0.", ".") + ")"
+            normality_text = f"Normal (Shapiro–Wilk p = {p_exact})"
 
     # Test label
     if "wilcoxon" in test_used.lower():

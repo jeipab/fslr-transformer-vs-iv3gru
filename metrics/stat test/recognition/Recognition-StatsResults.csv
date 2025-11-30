@@ -1,7 +1,7 @@
 metric,n,transformer_mean,gru_mean,difference,normality,test_used,test_statistic,p_value,effect_size,direction,decision
-Occluded Precision,94,0.482629,0.406076,0.076552,Non-normal (Shapiro–Wilk p < .00001),Wilcoxon Signed-Rank Test (two-tailed),z = -4.118,p = 3.82×10⁻5,r = 0.42 (medium),Transformer > IV3-GRU,Reject Null Hypothesis 1
-Occluded Recall,93,0.784429,0.481333,0.303095,Non-normal (Shapiro–Wilk p < .00001),Wilcoxon Signed-Rank Test (two-tailed),z = -8.257,p < .00001,r = 0.86 (large),Transformer > IV3-GRU,Reject Null Hypothesis 1
-Occluded F1-score,94,0.561124,0.419848,0.141276,Non-normal (Shapiro–Wilk p < .00001),Wilcoxon Signed-Rank Test (two-tailed),z = -7.267,p < .00001,r = 0.75 (large),Transformer > IV3-GRU,Reject Null Hypothesis 1
-Nonoccluded Precision,6,0.933333,0.87619,0.057143,Non-normal (Shapiro–Wilk p < .00001),Wilcoxon Signed-Rank Test (two-tailed),"W = 0 (exact test, N = 6)",p = .0143,N/A,Transformer > IV3-GRU,Reject Null Hypothesis 1
-Nonoccluded Recall,93,0.813171,0.526714,0.286457,Non-normal (Shapiro–Wilk p = 8.41×10⁻5),Wilcoxon Signed-Rank Test (two-tailed),z = -7.889,p < .00001,r = 0.82 (large),Transformer > IV3-GRU,Reject Null Hypothesis 1
-Nonoccluded F1-score,93,0.864905,0.629314,0.23559,Non-normal (Shapiro–Wilk p < .00001),Wilcoxon Signed-Rank Test (two-tailed),z = -7.947,p < .00001,r = 0.82 (large),Transformer > IV3-GRU,Reject Null Hypothesis 1
+Occluded Precision,94,0.482629,0.406076,0.076552,Non-normal (Shapiro–Wilk p = 2.24×10⁻8),Wilcoxon Signed-Rank Test (two-tailed),z = -4.118,p = 3.82×10⁻5,r = 0.42 (medium),Transformer > IV3-GRU,Reject Null Hypothesis 1
+Occluded Recall,93,0.784429,0.481333,0.303095,Non-normal (Shapiro–Wilk p = 3.88×10⁻6),Wilcoxon Signed-Rank Test (two-tailed),z = -8.257,p = 1.49×10⁻16,r = 0.86 (large),Transformer > IV3-GRU,Reject Null Hypothesis 1
+Occluded F1-score,94,0.561124,0.419848,0.141276,Non-normal (Shapiro–Wilk p = 2.58×10⁻8),Wilcoxon Signed-Rank Test (two-tailed),z = -7.267,p = 3.69×10⁻13,r = 0.75 (large),Transformer > IV3-GRU,Reject Null Hypothesis 1
+Nonoccluded Precision,6,0.933333,0.87619,0.057143,Non-normal (Shapiro–Wilk p = 8.21×10⁻21),Wilcoxon Signed-Rank Test (two-tailed),"W = 0 (exact test, N = 6)",p = .0143,N/A,Transformer > IV3-GRU,Reject Null Hypothesis 1
+Nonoccluded Recall,93,0.813171,0.526714,0.286457,Non-normal (Shapiro–Wilk p = 8.41×10⁻5),Wilcoxon Signed-Rank Test (two-tailed),z = -7.889,p = 3.04×10⁻15,r = 0.82 (large),Transformer > IV3-GRU,Reject Null Hypothesis 1
+Nonoccluded F1-score,93,0.864905,0.629314,0.23559,Non-normal (Shapiro–Wilk p = 3.70×10⁻8),Wilcoxon Signed-Rank Test (two-tailed),z = -7.947,p = 1.91×10⁻15,r = 0.82 (large),Transformer > IV3-GRU,Reject Null Hypothesis 1
