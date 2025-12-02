@@ -23,7 +23,14 @@ import matplotlib.pyplot as plt
 import numpy as np
 import os
 import sys
-import colorsys
+from pathlib import Path
+
+# Add parent directory to path to import shared color palette
+sys.path.insert(0, str(Path(__file__).parent.parent))
+from color_palette import (
+    COLOR_TRANSFORMER_OCC, COLOR_TRANSFORMER_NON,
+    COLOR_IV3_GRU_OCC, COLOR_IV3_GRU_NON
+)
 
 # Set academic style
 try:
@@ -46,40 +53,6 @@ plt.rcParams.update({
     'grid.linewidth': 0.8,
     'grid.alpha': 0.3
 })
-
-# Colors: Transformer and IV3-GRU base colors
-COLOR_TRANSFORMER = '#fff4d3'  # Light yellow/cream
-COLOR_IV3_GRU = '#daedff'      # Light blue
-
-def darken_color(color_hex, factor=0.3):
-    """Darken a hex color by a factor (0-1)."""
-    # Convert hex to RGB
-    color_hex = color_hex.lstrip('#')
-    r, g, b = [int(color_hex[i:i+2], 16) / 255.0 for i in (0, 2, 4)]
-    # Convert to HSV, reduce value (brightness), convert back
-    h, s, v = colorsys.rgb_to_hsv(r, g, b)
-    v = max(0, v * (1 - factor))
-    r, g, b = colorsys.hsv_to_rgb(h, s, v)
-    # Convert back to hex
-    return '#{:02x}{:02x}{:02x}'.format(int(r*255), int(g*255), int(b*255))
-
-def lighten_color(color_hex, factor=0.2):
-    """Lighten a hex color by a factor (0-1)."""
-    # Convert hex to RGB
-    color_hex = color_hex.lstrip('#')
-    r, g, b = [int(color_hex[i:i+2], 16) / 255.0 for i in (0, 2, 4)]
-    # Convert to HSV, increase value (brightness), convert back
-    h, s, v = colorsys.rgb_to_hsv(r, g, b)
-    v = min(1, v + (1 - v) * factor)
-    r, g, b = colorsys.hsv_to_rgb(h, s, v)
-    # Convert back to hex
-    return '#{:02x}{:02x}{:02x}'.format(int(r*255), int(g*255), int(b*255))
-
-# Create distinct colors for occluded (darker) and non-occluded (lighter)
-COLOR_TRANSFORMER_OCC = darken_color(COLOR_TRANSFORMER, 0.25)  # Darker for occluded
-COLOR_TRANSFORMER_NON = lighten_color(COLOR_TRANSFORMER, 0.15)  # Lighter for non-occluded
-COLOR_IV3_GRU_OCC = darken_color(COLOR_IV3_GRU, 0.25)  # Darker for occluded
-COLOR_IV3_GRU_NON = lighten_color(COLOR_IV3_GRU, 0.15)  # Lighter for non-occluded
 
 # Directory for output
 output_dir = os.path.dirname(os.path.abspath(__file__))
