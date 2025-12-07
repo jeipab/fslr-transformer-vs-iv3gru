@@ -11,13 +11,13 @@ python -m evaluation.prediction.predict --list-models
 ### Predict from NPZ File
 
 ```powershell
-python -m evaluation.prediction.predict --model transformer --checkpoint trained_models\transformer\cmb_optimal\SignTransformer_best.pt --input data\demo\clip_0138_nice to meet you.npz
+python -m evaluation.prediction.predict --model transformer_isolated --checkpoint trained_models\transformer\FSL105_classification\SignTransformer_best.pt --input data\demo\clip_0138_nice to meet you.npz
 ```
 
 ### Predict from Video File
 
 ```powershell
-python -m evaluation.prediction.predict --model iv3_gru --checkpoint trained_models\iv3_gru\cmb_optimal\InceptionV3GRU_best.pt --input video.mp4
+python -m evaluation.prediction.predict --model iv3_gru_isolated --checkpoint trained_models\iv3_gru\FSL105_classification\InceptionV3GRU_best.pt --input video.mp4
 ```
 
 **Note**: Model input dimensions (178 for keypoints, 2048 for features) are auto-detected from checkpoints.
@@ -26,7 +26,7 @@ python -m evaluation.prediction.predict --model iv3_gru --checkpoint trained_mod
 
 ### Required
 
-- `--model`: Model type (`transformer` or `iv3_gru`)
+- `--model`: Model type (`transformer_isolated` or `iv3_gru_isolated`)
 - `--checkpoint`: Path to model checkpoint (.pt file)
 - `--input`: Input file (NPZ or video)
 
@@ -65,25 +65,25 @@ Return structure (when used programmatically or with `--output`):
 ### NPZ File
 
 ```powershell
-python -m evaluation.prediction.predict --model transformer --checkpoint trained_models\transformer\cmb_optimal\SignTransformer_best.pt --input data\demo\clip_0585_nine.npz
+python -m evaluation.prediction.predict --model transformer_isolated --checkpoint trained_models\transformer\FSL105_classification\SignTransformer_best.pt --input data\demo\clip_0585_nine.npz
 ```
 
 ### Save to File
 
 ```powershell
-python -m evaluation.prediction.predict --model transformer --checkpoint trained_models\transformer\cmb_optimal\SignTransformer_best.pt --input data\demo\clip_1493_green.npz --output results.json
+python -m evaluation.prediction.predict --model transformer_isolated --checkpoint trained_models\transformer\FSL105_classification\SignTransformer_best.pt --input data\demo\clip_1493_green.npz --output results.json
 ```
 
 ### Video File
 
 ```powershell
-python -m evaluation.prediction.predict --model transformer --checkpoint trained_models\transformer\cmb_optimal\SignTransformer_best.pt --input video.mp4 --fps 30 --image-size 256
+python -m evaluation.prediction.predict --model transformer_isolated --checkpoint trained_models\transformer\FSL105_classification\SignTransformer_best.pt --input video.mp4 --fps 30 --image-size 256
 ```
 
 ### CPU Only
 
 ```powershell
-python -m evaluation.prediction.predict --model iv3_gru --checkpoint trained_models\iv3_gru\cmb_optimal\InceptionV3GRU_best.pt --input data\demo\clip_1765_fish.npz --device cpu
+python -m evaluation.prediction.predict --model iv3_gru_isolated --checkpoint trained_models\iv3_gru\FSL105_classification\InceptionV3GRU_best.pt --input data\demo\clip_1765_fish.npz --device cpu
 ```
 
 ## Model Types
@@ -141,12 +141,20 @@ Located in `data\demo\`:
 
 ```
 trained_models\
-├── transformer\cmb_optimal\
-│   ├── SignTransformer_best.pt
-│   └── SignTransformer_last.pt
-└── iv3_gru\cmb_optimal\
-    ├── InceptionV3GRU_best.pt
-    └── InceptionV3GRU_last.pt
+├── transformer\
+│   ├── FSL105_classification\
+│   │   ├── SignTransformer_best.pt
+│   │   └── SignTransformer_last.pt
+│   └── FSL105_ctc\
+│       ├── SignTransformerCtc_best.pt
+│       └── SignTransformerCtc_last.pt
+└── iv3_gru\
+    ├── FSL105_classification\
+    │   ├── InceptionV3GRU_best.pt
+    │   └── InceptionV3GRU_last.pt
+    └── FSL105_ctc\
+        ├── InceptionV3GRUCtc_best.pt
+        └── InceptionV3GRUCtc_last.pt
 ```
 
 ## CTC Prediction (Continuous Recognition)
@@ -157,8 +165,8 @@ trained_models\
 
 ```powershell
 python evaluation\prediction\predict_ctc.py ^
-  --model transformer_ctc ^
-  --checkpoint trained_models\transformer_ctc\optimal\SignTransformerCtc_best.pt ^
+  --model transformer_continuous ^
+  --checkpoint trained_models\transformer\FSL105_ctc\SignTransformerCtc_best.pt ^
   --input data\demo\clip_1830_spaghetti.npz
 ```
 
@@ -166,8 +174,8 @@ python evaluation\prediction\predict_ctc.py ^
 
 ```powershell
 python evaluation\prediction\predict_ctc.py ^
-  --model transformer_ctc ^
-  --checkpoint trained_models\transformer_ctc\optimal\SignTransformerCtc_best.pt ^
+  --model transformer_continuous ^
+  --checkpoint trained_models\transformer\FSL105_ctc\SignTransformerCtc_best.pt ^
   --input data\demo\clip_1830_spaghetti.npz ^
   --decode-method beam_search ^
   --beam-width 10
@@ -180,8 +188,8 @@ from evaluation.prediction.predict_ctc import CTCPredictor
 
 # Initialize
 predictor = CTCPredictor(
-    model_type='transformer_ctc',
-    checkpoint_path='trained_models/transformer_ctc/best.pt'
+    model_type='transformer_continuous',
+    checkpoint_path='trained_models/transformer/FSL105_ctc/SignTransformerCtc_best.pt'
 )
 
 # Predict

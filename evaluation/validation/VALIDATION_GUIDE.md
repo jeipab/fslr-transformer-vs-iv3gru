@@ -6,10 +6,10 @@ This guide explains how to run the continuous validation pipeline and interpret 
 
 ```bash
 python evaluation/validation/validate.py \
-    --model transformer \
-    --checkpoint trained_models/transformer/optimal/model.pt \
-    --data-dir data/processed/fsl_val \
-    --labels-csv data/processed/fsl_val.csv
+    --model transformer_isolated \
+    --checkpoint trained_models/transformer/FSL105_classification/SignTransformer_best.pt \
+    --data-dir data/processed/FSL105_val \
+    --labels-csv data/processed/FSL105_val.csv
 ```
 
 The command computes streaming predictions, aligns them with ground-truth activity windows, and saves confusion statistics to `confusion_matrices.json`.
