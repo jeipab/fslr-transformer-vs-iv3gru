@@ -27,19 +27,19 @@ The application serves as a sophisticated data gathering and analysis platform d
 
 ### Data Organization
 
-- **Combined Dataset**: FSL-105 (main) + Sample-105 (supplementary)
-- **Training Set**: `data/processed/cmb_train/` (80% of data)
-- **Validation Set**: `data/processed/cmb_val/` (20% of data)
-- **Label Files**: `cmb_train.csv`, `cmb_val.csv`
+- **Dataset**: FSL-105
+- **Training Set**: `data/processed/FSL105_train/` (80% of data)
+- **Validation Set**: `data/processed/FSL105_val/` (20% of data)
+- **Label Files**: `FSL105_train.csv`, `FSL105_val.csv`
 - **Demo Files**: `data/demo/` (6 pre-processed samples for quick testing)
 
 ### Pre-trained Models
 
-- **Transformer Model**: `trained_models/transformer/cmb_optimal/SignTransformer_best.pt`
-  - Input: Keypoints [T, 156] from MediaPipe
+- **Transformer Model**: `trained_models/transformer/FSL105_classification/SignTransformer_best.pt`
+  - Input: Keypoints [T, 178] from MediaPipe
   - Architecture: Multi-Head Attention Mechanism
   - Parameters: ~2M
-- **IV3-GRU Model**: `trained_models/iv3_gru/cmb_optimal/InceptionV3GRU_best.pt`
+- **IV3-GRU Model**: `trained_models/iv3_gru/FSL105_classification/InceptionV3GRU_best.pt`
   - Input: InceptionV3 features [T, 2048]
   - Architecture: CNN + GRU
   - Parameters: ~25M
@@ -78,7 +78,7 @@ python show_network_info.py
 
 Rather than being a simple demonstration platform, PANSINAYAN serves as a comprehensive evidence collection system that enables systematic evaluation of two competing neural network architectures:
 
-- **Multi-Head Attention Mechanism Transformer**: Processes spatio-temporal keypoint sequences (156-dimensional features)
+- **Multi-Head Attention Mechanism Transformer**: Processes spatio-temporal keypoint sequences (178-dimensional features)
 - **InceptionV3-GRU Baseline**: Processes visual feature sequences (2048-dimensional features)
 
 The tool is purpose-built to address the core research question: **How does a Multi-Head Attention Mechanism Transformer improve recognition and classification of isolated FSL glosses compared to the IV3-GRU baseline, both with and without occlusion?**
@@ -126,7 +126,7 @@ The application is built on a technical foundation that enables data collection:
 
 #### **Dual Architecture Support**
 
-- **Multi-Head Attention Mechanism Transformer**: Processes 156-dimensional keypoint sequences extracted from MediaPipe pose, hand, and face landmarks
+- **Multi-Head Attention Mechanism Transformer**: Processes 178-dimensional keypoint sequences extracted from MediaPipe pose, hand, and face landmarks
 - **InceptionV3-GRU Baseline**: Processes 2048-dimensional visual features extracted from video frames using pre-trained InceptionV3 CNN
 - **Integration**: Both architectures are integrated into a unified evaluation framework
 
@@ -181,7 +181,7 @@ The upload system supports two data input pathways that enable research data gat
 
 - **Purpose**: Direct input of preprocessed data containing both keypoint sequences and visual features
 - **Data Structure**:
-  - `X`: 156-dimensional keypoint sequences for Transformer analysis
+  - `X`: 178-dimensional keypoint sequences for Transformer analysis
   - `X2048`: 2048-dimensional visual features for InceptionV3-GRU analysis
   - `mask`: Visibility information for occlusion analysis
   - `timestamps_ms`: Temporal information for spatio-temporal analysis
@@ -413,8 +413,8 @@ The preprocessing stage serves as the **critical data transformation hub** that 
 
 The preprocessing pipeline implements advanced keypoint extraction specifically designed to capture spatio-temporal patterns that support the research hypothesis:
 
-- **MediaPipe Holistic Integration**: Comprehensive extraction of 78 keypoints from pose (25 points), hands (21 points each), and face (11 points)
-- **Spatio-Temporal Representation**: 156-dimensional feature vectors (78 keypoints × 2 coordinates) that capture spatial relationships and temporal dynamics
+- **MediaPipe Holistic Integration**: Comprehensive extraction of 89 keypoints from pose (25 points), hands (21 points each), and face (22 points)
+- **Spatio-Temporal Representation**: 178-dimensional feature vectors (89 keypoints × 2 coordinates) that capture spatial relationships and temporal dynamics
 - **Temporal Sequence Processing**: Frame-by-frame keypoint tracking that preserves temporal information crucial for sign language recognition
 - **Coordinate Normalization**: Standardized coordinate system ensuring consistent spatial representation across different video sources
 
@@ -434,7 +434,7 @@ The preprocessing pipeline implements visual feature extraction that provides th
 The preprocessing stage implements occlusion detection that is central to the research methodology:
 
 - **Facial Region Occlusion Detection**: Geometric algorithms that detect when hand movements intersect with specific facial regions (eyes, nose, mouth areas)
-- **Facial Keypoint Analysis**: Analysis of 11 facial landmarks to identify which facial features are occluded by hand movements
+- **Facial Keypoint Analysis**: Analysis of 22 facial landmarks to identify which facial features are occluded by hand movements
 - **Consecutive Frame Threshold**: Detection requires occlusion for a minimum of 15 consecutive frames to classify a sample as occluded
 - **Occlusion Severity Assessment**: Quantitative measurement of occlusion extent based on the number of occluded facial keypoints
 
@@ -502,8 +502,8 @@ The preprocessing stage implements sophisticated batch processing designed for e
 ##### **Geometric Analysis Algorithm**
 
 - **Facial Region Intersection Detection**: Geometric algorithms for detecting when hand keypoints intersect with facial regions (eyes, nose, mouth areas)
-- **Spatial Relationship Analysis**: Analysis of spatial relationships between 21 hand keypoints and 11 facial landmarks
-- **Occlusion Severity Calculation**: Quantitative measurement based on the number of occluded facial keypoints out of 11 total facial landmarks
+- **Spatial Relationship Analysis**: Analysis of spatial relationships between 21 hand keypoints and 22 facial landmarks
+- **Occlusion Severity Calculation**: Quantitative measurement based on the number of occluded facial keypoints out of 22 total facial landmarks
 - **Temporal Occlusion Tracking**: Analysis of occlusion patterns across temporal sequences with 15-frame minimum threshold
 
 ##### **Occlusion Metadata Generation**
@@ -519,7 +519,7 @@ The preprocessing stage implements sophisticated batch processing designed for e
 
 The preprocessing stage generates comprehensive NPZ files containing all data required for research evaluation:
 
-- **Keypoint Data (X)**: 156-dimensional keypoint sequences for Transformer analysis
+- **Keypoint Data (X)**: 178-dimensional keypoint sequences for Transformer analysis
 - **Visual Features (X2048)**: 2048-dimensional visual features for InceptionV3-GRU analysis
 - **Visibility Masks**: Information about keypoint visibility and occlusion status
 - **Temporal Information**: Timestamps and temporal metadata for spatio-temporal analysis
@@ -555,7 +555,7 @@ The inference stage serves as the **core performance data collection engine** th
 
 The inference system implements comprehensive integration of the Transformer architecture for spatio-temporal analysis:
 
-- **Spatio-Temporal Keypoint Processing**: Direct processing of 156-dimensional keypoint sequences that capture spatial relationships and temporal dynamics
+- **Spatio-Temporal Keypoint Processing**: Direct processing of 178-dimensional keypoint sequences that capture spatial relationships and temporal dynamics
 - **Multi-Head Attention Mechanism**: Utilization of attention mechanisms that can focus on different spatial and temporal aspects of sign language
 - **Sequence Modeling**: Advanced temporal sequence processing that preserves temporal information crucial for sign language recognition
 - **Research Hypothesis Support**: Direct testing of the hypothesis that Transformer architectures can better capture spatio-temporal patterns
@@ -775,7 +775,7 @@ The visualization system implements sophisticated keypoint animation that direct
 - **Pose Landmarks (Red)**: Upper body landmarks (25 points) for body posture analysis
 - **Left Hand Landmarks (Blue)**: Hand landmarks (21 points) for left hand movement analysis
 - **Right Hand Landmarks (Green)**: Hand landmarks (21 points) for right hand movement analysis
-- **Face Landmarks (Orange)**: Facial landmarks (11 points) for facial expression and occlusion analysis
+- **Face Landmarks (Orange)**: Facial landmarks (22 points) for facial expression and occlusion analysis
 - **Spatial Relationship Analysis**: Clear visualization of spatial relationships between different body parts
 
 ##### **Occlusion-Aware Visualization**
@@ -899,9 +899,9 @@ The validation stage serves as the **comprehensive systematic evaluation engine*
 
 The validation system implements sophisticated dataset management designed for systematic research evaluation:
 
-- **Dataset Configuration**: FSL-105 (main dataset) + Sample-105 (supplementary) = Combined dataset for training
-- **NPZ Folder Integration**: Direct integration with large-scale research datasets (`cmb_train`, `cmb_val`) containing preprocessed data
-- **CSV Label System**: Automatic integration of comprehensive label files (`cmb_train.csv`, `cmb_val.csv`) with encoding detection for robust data handling
+- **Dataset Configuration**: FSL-105 dataset for training
+- **NPZ Folder Integration**: Direct integration with large-scale research datasets (`FSL105_train`, `FSL105_val`) containing preprocessed data
+- **CSV Label System**: Automatic integration of comprehensive label files (`FSL105_train.csv`, `FSL105_val.csv`) with encoding detection for robust data handling
 - **File Compatibility Validation**: Comprehensive verification that NPZ files contain properly formatted data for both architectures
 - **Batch Dataset Preparation**: Efficient preparation of large datasets (80% train, 20% validation) required for statistically significant research evaluation
 
@@ -1357,13 +1357,13 @@ The following demo flow is specifically designed to demonstrate how the tool sup
 
 - **105 Glosses**: Complete Filipino Sign Language vocabulary (GREETING, SURVIVAL, NUMBER, CALENDAR, DAYS, FAMILY, RELATIONSHIPS, COLOR, FOOD, DRINK)
 - **10 Categories**: Semantic groupings for hierarchical classification analysis
-- **Combined Dataset**: FSL-105 + Sample-105 for comprehensive evaluation
-- **Data Split**: 80% training (cmb_train), 20% validation (cmb_val)
+- **Dataset**: FSL-105 for comprehensive evaluation
+- **Data Split**: 80% training (FSL105_train), 20% validation (FSL105_val)
 
 **Pre-trained Models:**
 
-- **Transformer**: `trained_models/transformer/cmb_optimal/SignTransformer_best.pt`
-- **IV3-GRU**: `trained_models/iv3_gru/cmb_optimal/InceptionV3GRU_best.pt`
+- **Transformer**: `trained_models/transformer/FSL105_classification/SignTransformer_best.pt`
+- **IV3-GRU**: `trained_models/iv3_gru/FSL105_classification/InceptionV3GRU_best.pt`
 
 **Demo Files Available:**
 
