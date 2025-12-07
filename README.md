@@ -10,7 +10,7 @@ Multi-Head Attention Transformer vs InceptionV3-GRU for Filipino Sign Language R
 
 - **Glosses**: 105 Filipino sign words
 - **Categories**: 10 semantic categories (Greeting, Survival, Number, Calendar, Days, Family, Relationships, Color, Food, Drink)
-- **Training Data**: fsl-105 dataset
+- **Training Data**: FSL-105 dataset
 - **Models**: Pre-trained Transformer and IV3-GRU models available
 
 ## 🚀 Quick Start
@@ -66,14 +66,14 @@ streamlit run run_app.py
 ```powershell
 # Transformer model
 python -m evaluation.prediction.predict ^
-  --model transformer ^
-  --checkpoint trained_models\transformer\optimal\SignTransformer_best.pt ^
+  --model transformer_isolated ^
+  --checkpoint trained_models\transformer\FSL105_classification\SignTransformer_best.pt ^
   --input data\demo\clip_0138_nice to meet you.npz
 
 # IV3-GRU model
 python -m evaluation.prediction.predict ^
-  --model iv3_gru ^
-  --checkpoint trained_models\iv3_gru\optimal\InceptionV3GRU_best.pt ^
+  --model iv3_gru_isolated ^
+  --checkpoint trained_models\iv3_gru\FSL105_classification\InceptionV3GRU_best.pt ^
   --input data\demo\clip_1146_grandfather.npz
 ```
 
@@ -81,8 +81,8 @@ python -m evaluation.prediction.predict ^
 
 ```powershell
 python -m evaluation.prediction.predict ^
-  --model transformer ^
-  --checkpoint trained_models\transformer\optimal\SignTransformer_best.pt ^
+  --model transformer_isolated ^
+  --checkpoint trained_models\transformer\FSL105_classification\SignTransformer_best.pt ^
   --input video.mp4
 ```
 
@@ -101,10 +101,10 @@ fslr-transformer-vs-iv3gru/
 │   ├── demo/                   # Demo NPZ files for testing
 │   ├── labels/                 # Label mappings (105 glosses, 10 categories)
 │   ├── processed/              # Preprocessed NPZ files
-│   │   ├── fsl_train/         # Training set (80%)
-│   │   ├── fsl_val/           # Validation set (20%)
-│   │   ├── fsl_train.csv      # Training labels
-│   │   └── fsl_val.csv        # Validation labels
+│   │   ├── FSL105_train/      # Training set (80%)
+│   │   ├── FSL105_val/        # Validation set (20%)
+│   │   ├── FSL105_train.csv   # Training labels
+│   │   └── FSL105_val.csv     # Validation labels
 │   ├── raw/                    # Raw video files
 │   └── splitting/              # Data splitting utilities
 ├── 📈 evaluation/              # Model validation and prediction
@@ -121,8 +121,10 @@ fslr-transformer-vs-iv3gru/
 │   └── for vast ai/           # Vast.ai deployment resources
 ├── 🖥️ streamlit_app/          # Interactive web application
 ├── 💾 trained_models/          # Model checkpoints and weights
-│   ├── transformer\optimal\  # Transformer models
-│   └── iv3_gru\optimal\      # IV3-GRU models
+│   ├── transformer\FSL105_classification\  # Transformer classification models
+│   ├── transformer\FSL105_ctc\             # Transformer CTC models
+│   ├── iv3_gru\FSL105_classification\      # IV3-GRU classification models
+│   └── iv3_gru\FSL105_ctc\                  # IV3-GRU CTC models
 └── 🏋️ training/               # Model training and evaluation
 ```
 
@@ -175,15 +177,15 @@ python data\splitting\assign.py
 
 # Split into train/val sets
 python data\splitting\data_split.py ^
-  --processed-root data\processed\fsl-105_10-08 ^
-  --labels data\processed\fsl-105_10-08\labels.csv ^
+  --processed-root data\processed\FSL-105 ^
+  --labels data\processed\FSL-105\labels.csv ^
   --out-root data\processed ^
   --copy ^
   --train-ratio 0.8 ^
-  --train-dir fsl_train ^
-  --val-dir fsl_val ^
-  --train-csv fsl_train.csv ^
-  --val-csv fsl_val.csv
+  --train-dir FSL105_train ^
+  --val-dir FSL105_val ^
+  --train-csv FSL105_train.csv ^
+  --val-csv FSL105_val.csv
 ```
 
 For detailed data splitting instructions, see [Data Guide](data/DATA_GUIDE.md).
@@ -194,11 +196,11 @@ For detailed data splitting instructions, see [Data Guide](data/DATA_GUIDE.md).
 
 ```powershell
 python -m training.train ^
-  --model transformer ^
-  --keypoints-train data\processed\fsl_train ^
-  --keypoints-val data\processed\fsl_val ^
-  --labels-train-csv data\processed\fsl_train.csv ^
-  --labels-val-csv data\processed\fsl_val.csv ^
+  --model transformer_isolated ^
+  --keypoints-train data\processed\FSL105_train ^
+  --keypoints-val data\processed\FSL105_val ^
+  --labels-train-csv data\processed\FSL105_train.csv ^
+  --labels-val-csv data\processed\FSL105_val.csv ^
   --num-gloss 105 ^
   --num-cat 10 ^
   --epochs 100 ^
@@ -212,11 +214,11 @@ python -m training.train ^
 
 ```powershell
 python -m training.train ^
-  --model iv3_gru ^
-  --features-train data\processed\fsl_train ^
-  --features-val data\processed\fsl_val ^
-  --labels-train-csv data\processed\fsl_train.csv ^
-  --labels-val-csv data\processed\fsl_val.csv ^
+  --model iv3_gru_isolated ^
+  --features-train data\processed\FSL105_train ^
+  --features-val data\processed\FSL105_val ^
+  --labels-train-csv data\processed\FSL105_train.csv ^
+  --labels-val-csv data\processed\FSL105_val.csv ^
   --feature-key X2048 ^
   --num-gloss 105 ^
   --num-cat 10 ^
@@ -235,10 +237,10 @@ Train models for continuous sign recognition using CTC (no frame-level alignment
 
 ```powershell
 # SignTransformerCtc
-python training/train.py --model transformer_ctc --keypoints-train data\processed\fsl_train --keypoints-val data\processed\fsl_val --labels-train-csv data\processed\fsl_train.csv --labels-val-csv data\processed\fsl_val.csv --epochs 100 --grad-clip 1.0 --amp
+python training/train.py --model transformer_continuous --keypoints-train data\processed\FSL105_train --keypoints-val data\processed\FSL105_val --labels-train-csv data\processed\FSL105_train.csv --labels-val-csv data\processed\FSL105_val.csv --epochs 100 --grad-clip 1.0 --amp
 
-# MediaPipeGRUCtc (baseline)
-python training/train.py --model mediapipe_gru_ctc --keypoints-train data\processed\fsl_train --keypoints-val data\processed\fsl_val --labels-train-csv data\processed\fsl_train.csv --labels-val-csv data\processed\fsl_val.csv --epochs 100 --grad-clip 1.0
+# InceptionV3GRUCtc
+python training/train.py --model iv3_gru_continuous --features-train data\processed\FSL105_train --features-val data\processed\FSL105_val --labels-train-csv data\processed\FSL105_train.csv --labels-val-csv data\processed\FSL105_val.csv --feature-key X2048 --epochs 100 --grad-clip 1.0 --amp
 ```
 
 For detailed CTC training options, see [Training Guide](training/TRAINING_GUIDE.md#ctc-training-continuous-recognition).
@@ -249,8 +251,8 @@ For detailed CTC training options, see [Training Guide](training/TRAINING_GUIDE.
 
 ```powershell
 # Validate NPZ files
-python -m preprocessing.utils.validate_npz data\processed\fsl_train
-python -m preprocessing.utils.validate_npz data\processed\fsl_val --require-x2048
+python -m preprocessing.utils.validate_npz data\processed\FSL105_train
+python -m preprocessing.utils.validate_npz data\processed\FSL105_val --require-x2048
 ```
 
 **Model Validation:**
@@ -258,24 +260,24 @@ python -m preprocessing.utils.validate_npz data\processed\fsl_val --require-x204
 ```powershell
 # Transformer model
 python -m evaluation.validation.validate ^
-  --model transformer ^
-  --checkpoint trained_models\transformer\optimal\SignTransformer_best.pt ^
-  --data-dir data\processed\fsl_val ^
-  --labels-csv data\processed\fsl_val.csv
+  --model transformer_isolated ^
+  --checkpoint trained_models\transformer\FSL105_classification\SignTransformer_best.pt ^
+  --data-dir data\processed\FSL105_val ^
+  --labels-csv data\processed\FSL105_val.csv
 
 # IV3-GRU model
 python -m evaluation.validation.validate ^
-  --model iv3_gru ^
-  --checkpoint trained_models\iv3_gru\optimal\InceptionV3GRU_best.pt ^
-  --data-dir data\processed\fsl_val ^
-  --labels-csv data\processed\fsl_val.csv
+  --model iv3_gru_isolated ^
+  --checkpoint trained_models\iv3_gru\FSL105_classification\InceptionV3GRU_best.pt ^
+  --data-dir data\processed\FSL105_val ^
+  --labels-csv data\processed\FSL105_val.csv
 ```
 
 **Smoke Tests:**
 
 ```powershell
-python -m training.train --model transformer --smoke-test --num-gloss 105 --num-cat 10
-python -m training.train --model iv3_gru --smoke-test --num-gloss 105 --num-cat 10
+python -m training.train --model transformer_isolated --smoke-test --num-gloss 105 --num-cat 10
+python -m training.train --model iv3_gru_isolated --smoke-test --num-gloss 105 --num-cat 10
 ```
 
 For detailed validation instructions, see [Validation Guide](evaluation/validation/VALIDATION_GUIDE.md).
@@ -285,13 +287,13 @@ For detailed validation instructions, see [Validation Guide](evaluation/validati
 **Predict**:
 
 ```powershell
-python evaluation\prediction\predict_ctc.py --model transformer_ctc --checkpoint model.pt --input clip.npz
+python evaluation\prediction\predict_ctc.py --model transformer_continuous --checkpoint model.pt --input clip.npz
 ```
 
 **Evaluate** (computes WER, sequence accuracy):
 
 ```powershell
-python evaluation\validation\evaluate_ctc.py --model transformer_ctc --checkpoint model.pt --test-data data\processed\fsl_val --test-labels fsl_val.csv
+python evaluation\validation\evaluate_ctc.py --model transformer_continuous --checkpoint model.pt --test-data data\processed\FSL105_val --test-labels FSL105_val.csv
 ```
 
 See [Prediction Guide](evaluation/prediction/PREDICTION_GUIDE.md#ctc-prediction-continuous-recognition) and [Validation Guide](evaluation/validation/VALIDATION_GUIDE.md#ctc-evaluation-continuous-recognition).
@@ -314,13 +316,6 @@ See [Prediction Guide](evaluation/prediction/PREDICTION_GUIDE.md#ctc-prediction-
 - **Advantages**: Transfer learning from ImageNet
 - **Best for**: Visual feature-based recognition
 
-#### MediaPipe-GRU
-
-- **Input**: MediaPipe keypoints [T, 178]
-- **Architecture**: Bidirectional GRU
-- **Advantages**: Lightweight, mobile-friendly
-- **Best for**: Baseline comparison
-
 Classification models predict:
 
 - **Gloss**: Specific sign word (105 classes)
@@ -336,13 +331,13 @@ Classification models predict:
 - **Advantages**: No frame-level alignment required, attention-based
 - **Best for**: Continuous sign recognition
 
-#### MediaPipeGRUCtc
+#### InceptionV3GRUCtc
 
-- **Input**: MediaPipe keypoints [T, 178]
+- **Input**: InceptionV3 features [T, 2048]
 - **Output**: Gloss sequences (variable length)
-- **Architecture**: Bidirectional GRU + CTC head
-- **Advantages**: Lightweight, fast inference
-- **Best for**: Baseline for continuous recognition
+- **Architecture**: CNN + GRU + CTC head
+- **Advantages**: Transfer learning benefits, visual features
+- **Best for**: Continuous recognition with visual features
 
 **CTC Features:**
 
