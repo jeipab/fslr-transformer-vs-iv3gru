@@ -292,7 +292,7 @@ def render_sequence_overview(npz_dict: Dict, sequence_length: int) -> Tuple[np.n
     if "X" not in npz_dict:
         raise KeyError("Uploaded .npz must contain key 'X' with shape [T, 178]")
 
-    X_raw = np.array(npz_dict["X"])  # [T, 156]
+    X_raw = np.array(npz_dict["X"])  # [T, 178]
     mask = np.array(npz_dict.get("mask", []))
     timestamps_ms = np.array(npz_dict.get("timestamps_ms", []))
     X2048 = np.array(npz_dict.get("X2048", [])) if "X2048" in npz_dict else None
@@ -691,7 +691,7 @@ def render_animated_keypoints(sequence: np.ndarray, mask: Optional[np.ndarray] =
         return
     
     # Get current frame keypoints
-    current_keypoints = keypoints_2d[frame_idx]  # [78, 2]
+    current_keypoints = keypoints_2d[frame_idx]  # [89, 2]
     
     # Create the plot
     fig = go.Figure()
@@ -813,7 +813,7 @@ def render_animated_keypoints(sequence: np.ndarray, mask: Optional[np.ndarray] =
     with col2:
         if mask is not None and mask.size > 0:
             visible_points = np.sum(mask[frame_idx]) if frame_idx < mask.shape[0] else 0
-            st.metric("Visible Points", f"{visible_points}/78")
+            st.metric("Visible Points", f"{visible_points}/89")
     with col3:
         if len(current_keypoints) > 0:
             avg_x = np.mean(current_keypoints[:, 0])

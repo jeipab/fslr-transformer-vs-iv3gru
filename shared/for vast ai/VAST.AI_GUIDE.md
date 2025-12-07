@@ -360,7 +360,7 @@ To verify IV3-GRU loads correctly on CPU:
 python -c "
 try:
     from evaluation.prediction.predict import ModelPredictor
-    predictor = ModelPredictor('iv3_gru', 'trained_models/iv3_gru/70-gloss_acc/InceptionV3GRU_best.pt', device='cpu')
+    predictor = ModelPredictor('iv3_gru_isolated', 'trained_models/iv3_gru/FSL105_classification/InceptionV3GRU_best.pt', device='cpu')
     print('IV3-GRU loaded successfully on CPU')
 except Exception as e:
     print('IV3-GRU loading failed:', str(e))

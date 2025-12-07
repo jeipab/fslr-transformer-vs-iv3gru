@@ -155,8 +155,8 @@ def render_dataset_upload():
     # NPZ folder selection
     st.markdown("**Validation NPZ Folder**")
     npz_folder_path = st.text_input(
-        "Enter path to folder containing NPZ files (default: data/processed/fsl_val)",
-        placeholder="e.g., data/processed/fsl_val",
+        "Enter path to folder containing NPZ files (default: data/processed/FSL105_val)",
+        placeholder="e.g., data/processed/FSL105_val",
         help="Path to directory containing NPZ files for validation"
     )
     
