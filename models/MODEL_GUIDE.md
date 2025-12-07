@@ -4,12 +4,19 @@ Technical documentation for Filipino Sign Language Recognition model architectur
 
 ## Overview
 
-Two architectures for dual-task learning (gloss + category prediction):
+The codebase provides two main architectures with both classification and CTC variants:
+
+**Classification Models** (Isolated Sign Recognition):
 
 - **SignTransformer**: Attention-based encoder for keypoint sequences
 - **InceptionV3GRU**: CNN-RNN hybrid for visual features
+- Both output `(gloss_logits, category_logits)` for 105 glosses and 10 categories
 
-Both models output `(gloss_logits, category_logits)` for 105 glosses and 10 categories.
+**CTC Models** (Continuous Sign Recognition):
+
+- **SignTransformerCtc**: Transformer encoder with CTC head for sequence-to-sequence recognition
+- **InceptionV3GRUCtc**: CNN-RNN hybrid with CTC head for continuous recognition
+- Both output log probabilities `[B, T, 106]` for variable-length gloss sequences
 
 ---
 
@@ -592,7 +599,10 @@ gloss_confidence = gloss_probs.gather(1, gloss_pred.unsqueeze(1))
 
 ## CTC Models (Continuous Recognition)
 
-Two CTC models for sequence-to-sequence sign language recognition without frame-level alignment.
+CTC models for sequence-to-sequence sign language recognition without frame-level alignment:
+
+- **SignTransformerCtc**: Transformer encoder with CTC head (keypoints)
+- **InceptionV3GRUCtc**: CNN-RNN hybrid with CTC head (visual features)
 
 ### SignTransformerCtc
 
@@ -618,29 +628,38 @@ log_probs = log_probs.permute(1, 0, 2)  # [T, B, C]
 **Key Differences from SignTransformer**:
 
 - ❌ No pooling layer
-- ❌ No category head
 - ✅ Full temporal output
 - ✅ Single CTC head
 
-### MediaPipeGRUCtc
+### InceptionV3GRUCtc
 
-**Architecture**: Bidirectional 2-layer GRU + CTC head
+**Architecture**: InceptionV3 feature extractor + GRU + CTC head
 
 **Input/Output**:
 
-- Input: `[B, T, 178]` keypoints
-- Output: `[B, T, 106]` log probabilities
+- Input: `[B, T, 2048]` InceptionV3 features
+- Output: `[B, T, 106]` log probabilities (105 glosses + 1 blank)
 
 **Usage**:
 
 ```python
-from models import MediaPipeGRUCtc
+from models import InceptionV3GRUCtc
 
-model = MediaPipeGRUCtc(num_ctc_classes=106, hidden1=256, hidden2=128)
+model = InceptionV3GRUCtc(
+    num_ctc_classes=106,
+    hidden1=16,
+    hidden2=12,
+    dropout=0.3
+)
 log_probs = model(x, lengths=lengths)  # [B, T, 106]
 ```
 
-**Advantages**: Lightweight (~500KB), faster inference, mobile-friendly
+**Key Differences from InceptionV3GRU**:
+
+- ❌ No pooling layer
+- ✅ Full temporal output
+- ✅ Single CTC head
+- ✅ Uses precomputed InceptionV3 features
 
 ### CTC vs Classification
 
@@ -686,8 +705,7 @@ decoded, score = beam_search_ctc_decoder(log_probs, blank_id=105, beam_width=10)
 ## Implementation Files
 
 - `models/transformer.py`: SignTransformer + SignTransformerCtc (~1020 lines)
-- `models/mediapipe_gru.py`: MediaPipeGRU + MediaPipeGRUCtc (~679 lines)
-- `models/iv3_gru.py`: InceptionV3GRU implementation (~430 lines)
+- `models/iv3_gru.py`: InceptionV3GRU + InceptionV3GRUCtc (~430 lines)
 - `models/__init__.py`: Module exports
 - `evaluation/ctc_utils.py`: CTC decoders and utilities
 
