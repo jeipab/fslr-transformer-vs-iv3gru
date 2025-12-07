@@ -39,7 +39,7 @@ python -m preprocessing.core.preprocess data\raw\videos data\processed\output --
 
 ```
 Video Frame → MediaPipe Keypoints → Multi-Method Detection → Temporal Filtering → Binary Flag
-     [T]            [78 points]           [4 methods]            [5-frame window]      [0 or 1]
+     [T]            [89 points]           [4 methods]            [5-frame window]      [0 or 1]
 ```
 
 ### 1. Head Region Partitioning

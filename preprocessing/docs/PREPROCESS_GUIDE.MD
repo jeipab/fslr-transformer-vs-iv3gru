@@ -24,9 +24,10 @@ pip install -r requirements.txt
 data/
 ├── raw/fsl-105/              # Input videos
 ├── processed/
-│   ├── fsl-105_10-08/       # Processed NPZ files + labels.csv
-│   ├── fsl_train/           # Training split (80%)
-│   ├── fsl_val/             # Validation split (20%)
+│   ├── FSL105_train/        # Training split (80%)
+│   ├── FSL105_val/          # Validation split (20%)
+│   ├── FSL105_train.csv     # Training labels
+│   └── FSL105_val.csv       # Validation labels
 ```
 
 ## Quick Start
@@ -46,7 +47,7 @@ python -m preprocessing.core.preprocess ^
 ```powershell
 python -m preprocessing.core.preprocess ^
   data\raw\fsl-105 ^
-  data\processed\fsl-105_10-08 ^
+  data\processed\FSL-105 ^
   --write-keypoints ^
   --write-iv3-features ^
   --workers 8 ^
@@ -120,7 +121,7 @@ Function: `compute_occlusion_detection(X, mask, output_format='compatible', ...)
 ```powershell
 python -m preprocessing.core.preprocess ^
   data\raw\fsl-105 ^
-  data\processed\fsl-105_output ^
+  data\processed\FSL-105 ^
   --write-keypoints ^
   --write-iv3-features ^
   --workers 12 ^
@@ -132,7 +133,7 @@ python -m preprocessing.core.preprocess ^
 ```powershell
 python -m preprocessing.core.preprocess ^
   data\raw\fsl-105 ^
-  data\processed\fsl-105_output ^
+  data\processed\FSL-105 ^
   --write-keypoints ^
   --write-iv3-features ^
   --workers 8 ^
@@ -144,7 +145,7 @@ python -m preprocessing.core.preprocess ^
 ```powershell
 python -m preprocessing.core.preprocess ^
   data\raw\fsl-105 ^
-  data\processed\fsl-105_output ^
+  data\processed\FSL-105 ^
   --write-keypoints ^
   --write-iv3-features ^
   --workers 4 ^
@@ -173,18 +174,19 @@ python -m preprocessing.core.preprocess ^
 
 Each `.npz` file contains:
 
-- `X`: `[T, 156]` - MediaPipe keypoints (normalized to [0, 1])
+- `X`: `[T, 178]` - MediaPipe keypoints (normalized to [0, 1])
 - `X2048`: `[T, 2048]` - InceptionV3 features
-- `mask`: `[T, 78]` - Keypoint visibility (boolean)
+- `mask`: `[T, 89]` - Keypoint visibility (boolean)
 - `timestamps_ms`: `[T]` - Frame timestamps (milliseconds)
 - `meta`: JSON metadata (FPS, dimensions, occlusion flag)
 
-**Keypoint Layout** (156 dimensions):
+**Keypoint Layout** (178 dimensions):
 
 - Pose: 25 points × 2 coords = 50
 - Left hand: 21 points × 2 coords = 42
 - Right hand: 21 points × 2 coords = 42
-- Face: 11 points × 2 coords = 22
+- Face: 22 points × 2 coords = 44
+- **Total**: 89 keypoints × 2 coordinates = 178 dimensions
 
 ## Labels CSV Workflow
 
@@ -195,7 +197,7 @@ import os, json
 import numpy as np
 import pandas as pd
 
-processed_dir = 'data/processed/fsl-105_10-08'
+processed_dir = 'data/processed/FSL-105'
 files = [f for f in os.listdir(processed_dir) if f.endswith('.npz')]
 
 data = []
@@ -213,9 +215,9 @@ pd.DataFrame(data).to_csv(f'{processed_dir}/labels.csv', index=False)
 ### 2. Add Gloss and Category IDs
 
 ```powershell
-copy data\processed\fsl-105_10-08\labels.csv data\processed\labels.csv
+copy data\processed\FSL-105\labels.csv data\processed\labels.csv
 python data\splitting\assign.py
-copy data\processed\labels.csv data\processed\fsl-105_10-08\labels.csv
+copy data\processed\labels.csv data\processed\FSL-105\labels.csv
 ```
 
 Result:
@@ -230,13 +232,15 @@ clip_0002_thank you,7,0,1
 
 ```powershell
 python data\splitting\data_split.py ^
-  --processed-root data\processed\fsl-105_10-08 ^
-  --labels data\processed\fsl-105_10-08\labels.csv ^
+  --processed-root data\processed\FSL-105 ^
+  --labels data\processed\FSL-105\labels.csv ^
   --out-root data\processed ^
   --copy ^
   --train-ratio 0.8 ^
-  --train-dir fsl_train ^
-  --val-dir fsl_val
+  --train-dir FSL105_train ^
+  --val-dir FSL105_val ^
+  --train-csv FSL105_train.csv ^
+  --val-csv FSL105_val.csv
 ```
 
 ## Occlusion Detection
@@ -267,14 +271,14 @@ Details: [Occlusion Guide](OCCLUSION_GUIDE.md)
 Check NPZ files:
 
 ```powershell
-python -m preprocessing.utils.validate_npz data\processed\fsl_train
-python -m preprocessing.utils.validate_npz data\processed\fsl_val --require-x2048
+python -m preprocessing.utils.validate_npz data\processed\FSL105_train
+python -m preprocessing.utils.validate_npz data\processed\FSL105_val --require-x2048
 ```
 
 Test training:
 
 ```powershell
-python -m training.train --model transformer --smoke-test --num-gloss 105 --num-cat 10
+python -m training.train --model transformer_isolated --smoke-test --num-gloss 105 --num-cat 10
 ```
 
 ## Common Issues
@@ -282,7 +286,7 @@ python -m training.train --model transformer --smoke-test --num-gloss 105 --num-
 | Issue              | Solution                                                    |
 | ------------------ | ----------------------------------------------------------- |
 | Mismatched names   | CSV `file` column must match NPZ filenames (without `.npz`) |
-| Wrong shape        | Check `X` is `[T, 156]` and `X2048` is `[T, 2048]`          |
+| Wrong shape        | Check `X` is `[T, 178]` and `X2048` is `[T, 2048]`          |
 | Label range errors | `gloss` in [0, 104], `cat` in [0, 9] (zero-indexed)         |
 | Empty sequences    | Preprocessing skips videos with no valid frames             |
 | Memory errors      | Reduce `--batch-size` and `--workers`                       |
@@ -294,10 +298,10 @@ python -m training.train --model transformer --smoke-test --num-gloss 105 --num-
 CSV links to NPZ via `file` column (basename without extension).
 
 **Keypoint order?**  
-`pose25, left_hand21, right_hand21, face11` - normalized to [0, 1].
+`pose25, left_hand21, right_hand21, face22` - normalized to [0, 1].
 
 **Use X2048 with Transformer?**  
-Yes, Transformer supports keypoints (156-D), features (2048-D), or both (2204-D).
+Yes, Transformer supports keypoints (178-D), features (2048-D), or both (2226-D).
 
 **Processing speed?**  
 8 workers + batch size 32 on RTX 3080: 400-600 videos/hour.
