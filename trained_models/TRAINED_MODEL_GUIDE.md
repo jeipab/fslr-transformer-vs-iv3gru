@@ -11,25 +11,40 @@ This directory contains trained models for Filipino Sign Language Recognition. B
 ```
 trained_models/
 ├── transformer/
-│   └── optimal/
-│       ├── SignTransformer_best.pt
-│       └── training_20251009_074031.log
+│   ├── FSL105_classification/
+│   │   ├── SignTransformer_best.pt
+│   │   ├── SignTransformer_last.pt
+│   │   └── training_*.log
+│   └── FSL105_ctc/
+│       ├── SignTransformerCtc_best.pt
+│       ├── SignTransformerCtc_last.pt
+│       └── training_*.log
 ├── iv3_gru/
-│   └── optimal/
-│       ├── InceptionV3GRU_best.pt
-│       ├── InceptionV3GRU_last.pt
-│       ├── training_20251009_083917_metrics.csv
-│       └── training_20251009_083917.log
+│   ├── FSL105_classification/
+│   │   ├── InceptionV3GRU_best.pt
+│   │   ├── InceptionV3GRU_last.pt
+│   │   └── training_*.log
+│   └── FSL105_ctc/
+│       ├── InceptionV3GRUCtc_best.pt
+│       ├── InceptionV3GRUCtc_last.pt
+│       └── training_*.log
 └── TRAINED_MODEL_GUIDE.md
 ```
 
 ---
 
-## Optimal Models
+## Model Organization
+
+### Directory Structure
+
+Models are organized by architecture and task type:
+
+- **Classification models** (isolated sign recognition): `FSL105_classification/`
+- **CTC models** (continuous sign recognition): `FSL105_ctc/`
 
 ### Training Configuration
 
-Both models in the `optimal/` directories were trained using:
+Models in the `FSL105_classification/` directories were trained using:
 
 **Dataset**:
 
@@ -78,11 +93,11 @@ import torch
 from models.transformer import SignTransformer
 
 # Load checkpoint
-checkpoint = torch.load('trained_models/transformer/optimal/SignTransformer_best.pt')
+checkpoint = torch.load('trained_models/transformer/FSL105_classification/SignTransformer_best.pt')
 
 # Initialize model with same architecture
 model = SignTransformer(
-    input_dim=156,
+    input_dim=178,
     emb_dim=256,
     num_heads=8,
     num_layers=4,
@@ -104,7 +119,7 @@ import torch
 from models.iv3_gru import InceptionV3GRU
 
 # Load checkpoint
-checkpoint = torch.load('trained_models/iv3_gru/optimal/InceptionV3GRU_best.pt')
+checkpoint = torch.load('trained_models/iv3_gru/FSL105_classification/InceptionV3GRU_best.pt')
 
 # Initialize model with same architecture
 model = InceptionV3GRU(
@@ -132,10 +147,10 @@ import torch
 
 # Load NPZ file with keypoints
 data = np.load('path/to/clip.npz')
-keypoints = data['X']  # Shape: [T, 156]
+keypoints = data['X']  # Shape: [T, 178]
 
 # Convert to tensor and add batch dimension
-x = torch.from_numpy(keypoints).float().unsqueeze(0)  # [1, T, 156]
+x = torch.from_numpy(keypoints).float().unsqueeze(0)  # [1, T, 178]
 
 # Forward pass
 with torch.no_grad():
@@ -207,11 +222,11 @@ The Streamlit app automatically loads models from these directories:
 # streamlit_app/core/config.py
 MODEL_CONFIG = {
     'transformer': {
-        'checkpoint_path': 'trained_models/transformer/optimal/SignTransformer_best.pt',
+        'checkpoint_path': 'trained_models/transformer/FSL105_classification/SignTransformer_best.pt',
         ...
     },
     'iv3_gru': {
-        'checkpoint_path': 'trained_models/iv3_gru/optimal/InceptionV3GRU_best.pt',
+        'checkpoint_path': 'trained_models/iv3_gru/FSL105_classification/InceptionV3GRU_best.pt',
         ...
     }
 }
@@ -223,8 +238,8 @@ MODEL_CONFIG = {
 
 ```powershell
 python evaluation/prediction/predict.py ^
-  --model transformer ^
-  --checkpoint trained_models/transformer/optimal/SignTransformer_best.pt ^
+  --model transformer_isolated ^
+  --checkpoint trained_models/transformer/FSL105_classification/SignTransformer_best.pt ^
   --input path/to/clip.npz
 ```
 
@@ -232,8 +247,8 @@ python evaluation/prediction/predict.py ^
 
 ```powershell
 python evaluation/prediction/predict.py ^
-  --model iv3_gru ^
-  --checkpoint trained_models/iv3_gru/optimal/InceptionV3GRU_best.pt ^
+  --model iv3_gru_isolated ^
+  --checkpoint trained_models/iv3_gru/FSL105_classification/InceptionV3GRU_best.pt ^
   --input path/to/clip.npz
 ```
 
@@ -241,10 +256,10 @@ python evaluation/prediction/predict.py ^
 
 ```powershell
 python evaluation/validation/validate.py ^
-  --model transformer ^
-  --checkpoint trained_models/transformer/optimal/SignTransformer_best.pt ^
-  --data-dir data/processed/fsl_val ^
-  --labels-csv data/processed/fsl_val.csv
+  --model transformer_isolated ^
+  --checkpoint trained_models/transformer/FSL105_classification/SignTransformer_best.pt ^
+  --data-dir data/processed/FSL105_val ^
+  --labels-csv data/processed/FSL105_val.csv
 ```
 
 ---
@@ -257,12 +272,12 @@ When training new models, specify output directory:
 
 ```powershell
 python training/train.py ^
-  --model transformer ^
-  --output-dir trained_models/transformer/experiment_name ^
-  --keypoints-train data/processed/fsl_train ^
-  --keypoints-val data/processed/fsl_val ^
-  --labels-train-csv data/processed/fsl_train.csv ^
-  --labels-val-csv data/processed/fsl_val.csv ^
+  --model transformer_isolated ^
+  --output-dir trained_models/transformer/FSL105_classification ^
+  --keypoints-train data/processed/FSL105_train ^
+  --keypoints-val data/processed/FSL105_val ^
+  --labels-train-csv data/processed/FSL105_train.csv ^
+  --labels-val-csv data/processed/FSL105_val.csv ^
   --num-gloss 105 ^
   --num-cat 10 ^
   --epochs 100
@@ -273,33 +288,32 @@ python training/train.py ^
 ```
 trained_models/
 ├── transformer/
-│   ├── optimal/              # Best production model
-│   ├── experiment1/          # Experimental run
-│   └── experiment2/          # Another experiment
+│   ├── FSL105_classification/    # Classification models
+│   ├── FSL105_ctc/                # CTC models
+│   └── experiment_name/           # Experimental runs
 └── iv3_gru/
-    ├── optimal/              # Best production model
-    ├── experiment1/          # Experimental run
-    └── experiment2/          # Another experiment
+    ├── FSL105_classification/     # Classification models
+    ├── FSL105_ctc/                # CTC models
+    └── experiment_name/            # Experimental runs
 ```
 
 ### Naming Convention
 
 Use descriptive folder names:
 
-- `optimal/` - Best production model
-- `baseline_MMDD/` - Baseline model from date
-- `improved_MMDD/` - Improved model from date
+- `FSL105_classification/` - Classification models (isolated signs)
+- `FSL105_ctc/` - CTC models (continuous recognition)
 - `experiment_name/` - Descriptive experiment name
 
 ---
 
 ## Model Comparison
 
-Both models in `optimal/` can be directly compared because they were:
+Models in the same task directory (e.g., `FSL105_classification/`) can be directly compared because they were:
 
 1. **Trained on same data**: FSL-105 with identical train/val split
 2. **Same hyperparameters**: Learning rate, batch size, epochs
-3. **Same loss function**: Multi-task learning with same weights
+3. **Same loss function**: Multi-task learning with same weights (classification) or CTCLoss (CTC)
 4. **Same evaluation**: Identical validation set and metrics
 
 This ensures any performance differences are due to model architecture, not training conditions.
@@ -310,8 +324,8 @@ This ensures any performance differences are due to model architecture, not trai
 
 ### File Management
 
-- Keep `optimal/` for production models
-- Use dated folders for experiments
+- Use `FSL105_classification/` and `FSL105_ctc/` for production models
+- Use descriptive folder names for experiments
 - Document changes in separate README per experiment
 - Keep training logs with checkpoints
 
@@ -321,9 +335,9 @@ When updating production models:
 
 1. Train new model in separate directory
 2. Validate performance on test set
-3. Compare with current optimal model
-4. If better, replace optimal model
-5. Archive old optimal model with date
+3. Compare with current production model
+4. If better, replace production model
+5. Archive old model with date suffix
 
 ### Checkpointing
 
