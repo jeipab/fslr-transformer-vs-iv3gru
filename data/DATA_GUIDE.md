@@ -8,10 +8,11 @@ File formats and structures for the Filipino Sign Language Recognition (FSLR) pi
 data/
 ├── raw/                    # Original videos (fsl-105, sample-105)
 ├── processed/              # Preprocessed NPZ files and splits
-│   ├── fsl-105_10-08/     # Processed fsl-105 source
-│   ├── fsl_train/         # FSL-105 training split
-│   ├── fsl_val/           # FSL-105 validation split
-│   └── *.csv              # Label files for each split
+│   ├── FSL105_train/      # FSL-105 training split (80%)
+│   ├── FSL105_val/        # FSL-105 validation split (20%)
+│   ├── FSL105_train.csv   # Training labels
+│   ├── FSL105_val.csv     # Validation labels
+│   └── labels.csv         # Main labels file
 ├── demo/                   # Demo clips for testing
 └── splitting/              # Data splitting utilities
 
@@ -58,24 +59,25 @@ Each `.npz` file contains both keypoint and feature data for both models.
 
 - **File**: `.npz` (compressed NumPy archive)
 - **Keys**:
-  - `X`: `[T, 156]` - MediaPipe keypoints (for Transformer)
+  - `X`: `[T, 178]` - MediaPipe keypoints (for Transformer)
   - `X2048`: `[T, 2048]` - InceptionV3 features (for IV3-GRU)
-  - `mask`: `[T, 78]` - Keypoint visibility mask
+  - `mask`: `[T, 89]` - Keypoint visibility mask
   - `timestamps_ms`: `[T]` - Frame timestamps in milliseconds
   - `meta`: JSON metadata (filename, source, occlusion info)
 
-### Keypoint Structure (156 dimensions)
+### Keypoint Structure (178 dimensions)
 
 - **Pose landmarks** (25 points): 50 dims (x, y per point)
 - **Left hand** (21 points): 42 dims (x, y per point)
 - **Right hand** (21 points): 42 dims (x, y per point)
-- **Face mesh** (11 points): 22 dims (x, y per point)
+- **Face mesh** (22 points): 44 dims (x, y per point)
+- **Total**: 89 keypoints × 2 coordinates = 178 dimensions
 
 ### Occlusion Detection
 
 Automatic occlusion detection during preprocessing:
 
-- **Frame occluded** if: `visible_keypoints / 78 < 0.6` (default threshold)
+- **Frame occluded** if: `visible_keypoints / 89 < 0.6` (default threshold)
 - **Clip marked occluded** if:
   - Occluded frames ≥ 40% of total frames, OR
   - Consecutive occluded frames ≥ 15
@@ -120,15 +122,15 @@ python data\splitting\assign.py
 
 ```powershell
 python data\splitting\data_split.py ^
-  --processed-root data\processed\fsl-105_10-08 ^
-  --labels data\processed\fsl-105_10-08\labels.csv ^
+  --processed-root data\processed\FSL-105 ^
+  --labels data\processed\labels.csv ^
   --out-root data\processed ^
   --copy ^
   --train-ratio 0.8 ^
-  --train-dir fsl_train ^
-  --val-dir fsl_val ^
-  --train-csv fsl_train.csv ^
-  --val-csv fsl_val.csv
+  --train-dir FSL105_train ^
+  --val-dir FSL105_val ^
+  --train-csv FSL105_train.csv ^
+  --val-csv FSL105_val.csv
 ```
 
 ### Label CSV Format
@@ -208,13 +210,23 @@ gloss_id,label,cat_id,category
 ```
 trained_models/
 ├── transformer/
-│   ├── SignTransformer_best.pt
-│   ├── SignTransformer_last.pt
-│   └── *.log
-└── iv3_gru/
-    ├── InceptionV3GRU_best.pt
-    ├── InceptionV3GRU_last.pt
-    └── *.log
+│   ├── FSL105_classification/
+│   │   ├── SignTransformer_best.pt
+│   │   ├── SignTransformer_last.pt
+│   │   └── *.log
+│   └── FSL105_ctc/
+│       ├── SignTransformerCtc_best.pt
+│       ├── SignTransformerCtc_last.pt
+│       └── *.log
+├── iv3_gru/
+│   ├── FSL105_classification/
+│   │   ├── InceptionV3GRU_best.pt
+│   │   ├── InceptionV3GRU_last.pt
+│   │   └── *.log
+│   └── FSL105_ctc/
+        ├── InceptionV3GRUCtc_best.pt
+        ├── InceptionV3GRUCtc_last.pt
+        └── *.log
 ```
 
 ### Checkpoint Format (.pt)
@@ -239,35 +251,37 @@ For details, see [Trained Model Guide](../trained_models/TRAINED_MODEL_GUIDE.md)
 
 ## Model Training
 
-### Transformer Training
+### Transformer Training (Classification)
 
 ```powershell
 python -m training.train ^
-  --model transformer ^
-  --keypoints-train data\processed\fsl_train ^
-  --keypoints-val data\processed\fsl_val ^
-  --labels-train-csv data\processed\fsl_train.csv ^
-  --labels-val-csv data\processed\fsl_val.csv ^
+  --model transformer_isolated ^
+  --keypoints-train data\processed\FSL105_train ^
+  --keypoints-val data\processed\FSL105_val ^
+  --labels-train-csv data\processed\FSL105_train.csv ^
+  --labels-val-csv data\processed\FSL105_val.csv ^
   --num-gloss 105 ^
   --num-cat 10 ^
   --epochs 100 ^
-  --batch-size 32
+  --batch-size 32 ^
+  --output-dir trained_models\transformer\FSL105_classification
 ```
 
-### IV3-GRU Training
+### IV3-GRU Training (Classification)
 
 ```powershell
 python -m training.train ^
-  --model iv3_gru ^
-  --features-train data\processed\fsl_train ^
-  --features-val data\processed\fsl_val ^
-  --labels-train-csv data\processed\fsl_train.csv ^
-  --labels-val-csv data\processed\fsl_val.csv ^
+  --model iv3_gru_isolated ^
+  --features-train data\processed\FSL105_train ^
+  --features-val data\processed\FSL105_val ^
+  --labels-train-csv data\processed\FSL105_train.csv ^
+  --labels-val-csv data\processed\FSL105_val.csv ^
   --feature-key X2048 ^
   --num-gloss 105 ^
   --num-cat 10 ^
   --epochs 100 ^
-  --batch-size 32
+  --batch-size 32 ^
+  --output-dir trained_models\iv3_gru\FSL105_classification
 ```
 
 For details, see [Training Guide](../training/TRAINING_GUIDE.md)
@@ -281,8 +295,8 @@ For details, see [Training Guide](../training/TRAINING_GUIDE.md)
 Validate preprocessed files before training:
 
 ```powershell
-python -m preprocessing.utils.validate_npz data\processed\fsl_train
-python -m preprocessing.utils.validate_npz data\processed\fsl_val --require-x2048
+python -m preprocessing.utils.validate_npz data\processed\FSL105_train
+python -m preprocessing.utils.validate_npz data\processed\FSL105_val --require-x2048
 ```
 
 ### Model Validation
@@ -291,10 +305,10 @@ Validate trained models:
 
 ```powershell
 python -m evaluation.validation.validate ^
-  --model-type transformer ^
-  --model-path trained_models\transformer\SignTransformer_best.pt ^
-  --data-dir data\processed\fsl_val ^
-  --labels-csv data\processed\fsl_val.csv
+  --model transformer_isolated ^
+  --checkpoint trained_models\transformer\FSL105_classification\SignTransformer_best.pt ^
+  --data-dir data\processed\FSL105_val ^
+  --labels-csv data\processed\FSL105_val.csv
 ```
 
 For details, see [Validation Guide](../evaluation/validation/VALIDATION_GUIDE.md)
@@ -344,17 +358,14 @@ data/
 │   └── sample-105/
 │       └── clip_0003_good morning.mp4
 ├── processed/
-│   ├── fsl-105_10-08/              # Preprocessing output
-│   │   ├── clip_0001_hello.npz
-│   │   ├── clip_0002_thank you.npz
-│   │   └── labels.csv
-│   ├── fsl_train/                  # Training split (80%)
+│   ├── FSL105_train/               # Training split (80%)
 │   │   ├── clip_0001_hello.npz
 │   │   └── clip_0003_good morning.npz
-│   ├── fsl_val/                    # Validation split (20%)
+│   ├── FSL105_val/                 # Validation split (20%)
 │   │   └── clip_0002_thank you.npz
-│   ├── fsl_train.csv               # file,gloss,cat,occluded
-│   └── fsl_val.csv
+│   ├── FSL105_train.csv            # file,gloss,cat,occluded
+│   ├── FSL105_val.csv
+│   └── labels.csv
 ├── demo/
 │   ├── clip_0138_nice to meet you.npz
 │   └── clip_0585_nine.npz
@@ -365,11 +376,19 @@ data/
 
 trained_models/
 ├── transformer/
-│   ├── SignTransformer_best.pt
-│   ├── SignTransformer_last.pt
-│   └── transformer_train.log
+│   ├── FSL105_classification/
+│   │   ├── SignTransformer_best.pt
+│   │   ├── SignTransformer_last.pt
+│   │   └── training_*.log
+│   └── FSL105_ctc/
+│       ├── SignTransformerCtc_best.pt
+│       └── training_*.log
 └── iv3_gru/
-    ├── InceptionV3GRU_best.pt
-    ├── InceptionV3GRU_last.pt
-    └── iv3_train.log
+    ├── FSL105_classification/
+    │   ├── InceptionV3GRU_best.pt
+    │   ├── InceptionV3GRU_last.pt
+    │   └── training_*.log
+    └── FSL105_ctc/
+        ├── InceptionV3GRUCtc_best.pt
+        └── training_*.log
 ```
