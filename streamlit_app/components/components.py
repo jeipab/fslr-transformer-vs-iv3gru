@@ -1080,7 +1080,7 @@ def _render_status_card(status_text: str, detail_text: str, status_color: str, s
 
 def render_android_button():
     """Render a styled sidebar button for downloading the Android APK."""
-    apk_url = "https://drive.google.com/uc?export=download&id=1qrjWyIOJNSuDYvkzUncOynkVFoe1yzFk"
+    apk_url = "https://drive.google.com/uc?export=download&id=1qS9f-Ye9LwbR3OBMbIhV5e183m7N5XDo"
 
     if st.sidebar.button("Android", help="Download the Android APK", use_container_width=True):
         # Open the APK link in a new tab using JavaScript
