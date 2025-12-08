@@ -398,7 +398,7 @@ $$\bar{d} = 0.292277$$
 
 - Mean Transformer F1-score: $\bar{X} = 0.614294$
 - Mean IV3-GRU F1-score: $\bar{Y} = 0.322017$
-- Mean difference: $\bar{d} = 0.292277$$
+- Mean difference: $\bar{d} = 0.292277$
 
 ### Variance Assessment
 
