@@ -1,0 +1,11 @@
+category_id,category_label,iv3gru_occluded_tp,iv3gru_occluded_fp,iv3gru_occluded_fn,iv3gru_occluded_count,iv3gru_nonoccluded_tp,iv3gru_nonoccluded_fp,iv3gru_nonoccluded_fn,iv3gru_nonoccluded_count,iv3gru_combined_tp,iv3gru_combined_fp,iv3gru_combined_fn,iv3gru_combined_count,transformer_occluded_tp,transformer_occluded_fp,transformer_occluded_fn,transformer_occluded_count,transformer_nonoccluded_tp,transformer_nonoccluded_fp,transformer_nonoccluded_fn,transformer_nonoccluded_count,transformer_combined_tp,transformer_combined_fp,transformer_combined_fn,transformer_combined_count
+0,GREETING,275,594,160,435,300,639,243,543,575,782,403,978,365,260,70,435,461,255,82,543,826,263,152,978
+1,SURVIVAL,132,236,163,295,325,253,373,698,457,284,536,993,254,461,41,295,606,457,92,698,860,473,133,993
+2,NUMBER,39,414,133,172,194,426,567,761,233,442,700,933,152,403,20,172,661,409,100,761,813,417,120,933
+3,CALENDAR,348,732,646,994,0,689,11,11,348,752,657,1005,857,456,137,994,7,455,4,11,864,460,141,1005
+4,DAYS,126,351,216,342,173,366,422,595,299,399,638,937,299,217,43,342,507,221,88,595,806,227,131,937
+5,FAMILY,239,450,319,558,221,507,191,412,460,599,510,970,473,425,85,558,336,430,76,412,809,435,161,970
+6,RELATIONSHIPS,210,337,316,526,107,333,310,417,317,369,626,943,452,459,74,526,359,453,58,417,811,474,132,943
+7,COLOR,141,299,233,374,187,278,421,608,328,375,654,982,313,391,61,374,527,397,81,608,840,408,142,982
+8,FOOD,262,646,137,399,307,680,203,510,569,957,340,909,342,255,57,399,455,257,55,510,797,265,112,909
+9,DRINK,148,133,371,519,112,127,341,453,260,150,712,972,450,422,69,519,389,419,64,453,839,435,133,972

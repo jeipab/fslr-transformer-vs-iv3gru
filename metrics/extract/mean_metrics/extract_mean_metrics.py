@@ -3,7 +3,7 @@ Extract mean precision, recall, and f1-score for recognition and classification
 from CTC validation results JSON files.
 
 Usage:
-    python metrics/extract/extract_mean_metrics.py
+    python metrics/extract/mean_metrics/extract_mean_metrics.py
 
 Output:
     - Writes two CSV files:
@@ -18,15 +18,18 @@ from collections import defaultdict
 
 # Import extraction functions from existing scripts
 import sys
-sys.path.insert(0, str(Path(__file__).parent))
+EXTRACT_DIR = Path(__file__).parent.parent
+sys.path.insert(0, str(EXTRACT_DIR / "recognition"))
+sys.path.insert(0, str(EXTRACT_DIR / "classification"))
 
 from extract_recognition import extract_gloss_metrics
 from extract_classification import extract_category_metrics
 
 # Paths
 SCRIPT_DIR = Path(__file__).parent
-IV3GRU_JSON = SCRIPT_DIR / "ctc_validation_results_iv3gru.json"
-TRANSFORMER_JSON = SCRIPT_DIR / "ctc_validation_results_transformer.json"
+SHARED_INPUTS_DIR = EXTRACT_DIR / "shared_inputs"
+IV3GRU_JSON = SHARED_INPUTS_DIR / "ctc_validation_results_iv3gru.json"
+TRANSFORMER_JSON = SHARED_INPUTS_DIR / "ctc_validation_results_transformer.json"
 
 
 def compute_mean_metrics(metrics_dict, num_classes):

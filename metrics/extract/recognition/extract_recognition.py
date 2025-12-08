@@ -3,7 +3,7 @@ Extract recognition (gloss) precision, recall, and f1-score per gloss
 from CTC validation results JSON files.
 
 Usage:
-    python metrics/extract/extract_recognition.py
+    python metrics/extract/recognition/extract_recognition.py
 
 Output:
     - Prints precision, recall, and f1-score values per gloss for both 
@@ -21,8 +21,10 @@ from collections import defaultdict
 
 # Paths
 SCRIPT_DIR = Path(__file__).parent
-IV3GRU_JSON = SCRIPT_DIR / "ctc_validation_results_iv3gru.json"
-TRANSFORMER_JSON = SCRIPT_DIR / "ctc_validation_results_transformer.json"
+EXTRACT_DIR = SCRIPT_DIR.parent
+SHARED_INPUTS_DIR = EXTRACT_DIR / "shared_inputs"
+IV3GRU_JSON = SHARED_INPUTS_DIR / "ctc_validation_results_iv3gru.json"
+TRANSFORMER_JSON = SHARED_INPUTS_DIR / "ctc_validation_results_transformer.json"
 LABELS_CSV = Path(__file__).parent.parent.parent / "data" / "labels_reference.csv"
 
 
