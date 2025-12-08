@@ -12,21 +12,26 @@ This document provides detailed step-by-step computations for all three metrics 
 
 ### Data Extraction
 
-Data extracted from `Recognition-Breakdown.csv` filtered for `Occlusion == "nonoccluded"`. Pairs with NaN values in either Transformer or IV3-GRU Precision were removed.
+Data extracted from `Recognition-Breakdown.csv` filtered for `Occlusion == "nonoccluded"`. Pairs with NaN values in either Transformer or IV3-GRU Precision were removed. Pairs where both models scored 0.0 (both-zero pairs) were excluded from the Wilcoxon test but included in mean calculations.
 
-**Non-zero pairs** (N = 6, after removing zero differences):
+**Total valid pairs**: N = 105 (all pairs for mean calculation)
+**Pairs after removing both-zero**: N = 94 (for Wilcoxon test)
+**Non-zero differences**: N_nonzero = 94
 
-| Gloss Label | Transformer Precision | IV3-GRU Precision | Difference (d_i) |
-| ----------- | --------------------- | ----------------- | ---------------- |
-| KNOW        | 1.000                 | 0.000             | 1.000            |
-| YES         | 1.000                 | 0.000             | 1.000            |
-| EIGHT       | 1.000                 | 0.000             | 1.000            |
-| JUNE        | 1.000                 | 0.000             | 1.000            |
-| UNCLE       | 1.000                 | 0.000             | 1.000            |
-| BLUE        | 1.000                 | 0.000             | 1.000            |
+**Sample data** (first 10 of 105 valid pairs):
 
-**Total valid pairs**: N = 105 (all pairs, used for mean calculation)  
-**Non-zero pairs**: $N_{\text{nonzero}} = 6$ (used for Wilcoxon test)
+| Gloss Label      | Transformer Precision | IV3-GRU Precision | Difference (d_i) |
+| ---------------- | --------------------- | ----------------- | ---------------- |
+| GOOD MORNING     | 0.623377              | 0.602941          | 0.020436         |
+| GOOD AFTERNOON   | 0.707547              | 0.246575          | 0.460972         |
+| GOOD EVENING     | 0.663366              | 0.404762          | 0.258604         |
+| HELLO            | 0.701031              | 0.477778          | 0.223253         |
+| HOW ARE YOU      | 0.647887              | 0.696429          | -0.048542        |
+| IM FINE          | 0.816327              | 0.804598          | 0.011729         |
+| NICE TO MEET YOU | 0.184211              | 0.178571          | 0.005640         |
+| THANK YOU        | 0.729167              | 0.757143          | -0.027976        |
+| YOURE WELCOME    | 0.437500              | 0.266667          | 0.170833         |
+| SEE YOU TOMORROW | 0.000000              | 0.000000          | 0.000000         |
 
 ### Descriptive Statistics
 
@@ -40,21 +45,23 @@ $$\bar{d} = \frac{1}{N}\sum_{i=1}^{N} d_i = \bar{X} - \bar{Y}$$
 
 **Substitution**
 
-$$\bar{X} = \frac{1}{105}\sum_{i=1}^{105} X_i = 0.933333$$
+Using all N = 105 valid pairs:
 
-$$\bar{Y} = \frac{1}{105}\sum_{i=1}^{105} Y_i = 0.876190$$
+$$\bar{X} = \frac{1}{105}\sum_{i=1}^{105} X_i = 0.482643$$
 
-$$\bar{d} = 0.933333 - 0.876190 = 0.057143$$
+$$\bar{Y} = \frac{1}{105}\sum_{i=1}^{105} Y_i = 0.406100$$
+
+$$\bar{d} = 0.482643 - 0.406100 = 0.076543$$
 
 **Arithmetic**
 
-$$\bar{d} = 0.057143$$
+$$\bar{d} = 0.076543$$
 
 **Final Result**
 
-- Mean Transformer Precision: $\bar{X} = 0.933333$
-- Mean IV3-GRU Precision: $\bar{Y} = 0.876190$
-- Mean difference: $\bar{d} = 0.057143$
+- Mean Transformer Precision: $\bar{X} = 0.482643$
+- Mean IV3-GRU Precision: $\bar{Y} = 0.406100$
+- Mean difference: $\bar{d} = 0.076543$
 
 ### Variance Assessment
 
@@ -62,160 +69,101 @@ $$\bar{d} = 0.057143$$
 
 $$s_d = \sqrt{\frac{1}{N-1}\sum_{i=1}^{N}(d_i - \bar{d})^2}$$
 
-**Substitution**
+**Computation**
 
-$$s_d = \sqrt{\frac{1}{105-1}\sum_{i=1}^{105}(d_i - 0.057143)^2}$$
+Using N = 94 (after removing both-zero pairs) for statistical testing:
 
-**Arithmetic**
-
-$$s_d = 0.233229$$
-
-**Arithmetic**
-
-$$s_d = 0.233333$$
-
-**Final Result**
-
-Standard deviation of differences: $s_d = 0.233333$
-
-Variance exists ($s_d > 0$), so statistical testing is applicable.
+The standard deviation of differences is computed from the 94 non-zero pairs. Variance exists (not all differences are zero).
 
 ### Normality Testing
 
-**Shapiro–Wilk Test**
-
 **Formula**
+
+Shapiro–Wilk test statistic:
 
 $$W = \frac{\left( \sum_{i=1}^{n} a_i d_{(i)} \right)^2}{\sum_{i=1}^{n}(d_i - \bar{d})^2}$$
 
-where $d_{(i)}$ are the ordered differences and $a_i$ are coefficients derived from the expected values of order statistics of a standard normal distribution.
+where $d_{(i)}$ are the ordered differences and $a_i$ are coefficients from expected values of order statistics.
 
 **Test Result**
 
-- Shapiro–Wilk statistic: $W = 0.234$ (computed by scipy)
-- p-value: $p_{SW} = 8.21 \times 10^{-21}$
+Performed on N = 94 differences (after removing both-zero pairs):
+
+- Shapiro–Wilk statistic: $W = 0.890257$
+- P-value: $p = 2.26 \times 10^{-8}$
 
 **Decision**
 
-Since $p_{SW} = 8.21 \times 10^{-21} < 0.05$, the differences are **non-normal**.
+Since $p = 2.26 \times 10^{-8} < 0.05$, the data is **non-normal**.
 
-**Final Result**
-
-Non-normal (Shapiro–Wilk p = 8.21×10⁻²¹)
+**Normality Assessment**: Non-normal (Shapiro–Wilk p = 2.26×10⁻⁸)
 
 ### Statistical Test Selection
 
-Since the data is non-normal ($p_{SW} < 0.05$), $N_{\text{nonzero}} = 6 < 10$, and variance exists, we use the **Wilcoxon Signed-Rank Test (two-tailed, exact test)**.
+Since the data is non-normal, the **Wilcoxon Signed-Rank Test** is used.
 
-### Wilcoxon Signed-Rank Test Computation (Exact Test)
+### Wilcoxon Signed-Rank Test Computation
 
-**Step 1: Identify Non-Zero Differences**
+**Step 1: Rank absolute non-zero differences**
 
-Remove zero differences: $d^{*} = \{d_i \mid d_i \neq 0\}$
-
-We have $N_{\text{nonzero}} = 6$ non-zero differences, all positive: $d^{*} = \{1.000, 1.000, 1.000, 1.000, 1.000, 1.000\}$
-
-**Step 2: Rank Absolute Non-Zero Differences**
-
-**Formula**
+For N_nonzero = 94 non-zero differences, rank the absolute values:
 
 $$R_i = \operatorname{rank}(|d^{*}_i|)$$
 
-Since all absolute differences are equal (all = 1.000), they receive tied ranks. With 6 equal values, each receives the average rank:
+where $d^{*}_i$ are the non-zero differences.
 
-$$R_i = \frac{1 + 2 + 3 + 4 + 5 + 6}{6} = \frac{21}{6} = 3.5$$
-
-for all $i = 1, 2, \ldots, 6$.
-
-**Arithmetic**
-
-All 6 differences have rank $R_i = 3.5$ (tied ranks).
-
-**Step 3: Compute Positive and Negative Rank Sums**
-
-**Formula**
+**Step 2: Compute positive and negative rank sums**
 
 $$S^+ = \sum_{d^{*}_i > 0} R_i$$
 
 $$S^- = \sum_{d^{*}_i < 0} R_i$$
 
-**Substitution**
+**Step 3: W statistic**
 
-Since all 6 differences are positive:
+$$W = \min(S^+, S^-) = 1145.0$$
 
-$$S^+ = 3.5 + 3.5 + 3.5 + 3.5 + 3.5 + 3.5 = 21$$
+**Step 4: Expected value and standard deviation**
 
-$$S^- = 0$$
+For large sample (N_nonzero = 94 ≥ 10), use normal approximation:
 
-**Arithmetic**
+$$\mu_W = \frac{N_{nonzero}(N_{nonzero}+1)}{4} = \frac{94 \times 95}{4} = \frac{8930}{4} = 2232.50$$
 
-$$S^+ = 21$$
+$$\sigma_W = \sqrt{\frac{N_{nonzero}(N_{nonzero}+1)(2N_{nonzero}+1)}{24}} = \sqrt{\frac{94 \times 95 \times 189}{24}} = \sqrt{\frac{1687770}{24}} = \sqrt{70323.75} = 265.19$$
 
-$$S^- = 0$$
+**Step 5: Z-value**
 
-**Step 4: Compute W Statistic**
+$$z = \frac{W - \mu_W}{\sigma_W} = \frac{1145.0 - 2232.50}{265.19} = \frac{-1087.50}{265.19} = -4.101$$
+
+**Step 6: P-value**
+
+$$p = 2(1 - \Phi(|z|)) = 2(1 - \Phi(4.101)) = 4.12 \times 10^{-5}$$
+
+where $\Phi$ is the cumulative distribution function of the standard normal distribution.
+
+**Final Result**
+
+- Test statistic: $z = -4.101$
+- P-value: $p = 4.12 \times 10^{-5}$
+
+### Effect Size
 
 **Formula**
 
-$$W = \min(S^+, S^-)$$
+$$r = \frac{|z|}{\sqrt{N_{nonzero}}} = \frac{4.101}{\sqrt{94}} = \frac{4.101}{9.695} = 0.423$$
 
-**Substitution**
+**Interpretation**
 
-$$W = \min(21, 0) = 0$$
-
-**Arithmetic**
-
-$$W = 0$$
-
-**Final Result**
-
-$$W = 0$$
-
-**Step 5: Exact Test (Small Sample)**
-
-Since $N_{\text{nonzero}} = 6 < 10$, we use the **exact Wilcoxon test** (not the normal approximation).
-
-**P-Value**
-
-The p-value is computed from the exact permutation distribution of the Wilcoxon W statistic. There is no closed-form formula; it is obtained from scipy's exact distribution:
-
-$$p = P(W \leq w_{\text{obs}} \mid H_0)$$
-
-where $w_{\text{obs}} = 0$ is the observed W statistic and the probability is computed from the exact null distribution.
-
-**Computation**
-
-From scipy's `wilcoxon` function with exact test:
-
-$$p = 0.0143$$
-
-**Final Result**
-
-$$p = 0.0143$$
-
-**Effect Size**
-
-For exact Wilcoxon tests with small $N_{\text{nonzero}} < 10$, effect size is not computed:
-
-$$r = \text{N/A}$$
+$r = 0.42$ indicates a **medium** effect size (0.3 ≤ |r| < 0.5).
 
 ### Hypothesis Decision
 
 **Comparison**
 
-$$p = 0.0143 < 0.05 = \alpha$$
+$p = 4.12 \times 10^{-5} < \alpha = 0.05$
 
-**Decision**
+**Decision**: **Reject Null Hypothesis 1**
 
-Since $p < \alpha$, we **Reject Null Hypothesis 1**.
-
-**Direction**
-
-Since $\bar{d} = 0.057143 > 0$, **Transformer > IV3-GRU**.
-
-**Final Result**
-
-Reject Null Hypothesis 1. Transformer significantly outperforms IV3-GRU on nonoccluded precision (p = .0143, exact Wilcoxon test, N = 6).
+The Transformer model shows significantly higher precision than IV3-GRU under nonoccluded conditions ($p = 4.12 \times 10^{-5}$, $r = 0.42$ medium effect).
 
 ---
 
@@ -223,19 +171,26 @@ Reject Null Hypothesis 1. Transformer significantly outperforms IV3-GRU on nonoc
 
 ### Data Extraction
 
-Data extracted from `Recognition-Breakdown.csv` filtered for `Occlusion == "nonoccluded"`. Pairs with NaN values in either Transformer or IV3-GRU Recall were removed.
+Data extracted from `Recognition-Breakdown.csv` filtered for `Occlusion == "nonoccluded"`. Pairs with NaN values in either Transformer or IV3-GRU Recall were removed. Pairs where both models scored 0.0 (both-zero pairs) were excluded from the Wilcoxon test but included in mean calculations.
 
-**Sample data** (first 5 of 93 valid pairs):
+**Total valid pairs**: N = 105 (all pairs for mean calculation)
+**Pairs after removing both-zero**: N = 94 (for Wilcoxon test)
+**Non-zero differences**: N_nonzero = 93
 
-| Gloss Label    | Transformer Recall | IV3-GRU Recall | Difference (d_i) |
-| -------------- | ------------------ | -------------- | ---------------- |
-| GOOD MORNING   | 0.861              | 0.556          | 0.305            |
-| GOOD AFTERNOON | 0.882              | 0.294          | 0.588            |
-| GOOD EVENING   | 0.864              | 0.227          | 0.637            |
-| HELLO          | 0.913              | 0.826          | 0.087            |
-| HOW ARE YOU    | 0.886              | 0.705          | 0.181            |
+**Sample data** (first 10 of 105 valid pairs):
 
-**Total valid pairs**: N = 93
+| Gloss Label      | Transformer Recall | IV3-GRU Recall | Difference (d_i) |
+| ---------------- | ------------------ | -------------- | ---------------- |
+| GOOD MORNING     | 0.813559           | 0.694915       | 0.118644         |
+| GOOD AFTERNOON   | 0.914634           | 0.219512       | 0.695122         |
+| GOOD EVENING     | 0.905405           | 0.459459       | 0.445946         |
+| HELLO            | 0.850000           | 0.537500       | 0.312500         |
+| HOW ARE YOU      | 0.836364           | 0.709091       | 0.127273         |
+| IM FINE          | 0.833333           | 0.729167       | 0.104166         |
+| NICE TO MEET YOU | 0.875000           | 0.625000       | 0.250000         |
+| THANK YOU        | 0.945946           | 0.716216       | 0.229730         |
+| YOURE WELCOME    | 0.933333           | 0.533333       | 0.400000         |
+| SEE YOU TOMORROW | 0.000000           | 0.000000       | 0.000000         |
 
 ### Descriptive Statistics
 
@@ -249,21 +204,23 @@ $$\bar{d} = \frac{1}{N}\sum_{i=1}^{N} d_i = \bar{X} - \bar{Y}$$
 
 **Substitution**
 
-$$\bar{X} = \frac{1}{93}\sum_{i=1}^{93} X_i = 0.813171$$
+Using all N = 105 valid pairs:
 
-$$\bar{Y} = \frac{1}{93}\sum_{i=1}^{93} Y_i = 0.526714$$
+$$\bar{X} = \frac{1}{105}\sum_{i=1}^{105} X_i = 0.784460$$
 
-$$\bar{d} = 0.813171 - 0.526714 = 0.286457$$
+$$\bar{Y} = \frac{1}{105}\sum_{i=1}^{105} Y_i = 0.481308$$
+
+$$\bar{d} = 0.784460 - 0.481308 = 0.303152$$
 
 **Arithmetic**
 
-$$\bar{d} = 0.286457$$
+$$\bar{d} = 0.303152$$
 
 **Final Result**
 
-- Mean Transformer Recall: $\bar{X} = 0.813171$
-- Mean IV3-GRU Recall: $\bar{Y} = 0.526714$
-- Mean difference: $\bar{d} = 0.286457$
+- Mean Transformer Recall: $\bar{X} = 0.784460$
+- Mean IV3-GRU Recall: $\bar{Y} = 0.481308$
+- Mean difference: $\bar{d} = 0.303152$
 
 ### Variance Assessment
 
@@ -271,180 +228,95 @@ $$\bar{d} = 0.286457$$
 
 $$s_d = \sqrt{\frac{1}{N-1}\sum_{i=1}^{N}(d_i - \bar{d})^2}$$
 
-**Substitution**
+**Computation**
 
-$$s_d = \sqrt{\frac{1}{93-1}\sum_{i=1}^{93}(d_i - 0.286457)^2}$$
+Using N = 94 (after removing both-zero pairs) for statistical testing:
 
-**Arithmetic**
-
-$$s_d = 0.330456$$
-
-**Final Result**
-
-Standard deviation of differences: $s_d = 0.330456$
-
-Variance exists ($s_d > 0$), so statistical testing is applicable.
+The standard deviation of differences is computed from the 94 non-zero pairs. Variance exists (not all differences are zero).
 
 ### Normality Testing
 
-**Shapiro–Wilk Test**
+**Formula**
+
+Shapiro–Wilk test statistic:
+
+$$W = \frac{\left( \sum_{i=1}^{n} a_i d_{(i)} \right)^2}{\sum_{i=1}^{n}(d_i - \bar{d})^2}$$
 
 **Test Result**
 
-- Shapiro–Wilk statistic: $W = 0.951$ (computed by scipy)
-- p-value: $p_{SW} = 8.41 \times 10^{-5}$
+Performed on N = 94 differences (after removing both-zero pairs):
+
+- Shapiro–Wilk statistic: $W = 0.923691$
+- P-value: $p = 3.90 \times 10^{-6}$
 
 **Decision**
 
-Since $p_{SW} = 8.41 \times 10^{-5} < 0.05$, the differences are **non-normal**.
+Since $p = 3.90 \times 10^{-6} < 0.05$, the data is **non-normal**.
 
-**Final Result**
-
-Non-normal (Shapiro–Wilk p = 8.41×10⁻⁵)
+**Normality Assessment**: Non-normal (Shapiro–Wilk p = 3.90×10⁻⁶)
 
 ### Statistical Test Selection
 
-Since the data is non-normal ($p_{SW} < 0.05$), $N = 93 \geq 2$, and variance exists, we use the **Wilcoxon Signed-Rank Test (two-tailed)**.
+Since the data is non-normal, the **Wilcoxon Signed-Rank Test** is used.
 
 ### Wilcoxon Signed-Rank Test Computation
 
-**Step 1: Identify Non-Zero Differences**
+**Step 1: Rank absolute non-zero differences**
 
-Remove zero differences: $d^{*} = \{d_i \mid d_i \neq 0\}$
-
-**Step 2: Rank Absolute Non-Zero Differences**
-
-**Formula**
+For N_nonzero = 93 non-zero differences, rank the absolute values:
 
 $$R_i = \operatorname{rank}(|d^{*}_i|)$$
 
-**Step 3: Compute Positive and Negative Rank Sums**
-
-**Formula**
+**Step 2: Compute positive and negative rank sums**
 
 $$S^+ = \sum_{d^{*}_i > 0} R_i$$
 
 $$S^- = \sum_{d^{*}_i < 0} R_i$$
 
-**Step 4: Compute W Statistic**
+**Step 3: W statistic**
 
-**Formula**
+$$W = \min(S^+, S^-) = 30.5$$
 
-$$W = \min(S^+, S^-)$$
+**Step 4: Expected value and standard deviation**
 
-**Computation**
+For large sample (N_nonzero = 93 ≥ 10), use normal approximation:
 
-From scipy's `wilcoxon` function: $W = 45$ (approximate, based on reported z-value)
+$$\mu_W = \frac{N_{nonzero}(N_{nonzero}+1)}{4} = \frac{93 \times 94}{4} = \frac{8742}{4} = 2185.50$$
 
-**Step 5: Large-Sample Normal Approximation**
+$$\sigma_W = \sqrt{\frac{N_{nonzero}(N_{nonzero}+1)(2N_{nonzero}+1)}{24}} = \sqrt{\frac{93 \times 94 \times 187}{24}} = \sqrt{\frac{1634154}{24}} = \sqrt{68173.08} = 261.10$$
 
-Since $N_{\text{nonzero}} \geq 10$, we use the normal approximation.
+**Step 5: Z-value**
 
-**Expected Value**
+$$z = \frac{W - \mu_W}{\sigma_W} = \frac{30.5 - 2185.50}{261.10} = \frac{-2155.00}{261.10} = -8.257$$
 
-**Formula**
+**Step 6: P-value**
 
-$$\mu_W = \frac{N_{\text{nonzero}}(N_{\text{nonzero}}+1)}{4}$$
-
-**Substitution**
-
-Using $N_{\text{nonzero}} = 93$:
-
-$$\mu_W = \frac{93 \times 94}{4} = \frac{8742}{4} = 2185.5$$
+$$p = 2(1 - \Phi(|z|)) = 2(1 - \Phi(8.257)) = 1.49 \times 10^{-16}$$
 
 **Final Result**
 
-$$\mu_W = 2185.5$$
-
-**Standard Deviation**
-
-**Formula**
-
-$$\sigma_W = \sqrt{\frac{N_{\text{nonzero}}(N_{\text{nonzero}}+1)(2N_{\text{nonzero}}+1)}{24}}$$
-
-**Substitution**
-
-$$\sigma_W = \sqrt{\frac{93 \times 94 \times 187}{24}}$$
-
-**Arithmetic**
-
-$$\sigma_W = \sqrt{\frac{1,634,154}{24}} = \sqrt{68,089.75} = 260.94$$
-
-**Final Result**
-
-$$\sigma_W = 260.94$$
-
-**Z-Value**
-
-**Formula**
-
-$$z = \frac{W - \mu_W}{\sigma_W}$$
-
-**Substitution**
-
-Using reported z-value: $z = -7.889$
-
-**Arithmetic**
-
-$$z = -7.889$$
-
-**Final Result**
-
-$$z = -7.889$$
-
-**P-Value**
-
-**Formula**
-
-$$p = 2(1 - \Phi(|z|))$$
-
-**Substitution**
-
-$$p = 2(1 - \Phi(7.889))$$
-
-**Arithmetic**
-
-$$p = 3.04 \times 10^{-15}$$
-
-**Final Result**
-
-$$p = 3.04 \times 10^{-15}$$
+- Test statistic: $z = -8.257$
+- P-value: $p = 1.49 \times 10^{-16}$
 
 ### Effect Size
 
 **Formula**
 
-$$r = \frac{|z|}{\sqrt{N_{\text{nonzero}}}}$$
+$$r = \frac{|z|}{\sqrt{N_{nonzero}}} = \frac{8.257}{\sqrt{93}} = \frac{8.257}{9.644} = 0.857$$
 
-**Substitution**
+**Interpretation**
 
-$$r = \frac{7.889}{\sqrt{93}}$$
-
-**Arithmetic**
-
-$$r = \frac{7.889}{9.644} = 0.818$$
-
-**Final Result**
-
-$r = 0.82$ (large effect size, since $|r| \geq 0.5$)
+$r = 0.86$ indicates a **large** effect size (|r| ≥ 0.5).
 
 ### Hypothesis Decision
 
 **Comparison**
 
-$$p = 3.04 \times 10^{-15} < 0.05 = \alpha$$
+$p = 1.49 \times 10^{-16} < \alpha = 0.05$
 
-**Decision**
+**Decision**: **Reject Null Hypothesis 1**
 
-Since $p < \alpha$, we **Reject Null Hypothesis 1**.
-
-**Direction**
-
-Since $\bar{d} = 0.286457 > 0$, **Transformer > IV3-GRU**.
-
-**Final Result**
-
-Reject Null Hypothesis 1. Transformer significantly outperforms IV3-GRU on nonoccluded recall (p = 3.04×10⁻¹⁵, r = 0.82, large effect).
+The Transformer model shows significantly higher recall than IV3-GRU under nonoccluded conditions ($p = 1.49 \times 10^{-16}$, $r = 0.86$ large effect).
 
 ---
 
@@ -452,19 +324,26 @@ Reject Null Hypothesis 1. Transformer significantly outperforms IV3-GRU on nonoc
 
 ### Data Extraction
 
-Data extracted from `Recognition-Breakdown.csv` filtered for `Occlusion == "nonoccluded"`. Pairs with NaN values in either Transformer or IV3-GRU F1-score were removed.
+Data extracted from `Recognition-Breakdown.csv` filtered for `Occlusion == "nonoccluded"`. Pairs with NaN values in either Transformer or IV3-GRU F1-score were removed. Pairs where both models scored 0.0 (both-zero pairs) were excluded from the Wilcoxon test but included in mean calculations.
 
-**Sample data** (first 5 of 93 valid pairs):
+**Total valid pairs**: N = 105 (all pairs for mean calculation)
+**Pairs after removing both-zero**: N = 94 (for Wilcoxon test)
+**Non-zero differences**: N_nonzero = 94
 
-| Gloss Label    | Transformer F1-score | IV3-GRU F1-score | Difference (d_i) |
-| -------------- | -------------------- | ---------------- | ---------------- |
-| GOOD MORNING   | 0.925                | 0.714            | 0.211            |
-| GOOD AFTERNOON | 0.938                | 0.455            | 0.483            |
-| GOOD EVENING   | 0.927                | 0.370            | 0.557            |
-| HELLO          | 0.955                | 0.905            | 0.050            |
-| HOW ARE YOU    | 0.940                | 0.827            | 0.113            |
+**Sample data** (first 10 of 105 valid pairs):
 
-**Total valid pairs**: N = 93
+| Gloss Label      | Transformer F1-score | IV3-GRU F1-score | Difference (d_i) |
+| ---------------- | -------------------- | ---------------- | ---------------- |
+| GOOD MORNING     | 0.705882             | 0.645669         | 0.060213         |
+| GOOD AFTERNOON   | 0.797872             | 0.232258         | 0.565614         |
+| GOOD EVENING     | 0.765714             | 0.430380         | 0.335334         |
+| HELLO            | 0.768362             | 0.505882         | 0.262480         |
+| HOW ARE YOU      | 0.730159             | 0.702703         | 0.027456         |
+| IM FINE          | 0.824742             | 0.765027         | 0.059715         |
+| NICE TO MEET YOU | 0.304348             | 0.277778         | 0.026570         |
+| THANK YOU        | 0.823529             | 0.736111         | 0.087418         |
+| YOURE WELCOME    | 0.595745             | 0.355556         | 0.240189         |
+| SEE YOU TOMORROW | 0.000000             | 0.000000         | 0.000000         |
 
 ### Descriptive Statistics
 
@@ -478,21 +357,23 @@ $$\bar{d} = \frac{1}{N}\sum_{i=1}^{N} d_i = \bar{X} - \bar{Y}$$
 
 **Substitution**
 
-$$\bar{X} = \frac{1}{93}\sum_{i=1}^{93} X_i = 0.864905$$
+Using all N = 105 valid pairs:
 
-$$\bar{Y} = \frac{1}{93}\sum_{i=1}^{93} Y_i = 0.629314$$
+$$\bar{X} = \frac{1}{105}\sum_{i=1}^{105} X_i = 0.561103$$
 
-$$\bar{d} = 0.864905 - 0.629314 = 0.235590$$
+$$\bar{Y} = \frac{1}{105}\sum_{i=1}^{105} Y_i = 0.419827$$
+
+$$\bar{d} = 0.561103 - 0.419827 = 0.141276$$
 
 **Arithmetic**
 
-$$\bar{d} = 0.235590$$
+$$\bar{d} = 0.141276$$
 
 **Final Result**
 
-- Mean Transformer F1-score: $\bar{X} = 0.864905$
-- Mean IV3-GRU F1-score: $\bar{Y} = 0.629314$
-- Mean difference: $\bar{d} = 0.235590$
+- Mean Transformer F1-score: $\bar{X} = 0.561103$
+- Mean IV3-GRU F1-score: $\bar{Y} = 0.419827$
+- Mean difference: $\bar{d} = 0.141276$
 
 ### Variance Assessment
 
@@ -500,180 +381,95 @@ $$\bar{d} = 0.235590$$
 
 $$s_d = \sqrt{\frac{1}{N-1}\sum_{i=1}^{N}(d_i - \bar{d})^2}$$
 
-**Substitution**
+**Computation**
 
-$$s_d = \sqrt{\frac{1}{93-1}\sum_{i=1}^{93}(d_i - 0.235590)^2}$$
+Using N = 94 (after removing both-zero pairs) for statistical testing:
 
-**Arithmetic**
-
-$$s_d = 0.253234$$
-
-**Final Result**
-
-Standard deviation of differences: $s_d = 0.253234$
-
-Variance exists ($s_d > 0$), so statistical testing is applicable.
+The standard deviation of differences is computed from the 94 non-zero pairs. Variance exists (not all differences are zero).
 
 ### Normality Testing
 
-**Shapiro–Wilk Test**
+**Formula**
+
+Shapiro–Wilk test statistic:
+
+$$W = \frac{\left( \sum_{i=1}^{n} a_i d_{(i)} \right)^2}{\sum_{i=1}^{n}(d_i - \bar{d})^2}$$
 
 **Test Result**
 
-- Shapiro–Wilk statistic: $W = 0.878$ (computed by scipy)
-- p-value: $p_{SW} = 3.70 \times 10^{-8}$
+Performed on N = 94 differences (after removing both-zero pairs):
+
+- Shapiro–Wilk statistic: $W = 0.887962$
+- P-value: $p = 2.57 \times 10^{-8}$
 
 **Decision**
 
-Since $p_{SW} = 3.70 \times 10^{-8} < 0.05$, the differences are **non-normal**.
+Since $p = 2.57 \times 10^{-8} < 0.05$, the data is **non-normal**.
 
-**Final Result**
-
-Non-normal (Shapiro–Wilk p = 3.70×10⁻⁸)
+**Normality Assessment**: Non-normal (Shapiro–Wilk p = 2.57×10⁻⁸)
 
 ### Statistical Test Selection
 
-Since the data is non-normal ($p_{SW} < 0.05$), $N = 93 \geq 2$, and variance exists, we use the **Wilcoxon Signed-Rank Test (two-tailed)**.
+Since the data is non-normal, the **Wilcoxon Signed-Rank Test** is used.
 
 ### Wilcoxon Signed-Rank Test Computation
 
-**Step 1: Identify Non-Zero Differences**
+**Step 1: Rank absolute non-zero differences**
 
-Remove zero differences: $d^{*} = \{d_i \mid d_i \neq 0\}$
-
-**Step 2: Rank Absolute Non-Zero Differences**
-
-**Formula**
+For N_nonzero = 94 non-zero differences, rank the absolute values:
 
 $$R_i = \operatorname{rank}(|d^{*}_i|)$$
 
-**Step 3: Compute Positive and Negative Rank Sums**
-
-**Formula**
+**Step 2: Compute positive and negative rank sums**
 
 $$S^+ = \sum_{d^{*}_i > 0} R_i$$
 
 $$S^- = \sum_{d^{*}_i < 0} R_i$$
 
-**Step 4: Compute W Statistic**
+**Step 3: W statistic**
 
-**Formula**
+$$W = \min(S^+, S^-) = 303.0$$
 
-$$W = \min(S^+, S^-)$$
+**Step 4: Expected value and standard deviation**
 
-**Computation**
+For large sample (N_nonzero = 94 ≥ 10), use normal approximation:
 
-From scipy's `wilcoxon` function: $W = 78$ (approximate, based on reported z-value)
+$$\mu_W = \frac{N_{nonzero}(N_{nonzero}+1)}{4} = \frac{94 \times 95}{4} = \frac{8930}{4} = 2232.50$$
 
-**Step 5: Large-Sample Normal Approximation**
+$$\sigma_W = \sqrt{\frac{N_{nonzero}(N_{nonzero}+1)(2N_{nonzero}+1)}{24}} = \sqrt{\frac{94 \times 95 \times 189}{24}} = \sqrt{\frac{1687770}{24}} = \sqrt{70323.75} = 265.19$$
 
-Since $N_{\text{nonzero}} \geq 10$, we use the normal approximation.
+**Step 5: Z-value**
 
-**Expected Value**
+$$z = \frac{W - \mu_W}{\sigma_W} = \frac{303.0 - 2232.50}{265.19} = \frac{-1929.50}{265.19} = -7.276$$
 
-**Formula**
+**Step 6: P-value**
 
-$$\mu_W = \frac{N_{\text{nonzero}}(N_{\text{nonzero}}+1)}{4}$$
-
-**Substitution**
-
-Using $N_{\text{nonzero}} = 93$:
-
-$$\mu_W = \frac{93 \times 94}{4} = \frac{8742}{4} = 2185.5$$
+$$p = 2(1 - \Phi(|z|)) = 2(1 - \Phi(7.276)) = 3.44 \times 10^{-13}$$
 
 **Final Result**
 
-$$\mu_W = 2185.5$$
-
-**Standard Deviation**
-
-**Formula**
-
-$$\sigma_W = \sqrt{\frac{N_{\text{nonzero}}(N_{\text{nonzero}}+1)(2N_{\text{nonzero}}+1)}{24}}$$
-
-**Substitution**
-
-$$\sigma_W = \sqrt{\frac{93 \times 94 \times 187}{24}}$$
-
-**Arithmetic**
-
-$$\sigma_W = \sqrt{\frac{1,634,154}{24}} = \sqrt{68,089.75} = 260.94$$
-
-**Final Result**
-
-$$\sigma_W = 260.94$$
-
-**Z-Value**
-
-**Formula**
-
-$$z = \frac{W - \mu_W}{\sigma_W}$$
-
-**Substitution**
-
-Using reported z-value: $z = -7.947$
-
-**Arithmetic**
-
-$$z = -7.947$$
-
-**Final Result**
-
-$$z = -7.947$$
-
-**P-Value**
-
-**Formula**
-
-$$p = 2(1 - \Phi(|z|))$$
-
-**Substitution**
-
-$$p = 2(1 - \Phi(7.947))$$
-
-**Arithmetic**
-
-$$p = 1.91 \times 10^{-15}$$
-
-**Final Result**
-
-$$p = 1.91 \times 10^{-15}$$
+- Test statistic: $z = -7.276$
+- P-value: $p = 3.44 \times 10^{-13}$
 
 ### Effect Size
 
 **Formula**
 
-$$r = \frac{|z|}{\sqrt{N_{\text{nonzero}}}}$$
+$$r = \frac{|z|}{\sqrt{N_{nonzero}}} = \frac{7.276}{\sqrt{94}} = \frac{7.276}{9.695} = 0.750$$
 
-**Substitution**
+**Interpretation**
 
-$$r = \frac{7.947}{\sqrt{93}}$$
-
-**Arithmetic**
-
-$$r = \frac{7.947}{9.644} = 0.825$$
-
-**Final Result**
-
-$r = 0.82$ (large effect size, since $|r| \geq 0.5$)
+$r = 0.75$ indicates a **large** effect size (|r| ≥ 0.5).
 
 ### Hypothesis Decision
 
 **Comparison**
 
-$$p = 1.91 \times 10^{-15} < 0.05 = \alpha$$
+$p = 3.44 \times 10^{-13} < \alpha = 0.05$
 
-**Decision**
+**Decision**: **Reject Null Hypothesis 1**
 
-Since $p < \alpha$, we **Reject Null Hypothesis 1**.
-
-**Direction**
-
-Since $\bar{d} = 0.235590 > 0$, **Transformer > IV3-GRU**.
-
-**Final Result**
-
-Reject Null Hypothesis 1. Transformer significantly outperforms IV3-GRU on nonoccluded F1-score (p = 1.91×10⁻¹⁵, r = 0.82, large effect).
+The Transformer model shows significantly higher F1-score than IV3-GRU under nonoccluded conditions ($p = 3.44 \times 10^{-13}$, $r = 0.75$ large effect).
 
 ---
 
@@ -681,6 +477,8 @@ Reject Null Hypothesis 1. Transformer significantly outperforms IV3-GRU on nonoc
 
 All three metrics (Precision, Recall, F1-score) show statistically significant differences favoring the Transformer model over IV3-GRU under nonoccluded conditions:
 
-- **Nonoccluded Precision**: Reject Null Hypothesis 1 (p = .0143, exact Wilcoxon test, N = 6)
-- **Nonoccluded Recall**: Reject Null Hypothesis 1 (p = 3.04×10⁻¹⁵, r = 0.82, large effect)
-- **Nonoccluded F1-score**: Reject Null Hypothesis 1 (p = 1.91×10⁻¹⁵, r = 0.82, large effect)
+- **Nonoccluded Precision**: Transformer > IV3-GRU ($p = 4.12 \times 10^{-5}$, $r = 0.42$ medium effect)
+- **Nonoccluded Recall**: Transformer > IV3-GRU ($p = 1.49 \times 10^{-16}$, $r = 0.86$ large effect)
+- **Nonoccluded F1-score**: Transformer > IV3-GRU ($p = 3.44 \times 10^{-13}$, $r = 0.75$ large effect)
+
+**Overall Decision**: **Reject Null Hypothesis 1** for all three metrics. The Transformer model demonstrates superior performance compared to IV3-GRU for the recognition task under nonoccluded conditions.

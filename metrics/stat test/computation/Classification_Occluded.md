@@ -14,22 +14,22 @@ This document provides detailed step-by-step computations for all three metrics 
 
 Data extracted from `Classification-Breakdown.csv` filtered for `Occlusion == "occluded"`. Pairs with NaN values in either Transformer or IV3-GRU Precision were removed.
 
-**All data pairs** (N = 10):
+**Total valid pairs**: N = 10
+
+**All data pairs**:
 
 | Category Label | Transformer Precision | IV3-GRU Precision | Difference (d_i) |
 | -------------- | --------------------- | ----------------- | ---------------- |
-| GREETING       | 0.632                 | 0.487             | 0.145            |
-| SURVIVAL       | 0.600                 | 0.604             | -0.004           |
-| NUMBER         | 0.629                 | 0.346             | 0.283            |
-| CALENDAR       | 0.017                 | 0.000             | 0.017            |
-| DAYS           | 0.691                 | 0.456             | 0.235            |
-| FAMILY         | 0.461                 | 0.492             | -0.031           |
-| RELATIONSHIPS  | 0.467                 | 0.390             | 0.077            |
-| COLOR          | 0.568                 | 0.620             | -0.052           |
-| FOOD           | 0.655                 | 0.605             | 0.050            |
-| DRINK          | 0.508                 | 0.553             | -0.045           |
-
-**Total valid pairs**: N = 10
+| GREETING       | 0.584000              | 0.316456          | 0.267544         |
+| SURVIVAL       | 0.355245              | 0.358696          | -0.003451        |
+| NUMBER         | 0.273874              | 0.086093          | 0.187781         |
+| CALENDAR       | 0.652704              | 0.322222          | 0.330482         |
+| DAYS           | 0.579457              | 0.264151          | 0.315306         |
+| FAMILY         | 0.526726              | 0.346880          | 0.179846         |
+| RELATIONSHIPS  | 0.496158              | 0.383912          | 0.112246         |
+| COLOR          | 0.444602              | 0.320455          | 0.124147         |
+| FOOD           | 0.572864              | 0.288546          | 0.284318         |
+| DRINK          | 0.516055              | 0.526690          | -0.010635        |
 
 ### Descriptive Statistics
 
@@ -43,21 +43,25 @@ $$\bar{d} = \frac{1}{N}\sum_{i=1}^{N} d_i = \bar{X} - \bar{Y}$$
 
 **Substitution**
 
-$$\bar{X} = \frac{1}{10}(0.632 + 0.600 + 0.629 + 0.017 + 0.691 + 0.461 + 0.467 + 0.568 + 0.655 + 0.508) = 0.522800$$
+$$\bar{X} = \frac{1}{10}(0.584000 + 0.355245 + 0.273874 + 0.652704 + 0.579457 + 0.526726 + 0.496158 + 0.444602 + 0.572864 + 0.516055)$$
 
-$$\bar{Y} = \frac{1}{10}(0.487 + 0.604 + 0.346 + 0.000 + 0.456 + 0.492 + 0.390 + 0.620 + 0.605 + 0.553) = 0.455300$$
+$$\bar{X} = \frac{1}{10}(5.001685) = 0.500169$$
 
-$$\bar{d} = 0.522800 - 0.455300 = 0.067500$$
+$$\bar{Y} = \frac{1}{10}(0.316456 + 0.358696 + 0.086093 + 0.322222 + 0.264151 + 0.346880 + 0.383912 + 0.320455 + 0.288546 + 0.526690)$$
+
+$$\bar{Y} = \frac{1}{10}(3.214100) = 0.321410$$
+
+$$\bar{d} = 0.500169 - 0.321410 = 0.178759$$
 
 **Arithmetic**
 
-$$\bar{d} = 0.067500$$
+$$\bar{d} = 0.178759 \approx 0.178758$$
 
 **Final Result**
 
-- Mean Transformer Precision: $\bar{X} = 0.522800$
-- Mean IV3-GRU Precision: $\bar{Y} = 0.455300$
-- Mean difference: $\bar{d} = 0.067500$
+- Mean Transformer Precision: $\bar{X} = 0.500168$
+- Mean IV3-GRU Precision: $\bar{Y} = 0.321410$
+- Mean difference: $\bar{d} = 0.178758$
 
 ### Variance Assessment
 
@@ -65,50 +69,44 @@ $$\bar{d} = 0.067500$$
 
 $$s_d = \sqrt{\frac{1}{N-1}\sum_{i=1}^{N}(d_i - \bar{d})^2}$$
 
-**Substitution**
+**Computation**
 
-$$s_d = \sqrt{\frac{1}{10-1}\sum_{i=1}^{10}(d_i - 0.067500)^2}$$
+First, compute squared deviations from mean:
 
-**Arithmetic**
+$$s_d = \sqrt{\frac{1}{9}\sum_{i=1}^{10}(d_i - 0.178758)^2} = 0.123491$$
 
-$$s_d = 0.117946$$
-
-**Final Result**
-
-Standard deviation of differences: $s_d = 0.117946$
-
-Variance exists ($s_d > 0$), so statistical testing is applicable.
+Variance exists (standard deviation is non-zero).
 
 ### Normality Testing
 
-**Shapiro–Wilk Test**
-
 **Formula**
+
+Shapiro–Wilk test statistic:
 
 $$W = \frac{\left( \sum_{i=1}^{n} a_i d_{(i)} \right)^2}{\sum_{i=1}^{n}(d_i - \bar{d})^2}$$
 
-where $d_{(i)}$ are the ordered differences and $a_i$ are coefficients derived from the expected values of order statistics of a standard normal distribution.
+where $d_{(i)}$ are the ordered differences and $a_i$ are coefficients from expected values of order statistics.
 
 **Test Result**
 
-- Shapiro–Wilk statistic: $W = 0.950$ (computed by scipy)
-- p-value: $p_{SW} = 0.1580$
+Performed on N = 10 differences:
+
+- Shapiro–Wilk statistic: $W = 0.920154$
+- P-value: $p = 0.3582$
 
 **Decision**
 
-Since $p_{SW} = 0.1580 > 0.05$, the differences are **normal**.
+Since $p = 0.3582 > 0.05$, the data is **normal**.
 
-**Final Result**
-
-Normal (Shapiro–Wilk p = .1580)
+**Normality Assessment**: Normal (Shapiro–Wilk p = .3582)
 
 ### Statistical Test Selection
 
-Since the data is normal ($p_{SW} > 0.05$), $N = 10 \geq 2$, and variance exists, we use the **Paired Samples t-Test (two-tailed)**.
+Since the data is normal, the **Paired Samples t-Test** is used.
 
-### Paired Samples t-Test Computation
+### Paired t-Test Computation
 
-**t-Statistic**
+**Step 1: t-statistic**
 
 **Formula**
 
@@ -116,31 +114,17 @@ $$t = \frac{\bar{d}}{s_d/\sqrt{N}} = \frac{\bar{d}\sqrt{N}}{s_d}$$
 
 **Substitution**
 
-$$t = \frac{0.067500 \times \sqrt{10}}{0.117946}$$
+$$t = \frac{0.178758 \times \sqrt{10}}{0.123491} = \frac{0.178758 \times 3.162278}{0.123491} = \frac{0.565685}{0.123491} = 4.584$$
 
 **Arithmetic**
 
-$$t = \frac{0.067500 \times 3.162}{0.117946} = \frac{0.213435}{0.117946} = 1.810$$
+$$t = 4.584 \approx 4.58$$
 
-**Final Result**
+**Step 2: Degrees of freedom**
 
-$$t = 1.81$$
+$$df = N - 1 = 10 - 1 = 9$$
 
-**Degrees of Freedom**
-
-**Formula**
-
-$$df = N - 1$$
-
-**Substitution**
-
-$$df = 10 - 1 = 9$$
-
-**Final Result**
-
-$$df = 9$$
-
-**P-Value**
+**Step 3: P-value**
 
 **Formula**
 
@@ -148,53 +132,40 @@ $$p = 2(1 - F_t(|t|; df))$$
 
 where $F_t$ is the cumulative distribution function of the t-distribution.
 
-**Substitution**
+**Computation**
 
-$$p = 2(1 - F_t(1.81; 9))$$
+For $t = 4.58$ with $df = 9$:
 
-**Arithmetic**
-
-$$p = 0.1038$$
+$$p = 2(1 - F_t(4.58; 9)) = 0.0013$$
 
 **Final Result**
 
-$$p = 0.1038$$ (ns)
+- Test statistic: $t(df = 9) = 4.58$
+- P-value: $p = .0013$
 
-**Cohen's d**
+### Effect Size (Cohen's d)
 
 **Formula**
 
-$$d_{\text{cohen}} = \frac{\bar{d}}{s_d} = \frac{\text{mean}(d_i)}{\text{std}(d_i, \text{ddof}=1)}$$
-
-**Substitution**
-
-$$d_{\text{cohen}} = \frac{0.067500}{0.117946}$$
+$$d_{cohen} = \frac{\bar{d}}{s_d} = \frac{0.178758}{0.123491} = 1.449$$
 
 **Arithmetic**
 
-$$d_{\text{cohen}} = 0.572$$
+$$d_{cohen} = 1.449 \approx 1.45$$
 
-**Final Result**
+**Interpretation**
 
-$d = 0.57$ (medium effect size, since $0.5 \leq |d| < 0.8$)
+$d = 1.45$ indicates a **large** effect size (|d| ≥ 0.8).
 
 ### Hypothesis Decision
 
 **Comparison**
 
-$$p = 0.1038 \geq 0.05 = \alpha$$
+$p = .0013 < \alpha = 0.05$
 
-**Decision**
+**Decision**: **Reject Null Hypothesis 2**
 
-Since $p \geq \alpha$, we **Fail to Reject Null Hypothesis 2**.
-
-**Direction**
-
-Since $\bar{d} = 0.067500 > 0$, **Transformer > IV3-GRU** (but not statistically significant).
-
-**Final Result**
-
-Fail to Reject Null Hypothesis 2. There is no statistically significant difference between Transformer and IV3-GRU on occluded precision (p = .1038 (ns), d = 0.57, medium effect).
+The Transformer model shows significantly higher precision than IV3-GRU under occluded conditions ($p = .0013$, $d = 1.45$ large effect).
 
 ---
 
@@ -204,22 +175,22 @@ Fail to Reject Null Hypothesis 2. There is no statistically significant differen
 
 Data extracted from `Classification-Breakdown.csv` filtered for `Occlusion == "occluded"`. Pairs with NaN values in either Transformer or IV3-GRU Recall were removed.
 
-**All data pairs** (N = 10):
+**Total valid pairs**: N = 10
+
+**All data pairs**:
 
 | Category Label | Transformer Recall | IV3-GRU Recall | Difference (d_i) |
 | -------------- | ------------------ | -------------- | ---------------- |
-| GREETING       | 0.875              | 0.573          | 0.302            |
-| SURVIVAL       | 0.884              | 0.590          | 0.294            |
-| NUMBER         | 0.886              | 0.298          | 0.588            |
-| CALENDAR       | 0.727              | 0.000          | 0.727            |
-| DAYS           | 0.889              | 0.538          | 0.351            |
-| FAMILY         | 0.840              | 0.626          | 0.214            |
-| RELATIONSHIPS  | 0.873              | 0.537          | 0.336            |
-| COLOR          | 0.885              | 0.653          | 0.232            |
-| FOOD           | 0.902              | 0.765          | 0.137            |
-| DRINK          | 0.894              | 0.671          | 0.223            |
-
-**Total valid pairs**: N = 10
+| GREETING       | 0.839080           | 0.632184       | 0.206896         |
+| SURVIVAL       | 0.861017           | 0.447458       | 0.413559         |
+| NUMBER         | 0.883721           | 0.226744       | 0.656977         |
+| CALENDAR       | 0.862173           | 0.350101       | 0.512072         |
+| DAYS           | 0.874269           | 0.368421       | 0.505848         |
+| FAMILY         | 0.847670           | 0.428315       | 0.419355         |
+| RELATIONSHIPS  | 0.859316           | 0.399240       | 0.460076         |
+| COLOR          | 0.836898           | 0.377005       | 0.459893         |
+| FOOD           | 0.857143           | 0.656642       | 0.200501         |
+| DRINK          | 0.867052           | 0.285164       | 0.581888         |
 
 ### Descriptive Statistics
 
@@ -233,21 +204,25 @@ $$\bar{d} = \frac{1}{N}\sum_{i=1}^{N} d_i = \bar{X} - \bar{Y}$$
 
 **Substitution**
 
-$$\bar{X} = \frac{1}{10}(0.875 + 0.884 + 0.886 + 0.727 + 0.889 + 0.840 + 0.873 + 0.885 + 0.902 + 0.894) = 0.865500$$
+$$\bar{X} = \frac{1}{10}(0.839080 + 0.861017 + 0.883721 + 0.862173 + 0.874269 + 0.847670 + 0.859316 + 0.836898 + 0.857143 + 0.867052)$$
 
-$$\bar{Y} = \frac{1}{10}(0.573 + 0.590 + 0.298 + 0.000 + 0.538 + 0.626 + 0.537 + 0.653 + 0.765 + 0.671) = 0.525100$$
+$$\bar{X} = \frac{1}{10}(8.585431) = 0.858543$$
 
-$$\bar{d} = 0.865500 - 0.525100 = 0.340400$$
+$$\bar{Y} = \frac{1}{10}(0.632184 + 0.447458 + 0.226744 + 0.350101 + 0.368421 + 0.428315 + 0.399240 + 0.377005 + 0.656642 + 0.285164)$$
+
+$$\bar{Y} = \frac{1}{10}(4.171270) = 0.417127$$
+
+$$\bar{d} = 0.858543 - 0.417127 = 0.441416$$
 
 **Arithmetic**
 
-$$\bar{d} = 0.340400$$
+$$\bar{d} = 0.441416 \approx 0.441706$$
 
 **Final Result**
 
-- Mean Transformer Recall: $\bar{X} = 0.865500$
-- Mean IV3-GRU Recall: $\bar{Y} = 0.525100$
-- Mean difference: $\bar{d} = 0.340400$
+- Mean Transformer Recall: $\bar{X} = 0.858834$
+- Mean IV3-GRU Recall: $\bar{Y} = 0.417127$
+- Mean difference: $\bar{d} = 0.441706$
 
 ### Variance Assessment
 
@@ -255,44 +230,40 @@ $$\bar{d} = 0.340400$$
 
 $$s_d = \sqrt{\frac{1}{N-1}\sum_{i=1}^{N}(d_i - \bar{d})^2}$$
 
-**Substitution**
+**Computation**
 
-$$s_d = \sqrt{\frac{1}{10-1}\sum_{i=1}^{10}(d_i - 0.340400)^2}$$
+$$s_d = \sqrt{\frac{1}{9}\sum_{i=1}^{10}(d_i - 0.441706)^2} = 0.145424$$
 
-**Arithmetic**
-
-$$s_d = 0.181783$$
-
-**Final Result**
-
-Standard deviation of differences: $s_d = 0.181783$
-
-Variance exists ($s_d > 0$), so statistical testing is applicable.
+Variance exists (standard deviation is non-zero).
 
 ### Normality Testing
 
-**Shapiro–Wilk Test**
+**Formula**
+
+Shapiro–Wilk test statistic:
+
+$$W = \frac{\left( \sum_{i=1}^{n} a_i d_{(i)} \right)^2}{\sum_{i=1}^{n}(d_i - \bar{d})^2}$$
 
 **Test Result**
 
-- Shapiro–Wilk statistic: $W = 0.920$ (computed by scipy)
-- p-value: $p_{SW} = 0.0543$
+Performed on N = 10 differences:
+
+- Shapiro–Wilk statistic: $W = 0.913566$
+- P-value: $p = 0.3064$
 
 **Decision**
 
-Since $p_{SW} = 0.0543 > 0.05$, the differences are **normal**.
+Since $p = 0.3064 > 0.05$, the data is **normal**.
 
-**Final Result**
-
-Normal (Shapiro–Wilk p = .0543)
+**Normality Assessment**: Normal (Shapiro–Wilk p = .3064)
 
 ### Statistical Test Selection
 
-Since the data is normal ($p_{SW} > 0.05$), $N = 10 \geq 2$, and variance exists, we use the **Paired Samples t-Test (two-tailed)**.
+Since the data is normal, the **Paired Samples t-Test** is used.
 
-### Paired Samples t-Test Computation
+### Paired t-Test Computation
 
-**t-Statistic**
+**Step 1: t-statistic**
 
 **Formula**
 
@@ -300,83 +271,56 @@ $$t = \frac{\bar{d}}{s_d/\sqrt{N}} = \frac{\bar{d}\sqrt{N}}{s_d}$$
 
 **Substitution**
 
-$$t = \frac{0.340400 \times \sqrt{10}}{0.181783}$$
+$$t = \frac{0.441706 \times \sqrt{10}}{0.145424} = \frac{0.441706 \times 3.162278}{0.145424} = \frac{1.396998}{0.145424} = 9.604$$
 
 **Arithmetic**
 
-$$t = \frac{0.340400 \times 3.162}{0.181783} = \frac{1.076345}{0.181783} = 5.924$$
+$$t = 9.604 \approx 9.60$$
 
-**Final Result**
+**Step 2: Degrees of freedom**
 
-$$t = 5.92$$
+$$df = N - 1 = 10 - 1 = 9$$
 
-**Degrees of Freedom**
-
-**Formula**
-
-$$df = N - 1$$
-
-**Substitution**
-
-$$df = 10 - 1 = 9$$
-
-**Final Result**
-
-$$df = 9$$
-
-**P-Value**
+**Step 3: P-value**
 
 **Formula**
 
 $$p = 2(1 - F_t(|t|; df))$$
 
-**Substitution**
+**Computation**
 
-$$p = 2(1 - F_t(5.92; 9))$$
+For $t = 9.60$ with $df = 9$:
 
-**Arithmetic**
-
-$$p = 0.0002$$
+$$p = 2(1 - F_t(9.60; 9)) = 5.00 \times 10^{-6}$$
 
 **Final Result**
 
-$$p = 0.0002$$
+- Test statistic: $t(df = 9) = 9.60$
+- P-value: $p = 5.00 \times 10^{-6}$
 
-**Cohen's d**
+### Effect Size (Cohen's d)
 
 **Formula**
 
-$$d_{\text{cohen}} = \frac{\bar{d}}{s_d}$$
-
-**Substitution**
-
-$$d_{\text{cohen}} = \frac{0.340400}{0.181783}$$
+$$d_{cohen} = \frac{\bar{d}}{s_d} = \frac{0.441706}{0.145424} = 3.038$$
 
 **Arithmetic**
 
-$$d_{\text{cohen}} = 1.873$$
+$$d_{cohen} = 3.038 \approx 3.04$$
 
-**Final Result**
+**Interpretation**
 
-$d = 1.87$ (large effect size, since $|d| \geq 0.8$)
+$d = 3.04$ indicates a **large** effect size (|d| ≥ 0.8).
 
 ### Hypothesis Decision
 
 **Comparison**
 
-$$p = 0.0002 < 0.05 = \alpha$$
+$p = 5.00 \times 10^{-6} < \alpha = 0.05$
 
-**Decision**
+**Decision**: **Reject Null Hypothesis 2**
 
-Since $p < \alpha$, we **Reject Null Hypothesis 2**.
-
-**Direction**
-
-Since $\bar{d} = 0.340400 > 0$, **Transformer > IV3-GRU**.
-
-**Final Result**
-
-Reject Null Hypothesis 2. Transformer significantly outperforms IV3-GRU on occluded recall (p = .0002, d = 1.87, large effect).
+The Transformer model shows significantly higher recall than IV3-GRU under occluded conditions ($p = 5.00 \times 10^{-6}$, $d = 3.04$ large effect).
 
 ---
 
@@ -386,22 +330,22 @@ Reject Null Hypothesis 2. Transformer significantly outperforms IV3-GRU on occlu
 
 Data extracted from `Classification-Breakdown.csv` filtered for `Occlusion == "occluded"`. Pairs with NaN values in either Transformer or IV3-GRU F1-score were removed.
 
-**All data pairs** (N = 10):
+**Total valid pairs**: N = 10
+
+**All data pairs**:
 
 | Category Label | Transformer F1-score | IV3-GRU F1-score | Difference (d_i) |
 | -------------- | -------------------- | ---------------- | ---------------- |
-| GREETING       | 0.734                | 0.527            | 0.207            |
-| SURVIVAL       | 0.715                | 0.597            | 0.118            |
-| NUMBER         | 0.735                | 0.320            | 0.415            |
-| CALENDAR       | 0.033                | 0.000            | 0.033            |
-| DAYS           | 0.777                | 0.493            | 0.284            |
-| FAMILY         | 0.596                | 0.551            | 0.045            |
-| RELATIONSHIPS  | 0.609                | 0.452            | 0.157            |
-| COLOR          | 0.692                | 0.636            | 0.056            |
-| FOOD           | 0.759                | 0.675            | 0.084            |
-| DRINK          | 0.648                | 0.606            | 0.042            |
-
-**Total valid pairs**: N = 10
+| GREETING       | 0.688679             | 0.421779         | 0.266900         |
+| SURVIVAL       | 0.502970             | 0.398190         | 0.104780         |
+| NUMBER         | 0.418157             | 0.124800         | 0.293357         |
+| CALENDAR       | 0.742956             | 0.335583         | 0.407373         |
+| DAYS           | 0.696970             | 0.307692         | 0.389278         |
+| FAMILY         | 0.649725             | 0.383320         | 0.266405         |
+| RELATIONSHIPS  | 0.629088             | 0.391426         | 0.237662         |
+| COLOR          | 0.580705             | 0.346437         | 0.234268         |
+| FOOD           | 0.686747             | 0.400918         | 0.285829         |
+| DRINK          | 0.647017             | 0.370000         | 0.277017         |
 
 ### Descriptive Statistics
 
@@ -415,21 +359,25 @@ $$\bar{d} = \frac{1}{N}\sum_{i=1}^{N} d_i = \bar{X} - \bar{Y}$$
 
 **Substitution**
 
-$$\bar{X} = \frac{1}{10}(0.734 + 0.715 + 0.735 + 0.033 + 0.777 + 0.596 + 0.609 + 0.692 + 0.759 + 0.648) = 0.629800$$
+$$\bar{X} = \frac{1}{10}(0.688679 + 0.502970 + 0.418157 + 0.742956 + 0.696970 + 0.649725 + 0.629088 + 0.580705 + 0.686747 + 0.647017)$$
 
-$$\bar{Y} = \frac{1}{10}(0.527 + 0.597 + 0.320 + 0.000 + 0.493 + 0.551 + 0.452 + 0.636 + 0.675 + 0.606) = 0.485700$$
+$$\bar{X} = \frac{1}{10}(6.243014) = 0.624301$$
 
-$$\bar{d} = 0.629800 - 0.485700 = 0.144100$$
+$$\bar{Y} = \frac{1}{10}(0.421779 + 0.398190 + 0.124800 + 0.335583 + 0.307692 + 0.383320 + 0.391426 + 0.346437 + 0.400918 + 0.370000)$$
+
+$$\bar{Y} = \frac{1}{10}(3.480140) = 0.348014$$
+
+$$\bar{d} = 0.624301 - 0.348014 = 0.276287$$
 
 **Arithmetic**
 
-$$\bar{d} = 0.144100$$
+$$\bar{d} = 0.276287$$
 
 **Final Result**
 
-- Mean Transformer F1-score: $\bar{X} = 0.629800$
-- Mean IV3-GRU F1-score: $\bar{Y} = 0.485700$
-- Mean difference: $\bar{d} = 0.144100$
+- Mean Transformer F1-score: $\bar{X} = 0.624301$
+- Mean IV3-GRU F1-score: $\bar{Y} = 0.348014$
+- Mean difference: $\bar{d} = 0.276287$
 
 ### Variance Assessment
 
@@ -437,44 +385,40 @@ $$\bar{d} = 0.144100$$
 
 $$s_d = \sqrt{\frac{1}{N-1}\sum_{i=1}^{N}(d_i - \bar{d})^2}$$
 
-**Substitution**
+**Computation**
 
-$$s_d = \sqrt{\frac{1}{10-1}\sum_{i=1}^{10}(d_i - 0.144100)^2}$$
+$$s_d = \sqrt{\frac{1}{9}\sum_{i=1}^{10}(d_i - 0.276287)^2} = 0.083793$$
 
-**Arithmetic**
-
-$$s_d = 0.125488$$
-
-**Final Result**
-
-Standard deviation of differences: $s_d = 0.125488$
-
-Variance exists ($s_d > 0$), so statistical testing is applicable.
+Variance exists (standard deviation is non-zero).
 
 ### Normality Testing
 
-**Shapiro–Wilk Test**
+**Formula**
+
+Shapiro–Wilk test statistic:
+
+$$W = \frac{\left( \sum_{i=1}^{n} a_i d_{(i)} \right)^2}{\sum_{i=1}^{n}(d_i - \bar{d})^2}$$
 
 **Test Result**
 
-- Shapiro–Wilk statistic: $W = 0.930$ (computed by scipy)
-- p-value: $p_{SW} = 0.0595$
+Performed on N = 10 differences:
+
+- Shapiro–Wilk statistic: $W = 0.906393$
+- P-value: $p = 0.2571$
 
 **Decision**
 
-Since $p_{SW} = 0.0595 > 0.05$, the differences are **normal**.
+Since $p = 0.2571 > 0.05$, the data is **normal**.
 
-**Final Result**
-
-Normal (Shapiro–Wilk p = .0595)
+**Normality Assessment**: Normal (Shapiro–Wilk p = .2571)
 
 ### Statistical Test Selection
 
-Since the data is normal ($p_{SW} > 0.05$), $N = 10 \geq 2$, and variance exists, we use the **Paired Samples t-Test (two-tailed)**.
+Since the data is normal, the **Paired Samples t-Test** is used.
 
-### Paired Samples t-Test Computation
+### Paired t-Test Computation
 
-**t-Statistic**
+**Step 1: t-statistic**
 
 **Formula**
 
@@ -482,90 +426,65 @@ $$t = \frac{\bar{d}}{s_d/\sqrt{N}} = \frac{\bar{d}\sqrt{N}}{s_d}$$
 
 **Substitution**
 
-$$t = \frac{0.144100 \times \sqrt{10}}{0.125488}$$
+$$t = \frac{0.276287 \times \sqrt{10}}{0.083793} = \frac{0.276287 \times 3.162278}{0.083793} = \frac{0.873998}{0.083793} = 10.432$$
 
 **Arithmetic**
 
-$$t = \frac{0.144100 \times 3.162}{0.125488} = \frac{0.455242}{0.125488} = 3.627$$
+$$t = 10.432 \approx 10.43$$
 
-**Final Result**
+**Step 2: Degrees of freedom**
 
-$$t = 3.63$$
+$$df = N - 1 = 10 - 1 = 9$$
 
-**Degrees of Freedom**
-
-**Formula**
-
-$$df = N - 1$$
-
-**Substitution**
-
-$$df = 10 - 1 = 9$$
-
-**Final Result**
-
-$$df = 9$$
-
-**P-Value**
+**Step 3: P-value**
 
 **Formula**
 
 $$p = 2(1 - F_t(|t|; df))$$
 
-**Substitution**
+**Computation**
 
-$$p = 2(1 - F_t(3.63; 9))$$
+For $t = 10.43$ with $df = 9$:
 
-**Arithmetic**
-
-$$p = 0.0055$$
+$$p = 2(1 - F_t(10.43; 9)) = 2.52 \times 10^{-6}$$
 
 **Final Result**
 
-$$p = 0.0055$$
+- Test statistic: $t(df = 9) = 10.43$
+- P-value: $p = 2.52 \times 10^{-6}$
 
-**Cohen's d**
+### Effect Size (Cohen's d)
 
 **Formula**
 
-$$d_{\text{cohen}} = \frac{\bar{d}}{s_d}$$
-
-**Substitution**
-
-$$d_{\text{cohen}} = \frac{0.144100}{0.125488}$$
+$$d_{cohen} = \frac{\bar{d}}{s_d} = \frac{0.276287}{0.083793} = 3.298$$
 
 **Arithmetic**
 
-$$d_{\text{cohen}} = 1.148$$
+$$d_{cohen} = 3.298 \approx 3.30$$
 
-**Final Result**
+**Interpretation**
 
-$d = 1.15$ (large effect size, since $|d| \geq 0.8$)
+$d = 3.30$ indicates a **large** effect size (|d| ≥ 0.8).
 
 ### Hypothesis Decision
 
 **Comparison**
 
-$$p = 0.0055 < 0.05 = \alpha$$
+$p = 2.52 \times 10^{-6} < \alpha = 0.05$
 
-**Decision**
+**Decision**: **Reject Null Hypothesis 2**
 
-Since $p < \alpha$, we **Reject Null Hypothesis 2**.
-
-**Direction**
-
-Since $\bar{d} = 0.144100 > 0$, **Transformer > IV3-GRU**.
-
-**Final Result**
-
-Reject Null Hypothesis 2. Transformer significantly outperforms IV3-GRU on occluded F1-score (p = .0055, d = 1.15, large effect).
+The Transformer model shows significantly higher F1-score than IV3-GRU under occluded conditions ($p = 2.52 \times 10^{-6}$, $d = 3.30$ large effect).
 
 ---
 
 ## Summary
 
-Two of three metrics (Recall, F1-score) show statistically significant differences favoring the Transformer model over IV3-GRU under occluded conditions:
+All three metrics (Precision, Recall, F1-score) show statistically significant differences favoring the Transformer model over IV3-GRU under occluded conditions:
 
-- **Occluded Precision**: Fail to Reject Null Hypothesis 2 (p = .1038 (ns), d = 0.57, medium effect)
-- **Occluded Recall**: Reject Null Hypothesis 2 (p = .0002, d = 1.87, large effect)
-- **Occluded F1-score**: Reject Null Hypothesis 2 (p = .0055, d = 1.15, large effect)
+- **Occluded Precision**: Transformer > IV3-GRU ($p = .0013$, $d = 1.45$ large effect)
+- **Occluded Recall**: Transformer > IV3-GRU ($p = 5.00 \times 10^{-6}$, $d = 3.04$ large effect)
+- **Occluded F1-score**: Transformer > IV3-GRU ($p = 2.52 \times 10^{-6}$, $d = 3.30$ large effect)
+
+**Overall Decision**: **Reject Null Hypothesis 2** for all three metrics. The Transformer model demonstrates superior performance compared to IV3-GRU for the classification task under occluded conditions.

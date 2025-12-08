@@ -14,22 +14,22 @@ This document provides detailed step-by-step computations for all three metrics 
 
 Data extracted from `Classification-Breakdown.csv` filtered for `Occlusion == "nonoccluded"`. Pairs with NaN values in either Transformer or IV3-GRU Precision were removed.
 
-**All data pairs** (N = 10):
+**Total valid pairs**: N = 10
+
+**All data pairs**:
 
 | Category Label | Transformer Precision | IV3-GRU Precision | Difference (d_i) |
 | -------------- | --------------------- | ----------------- | ---------------- |
-| GREETING       | 1.000                 | 1.000             | 0.000            |
-| SURVIVAL       | 1.000                 | 1.000             | 0.000            |
-| NUMBER         | 1.000                 | 1.000             | 0.000            |
-| CALENDAR       | 1.000                 | 1.000             | 0.000            |
-| DAYS           | 1.000                 | 1.000             | 0.000            |
-| FAMILY         | 1.000                 | 1.000             | 0.000            |
-| RELATIONSHIPS  | 1.000                 | 1.000             | 0.000            |
-| COLOR          | 1.000                 | 1.000             | 0.000            |
-| FOOD           | 1.000                 | 1.000             | 0.000            |
-| DRINK          | 1.000                 | 1.000             | 0.000            |
-
-**Total valid pairs**: N = 10
+| GREETING       | 0.643855              | 0.319489          | 0.324366         |
+| SURVIVAL       | 0.570085              | 0.562284          | 0.007801         |
+| NUMBER         | 0.617757              | 0.312903          | 0.304854         |
+| CALENDAR       | 0.015152              | 0.000000          | 0.015152         |
+| DAYS           | 0.696429              | 0.320965          | 0.375464         |
+| FAMILY         | 0.438642              | 0.303571          | 0.135071         |
+| RELATIONSHIPS  | 0.442118              | 0.243182          | 0.198936         |
+| COLOR          | 0.570346              | 0.402151          | 0.168195         |
+| FOOD           | 0.639045              | 0.311044          | 0.328001         |
+| DRINK          | 0.481436              | 0.468619          | 0.012817         |
 
 ### Descriptive Statistics
 
@@ -43,21 +43,25 @@ $$\bar{d} = \frac{1}{N}\sum_{i=1}^{N} d_i = \bar{X} - \bar{Y}$$
 
 **Substitution**
 
-$$\bar{X} = \frac{1}{10}(1.000 + 1.000 + 1.000 + 1.000 + 1.000 + 1.000 + 1.000 + 1.000 + 1.000 + 1.000) = 1.000$$
+$$\bar{X} = \frac{1}{10}(0.643855 + 0.570085 + 0.617757 + 0.015152 + 0.696429 + 0.438642 + 0.442118 + 0.570346 + 0.639045 + 0.481436)$$
 
-$$\bar{Y} = \frac{1}{10}(1.000 + 1.000 + 1.000 + 1.000 + 1.000 + 1.000 + 1.000 + 1.000 + 1.000 + 1.000) = 1.000$$
+$$\bar{X} = \frac{1}{10}(5.114860) = 0.511486$$
 
-$$\bar{d} = 1.000 - 1.000 = 0.000$$
+$$\bar{Y} = \frac{1}{10}(0.319489 + 0.562284 + 0.312903 + 0.000000 + 0.320965 + 0.303571 + 0.243182 + 0.402151 + 0.311044 + 0.468619)$$
+
+$$\bar{Y} = \frac{1}{10}(3.244210) = 0.324421$$
+
+$$\bar{d} = 0.511486 - 0.324421 = 0.187065$$
 
 **Arithmetic**
 
-$$\bar{d} = 0.000$$
+$$\bar{d} = 0.187065 \approx 0.187066$$
 
 **Final Result**
 
-- Mean Transformer Precision: $\bar{X} = 1.000$
-- Mean IV3-GRU Precision: $\bar{Y} = 1.000$
-- Mean difference: $\bar{d} = 0.000$
+- Mean Transformer Precision: $\bar{X} = 0.511486$
+- Mean IV3-GRU Precision: $\bar{Y} = 0.324421$
+- Mean difference: $\bar{d} = 0.187066$
 
 ### Variance Assessment
 
@@ -65,57 +69,103 @@ $$\bar{d} = 0.000$$
 
 $$s_d = \sqrt{\frac{1}{N-1}\sum_{i=1}^{N}(d_i - \bar{d})^2}$$
 
-**Substitution**
+**Computation**
 
-Since all differences $d_i = 0.000$ and $\bar{d} = 0.000$:
+First, compute squared deviations from mean:
 
-$$s_d = \sqrt{\frac{1}{10-1}\sum_{i=1}^{10}(0.000 - 0.000)^2} = \sqrt{\frac{1}{9} \times 0} = 0$$
+$$s_d = \sqrt{\frac{1}{9}\sum_{i=1}^{10}(d_i - 0.187066)^2} = 0.142726$$
 
-**Arithmetic**
-
-$$s_d = 0$$
-
-**Final Result**
-
-Standard deviation of differences: $s_d = 0.000$
-
-**No variance exists** ($s_d = 0$ and all differences are zero), so statistical testing is **not applicable**.
+Variance exists (standard deviation is non-zero). All differences are non-zero, so there is variation in the paired differences.
 
 ### Normality Testing
 
-**Shapiro–Wilk Test**
+**Formula**
 
-Normality testing cannot be performed because there is no variance in the differences (all $d_i = 0$).
+Shapiro–Wilk test statistic:
 
-**Final Result**
+$$W = \frac{\left( \sum_{i=1}^{n} a_i d_{(i)} \right)^2}{\sum_{i=1}^{n}(d_i - \bar{d})^2}$$
 
-Normality cannot be assessed (no variance)
+where $d_{(i)}$ are the ordered differences and $a_i$ are coefficients from expected values of order statistics.
+
+**Test Result**
+
+Performed on N = 10 differences:
+
+- Shapiro–Wilk statistic: $W = 0.885768$
+- P-value: $p = 0.1519$
+
+**Decision**
+
+Since $p = 0.1519 > 0.05$, the data is **normal**.
+
+**Normality Assessment**: Normal (Shapiro–Wilk p = .1519)
 
 ### Statistical Test Selection
 
-Since there is no variance (all differences are zero), statistical tests are **not applicable**.
+Since the data is normal, the **Paired Samples t-Test** is used.
+
+### Paired t-Test Computation
+
+**Step 1: t-statistic**
+
+**Formula**
+
+$$t = \frac{\bar{d}}{s_d/\sqrt{N}} = \frac{\bar{d}\sqrt{N}}{s_d}$$
+
+**Substitution**
+
+$$t = \frac{0.187066 \times \sqrt{10}}{0.142726} = \frac{0.187066 \times 3.162278}{0.142726} = \frac{0.591528}{0.142726} = 4.144$$
+
+**Arithmetic**
+
+$$t = 4.144 \approx 4.14$$
+
+**Step 2: Degrees of freedom**
+
+$$df = N - 1 = 10 - 1 = 9$$
+
+**Step 3: P-value**
+
+**Formula**
+
+$$p = 2(1 - F_t(|t|; df))$$
+
+where $F_t$ is the cumulative distribution function of the t-distribution.
+
+**Computation**
+
+For $t = 4.14$ with $df = 9$:
+
+$$p = 2(1 - F_t(4.14; 9)) = 0.0025$$
 
 **Final Result**
 
-Test not applicable — no variance
+- Test statistic: $t(df = 9) = 4.14$
+- P-value: $p = .0025$
+
+### Effect Size (Cohen's d)
+
+**Formula**
+
+$$d_{cohen} = \frac{\bar{d}}{s_d} = \frac{0.187066}{0.142726} = 1.311$$
+
+**Arithmetic**
+
+$$d_{cohen} = 1.311 \approx 1.31$$
+
+**Interpretation**
+
+$d = 1.31$ indicates a **large** effect size (|d| ≥ 0.8).
 
 ### Hypothesis Decision
 
 **Comparison**
 
-Since all differences are zero ($\bar{d} = 0.000$), both models have identical performance.
+$p = .0025 < \alpha = 0.05$
 
-**Decision**
+**Decision**: **Reject Null Hypothesis 2**
 
-We **Fail to Reject Null Hypothesis 2** (no statistical test can be performed due to lack of variance).
-
-**Direction**
-
-**Equal performance** (both models achieve perfect precision of 1.000)
-
-**Final Result**
-
-Fail to Reject Null Hypothesis 2. Both Transformer and IV3-GRU achieve identical precision (1.000) under nonoccluded conditions. No statistical test is applicable due to lack of variance.
+The Transformer model shows significantly higher precision than IV3-GRU under nonoccluded conditions ($p = .0025$, $d = 1.31$ large effect).
 
 ---
 
@@ -125,22 +175,22 @@ Fail to Reject Null Hypothesis 2. Both Transformer and IV3-GRU achieve identical
 
 Data extracted from `Classification-Breakdown.csv` filtered for `Occlusion == "nonoccluded"`. Pairs with NaN values in either Transformer or IV3-GRU Recall were removed.
 
-**All data pairs** (N = 10):
+**Total valid pairs**: N = 10
+
+**All data pairs**:
 
 | Category Label | Transformer Recall | IV3-GRU Recall | Difference (d_i) |
 | -------------- | ------------------ | -------------- | ---------------- |
-| GREETING       | 0.880              | 0.653          | 0.227            |
-| SURVIVAL       | 0.864              | 0.769          | 0.095            |
-| NUMBER         | 0.913              | 0.297          | 0.616            |
-| CALENDAR       | 0.874              | 0.370          | 0.504            |
-| DAYS           | 0.898              | 0.635          | 0.263            |
-| FAMILY         | 0.866              | 0.575          | 0.291            |
-| RELATIONSHIPS  | 0.882              | 0.644          | 0.238            |
-| COLOR          | 0.866              | 0.727          | 0.139            |
-| FOOD           | 0.902              | 0.749          | 0.153            |
-| DRINK          | 0.884              | 0.680          | 0.204            |
-
-**Total valid pairs**: N = 10
+| GREETING       | 0.848987           | 0.552486       | 0.296501         |
+| SURVIVAL       | 0.868195           | 0.465616       | 0.402579         |
+| NUMBER         | 0.868594           | 0.254928       | 0.613666         |
+| CALENDAR       | 0.636364           | 0.000000       | 0.636364         |
+| DAYS           | 0.852101           | 0.290756       | 0.561345         |
+| FAMILY         | 0.815534           | 0.536408       | 0.279126         |
+| RELATIONSHIPS  | 0.860911           | 0.256595       | 0.604316         |
+| COLOR          | 0.866776           | 0.307566       | 0.559210         |
+| FOOD           | 0.892157           | 0.601961       | 0.290196         |
+| DRINK          | 0.858720           | 0.247241       | 0.611479         |
 
 ### Descriptive Statistics
 
@@ -154,21 +204,25 @@ $$\bar{d} = \frac{1}{N}\sum_{i=1}^{N} d_i = \bar{X} - \bar{Y}$$
 
 **Substitution**
 
-$$\bar{X} = \frac{1}{10}(0.880 + 0.864 + 0.913 + 0.874 + 0.898 + 0.866 + 0.882 + 0.866 + 0.902 + 0.884) = 0.882900$$
+$$\bar{X} = \frac{1}{10}(0.848987 + 0.868195 + 0.868594 + 0.636364 + 0.852101 + 0.815534 + 0.860911 + 0.866776 + 0.892157 + 0.858720)$$
 
-$$\bar{Y} = \frac{1}{10}(0.653 + 0.769 + 0.297 + 0.370 + 0.635 + 0.575 + 0.644 + 0.727 + 0.749 + 0.680) = 0.609900$$
+$$\bar{X} = \frac{1}{10}(8.368339) = 0.836834$$
 
-$$\bar{d} = 0.882900 - 0.609900 = 0.273000$$
+$$\bar{Y} = \frac{1}{10}(0.552486 + 0.465616 + 0.254928 + 0.000000 + 0.290756 + 0.536408 + 0.256595 + 0.307566 + 0.601961 + 0.247241)$$
+
+$$\bar{Y} = \frac{1}{10}(3.513557) = 0.351356$$
+
+$$\bar{d} = 0.836834 - 0.351356 = 0.485478$$
 
 **Arithmetic**
 
-$$\bar{d} = 0.273000$$
+$$\bar{d} = 0.485478$$
 
 **Final Result**
 
-- Mean Transformer Recall: $\bar{X} = 0.882900$
-- Mean IV3-GRU Recall: $\bar{Y} = 0.609900$
-- Mean difference: $\bar{d} = 0.273000$
+- Mean Transformer Recall: $\bar{X} = 0.836834$
+- Mean IV3-GRU Recall: $\bar{Y} = 0.351356$
+- Mean difference: $\bar{d} = 0.485478$
 
 ### Variance Assessment
 
@@ -176,130 +230,118 @@ $$\bar{d} = 0.273000$$
 
 $$s_d = \sqrt{\frac{1}{N-1}\sum_{i=1}^{N}(d_i - \bar{d})^2}$$
 
-**Substitution**
+**Computation**
 
-$$s_d = \sqrt{\frac{1}{10-1}\sum_{i=1}^{10}(d_i - 0.273000)^2}$$
+$$s_d = \sqrt{\frac{1}{9}\sum_{i=1}^{10}(d_i - 0.485478)^2} = 0.150440$$
 
-**Arithmetic**
-
-$$s_d = 0.164511$$
-
-**Final Result**
-
-Standard deviation of differences: $s_d = 0.164511$
-
-Variance exists ($s_d > 0$), so statistical testing is applicable.
+Variance exists (standard deviation is non-zero). All differences are positive (Transformer > IV3-GRU for all pairs), but there is variation in the magnitude of differences.
 
 ### Normality Testing
 
-**Shapiro–Wilk Test**
+**Formula**
+
+Shapiro–Wilk test statistic:
+
+$$W = \frac{\left( \sum_{i=1}^{n} a_i d_{(i)} \right)^2}{\sum_{i=1}^{n}(d_i - \bar{d})^2}$$
 
 **Test Result**
 
-- Shapiro–Wilk statistic: $W = 0.925$ (computed by scipy)
-- p-value: $p_{SW} = 0.0659$
+Performed on N = 10 differences:
+
+- Shapiro–Wilk statistic: $W = 0.800251$
+- P-value: $p = 0.0146$
 
 **Decision**
 
-Since $p_{SW} = 0.0659 > 0.05$, the differences are **normal**.
+Since $p = 0.0146 < 0.05$, the data is **non-normal**.
 
-**Final Result**
-
-Normal (Shapiro–Wilk p = .0659)
+**Normality Assessment**: Non-normal (Shapiro–Wilk p = .0146)
 
 ### Statistical Test Selection
 
-Since the data is normal ($p_{SW} > 0.05$), $N = 10 \geq 2$, and variance exists, we use the **Paired Samples t-Test (two-tailed)**.
+Since the data is non-normal, the **Wilcoxon Signed-Rank Test** is used.
 
-### Paired Samples t-Test Computation
+### Wilcoxon Signed-Rank Test Computation
 
-**t-Statistic**
+**Step 1: Rank absolute non-zero differences**
+
+For N = 10 pairs, all differences are non-zero and positive. Rank the absolute values:
+
+$$R_i = \operatorname{rank}(|d_i|)$$
+
+Since all differences are positive, we rank them from smallest to largest:
+
+| Rank | Difference (d_i) | Absolute Value |
+| ---- | ---------------- | -------------- |
+| 1    | 0.296501         | 0.296501       |
+| 2    | 0.279126         | 0.279126       |
+| 3    | 0.290196         | 0.290196       |
+| 4    | 0.402579         | 0.402579       |
+| 5    | 0.559210         | 0.559210       |
+| 6    | 0.561345         | 0.561345       |
+| 7    | 0.604316         | 0.604316       |
+| 8    | 0.611479         | 0.611479       |
+| 9    | 0.613666         | 0.613666       |
+| 10   | 0.636364         | 0.636364       |
+
+**Step 2: Compute positive and negative rank sums**
+
+Since all differences are positive ($d_i > 0$ for all $i$):
+
+$$S^+ = \sum_{d_i > 0} R_i = 1 + 2 + 3 + 4 + 5 + 6 + 7 + 8 + 9 + 10 = 55$$
+
+$$S^- = \sum_{d_i < 0} R_i = 0$$
+
+**Step 3: W statistic**
+
+$$W = \min(S^+, S^-) = \min(55, 0) = 0$$
+
+**Step 4: Expected value and standard deviation**
+
+For large sample (N_nonzero = 10 ≥ 10), use normal approximation:
+
+$$\mu_W = \frac{N_{nonzero}(N_{nonzero}+1)}{4} = \frac{10 \times 11}{4} = \frac{110}{4} = 27.50$$
+
+$$\sigma_W = \sqrt{\frac{N_{nonzero}(N_{nonzero}+1)(2N_{nonzero}+1)}{24}} = \sqrt{\frac{10 \times 11 \times 21}{24}} = \sqrt{\frac{2310}{24}} = \sqrt{96.25} = 9.811$$
+
+**Step 5: Z-value**
+
+$$z = \frac{W - \mu_W}{\sigma_W} = \frac{0 - 27.50}{9.811} = \frac{-27.50}{9.811} = -2.803$$
+
+**Step 6: P-value**
+
+$$p = 2(1 - \Phi(|z|)) = 2(1 - \Phi(2.803)) = 0.0020$$
+
+where $\Phi$ is the cumulative distribution function of the standard normal distribution.
+
+**Final Result**
+
+- Test statistic: $z = -2.803$
+- P-value: $p = .0020$
+
+### Effect Size
 
 **Formula**
 
-$$t = \frac{\bar{d}}{s_d/\sqrt{N}} = \frac{\bar{d}\sqrt{N}}{s_d}$$
-
-**Substitution**
-
-$$t = \frac{0.273000 \times \sqrt{10}}{0.164511}$$
+$$r = \frac{|z|}{\sqrt{N_{nonzero}}} = \frac{2.803}{\sqrt{10}} = \frac{2.803}{3.162} = 0.886$$
 
 **Arithmetic**
 
-$$t = \frac{0.273000 \times 3.162}{0.164511} = \frac{0.863226}{0.164511} = 5.250$$
+$$r = 0.886 \approx 0.89$$
 
-**Final Result**
+**Interpretation**
 
-$$t = 5.25$$
-
-**Degrees of Freedom**
-
-**Formula**
-
-$$df = N - 1$$
-
-**Substitution**
-
-$$df = 10 - 1 = 9$$
-
-**Final Result**
-
-$$df = 9$$
-
-**P-Value**
-
-**Formula**
-
-$$p = 2(1 - F_t(|t|; df))$$
-
-where $F_t$ is the cumulative distribution function of the t-distribution.
-
-**Substitution**
-
-$$p = 2(1 - F_t(5.25; 9))$$
-
-**Arithmetic**
-
-$$p = 0.0005$$
-
-**Final Result**
-
-$$p = 0.0005$$
-
-**Cohen's d**
-
-**Formula**
-
-$$d_{\text{cohen}} = \frac{\bar{d}}{s_d}$$
-
-**Substitution**
-
-$$d_{\text{cohen}} = \frac{0.273000}{0.164511}$$
-
-**Arithmetic**
-
-$$d_{\text{cohen}} = 1.659$$
-
-**Final Result**
-
-$d = 1.66$ (large effect size, since $|d| \geq 0.8$)
+$r = 0.89$ indicates a **large** effect size (|r| ≥ 0.5).
 
 ### Hypothesis Decision
 
 **Comparison**
 
-$$p = 0.0005 < 0.05 = \alpha$$
+$p = .0020 < \alpha = 0.05$
 
-**Decision**
+**Decision**: **Reject Null Hypothesis 2**
 
-Since $p < \alpha$, we **Reject Null Hypothesis 2**.
-
-**Direction**
-
-Since $\bar{d} = 0.273000 > 0$, **Transformer > IV3-GRU**.
-
-**Final Result**
-
-Reject Null Hypothesis 2. Transformer significantly outperforms IV3-GRU on nonoccluded recall (p = .0005, d = 1.66, large effect).
+The Transformer model shows significantly higher recall than IV3-GRU under nonoccluded conditions ($p = .0020$, $r = 0.89$ large effect).
 
 ---
 
@@ -309,22 +351,22 @@ Reject Null Hypothesis 2. Transformer significantly outperforms IV3-GRU on nonoc
 
 Data extracted from `Classification-Breakdown.csv` filtered for `Occlusion == "nonoccluded"`. Pairs with NaN values in either Transformer or IV3-GRU F1-score were removed.
 
-**All data pairs** (N = 10):
+**Total valid pairs**: N = 10
+
+**All data pairs**:
 
 | Category Label | Transformer F1-score | IV3-GRU F1-score | Difference (d_i) |
 | -------------- | -------------------- | ---------------- | ---------------- |
-| GREETING       | 0.936                | 0.790            | 0.146            |
-| SURVIVAL       | 0.927                | 0.870            | 0.057            |
-| NUMBER         | 0.954                | 0.457            | 0.497            |
-| CALENDAR       | 0.933                | 0.540            | 0.393            |
-| DAYS           | 0.946                | 0.776            | 0.170            |
-| FAMILY         | 0.928                | 0.730            | 0.198            |
-| RELATIONSHIPS  | 0.937                | 0.784            | 0.153            |
-| COLOR          | 0.928                | 0.842            | 0.086            |
-| FOOD           | 0.949                | 0.857            | 0.092            |
-| DRINK          | 0.939                | 0.810            | 0.129            |
-
-**Total valid pairs**: N = 10
+| GREETING       | 0.732327             | 0.404858         | 0.327469         |
+| SURVIVAL       | 0.688245             | 0.509404         | 0.178841         |
+| NUMBER         | 0.722010             | 0.280956         | 0.441054         |
+| CALENDAR       | 0.029598             | 0.000000         | 0.029598         |
+| DAYS           | 0.766440             | 0.305115         | 0.461325         |
+| FAMILY         | 0.570458             | 0.387719         | 0.182739         |
+| RELATIONSHIPS  | 0.584215             | 0.249708         | 0.334507         |
+| COLOR          | 0.687990             | 0.348555         | 0.339435         |
+| FOOD           | 0.744681             | 0.410154         | 0.334527         |
+| DRINK          | 0.616971             | 0.323699         | 0.293272         |
 
 ### Descriptive Statistics
 
@@ -338,21 +380,25 @@ $$\bar{d} = \frac{1}{N}\sum_{i=1}^{N} d_i = \bar{X} - \bar{Y}$$
 
 **Substitution**
 
-$$\bar{X} = \frac{1}{10}(0.936 + 0.927 + 0.954 + 0.933 + 0.946 + 0.928 + 0.937 + 0.928 + 0.949 + 0.939) = 0.937700$$
+$$\bar{X} = \frac{1}{10}(0.732327 + 0.688245 + 0.722010 + 0.029598 + 0.766440 + 0.570458 + 0.584215 + 0.687990 + 0.744681 + 0.616971)$$
 
-$$\bar{Y} = \frac{1}{10}(0.790 + 0.870 + 0.457 + 0.540 + 0.776 + 0.730 + 0.784 + 0.842 + 0.857 + 0.810) = 0.745600$$
+$$\bar{X} = \frac{1}{10}(6.142944) = 0.614294$$
 
-$$\bar{d} = 0.937700 - 0.745600 = 0.192100$$
+$$\bar{Y} = \frac{1}{10}(0.404858 + 0.509404 + 0.280956 + 0.000000 + 0.305115 + 0.387719 + 0.249708 + 0.348555 + 0.410154 + 0.323699)$$
+
+$$\bar{Y} = \frac{1}{10}(3.220164) = 0.322017$$
+
+$$\bar{d} = 0.614294 - 0.322017 = 0.292277$$
 
 **Arithmetic**
 
-$$\bar{d} = 0.192100$$
+$$\bar{d} = 0.292277$$
 
 **Final Result**
 
-- Mean Transformer F1-score: $\bar{X} = 0.937700$
-- Mean IV3-GRU F1-score: $\bar{Y} = 0.745600$
-- Mean difference: $\bar{d} = 0.192100$
+- Mean Transformer F1-score: $\bar{X} = 0.614294$
+- Mean IV3-GRU F1-score: $\bar{Y} = 0.322017$
+- Mean difference: $\bar{d} = 0.292277$$
 
 ### Variance Assessment
 
@@ -360,201 +406,108 @@ $$\bar{d} = 0.192100$$
 
 $$s_d = \sqrt{\frac{1}{N-1}\sum_{i=1}^{N}(d_i - \bar{d})^2}$$
 
-**Substitution**
+**Computation**
 
-$$s_d = \sqrt{\frac{1}{10-1}\sum_{i=1}^{10}(d_i - 0.192100)^2}$$
+$$s_d = \sqrt{\frac{1}{9}\sum_{i=1}^{10}(d_i - 0.292277)^2} = 0.129790$$
 
-**Arithmetic**
-
-$$s_d = 0.141819$$
-
-**Final Result**
-
-Standard deviation of differences: $s_d = 0.141819$
-
-Variance exists ($s_d > 0$), so statistical testing is applicable.
+Variance exists (standard deviation is non-zero). All differences are positive, but there is variation in the magnitude of differences.
 
 ### Normality Testing
 
-**Shapiro–Wilk Test**
+**Formula**
+
+Shapiro–Wilk test statistic:
+
+$$W = \frac{\left( \sum_{i=1}^{n} a_i d_{(i)} \right)^2}{\sum_{i=1}^{n}(d_i - \bar{d})^2}$$
 
 **Test Result**
 
-- Shapiro–Wilk statistic: $W = 0.880$ (computed by scipy)
-- p-value: $p_{SW} = 0.0162$
+Performed on N = 10 differences:
+
+- Shapiro–Wilk statistic: $W = 0.917105$
+- P-value: $p = 0.3334$
 
 **Decision**
 
-Since $p_{SW} = 0.0162 < 0.05$, the differences are **non-normal**.
+Since $p = 0.3334 > 0.05$, the data is **normal**.
 
-**Final Result**
-
-Non-normal (Shapiro–Wilk p = .0162)
+**Normality Assessment**: Normal (Shapiro–Wilk p = .3334)
 
 ### Statistical Test Selection
 
-Since the data is non-normal ($p_{SW} < 0.05$), $N = 10 \geq 2$, and variance exists, we use the **Wilcoxon Signed-Rank Test (two-tailed)**.
+Since the data is normal, the **Paired Samples t-Test** is used.
 
-### Wilcoxon Signed-Rank Test Computation
+### Paired t-Test Computation
 
-**Step 1: Identify Non-Zero Differences**
-
-Remove zero differences: $d^{*} = \{d_i \mid d_i \neq 0\}$
-
-All 10 differences are non-zero: $d^{*} = \{0.146, 0.057, 0.497, 0.393, 0.170, 0.198, 0.153, 0.086, 0.092, 0.129\}$
-
-**Step 2: Rank Absolute Non-Zero Differences**
+**Step 1: t-statistic**
 
 **Formula**
 
-$$R_i = \operatorname{rank}(|d^{*}_i|)$$
-
-Rank the absolute values of non-zero differences from smallest to largest.
-
-**Step 3: Compute Positive and Negative Rank Sums**
-
-**Formula**
-
-$$S^+ = \sum_{d^{*}_i > 0} R_i$$
-
-$$S^- = \sum_{d^{*}_i < 0} R_i$$
-
-Since all 10 differences are positive, $S^- = 0$ and $S^+$ equals the sum of all ranks.
-
-**Step 4: Compute W Statistic**
-
-**Formula**
-
-$$W = \min(S^+, S^-)$$
+$$t = \frac{\bar{d}}{s_d/\sqrt{N}} = \frac{\bar{d}\sqrt{N}}{s_d}$$
 
 **Substitution**
 
-$$W = \min(S^+, 0) = 0$$
+$$t = \frac{0.292277 \times \sqrt{10}}{0.129790} = \frac{0.292277 \times 3.162278}{0.129790} = \frac{0.924499}{0.129790} = 7.124$$
 
 **Arithmetic**
 
-$$W = 0$$
+$$t = 7.124 \approx 7.12$$
 
-**Final Result**
+**Step 2: Degrees of freedom**
 
-$$W = 0$$
+$$df = N - 1 = 10 - 1 = 9$$
 
-**Step 5: Large-Sample Normal Approximation**
-
-Since $N_{\text{nonzero}} = 10 \geq 10$, we use the normal approximation.
-
-**Expected Value**
+**Step 3: P-value**
 
 **Formula**
 
-$$\mu_W = \frac{N_{\text{nonzero}}(N_{\text{nonzero}}+1)}{4}$$
+$$p = 2(1 - F_t(|t|; df))$$
 
-**Substitution**
+**Computation**
 
-$$\mu_W = \frac{10 \times 11}{4} = \frac{110}{4} = 27.5$$
+For $t = 7.12$ with $df = 9$:
+
+$$p = 2(1 - F_t(7.12; 9)) = 5.54 \times 10^{-5}$$
 
 **Final Result**
 
-$$\mu_W = 27.5$$
+- Test statistic: $t(df = 9) = 7.12$
+- P-value: $p = 5.54 \times 10^{-5}$
 
-**Standard Deviation**
+### Effect Size (Cohen's d)
 
 **Formula**
 
-$$\sigma_W = \sqrt{\frac{N_{\text{nonzero}}(N_{\text{nonzero}}+1)(2N_{\text{nonzero}}+1)}{24}}$$
-
-**Substitution**
-
-$$\sigma_W = \sqrt{\frac{10 \times 11 \times 21}{24}}$$
+$$d_{cohen} = \frac{\bar{d}}{s_d} = \frac{0.292277}{0.129790} = 2.253$$
 
 **Arithmetic**
 
-$$\sigma_W = \sqrt{\frac{2310}{24}} = \sqrt{96.25} = 9.811$$
+$$d_{cohen} = 2.253 \approx 2.25$$
 
-**Final Result**
+**Interpretation**
 
-$$\sigma_W = 9.811$$
-
-**Z-Value**
-
-**Formula**
-
-$$z = \frac{W - \mu_W}{\sigma_W}$$
-
-**Substitution**
-
-$$z = \frac{0 - 27.5}{9.811}$$
-
-**Arithmetic**
-
-$$z = \frac{-27.5}{9.811} = -2.803$$
-
-**Final Result**
-
-$$z = -2.803$$
-
-**P-Value**
-
-**Formula**
-
-$$p = 2(1 - \Phi(|z|))$$
-
-where $\Phi$ is the cumulative distribution function of the standard normal distribution.
-
-**Substitution**
-
-$$p = 2(1 - \Phi(2.803))$$
-
-**Arithmetic**
-
-$$p = 0.0020$$
-
-**Final Result**
-
-$$p = 0.0020$$
-
-### Effect Size
-
-**Formula**
-
-$$r = \frac{|z|}{\sqrt{N_{\text{nonzero}}}}$$
-
-**Substitution**
-
-$$r = \frac{2.803}{\sqrt{10}}$$
-
-**Arithmetic**
-
-$$r = \frac{2.803}{3.162} = 0.886$$
-
-**Final Result**
-
-$r = 0.89$ (large effect size, since $|r| \geq 0.5$)
+$d = 2.25$ indicates a **large** effect size (|d| ≥ 0.8).
 
 ### Hypothesis Decision
 
 **Comparison**
 
-$$p = 0.0020 < 0.05 = \alpha$$
+$p = 5.54 \times 10^{-5} < \alpha = 0.05$
 
-**Decision**
+**Decision**: **Reject Null Hypothesis 2**
 
-Since $p < \alpha$, we **Reject Null Hypothesis 2**.
-
-**Direction**
-
-Since $\bar{d} = 0.192100 > 0$, **Transformer > IV3-GRU**.
-
-**Final Result**
-
-Reject Null Hypothesis 2. Transformer significantly outperforms IV3-GRU on nonoccluded F1-score (p = .0020, r = 0.89, large effect).
+The Transformer model shows significantly higher F1-score than IV3-GRU under nonoccluded conditions ($p = 5.54 \times 10^{-5}$, $d = 2.25$ large effect).
 
 ---
 
 ## Summary
 
-Two of three metrics (Recall, F1-score) show statistically significant differences favoring the Transformer model over IV3-GRU under nonoccluded conditions:
+All three metrics (Precision, Recall, F1-score) show statistically significant differences favoring the Transformer model over IV3-GRU under nonoccluded conditions:
 
-- **Nonoccluded Precision**: Fail to Reject Null Hypothesis 2 (no variance — both models achieve perfect precision of 1.000)
-- **Nonoccluded Recall**: Reject Null Hypothesis 2 (p = .0005, d = 1.66, large effect)
-- **Nonoccluded F1-score**: Reject Null Hypothesis 2 (p = .0020, r = 0.89, large effect)
+- **Nonoccluded Precision**: Transformer > IV3-GRU ($p = .0025$, $d = 1.31$ large effect)
+- **Nonoccluded Recall**: Transformer > IV3-GRU ($p = .0020$, $r = 0.89$ large effect)
+- **Nonoccluded F1-score**: Transformer > IV3-GRU ($p = 5.54 \times 10^{-5}$, $d = 2.25$ large effect)
+
+**Overall Decision**: **Reject Null Hypothesis 2** for all three metrics. The Transformer model demonstrates superior performance compared to IV3-GRU for the classification task under nonoccluded conditions.
+
+**Note on Variance**: All three metrics show variance in the paired differences. The Nonoccluded Precision metric has variance (standard deviation = 0.142726), contrary to a potential "no variance" case. All differences are non-zero, indicating meaningful variation between the two models' performance.
