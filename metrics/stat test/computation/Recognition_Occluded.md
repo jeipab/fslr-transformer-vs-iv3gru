@@ -73,6 +73,8 @@ $$s_d = \sqrt{\frac{1}{N-1}\sum_{i=1}^{N}(d_i - \bar{d})^2}$$
 
 Using N = 98 (after removing both-zero pairs) for statistical testing:
 
+$$s_d = \sqrt{\frac{1}{97}\sum_{i=1}^{98}(d_i - 0.091360)^2} = 0.190318$$
+
 The standard deviation of differences is computed from the 98 non-zero pairs. Variance exists (not all differences are zero).
 
 ### Normality Testing
@@ -232,6 +234,8 @@ $$s_d = \sqrt{\frac{1}{N-1}\sum_{i=1}^{N}(d_i - \bar{d})^2}$$
 
 Using N = 98 (after removing both-zero pairs) for statistical testing:
 
+$$s_d = \sqrt{\frac{1}{97}\sum_{i=1}^{98}(d_i - 0.286451)^2} = 0.291009$$
+
 The standard deviation of differences is computed from the 98 non-zero pairs. Variance exists (not all differences are zero).
 
 ### Normality Testing
@@ -384,6 +388,8 @@ $$s_d = \sqrt{\frac{1}{N-1}\sum_{i=1}^{N}(d_i - \bar{d})^2}$$
 **Computation**
 
 Using N = 98 (after removing both-zero pairs) for statistical testing:
+
+$$s_d = \sqrt{\frac{1}{97}\sum_{i=1}^{98}(d_i - 0.151778)^2} = 0.202891$$
 
 The standard deviation of differences is computed from the 98 non-zero pairs. Variance exists (not all differences are zero).
 

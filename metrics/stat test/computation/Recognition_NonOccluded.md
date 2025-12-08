@@ -73,6 +73,8 @@ $$s_d = \sqrt{\frac{1}{N-1}\sum_{i=1}^{N}(d_i - \bar{d})^2}$$
 
 Using N = 94 (after removing both-zero pairs) for statistical testing:
 
+$$s_d = \sqrt{\frac{1}{93}\sum_{i=1}^{94}(d_i - 0.076543)^2} = 0.179511$$
+
 The standard deviation of differences is computed from the 94 non-zero pairs. Variance exists (not all differences are zero).
 
 ### Normality Testing
@@ -89,7 +91,7 @@ where $d_{(i)}$ are the ordered differences and $a_i$ are coefficients from expe
 
 Performed on N = 94 differences (after removing both-zero pairs):
 
-- Shapiro–Wilk statistic: $W = 0.890257$
+- Shapiro–Wilk statistic: $W = 0.890257$$
 - P-value: $p = 2.26 \times 10^{-8}$
 
 **Decision**
@@ -231,6 +233,8 @@ $$s_d = \sqrt{\frac{1}{N-1}\sum_{i=1}^{N}(d_i - \bar{d})^2}$$
 **Computation**
 
 Using N = 94 (after removing both-zero pairs) for statistical testing:
+
+$$s_d = \sqrt{\frac{1}{93}\sum_{i=1}^{94}(d_i - 0.303152)^2} = 0.271056$$
 
 The standard deviation of differences is computed from the 94 non-zero pairs. Variance exists (not all differences are zero).
 
@@ -384,6 +388,8 @@ $$s_d = \sqrt{\frac{1}{N-1}\sum_{i=1}^{N}(d_i - \bar{d})^2}$$
 **Computation**
 
 Using N = 94 (after removing both-zero pairs) for statistical testing:
+
+$$s_d = \sqrt{\frac{1}{93}\sum_{i=1}^{94}(d_i - 0.141276)^2} = 0.187436$$
 
 The standard deviation of differences is computed from the 94 non-zero pairs. Variance exists (not all differences are zero).
 
