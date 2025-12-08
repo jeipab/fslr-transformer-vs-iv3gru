@@ -1,0 +1,7 @@
+Metric,Occlusion,Transformer,IV3-GRU
+Precision,nonoccluded,0.482643,0.4061
+Precision,occluded,0.470068,0.378707
+Recall,nonoccluded,0.78446,0.481308
+Recall,occluded,0.813161,0.52671
+F1-Score,nonoccluded,0.561103,0.419827
+F1-Score,occluded,0.563301,0.411522

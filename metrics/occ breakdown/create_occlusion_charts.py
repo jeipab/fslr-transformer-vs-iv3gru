@@ -10,6 +10,10 @@ Requirements:
     - pandas
     - numpy
     
+Input:
+    - metrics\stat test\recognition\Recognition-Mean.csv
+    - metrics\stat test\classification\Classification-Mean.csv
+    
 Output:
     Generates two PNG charts in the same directory:
     - recognition_occlusion_comparison.png
@@ -144,11 +148,67 @@ def create_comparison_chart(df, title, filename):
     print(f"Saved: {output_path}")
     sys.stdout.flush()
 
+def transform_data(df):
+    """
+    Transform data from new CSV format (Metric, Occlusion, Transformer, IV3-GRU)
+    to format expected by chart function (Model, Occlusion, Precision, Recall, F1-score).
+    
+    Parameters:
+    df: DataFrame with columns Metric, Occlusion, Transformer, IV3-GRU
+    
+    Returns:
+    DataFrame with columns Model, Occlusion, Precision, Recall, F1-score
+    """
+    # Normalize occlusion values to match expected format
+    df = df.copy()
+    df['Occlusion'] = df['Occlusion'].str.replace('nonoccluded', 'Non-Occluded', regex=False)
+    df['Occlusion'] = df['Occlusion'].str.replace('occluded', 'Occluded', regex=False)
+    
+    # Normalize metric names
+    df['Metric'] = df['Metric'].str.replace('F1-Score', 'F1-score', regex=False)
+    
+    # Build result DataFrame by extracting values for each model and occlusion combination
+    result_rows = []
+    
+    for occlusion in ['Non-Occluded', 'Occluded']:
+        occlusion_data = df[df['Occlusion'] == occlusion]
+        
+        # Extract values for Transformer
+        transformer_precision = occlusion_data[occlusion_data['Metric'] == 'Precision']['Transformer'].values[0]
+        transformer_recall = occlusion_data[occlusion_data['Metric'] == 'Recall']['Transformer'].values[0]
+        transformer_f1 = occlusion_data[occlusion_data['Metric'] == 'F1-score']['Transformer'].values[0]
+        
+        result_rows.append({
+            'Model': 'Transformer',
+            'Occlusion': occlusion,
+            'Precision': transformer_precision,
+            'Recall': transformer_recall,
+            'F1-score': transformer_f1
+        })
+        
+        # Extract values for IV3-GRU
+        iv3_precision = occlusion_data[occlusion_data['Metric'] == 'Precision']['IV3-GRU'].values[0]
+        iv3_recall = occlusion_data[occlusion_data['Metric'] == 'Recall']['IV3-GRU'].values[0]
+        iv3_f1 = occlusion_data[occlusion_data['Metric'] == 'F1-score']['IV3-GRU'].values[0]
+        
+        result_rows.append({
+            'Model': 'IV3-GRU',
+            'Occlusion': occlusion,
+            'Precision': iv3_precision,
+            'Recall': iv3_recall,
+            'F1-score': iv3_f1
+        })
+    
+    return pd.DataFrame(result_rows)
+
 def main():
     try:
-        # Read CSV files
-        recognition_file = os.path.join(output_dir, 'Compiled Data Summary - TABLE B2 — Recognition Occlusion Breakdown.csv')
-        classification_file = os.path.join(output_dir, 'Compiled Data Summary - TABLE B4 — Classification Occlusion Breakdown.csv')
+        # Get project root (parent of metrics directory)
+        project_root = Path(__file__).parent.parent.parent
+        
+        # Read CSV files from new location
+        recognition_file = project_root / 'metrics' / 'stat test' / 'recognition' / 'Recognition-Mean.csv'
+        classification_file = project_root / 'metrics' / 'stat test' / 'classification' / 'Classification-Mean.csv'
         
         print(f"Reading recognition file: {recognition_file}")
         sys.stdout.flush()
@@ -156,12 +216,12 @@ def main():
         sys.stdout.flush()
         
         # Load data
-        df_recognition = pd.read_csv(recognition_file)
-        df_classification = pd.read_csv(classification_file)
+        df_recognition_raw = pd.read_csv(recognition_file)
+        df_classification_raw = pd.read_csv(classification_file)
         
-        # Forward-fill empty Model values (for continuation rows)
-        df_recognition['Model'] = df_recognition['Model'].ffill()
-        df_classification['Model'] = df_classification['Model'].ffill()
+        # Transform data to expected format
+        df_recognition = transform_data(df_recognition_raw)
+        df_classification = transform_data(df_classification_raw)
         
         print(f"Recognition data shape: {df_recognition.shape}")
         sys.stdout.flush()

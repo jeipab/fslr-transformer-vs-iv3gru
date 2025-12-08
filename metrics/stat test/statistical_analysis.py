@@ -5,7 +5,7 @@ This script performs comprehensive statistical testing comparing Transformer and
 models for Filipino Sign Language recognition and classification tasks.
 
 USAGE:
-    python statistical_analysis.py
+    python "metrics\stat test\statistical_analysis.py"
 
 REQUIREMENTS:
     - Python 3.7+
