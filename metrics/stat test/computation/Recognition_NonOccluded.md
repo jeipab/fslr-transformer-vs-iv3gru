@@ -87,11 +87,33 @@ $$W = \frac{\left( \sum_{i=1}^{n} a_i d_{(i)} \right)^2}{\sum_{i=1}^{n}(d_i - \b
 
 where $d_{(i)}$ are the ordered differences and $a_i$ are coefficients from expected values of order statistics.
 
+**Substitution**
+
+Order the N = 94 differences (after removing both-zero pairs) from smallest to largest to obtain $d_{(1)}, d_{(2)}, \ldots, d_{(94)}$. The coefficients $a_i$ are derived from expected values of order statistics of a standard normal distribution (computed via scipy's algorithm).
+
+The denominator $\sum_{i=1}^{94}(d_i - \bar{d})^2$ was computed in the Variance Assessment section.
+
+**Computation**
+
+Using the ordered differences and coefficients $a_i$:
+
+$$W = \frac{\left( \sum_{i=1}^{94} a_i d_{(i)} \right)^2}{\sum_{i=1}^{94}(d_i - \bar{d})^2} = 0.890257$$
+
+**P-value Computation**
+
+The p-value is computed from the distribution of the Shapiro–Wilk statistic under the null hypothesis of normality:
+
+$$p = P(W \leq 0.890257 \mid H_0: \text{data is normal}, N = 94)$$
+
+For N = 94, the p-value is computed using the distribution of W (via scipy's algorithm, which uses approximations for large samples):
+
+$$p = 2.26 \times 10^{-8}$$
+
 **Test Result**
 
 Performed on N = 94 differences (after removing both-zero pairs):
 
-- Shapiro–Wilk statistic: $W = 0.890257$$
+- Shapiro–Wilk statistic: $W = 0.890257$
 - P-value: $p = 2.26 \times 10^{-8}$
 
 **Decision**
@@ -245,6 +267,28 @@ The standard deviation of differences is computed from the 94 non-zero pairs. Va
 Shapiro–Wilk test statistic:
 
 $$W = \frac{\left( \sum_{i=1}^{n} a_i d_{(i)} \right)^2}{\sum_{i=1}^{n}(d_i - \bar{d})^2}$$
+
+**Substitution**
+
+Order the N = 94 differences (after removing both-zero pairs) from smallest to largest to obtain $d_{(1)}, d_{(2)}, \ldots, d_{(94)}$. The coefficients $a_i$ are derived from expected values of order statistics of a standard normal distribution (computed via scipy's algorithm).
+
+The denominator $\sum_{i=1}^{94}(d_i - \bar{d})^2$ was computed in the Variance Assessment section.
+
+**Computation**
+
+Using the ordered differences and coefficients $a_i$:
+
+$$W = \frac{\left( \sum_{i=1}^{94} a_i d_{(i)} \right)^2}{\sum_{i=1}^{94}(d_i - \bar{d})^2} = 0.923691$$
+
+**P-value Computation**
+
+The p-value is computed from the distribution of the Shapiro–Wilk statistic under the null hypothesis of normality:
+
+$$p = P(W \leq 0.923691 \mid H_0: \text{data is normal}, N = 94)$$
+
+For N = 94, the p-value is computed using the distribution of W (via scipy's algorithm, which uses approximations for large samples):
+
+$$p = 3.90 \times 10^{-6}$$
 
 **Test Result**
 
@@ -400,6 +444,28 @@ The standard deviation of differences is computed from the 94 non-zero pairs. Va
 Shapiro–Wilk test statistic:
 
 $$W = \frac{\left( \sum_{i=1}^{n} a_i d_{(i)} \right)^2}{\sum_{i=1}^{n}(d_i - \bar{d})^2}$$
+
+**Substitution**
+
+Order the N = 94 differences (after removing both-zero pairs) from smallest to largest to obtain $d_{(1)}, d_{(2)}, \ldots, d_{(94)}$. The coefficients $a_i$ are derived from expected values of order statistics of a standard normal distribution (computed via scipy's algorithm).
+
+The denominator $\sum_{i=1}^{94}(d_i - \bar{d})^2$ was computed in the Variance Assessment section.
+
+**Computation**
+
+Using the ordered differences and coefficients $a_i$:
+
+$$W = \frac{\left( \sum_{i=1}^{94} a_i d_{(i)} \right)^2}{\sum_{i=1}^{94}(d_i - \bar{d})^2} = 0.887962$$
+
+**P-value Computation**
+
+The p-value is computed from the distribution of the Shapiro–Wilk statistic under the null hypothesis of normality:
+
+$$p = P(W \leq 0.887962 \mid H_0: \text{data is normal}, N = 94)$$
+
+For N = 94, the p-value is computed using the distribution of W (via scipy's algorithm, which uses approximations for large samples):
+
+$$p = 2.57 \times 10^{-8}$$
 
 **Test Result**
 

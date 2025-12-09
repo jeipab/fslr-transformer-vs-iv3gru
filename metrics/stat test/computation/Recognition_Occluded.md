@@ -87,6 +87,28 @@ $$W = \frac{\left( \sum_{i=1}^{n} a_i d_{(i)} \right)^2}{\sum_{i=1}^{n}(d_i - \b
 
 where $d_{(i)}$ are the ordered differences and $a_i$ are coefficients from expected values of order statistics.
 
+**Substitution**
+
+Order the N = 98 differences (after removing both-zero pairs) from smallest to largest to obtain $d_{(1)}, d_{(2)}, \ldots, d_{(98)}$. The coefficients $a_i$ are derived from expected values of order statistics of a standard normal distribution (computed via scipy's algorithm).
+
+The denominator $\sum_{i=1}^{98}(d_i - \bar{d})^2$ was computed in the Variance Assessment section.
+
+**Computation**
+
+Using the ordered differences and coefficients $a_i$:
+
+$$W = \frac{\left( \sum_{i=1}^{98} a_i d_{(i)} \right)^2}{\sum_{i=1}^{98}(d_i - \bar{d})^2} = 0.941027$$
+
+**P-value Computation**
+
+The p-value is computed from the distribution of the Shapiro–Wilk statistic under the null hypothesis of normality:
+
+$$p = P(W \leq 0.941027 \mid H_0: \text{data is normal}, N = 98)$$
+
+For N = 98, the p-value is computed using the distribution of W (via scipy's algorithm, which uses approximations for large samples):
+
+$$p = 2.92 \times 10^{-5}$$
+
 **Test Result**
 
 Performed on N = 98 differences (after removing both-zero pairs):
@@ -246,6 +268,28 @@ Shapiro–Wilk test statistic:
 
 $$W = \frac{\left( \sum_{i=1}^{n} a_i d_{(i)} \right)^2}{\sum_{i=1}^{n}(d_i - \bar{d})^2}$$
 
+**Substitution**
+
+Order the N = 98 differences (after removing both-zero pairs) from smallest to largest to obtain $d_{(1)}, d_{(2)}, \ldots, d_{(98)}$. The coefficients $a_i$ are derived from expected values of order statistics of a standard normal distribution (computed via scipy's algorithm).
+
+The denominator $\sum_{i=1}^{98}(d_i - \bar{d})^2$ was computed in the Variance Assessment section.
+
+**Computation**
+
+Using the ordered differences and coefficients $a_i$:
+
+$$W = \frac{\left( \sum_{i=1}^{98} a_i d_{(i)} \right)^2}{\sum_{i=1}^{98}(d_i - \bar{d})^2} = 0.948846$$
+
+**P-value Computation**
+
+The p-value is computed from the distribution of the Shapiro–Wilk statistic under the null hypothesis of normality:
+
+$$p = P(W \leq 0.948846 \mid H_0: \text{data is normal}, N = 98)$$
+
+For N = 98, the p-value is computed using the distribution of W (via scipy's algorithm, which uses approximations for large samples):
+
+$$p = 8.37 \times 10^{-5}$$
+
 **Test Result**
 
 Performed on N = 98 differences (after removing both-zero pairs):
@@ -400,6 +444,28 @@ The standard deviation of differences is computed from the 98 non-zero pairs. Va
 Shapiro–Wilk test statistic:
 
 $$W = \frac{\left( \sum_{i=1}^{n} a_i d_{(i)} \right)^2}{\sum_{i=1}^{n}(d_i - \bar{d})^2}$$
+
+**Substitution**
+
+Order the N = 98 differences (after removing both-zero pairs) from smallest to largest to obtain $d_{(1)}, d_{(2)}, \ldots, d_{(98)}$. The coefficients $a_i$ are derived from expected values of order statistics of a standard normal distribution (computed via scipy's algorithm).
+
+The denominator $\sum_{i=1}^{98}(d_i - \bar{d})^2$ was computed in the Variance Assessment section.
+
+**Computation**
+
+Using the ordered differences and coefficients $a_i$:
+
+$$W = \frac{\left( \sum_{i=1}^{98} a_i d_{(i)} \right)^2}{\sum_{i=1}^{98}(d_i - \bar{d})^2} = 0.930729$$
+
+**P-value Computation**
+
+The p-value is computed from the distribution of the Shapiro–Wilk statistic under the null hypothesis of normality:
+
+$$p = P(W \leq 0.930729 \mid H_0: \text{data is normal}, N = 98)$$
+
+For N = 98, the p-value is computed using the distribution of W (via scipy's algorithm, which uses approximations for large samples):
+
+$$p = 4.21 \times 10^{-6}$$
 
 **Test Result**
 
