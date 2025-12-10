@@ -1,7 +1,7 @@
-metric,n,transformer_mean,gru_mean,difference,normality,test_used,test_statistic,p_value,effect_size,direction,decision
-Occluded Precision,10,0.500168,0.32141,0.178758,Normal (Shapiro–Wilk p = .3582),Paired Samples t-Test (two-tailed),t(df = 9) = 4.58,p = .0013,d = 1.45 (large),Transformer > IV3-GRU,Reject Null Hypothesis 2
-Occluded Recall,10,0.858834,0.417127,0.441706,Normal (Shapiro–Wilk p = .3064),Paired Samples t-Test (two-tailed),t(df = 9) = 9.60,p = 5.00×10⁻6,d = 3.04 (large),Transformer > IV3-GRU,Reject Null Hypothesis 2
-Occluded F1-score,10,0.624301,0.348014,0.276287,Normal (Shapiro–Wilk p = .2571),Paired Samples t-Test (two-tailed),t(df = 9) = 10.43,p = 2.52×10⁻6,d = 3.30 (large),Transformer > IV3-GRU,Reject Null Hypothesis 2
-Nonoccluded Precision,10,0.511486,0.324421,0.187066,Normal (Shapiro–Wilk p = .1519),Paired Samples t-Test (two-tailed),t(df = 9) = 4.14,p = .0025,d = 1.31 (large),Transformer > IV3-GRU,Reject Null Hypothesis 2
-Nonoccluded Recall,10,0.836834,0.351356,0.485478,Non-normal (Shapiro–Wilk p = .0146),Wilcoxon Signed-Rank Test (two-tailed),z = -2.803,p = .0020,r = 0.89 (large),Transformer > IV3-GRU,Reject Null Hypothesis 2
-Nonoccluded F1-score,10,0.614294,0.322017,0.292277,Normal (Shapiro–Wilk p = .3334),Paired Samples t-Test (two-tailed),t(df = 9) = 7.12,p = 5.54×10⁻5,d = 2.25 (large),Transformer > IV3-GRU,Reject Null Hypothesis 2
+metric,n,transformer_mean,gru_mean,difference,normality,test_used,test_statistic,p_value,p_value_adjusted,effect_size,direction,decision
+Occluded Precision,10,0.500168,0.32141,0.178758,Normal (Shapiro–Wilk p = .3582),Paired Samples t-Test (two-tailed),t(df = 9) = 4.58,p = .0013,p = .0040,d = 1.45 (large),Transformer > IV3-GRU,Reject Null Hypothesis 2
+Occluded Recall,10,0.858834,0.417127,0.441706,Normal (Shapiro–Wilk p = .3064),Paired Samples t-Test (two-tailed),t(df = 9) = 9.60,p = 5.00×10⁻6,p = 2.50×10⁻5,d = 3.04 (large),Transformer > IV3-GRU,Reject Null Hypothesis 2
+Occluded F1-score,10,0.624301,0.348014,0.276287,Normal (Shapiro–Wilk p = .2571),Paired Samples t-Test (two-tailed),t(df = 9) = 10.43,p = 2.52×10⁻6,p = 1.51×10⁻5,d = 3.30 (large),Transformer > IV3-GRU,Reject Null Hypothesis 2
+Nonoccluded Precision,10,0.511486,0.324421,0.187066,Normal (Shapiro–Wilk p = .1519),Paired Samples t-Test (two-tailed),t(df = 9) = 4.14,p = .0025,p = .0040,d = 1.31 (large),Transformer > IV3-GRU,Reject Null Hypothesis 2
+Nonoccluded Recall,10,0.836834,0.351356,0.485478,Non-normal (Shapiro–Wilk p = .0146),Wilcoxon Signed-Rank Test (two-tailed),z = -2.803,p = .0020,p = .0040,r = 0.89 (large),Transformer > IV3-GRU,Reject Null Hypothesis 2
+Nonoccluded F1-score,10,0.614294,0.322017,0.292277,Normal (Shapiro–Wilk p = .3334),Paired Samples t-Test (two-tailed),t(df = 9) = 7.12,p = 5.54×10⁻5,p = .0002,d = 2.25 (large),Transformer > IV3-GRU,Reject Null Hypothesis 2

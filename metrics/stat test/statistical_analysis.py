@@ -27,6 +27,9 @@ STATISTICAL TESTS PERFORMED:
     3. If non-normal (p <= 0.05) -> Wilcoxon Signed-Rank test
        - Effect size r (from z-value) for N >= 10
        - Exact test for N < 10 (no effect size)
+    4. Holm-Bonferroni correction applied to control for multiple comparisons
+       - Applied separately for each task (classification/recognition)
+       - Corrects for 6 tests per task (3 metrics × 2 occlusion conditions)
 
 OUTPUT COLUMNS:
     - metric: Metric name (e.g., "Occluded Precision")
@@ -36,15 +39,17 @@ OUTPUT COLUMNS:
     - normality: Normality assessment text
     - test_used: Statistical test applied
     - test_statistic: Test statistic value (formatted)
-    - p_value: P-value from statistical test (formatted)
+    - p_value: P-value from statistical test (formatted, unadjusted)
+    - p_value_adjusted: Holm-Bonferroni adjusted p-value (formatted)
     - effect_size: Effect size with interpretation
     - direction: Direction of difference
-    - decision: Statistical decision
+    - decision: Statistical decision (based on adjusted p-value)
 
 NOTES:
     - Alpha level: 0.05
     - All metrics (Precision, Recall, F1-score) are tested for both
       occluded and non-occluded conditions
+    - Statistical decisions are based on Holm-Bonferroni adjusted p-values
     - Results are automatically saved to CSV files for thesis documentation
 """
 
@@ -365,6 +370,64 @@ def format_direction_text(mean_diff):
         return "Equal performance"
 
 
+def holm_bonferroni_correction(p_values, alpha=0.05):
+    """
+    Apply Holm-Bonferroni correction to p-values.
+    
+    Parameters:
+    -----------
+    p_values : list or array-like
+        List of p-values to correct. Can contain NaN values.
+    alpha : float
+        Significance level (default: 0.05)
+        
+    Returns:
+    --------
+    dict : Dictionary mapping original indices to adjusted p-values
+           Adjusted p-values are capped at 1.0 and maintain monotonicity
+    """
+    # Convert to numpy array and get valid indices
+    p_array = np.array(p_values)
+    valid_mask = ~np.isnan(p_array)
+    valid_indices = np.where(valid_mask)[0]
+    valid_p_values = p_array[valid_mask]
+    
+    if len(valid_p_values) == 0:
+        # All p-values are NaN
+        return {i: np.nan for i in range(len(p_values))}
+    
+    # Sort p-values in ascending order, keeping track of original indices
+    # sorted_indices_in_valid gives positions in valid_p_values array
+    sorted_indices_in_valid = np.argsort(valid_p_values)
+    sorted_p = valid_p_values[sorted_indices_in_valid]
+    m = len(sorted_p)
+    
+    # Apply Holm-Bonferroni correction
+    adjusted_p = np.zeros(m)
+    for i in range(m):
+        # Rank (1-indexed): i+1
+        # Adjustment factor: m - i
+        adjusted_p[i] = sorted_p[i] * (m - i)
+    
+    # Ensure monotonicity (each adjusted p-value should be >= previous)
+    for i in range(1, m):
+        if adjusted_p[i] < adjusted_p[i-1]:
+            adjusted_p[i] = adjusted_p[i-1]
+    
+    # Cap at 1.0
+    adjusted_p = np.minimum(adjusted_p, 1.0)
+    
+    # Map back to original indices
+    result = {i: np.nan for i in range(len(p_values))}
+    for sort_pos, valid_pos in enumerate(sorted_indices_in_valid):
+        # valid_pos is position in valid_p_values array
+        # valid_indices[valid_pos] is the original index in p_values array
+        original_idx = valid_indices[valid_pos]
+        result[original_idx] = adjusted_p[sort_pos]
+    
+    return result
+
+
 def format_decision_text(p_val, has_variance, hypothesis_num=1):
     """
     Format statistical decision.
@@ -372,7 +435,7 @@ def format_decision_text(p_val, has_variance, hypothesis_num=1):
     Parameters:
     -----------
     p_val : float
-        P-value
+        P-value (can be adjusted p-value)
     has_variance : bool
         Whether test was applicable
     hypothesis_num : int
@@ -396,7 +459,8 @@ def format_decision_text(p_val, has_variance, hypothesis_num=1):
 
 def format_statistic_row(metric, n, transformer_mean, gru_mean, diff,
                          normality_p, test_used, test_stat_raw, p_value_raw,
-                         effect_val, effect_type, direction, decision, hypothesis_num=1):
+                         effect_val, effect_type, direction, decision, hypothesis_num=1,
+                         p_value_adjusted=None):
     """
     Format a single test result row for CSV output.
     
@@ -419,7 +483,7 @@ def format_statistic_row(metric, n, transformer_mean, gru_mean, diff,
     test_stat_raw : float or dict
         Test statistic (raw value or dict with W/z/n for Wilcoxon)
     p_value_raw : float or None
-        P-value
+        P-value (raw, unadjusted)
     effect_val : float or None
         Effect size value
     effect_type : str
@@ -430,6 +494,8 @@ def format_statistic_row(metric, n, transformer_mean, gru_mean, diff,
         Decision text (will be formatted with hypothesis_num)
     hypothesis_num : int
         Hypothesis number (1 for recognition, 2 for classification)
+    p_value_adjusted : float or None, optional
+        Holm-Bonferroni adjusted p-value
         
     Returns:
     --------
@@ -486,6 +552,12 @@ def format_statistic_row(metric, n, transformer_mean, gru_mean, diff,
 
     p_text = format_pvalue(p_value_raw)
 
+    # Format adjusted p-value if provided
+    if p_value_adjusted is not None and not (isinstance(p_value_adjusted, float) and np.isnan(p_value_adjusted)):
+        p_adj_text = format_pvalue(p_value_adjusted)
+    else:
+        p_adj_text = "N/A"
+
     # Effect size formatting
     if effect_type == "r" and effect_val is not None and not (isinstance(effect_val, float) and np.isnan(effect_val)):
         eff_text = f"r = {float(effect_val):.2f} ({effect_label_r(effect_val)})"
@@ -495,11 +567,19 @@ def format_statistic_row(metric, n, transformer_mean, gru_mean, diff,
         eff_text = "N/A"
 
     # Format decision with hypothesis number
+    # Use adjusted p-value if available, otherwise use raw p-value
     # Handle no variance case
     if "Test not applicable" in test_label or test_label == "N/A":
         decision_text = f"Fail to Reject Null Hypothesis {hypothesis_num}"
+    elif p_value_adjusted is not None and not (isinstance(p_value_adjusted, float) and np.isnan(p_value_adjusted)):
+        # Use adjusted p-value for decision
+        p_val = float(p_value_adjusted)
+        if p_val < 0.05:
+            decision_text = f"Reject Null Hypothesis {hypothesis_num}"
+        else:
+            decision_text = f"Fail to Reject Null Hypothesis {hypothesis_num}"
     elif p_value_raw is not None and not (isinstance(p_value_raw, float) and np.isnan(p_value_raw)):
-        # Determine decision based on p-value
+        # Fallback to raw p-value if adjusted not available
         p_val = float(p_value_raw)
         if p_val < 0.05:
             decision_text = f"Reject Null Hypothesis {hypothesis_num}"
@@ -522,6 +602,7 @@ def format_statistic_row(metric, n, transformer_mean, gru_mean, diff,
         "test_used": test_label,
         "test_statistic": stat_text,
         "p_value": p_text,
+        "p_value_adjusted": p_adj_text,
         "effect_size": eff_text,
         "direction": direction,
         "decision": decision_text
@@ -836,7 +917,8 @@ def process_task(task_name, breakdown_path, verbose=True):
     # Determine hypothesis number based on task
     hypothesis_num = 2 if task_name.lower() == 'classification' else 1
     
-    results = []
+    # First pass: collect all raw results
+    raw_results = []
     metrics = ['Precision', 'Recall', 'F1-score']
     occlusion_types = ['occluded', 'nonoccluded']
     
@@ -866,31 +948,55 @@ def process_task(task_name, breakdown_path, verbose=True):
                 metric_name,
                 verbose=verbose
             )
-            
-            # Determine N for formatting (non-zero for Wilcoxon, total for t-test)
-            if "Wilcoxon" in raw_result['test_used']:
-                n_for_format = raw_result.get('n_nonzero', raw_result['n'])
-            else:
-                n_for_format = raw_result['n']
-            
-            # Format results using format_statistic_row
-            formatted_result = format_statistic_row(
-                metric=raw_result['metric'],
-                n=n_for_format,
-                transformer_mean=raw_result['transformer_mean'],
-                gru_mean=raw_result['gru_mean'],
-                diff=raw_result['difference'],
-                normality_p=raw_result['normality_p'],
-                test_used=raw_result['test_used'],
-                test_stat_raw=raw_result['test_statistic'],
-                p_value_raw=raw_result['p_value'],
-                effect_val=raw_result['effect_size'],
-                effect_type=raw_result['effect_size_type'],
-                direction=raw_result['direction'],
-                decision=raw_result['decision'],
-                hypothesis_num=hypothesis_num
-            )
-            results.append(formatted_result)
+            raw_results.append(raw_result)
+    
+    # Apply Holm-Bonferroni correction to all p-values
+    if verbose:
+        print(f"\n{'=' * 80}")
+        print("APPLYING HOLM-BONFERRONI CORRECTION")
+        print(f"{'=' * 80}")
+    
+    p_values = [r['p_value'] for r in raw_results]
+    adjusted_p_values = holm_bonferroni_correction(p_values, alpha=0.05)
+    
+    if verbose:
+        print(f"Number of tests: {len([p for p in p_values if not np.isnan(p)])}")
+        print("P-value adjustments:")
+        for i, (raw_p, adj_p) in enumerate(zip(p_values, [adjusted_p_values[i] for i in range(len(p_values))])):
+            if not np.isnan(raw_p):
+                print(f"  {raw_results[i]['metric']}: {raw_p:.6f} -> {adj_p:.6f}")
+    
+    # Second pass: format results with adjusted p-values
+    results = []
+    for i, raw_result in enumerate(raw_results):
+        # Determine N for formatting (non-zero for Wilcoxon, total for t-test)
+        if "Wilcoxon" in raw_result['test_used']:
+            n_for_format = raw_result.get('n_nonzero', raw_result['n'])
+        else:
+            n_for_format = raw_result['n']
+        
+        # Get adjusted p-value for this result
+        p_adj = adjusted_p_values.get(i, np.nan)
+        
+        # Format results using format_statistic_row
+        formatted_result = format_statistic_row(
+            metric=raw_result['metric'],
+            n=n_for_format,
+            transformer_mean=raw_result['transformer_mean'],
+            gru_mean=raw_result['gru_mean'],
+            diff=raw_result['difference'],
+            normality_p=raw_result['normality_p'],
+            test_used=raw_result['test_used'],
+            test_stat_raw=raw_result['test_statistic'],
+            p_value_raw=raw_result['p_value'],
+            effect_val=raw_result['effect_size'],
+            effect_type=raw_result['effect_size_type'],
+            direction=raw_result['direction'],
+            decision=raw_result['decision'],
+            hypothesis_num=hypothesis_num,
+            p_value_adjusted=p_adj
+        )
+        results.append(formatted_result)
     
     # Create results dataframe
     results_df = pd.DataFrame(results)
