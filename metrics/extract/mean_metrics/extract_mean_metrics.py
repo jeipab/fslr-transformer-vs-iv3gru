@@ -34,18 +34,34 @@ TRANSFORMER_JSON = SHARED_INPUTS_DIR / "ctc_validation_results_transformer.json"
 
 def compute_mean_metrics(metrics_dict, num_classes):
     """
-    Compute mean precision, recall, and f1-score from per-class metrics.
+    Compute mean precision, recall, and f1-score from per-class metrics (macro-averaging).
+    Only includes classes with actual data (TP + FP + FN > 0).
     
     Args:
-        metrics_dict: Dictionary with 'precision', 'recall', 'f1' keys
+        metrics_dict: Dictionary with 'precision', 'recall', 'f1', 'tp', 'fp', 'fn' keys
         num_classes: Number of classes (105 for glosses, 10 for categories)
         
     Returns:
         Tuple of (mean_precision, mean_recall, mean_f1)
     """
-    precision_values = [metrics_dict['precision'].get(i, 0.0) for i in range(num_classes)]
-    recall_values = [metrics_dict['recall'].get(i, 0.0) for i in range(num_classes)]
-    f1_values = [metrics_dict['f1'].get(i, 0.0) for i in range(num_classes)]
+    precision_values = []
+    recall_values = []
+    f1_values = []
+    
+    for i in range(num_classes):
+        tp = metrics_dict.get('tp', {}).get(i, 0)
+        fp = metrics_dict.get('fp', {}).get(i, 0)
+        fn = metrics_dict.get('fn', {}).get(i, 0)
+        
+        # Only include classes with actual data
+        if tp + fp + fn > 0:
+            precision = metrics_dict['precision'].get(i, 0.0)
+            recall = metrics_dict['recall'].get(i, 0.0)
+            f1 = metrics_dict['f1'].get(i, 0.0)
+            
+            precision_values.append(precision)
+            recall_values.append(recall)
+            f1_values.append(f1)
     
     mean_precision = sum(precision_values) / len(precision_values) if precision_values else 0.0
     mean_recall = sum(recall_values) / len(recall_values) if recall_values else 0.0
