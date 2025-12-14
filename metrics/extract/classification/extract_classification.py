@@ -40,6 +40,50 @@ CATEGORY_NAMES = {
 }
 
 
+def _max_iou_with_gt(pred_ts, gt_ts_list):
+    """
+    Find the ground truth item with maximum IoU overlap for a prediction timestamp.
+    
+    Args:
+        pred_ts: Prediction timestamp dict with 'start_ms' and 'end_ms'
+        gt_ts_list: List of ground truth timestamp dicts with 'start_ms' and 'end_ms'
+        
+    Returns:
+        Tuple of (max_iou, best_gt_idx) where best_gt_idx is the index of the best matching GT
+    """
+    best_iou = 0.0
+    best_idx = -1
+    
+    if not pred_ts or not gt_ts_list:
+        return best_iou, best_idx
+    
+    pred_start = pred_ts.get('start_ms', 0)
+    pred_end = pred_ts.get('end_ms', 0)
+    
+    for j, gt_ts in enumerate(gt_ts_list):
+        gt_start = gt_ts.get('start_ms', 0)
+        gt_end = gt_ts.get('end_ms', 0)
+        
+        # Calculate overlap
+        overlap_start = max(pred_start, gt_start)
+        overlap_end = min(pred_end, gt_end)
+        overlap = max(0.0, overlap_end - overlap_start)
+        
+        # Calculate union
+        union_start = min(pred_start, gt_start)
+        union_end = max(pred_end, gt_end)
+        union = union_end - union_start
+        
+        # Calculate IoU
+        iou = overlap / union if union > 0 else 0.0
+        
+        if iou > best_iou:
+            best_iou = iou
+            best_idx = j
+    
+    return best_iou, best_idx
+
+
 def extract_category_metrics(json_path, occlusion_filter):
     """
     Extract precision, recall, and f1-score per category for occluded or non-occluded data.
@@ -66,6 +110,10 @@ def extract_category_metrics(json_path, occlusion_filter):
         gt_categories = prediction.get('ground_truth_categories', [])
         pred_categories = prediction.get('predicted_categories', [])
         gt_occluded = prediction.get('ground_truth_occluded', [])
+        
+        # Get timestamps for IoU calculation
+        pred_timestamps = prediction.get('predicted_timestamps', [])
+        gt_timestamps = prediction.get('ground_truth_timestamps', [])
         
         # Count total ground truth items per category for this occlusion type
         for gt_idx, gt_cat in enumerate(gt_categories):
@@ -101,11 +149,31 @@ def extract_category_metrics(json_path, occlusion_filter):
                         category_fp[pred_cat] += 1
                         category_fn[gt_cat] += 1
         
-        # Process unmatched predictions (FP)
+        # Process unmatched predictions (FP) - assign to occlusion type based on IoU with GT
         for pred_idx in unmatched_pred:
             if pred_idx < len(pred_categories):
                 pred_cat = pred_categories[pred_idx]
-                category_fp[pred_cat] += 1
+                
+                # Find the GT item with maximum IoU overlap
+                # predicted_timestamps is a list of dicts with 'index' field
+                pred_ts = None
+                if pred_timestamps:
+                    for ts in pred_timestamps:
+                        if ts.get('index') == pred_idx:
+                            pred_ts = ts
+                            break
+                
+                if pred_ts and gt_timestamps:
+                    max_iou, best_gt_idx = _max_iou_with_gt(pred_ts, gt_timestamps)
+                    
+                    # Only count FP if there's overlap and the GT occlusion matches the filter
+                    if max_iou > 0 and 0 <= best_gt_idx < len(gt_occluded):
+                        if gt_occluded[best_gt_idx] == occlusion_filter:
+                            category_fp[pred_cat] += 1
+                    # If no overlap, don't count it (consistent with predict_ctc.py logic)
+                else:
+                    # Fallback: if timestamps are not available, don't count (to avoid double counting)
+                    pass
         
         # Process unmatched ground truth items (FN)
         for gt_idx, gt_cat in enumerate(gt_categories):

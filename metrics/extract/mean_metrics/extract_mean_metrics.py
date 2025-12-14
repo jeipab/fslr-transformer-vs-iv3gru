@@ -54,6 +54,24 @@ def compute_mean_metrics(metrics_dict, num_classes):
     return mean_precision, mean_recall, mean_f1
 
 
+def compute_total_counts(metrics_dict, num_classes):
+    """
+    Compute total TP, FP, and FN counts across all classes.
+    
+    Args:
+        metrics_dict: Dictionary with 'tp', 'fp', 'fn' keys mapping class_id to count
+        num_classes: Number of classes (105 for glosses, 10 for categories)
+        
+    Returns:
+        Tuple of (total_tp, total_fp, total_fn)
+    """
+    total_tp = sum(metrics_dict.get('tp', {}).get(i, 0) for i in range(num_classes))
+    total_fp = sum(metrics_dict.get('fp', {}).get(i, 0) for i in range(num_classes))
+    total_fn = sum(metrics_dict.get('fn', {}).get(i, 0) for i in range(num_classes))
+    
+    return total_tp, total_fp, total_fn
+
+
 def write_mean_metrics_csv(recognition_data, classification_data, output_dir):
     """
     Write mean metrics to CSV files.
@@ -110,6 +128,48 @@ def write_mean_metrics_csv(recognition_data, classification_data, output_dir):
             f"{recognition_data['transformer_occ']['f1']:.6f}",
             f"{recognition_data['iv3gru_occ']['f1']:.6f}"
         ])
+        
+        # Total TP
+        writer.writerow([
+            'Total TP',
+            'nonoccluded',
+            f"{recognition_data['transformer_nonocc']['total_tp']}",
+            f"{recognition_data['iv3gru_nonocc']['total_tp']}"
+        ])
+        writer.writerow([
+            'Total TP',
+            'occluded',
+            f"{recognition_data['transformer_occ']['total_tp']}",
+            f"{recognition_data['iv3gru_occ']['total_tp']}"
+        ])
+        
+        # Total FP
+        writer.writerow([
+            'Total FP',
+            'nonoccluded',
+            f"{recognition_data['transformer_nonocc']['total_fp']}",
+            f"{recognition_data['iv3gru_nonocc']['total_fp']}"
+        ])
+        writer.writerow([
+            'Total FP',
+            'occluded',
+            f"{recognition_data['transformer_occ']['total_fp']}",
+            f"{recognition_data['iv3gru_occ']['total_fp']}"
+        ])
+        
+        # Total FN
+        writer.writerow([
+            'Total FN',
+            'nonoccluded',
+            f"{recognition_data['transformer_nonocc']['total_fn']}",
+            f"{recognition_data['iv3gru_nonocc']['total_fn']}"
+        ])
+        writer.writerow([
+            'Total FN',
+            'occluded',
+            f"{recognition_data['transformer_occ']['total_fn']}",
+            f"{recognition_data['iv3gru_occ']['total_fn']}"
+        ])
     
     # Write classification metrics CSV
     classification_path = output_dir / "classification_mean_metrics.csv"
@@ -158,6 +218,48 @@ def write_mean_metrics_csv(recognition_data, classification_data, output_dir):
             f"{classification_data['transformer_occ']['f1']:.6f}",
             f"{classification_data['iv3gru_occ']['f1']:.6f}"
         ])
+        
+        # Total TP
+        writer.writerow([
+            'Total TP',
+            'nonoccluded',
+            f"{classification_data['transformer_nonocc']['total_tp']}",
+            f"{classification_data['iv3gru_nonocc']['total_tp']}"
+        ])
+        writer.writerow([
+            'Total TP',
+            'occluded',
+            f"{classification_data['transformer_occ']['total_tp']}",
+            f"{classification_data['iv3gru_occ']['total_tp']}"
+        ])
+        
+        # Total FP
+        writer.writerow([
+            'Total FP',
+            'nonoccluded',
+            f"{classification_data['transformer_nonocc']['total_fp']}",
+            f"{classification_data['iv3gru_nonocc']['total_fp']}"
+        ])
+        writer.writerow([
+            'Total FP',
+            'occluded',
+            f"{classification_data['transformer_occ']['total_fp']}",
+            f"{classification_data['iv3gru_occ']['total_fp']}"
+        ])
+        
+        # Total FN
+        writer.writerow([
+            'Total FN',
+            'nonoccluded',
+            f"{classification_data['transformer_nonocc']['total_fn']}",
+            f"{classification_data['iv3gru_nonocc']['total_fn']}"
+        ])
+        writer.writerow([
+            'Total FN',
+            'occluded',
+            f"{classification_data['transformer_occ']['total_fn']}",
+            f"{classification_data['iv3gru_occ']['total_fn']}"
+        ])
     
     return recognition_path, classification_path
 
@@ -175,28 +277,28 @@ def main():
         transformer_recognition_nonocc = extract_gloss_metrics(TRANSFORMER_JSON, occlusion_filter=0)
     except Exception as e:
         print(f"Error loading Transformer recognition results: {e}")
-        transformer_recognition_nonocc = {'precision': {}, 'recall': {}, 'f1': {}}
+        transformer_recognition_nonocc = {'precision': {}, 'recall': {}, 'f1': {}, 'tp': {}, 'fp': {}, 'fn': {}}
     
     print("Loading IV3-GRU results (non-occluded)...")
     try:
         iv3gru_recognition_nonocc = extract_gloss_metrics(IV3GRU_JSON, occlusion_filter=0)
     except Exception as e:
         print(f"Error loading IV3-GRU recognition results: {e}")
-        iv3gru_recognition_nonocc = {'precision': {}, 'recall': {}, 'f1': {}}
+        iv3gru_recognition_nonocc = {'precision': {}, 'recall': {}, 'f1': {}, 'tp': {}, 'fp': {}, 'fn': {}}
     
     print("Loading Transformer results (occluded)...")
     try:
         transformer_recognition_occ = extract_gloss_metrics(TRANSFORMER_JSON, occlusion_filter=1)
     except Exception as e:
         print(f"Error loading Transformer recognition results: {e}")
-        transformer_recognition_occ = {'precision': {}, 'recall': {}, 'f1': {}}
+        transformer_recognition_occ = {'precision': {}, 'recall': {}, 'f1': {}, 'tp': {}, 'fp': {}, 'fn': {}}
     
     print("Loading IV3-GRU results (occluded)...")
     try:
         iv3gru_recognition_occ = extract_gloss_metrics(IV3GRU_JSON, occlusion_filter=1)
     except Exception as e:
         print(f"Error loading IV3-GRU recognition results: {e}")
-        iv3gru_recognition_occ = {'precision': {}, 'recall': {}, 'f1': {}}
+        iv3gru_recognition_occ = {'precision': {}, 'recall': {}, 'f1': {}, 'tp': {}, 'fp': {}, 'fn': {}}
     
     # Compute mean recognition metrics
     print("\nComputing mean recognition metrics...")
@@ -204,22 +306,34 @@ def main():
         'transformer_nonocc': {
             'precision': compute_mean_metrics(transformer_recognition_nonocc, 105)[0],
             'recall': compute_mean_metrics(transformer_recognition_nonocc, 105)[1],
-            'f1': compute_mean_metrics(transformer_recognition_nonocc, 105)[2]
+            'f1': compute_mean_metrics(transformer_recognition_nonocc, 105)[2],
+            'total_tp': compute_total_counts(transformer_recognition_nonocc, 105)[0],
+            'total_fp': compute_total_counts(transformer_recognition_nonocc, 105)[1],
+            'total_fn': compute_total_counts(transformer_recognition_nonocc, 105)[2]
         },
         'iv3gru_nonocc': {
             'precision': compute_mean_metrics(iv3gru_recognition_nonocc, 105)[0],
             'recall': compute_mean_metrics(iv3gru_recognition_nonocc, 105)[1],
-            'f1': compute_mean_metrics(iv3gru_recognition_nonocc, 105)[2]
+            'f1': compute_mean_metrics(iv3gru_recognition_nonocc, 105)[2],
+            'total_tp': compute_total_counts(iv3gru_recognition_nonocc, 105)[0],
+            'total_fp': compute_total_counts(iv3gru_recognition_nonocc, 105)[1],
+            'total_fn': compute_total_counts(iv3gru_recognition_nonocc, 105)[2]
         },
         'transformer_occ': {
             'precision': compute_mean_metrics(transformer_recognition_occ, 105)[0],
             'recall': compute_mean_metrics(transformer_recognition_occ, 105)[1],
-            'f1': compute_mean_metrics(transformer_recognition_occ, 105)[2]
+            'f1': compute_mean_metrics(transformer_recognition_occ, 105)[2],
+            'total_tp': compute_total_counts(transformer_recognition_occ, 105)[0],
+            'total_fp': compute_total_counts(transformer_recognition_occ, 105)[1],
+            'total_fn': compute_total_counts(transformer_recognition_occ, 105)[2]
         },
         'iv3gru_occ': {
             'precision': compute_mean_metrics(iv3gru_recognition_occ, 105)[0],
             'recall': compute_mean_metrics(iv3gru_recognition_occ, 105)[1],
-            'f1': compute_mean_metrics(iv3gru_recognition_occ, 105)[2]
+            'f1': compute_mean_metrics(iv3gru_recognition_occ, 105)[2],
+            'total_tp': compute_total_counts(iv3gru_recognition_occ, 105)[0],
+            'total_fp': compute_total_counts(iv3gru_recognition_occ, 105)[1],
+            'total_fn': compute_total_counts(iv3gru_recognition_occ, 105)[2]
         }
     }
     
@@ -230,28 +344,28 @@ def main():
         transformer_classification_nonocc = extract_category_metrics(TRANSFORMER_JSON, occlusion_filter=0)
     except Exception as e:
         print(f"Error loading Transformer classification results: {e}")
-        transformer_classification_nonocc = {'precision': {}, 'recall': {}, 'f1': {}}
+        transformer_classification_nonocc = {'precision': {}, 'recall': {}, 'f1': {}, 'tp': {}, 'fp': {}, 'fn': {}}
     
     print("Loading IV3-GRU results (non-occluded)...")
     try:
         iv3gru_classification_nonocc = extract_category_metrics(IV3GRU_JSON, occlusion_filter=0)
     except Exception as e:
         print(f"Error loading IV3-GRU classification results: {e}")
-        iv3gru_classification_nonocc = {'precision': {}, 'recall': {}, 'f1': {}}
+        iv3gru_classification_nonocc = {'precision': {}, 'recall': {}, 'f1': {}, 'tp': {}, 'fp': {}, 'fn': {}}
     
     print("Loading Transformer results (occluded)...")
     try:
         transformer_classification_occ = extract_category_metrics(TRANSFORMER_JSON, occlusion_filter=1)
     except Exception as e:
         print(f"Error loading Transformer classification results: {e}")
-        transformer_classification_occ = {'precision': {}, 'recall': {}, 'f1': {}}
+        transformer_classification_occ = {'precision': {}, 'recall': {}, 'f1': {}, 'tp': {}, 'fp': {}, 'fn': {}}
     
     print("Loading IV3-GRU results (occluded)...")
     try:
         iv3gru_classification_occ = extract_category_metrics(IV3GRU_JSON, occlusion_filter=1)
     except Exception as e:
         print(f"Error loading IV3-GRU classification results: {e}")
-        iv3gru_classification_occ = {'precision': {}, 'recall': {}, 'f1': {}}
+        iv3gru_classification_occ = {'precision': {}, 'recall': {}, 'f1': {}, 'tp': {}, 'fp': {}, 'fn': {}}
     
     # Compute mean classification metrics
     print("\nComputing mean classification metrics...")
@@ -259,22 +373,34 @@ def main():
         'transformer_nonocc': {
             'precision': compute_mean_metrics(transformer_classification_nonocc, 10)[0],
             'recall': compute_mean_metrics(transformer_classification_nonocc, 10)[1],
-            'f1': compute_mean_metrics(transformer_classification_nonocc, 10)[2]
+            'f1': compute_mean_metrics(transformer_classification_nonocc, 10)[2],
+            'total_tp': compute_total_counts(transformer_classification_nonocc, 10)[0],
+            'total_fp': compute_total_counts(transformer_classification_nonocc, 10)[1],
+            'total_fn': compute_total_counts(transformer_classification_nonocc, 10)[2]
         },
         'iv3gru_nonocc': {
             'precision': compute_mean_metrics(iv3gru_classification_nonocc, 10)[0],
             'recall': compute_mean_metrics(iv3gru_classification_nonocc, 10)[1],
-            'f1': compute_mean_metrics(iv3gru_classification_nonocc, 10)[2]
+            'f1': compute_mean_metrics(iv3gru_classification_nonocc, 10)[2],
+            'total_tp': compute_total_counts(iv3gru_classification_nonocc, 10)[0],
+            'total_fp': compute_total_counts(iv3gru_classification_nonocc, 10)[1],
+            'total_fn': compute_total_counts(iv3gru_classification_nonocc, 10)[2]
         },
         'transformer_occ': {
             'precision': compute_mean_metrics(transformer_classification_occ, 10)[0],
             'recall': compute_mean_metrics(transformer_classification_occ, 10)[1],
-            'f1': compute_mean_metrics(transformer_classification_occ, 10)[2]
+            'f1': compute_mean_metrics(transformer_classification_occ, 10)[2],
+            'total_tp': compute_total_counts(transformer_classification_occ, 10)[0],
+            'total_fp': compute_total_counts(transformer_classification_occ, 10)[1],
+            'total_fn': compute_total_counts(transformer_classification_occ, 10)[2]
         },
         'iv3gru_occ': {
             'precision': compute_mean_metrics(iv3gru_classification_occ, 10)[0],
             'recall': compute_mean_metrics(iv3gru_classification_occ, 10)[1],
-            'f1': compute_mean_metrics(iv3gru_classification_occ, 10)[2]
+            'f1': compute_mean_metrics(iv3gru_classification_occ, 10)[2],
+            'total_tp': compute_total_counts(iv3gru_classification_occ, 10)[0],
+            'total_fp': compute_total_counts(iv3gru_classification_occ, 10)[1],
+            'total_fn': compute_total_counts(iv3gru_classification_occ, 10)[2]
         }
     }
     
