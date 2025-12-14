@@ -1,0 +1,7 @@
+Metric,Transformer,IV3-GRU
+Precision,0.699307,0.622446
+Recall,0.881002,0.579297
+F1-Score,0.779709,0.600097
+Total TP,8477,5574
+Total FP,3645,3381
+Total FN,1145,4048
