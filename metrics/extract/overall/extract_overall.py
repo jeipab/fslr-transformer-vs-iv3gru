@@ -1,6 +1,7 @@
 """
 Extract overall precision, recall, and f1-score metrics (regardless of occlusion status)
 from CTC validation results JSON files.
+Uses macro-averaging: computes per-class metrics, then averages them.
 
 Usage:
     python metrics/extract/overall/extract_overall.py
@@ -30,6 +31,7 @@ OUTPUT_CLASSIFICATION_CSV = SCRIPT_DIR / "overall_classification_metrics.csv"
 def extract_overall_metrics(json_path):
     """
     Extract overall precision, recall, and f1-score metrics regardless of occlusion status.
+    Uses macro-averaging: computes per-class metrics, then averages them.
     
     Args:
         json_path: Path to validation results JSON file
@@ -40,10 +42,11 @@ def extract_overall_metrics(json_path):
     with open(json_path, 'r', encoding='utf-8') as f:
         data = json.load(f)
     
-    # Initialize counters
-    total_tp = 0
-    total_fp = 0
-    total_fn = 0
+    # Initialize per-class counters (105 glosses: 0-104)
+    num_classes = 105
+    gloss_tp = defaultdict(int)
+    gloss_fp = defaultdict(int)
+    gloss_fn = defaultdict(int)
     
     for prediction in data['predictions']:
         # Get ground truth and predicted sequences
@@ -72,29 +75,59 @@ def extract_overall_metrics(json_path):
                 pred_gloss = pred_sequence[pred_idx]
                 gt_gloss = gt_sequence[gt_idx]
                 if pred_gloss == gt_gloss:
-                    total_tp += 1
+                    gloss_tp[pred_gloss] += 1
                 else:
                     # FP for predicted gloss, FN for ground truth gloss
-                    total_fp += 1
-                    total_fn += 1
+                    gloss_fp[pred_gloss] += 1
+                    gloss_fn[gt_gloss] += 1
         
         # Process unmatched predictions (FP)
-        total_fp += len(unmatched_pred)
+        for pred_idx in unmatched_pred:
+            if pred_idx < len(pred_sequence):
+                pred_gloss = pred_sequence[pred_idx]
+                gloss_fp[pred_gloss] += 1
         
         # Process unmatched ground truth items (FN)
         for gt_idx, gt_gloss in enumerate(gt_sequence):
             if gt_idx not in matched_gt_indices:
-                total_fn += 1
+                gloss_fn[gt_gloss] += 1
     
-    # Calculate precision, recall, and f1-score
-    precision = total_tp / (total_tp + total_fp) if (total_tp + total_fp) > 0 else 0.0
-    recall = total_tp / (total_tp + total_fn) if (total_tp + total_fn) > 0 else 0.0
-    f1 = 2 * (precision * recall) / (precision + recall) if (precision + recall) > 0 else 0.0
+    # Calculate per-class metrics and then macro-average
+    precision_values = []
+    recall_values = []
+    f1_values = []
+    total_tp = 0
+    total_fp = 0
+    total_fn = 0
+    
+    for gloss_id in range(num_classes):
+        tp = gloss_tp[gloss_id]
+        fp = gloss_fp[gloss_id]
+        fn = gloss_fn[gloss_id]
+        
+        total_tp += tp
+        total_fp += fp
+        total_fn += fn
+        
+        # Only include classes with actual data
+        if tp + fp + fn > 0:
+            precision = tp / (tp + fp) if (tp + fp) > 0 else 0.0
+            recall = tp / (tp + fn) if (tp + fn) > 0 else 0.0
+            f1 = 2 * (precision * recall) / (precision + recall) if (precision + recall) > 0 else 0.0
+            
+            precision_values.append(precision)
+            recall_values.append(recall)
+            f1_values.append(f1)
+    
+    # Macro-average: mean of per-class metrics
+    mean_precision = sum(precision_values) / len(precision_values) if precision_values else 0.0
+    mean_recall = sum(recall_values) / len(recall_values) if recall_values else 0.0
+    mean_f1 = sum(f1_values) / len(f1_values) if f1_values else 0.0
     
     return {
-        'precision': precision,
-        'recall': recall,
-        'f1': f1,
+        'precision': mean_precision,
+        'recall': mean_recall,
+        'f1': mean_f1,
         'tp': total_tp,
         'fp': total_fp,
         'fn': total_fn
@@ -104,7 +137,7 @@ def extract_overall_metrics(json_path):
 def extract_overall_classification_metrics(json_path):
     """
     Extract overall classification precision, recall, and f1-score metrics regardless of occlusion status.
-    Aggregates across all categories.
+    Uses macro-averaging: computes per-class metrics, then averages them.
     
     Args:
         json_path: Path to validation results JSON file
@@ -115,10 +148,11 @@ def extract_overall_classification_metrics(json_path):
     with open(json_path, 'r', encoding='utf-8') as f:
         data = json.load(f)
     
-    # Initialize counters
-    total_tp = 0
-    total_fp = 0
-    total_fn = 0
+    # Initialize per-class counters (10 categories: 0-9)
+    num_classes = 10
+    category_tp = defaultdict(int)
+    category_fp = defaultdict(int)
+    category_fn = defaultdict(int)
     
     def _max_iou_with_gt(pred_ts, gt_ts_list):
         """Find the ground truth item with maximum IoU overlap for a prediction timestamp."""
@@ -185,11 +219,11 @@ def extract_overall_classification_metrics(json_path):
                 pred_cat = pred_categories[pred_idx]
                 gt_cat = gt_categories[gt_idx]
                 if pred_cat == gt_cat:
-                    total_tp += 1
+                    category_tp[pred_cat] += 1
                 else:
                     # FP for predicted category, FN for ground truth category
-                    total_fp += 1
-                    total_fn += 1
+                    category_fp[pred_cat] += 1
+                    category_fn[gt_cat] += 1
         
         # Process unmatched predictions (FP) - assign based on IoU with GT
         for pred_idx in unmatched_pred:
@@ -209,7 +243,7 @@ def extract_overall_classification_metrics(json_path):
                     
                     # Only count FP if there's overlap
                     if max_iou > 0:
-                        total_fp += 1
+                        category_fp[pred_cat] += 1
                     # If no overlap, don't count it (consistent with predict_ctc.py logic)
                 else:
                     # Fallback: if timestamps are not available, don't count (to avoid double counting)
@@ -218,17 +252,44 @@ def extract_overall_classification_metrics(json_path):
         # Process unmatched ground truth items (FN)
         for gt_idx, gt_cat in enumerate(gt_categories):
             if gt_idx not in matched_gt_indices:
-                total_fn += 1
+                category_fn[gt_cat] += 1
     
-    # Calculate precision, recall, and f1-score
-    precision = total_tp / (total_tp + total_fp) if (total_tp + total_fp) > 0 else 0.0
-    recall = total_tp / (total_tp + total_fn) if (total_tp + total_fn) > 0 else 0.0
-    f1 = 2 * (precision * recall) / (precision + recall) if (precision + recall) > 0 else 0.0
+    # Calculate per-class metrics and then macro-average
+    precision_values = []
+    recall_values = []
+    f1_values = []
+    total_tp = 0
+    total_fp = 0
+    total_fn = 0
+    
+    for cat_id in range(num_classes):
+        tp = category_tp[cat_id]
+        fp = category_fp[cat_id]
+        fn = category_fn[cat_id]
+        
+        total_tp += tp
+        total_fp += fp
+        total_fn += fn
+        
+        # Only include classes with actual data
+        if tp + fp + fn > 0:
+            precision = tp / (tp + fp) if (tp + fp) > 0 else 0.0
+            recall = tp / (tp + fn) if (tp + fn) > 0 else 0.0
+            f1 = 2 * (precision * recall) / (precision + recall) if (precision + recall) > 0 else 0.0
+            
+            precision_values.append(precision)
+            recall_values.append(recall)
+            f1_values.append(f1)
+    
+    # Macro-average: mean of per-class metrics
+    mean_precision = sum(precision_values) / len(precision_values) if precision_values else 0.0
+    mean_recall = sum(recall_values) / len(recall_values) if recall_values else 0.0
+    mean_f1 = sum(f1_values) / len(f1_values) if f1_values else 0.0
     
     return {
-        'precision': precision,
-        'recall': recall,
-        'f1': f1,
+        'precision': mean_precision,
+        'recall': mean_recall,
+        'f1': mean_f1,
         'tp': total_tp,
         'fp': total_fp,
         'fn': total_fn
