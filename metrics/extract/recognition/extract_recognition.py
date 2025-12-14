@@ -25,7 +25,7 @@ EXTRACT_DIR = SCRIPT_DIR.parent
 SHARED_INPUTS_DIR = EXTRACT_DIR / "shared_inputs"
 IV3GRU_JSON = SHARED_INPUTS_DIR / "ctc_validation_results_iv3gru.json"
 TRANSFORMER_JSON = SHARED_INPUTS_DIR / "ctc_validation_results_transformer.json"
-LABELS_CSV = Path(__file__).parent.parent.parent / "data" / "labels_reference.csv"
+LABELS_CSV = EXTRACT_DIR.parent.parent / "data" / "labels_reference.csv"
 
 
 def load_label_mapping():
@@ -69,6 +69,7 @@ def extract_gloss_metrics(json_path, occlusion_filter):
         # Get matched pairs
         matched_pairs = prediction.get('matched_pairs', [])
         unmatched_pred = prediction.get('unmatched_predictions', [])
+        unmatched_gt = prediction.get('unmatched_ground_truth', [])
         
         # Create a mapping from pred_idx to gt_idx for matched pairs
         pred_to_gt = {}
@@ -78,13 +79,9 @@ def extract_gloss_metrics(json_path, occlusion_filter):
             if pred_idx is not None and gt_idx is not None:
                 pred_to_gt[pred_idx] = gt_idx
         
-        # Track which ground truth items have been matched
-        matched_gt_indices = set()
-        
         # Process matched pairs
         for pred_idx, gt_idx in pred_to_gt.items():
             if gt_idx < len(gt_occluded) and gt_occluded[gt_idx] == occlusion_filter:
-                matched_gt_indices.add(gt_idx)
                 if pred_idx < len(pred_sequence) and gt_idx < len(gt_sequence):
                     pred_gloss = pred_sequence[pred_idx]
                     gt_gloss = gt_sequence[gt_idx]
@@ -101,11 +98,11 @@ def extract_gloss_metrics(json_path, occlusion_filter):
                 pred_gloss = pred_sequence[pred_idx]
                 gloss_fp[pred_gloss] += 1
         
-        # Process unmatched ground truth items (FN)
-        for gt_idx, gt_gloss in enumerate(gt_sequence):
-            if gt_idx < len(gt_occluded) and gt_occluded[gt_idx] == occlusion_filter:
-                if gt_idx not in matched_gt_indices:
-                    gloss_fn[gt_gloss] += 1
+        # Process unmatched ground truth items (FN) - use the field from JSON
+        for gt_idx in unmatched_gt:
+            if gt_idx < len(gt_sequence) and gt_idx < len(gt_occluded) and gt_occluded[gt_idx] == occlusion_filter:
+                gt_gloss = gt_sequence[gt_idx]
+                gloss_fn[gt_gloss] += 1
     
     # Calculate precision, recall, and f1-score for each gloss
     gloss_precision = {}
