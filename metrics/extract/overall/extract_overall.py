@@ -8,9 +8,9 @@ Usage:
 
 Output:
     - overall_recognition_metrics.csv: CSV file with columns Metric, Transformer, IV3-GRU
-      containing overall Precision, Recall, F1-Score, Total TP, Total FP, and Total FN for recognition (gloss-based)
+      containing overall Precision, Recall, F1-Score, Total TP, Total FP, Total FN, Average TP, Average FP, and Average FN for recognition (gloss-based)
     - overall_classification_metrics.csv: CSV file with columns Metric, Transformer, IV3-GRU
-      containing overall Precision, Recall, F1-Score, Total TP, Total FP, and Total FN for classification (category-based)
+      containing overall Precision, Recall, F1-Score, Total TP, Total FP, Total FN, Average TP, Average FP, and Average FN for classification (category-based)
     - per_gloss_metrics.csv: CSV file with per-gloss metrics (TP, FP, FN, Precision, Recall, F1-Score) for both models
     - per_category_metrics.csv: CSV file with per-category metrics (TP, FP, FN, Precision, Recall, F1-Score) for both models
 """
@@ -41,7 +41,7 @@ def extract_overall_metrics(json_path):
         json_path: Path to validation results JSON file
         
     Returns:
-        Dictionary with keys 'precision', 'recall', 'f1', 'tp', 'fp', 'fn'
+        Dictionary with keys 'precision', 'recall', 'f1', 'tp', 'fp', 'fn', 'avg_tp', 'avg_fp', 'avg_fn'
     """
     with open(json_path, 'r', encoding='utf-8') as f:
         data = json.load(f)
@@ -100,6 +100,9 @@ def extract_overall_metrics(json_path):
     precision_values = []
     recall_values = []
     f1_values = []
+    tp_values = []
+    fp_values = []
+    fn_values = []
     total_tp = 0
     total_fp = 0
     total_fn = 0
@@ -122,11 +125,17 @@ def extract_overall_metrics(json_path):
             precision_values.append(precision)
             recall_values.append(recall)
             f1_values.append(f1)
+            tp_values.append(tp)
+            fp_values.append(fp)
+            fn_values.append(fn)
     
     # Macro-average: mean of per-class metrics
     mean_precision = sum(precision_values) / len(precision_values) if precision_values else 0.0
     mean_recall = sum(recall_values) / len(recall_values) if recall_values else 0.0
     mean_f1 = sum(f1_values) / len(f1_values) if f1_values else 0.0
+    mean_tp = sum(tp_values) / len(tp_values) if tp_values else 0.0
+    mean_fp = sum(fp_values) / len(fp_values) if fp_values else 0.0
+    mean_fn = sum(fn_values) / len(fn_values) if fn_values else 0.0
     
     return {
         'precision': mean_precision,
@@ -134,7 +143,10 @@ def extract_overall_metrics(json_path):
         'f1': mean_f1,
         'tp': total_tp,
         'fp': total_fp,
-        'fn': total_fn
+        'fn': total_fn,
+        'avg_tp': mean_tp,
+        'avg_fp': mean_fp,
+        'avg_fn': mean_fn
     }
 
 
@@ -147,7 +159,7 @@ def extract_overall_classification_metrics(json_path):
         json_path: Path to validation results JSON file
         
     Returns:
-        Dictionary with keys 'precision', 'recall', 'f1', 'tp', 'fp', 'fn'
+        Dictionary with keys 'precision', 'recall', 'f1', 'tp', 'fp', 'fn', 'avg_tp', 'avg_fp', 'avg_fn'
     """
     with open(json_path, 'r', encoding='utf-8') as f:
         data = json.load(f)
@@ -262,6 +274,9 @@ def extract_overall_classification_metrics(json_path):
     precision_values = []
     recall_values = []
     f1_values = []
+    tp_values = []
+    fp_values = []
+    fn_values = []
     total_tp = 0
     total_fp = 0
     total_fn = 0
@@ -284,11 +299,17 @@ def extract_overall_classification_metrics(json_path):
             precision_values.append(precision)
             recall_values.append(recall)
             f1_values.append(f1)
+            tp_values.append(tp)
+            fp_values.append(fp)
+            fn_values.append(fn)
     
     # Macro-average: mean of per-class metrics
     mean_precision = sum(precision_values) / len(precision_values) if precision_values else 0.0
     mean_recall = sum(recall_values) / len(recall_values) if recall_values else 0.0
     mean_f1 = sum(f1_values) / len(f1_values) if f1_values else 0.0
+    mean_tp = sum(tp_values) / len(tp_values) if tp_values else 0.0
+    mean_fp = sum(fp_values) / len(fp_values) if fp_values else 0.0
+    mean_fn = sum(fn_values) / len(fn_values) if fn_values else 0.0
     
     return {
         'precision': mean_precision,
@@ -296,7 +317,10 @@ def extract_overall_classification_metrics(json_path):
         'f1': mean_f1,
         'tp': total_tp,
         'fp': total_fp,
-        'fn': total_fn
+        'fn': total_fn,
+        'avg_tp': mean_tp,
+        'avg_fp': mean_fp,
+        'avg_fn': mean_fn
     }
 
 
@@ -576,6 +600,27 @@ def write_overall_csv(transformer_metrics, iv3gru_metrics, output_path):
             'Total FN',
             f'{transformer_metrics["fn"]}',
             f'{iv3gru_metrics["fn"]}'
+        ])
+        
+        # Write Average TP
+        writer.writerow([
+            'Average TP',
+            f'{transformer_metrics["avg_tp"]:.6f}',
+            f'{iv3gru_metrics["avg_tp"]:.6f}'
+        ])
+        
+        # Write Average FP
+        writer.writerow([
+            'Average FP',
+            f'{transformer_metrics["avg_fp"]:.6f}',
+            f'{iv3gru_metrics["avg_fp"]:.6f}'
+        ])
+        
+        # Write Average FN
+        writer.writerow([
+            'Average FN',
+            f'{transformer_metrics["avg_fn"]:.6f}',
+            f'{iv3gru_metrics["avg_fn"]:.6f}'
         ])
 
 
