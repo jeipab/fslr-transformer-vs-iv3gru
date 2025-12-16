@@ -1,0 +1,107 @@
+,,Transformer,,,IV3-GRU,,,Difference (Transformer - GRU),,,
+Gloss ID,Gloss Label,Precision,Recall,F1-Score,Precision,Recall,F1-Score,Precision,Recall,F1-Score,Interpretation Notes
+0,GOOD MORNING (0),0.731481,0.831579,0.778325,0.693182,0.642105,0.666667,0.038299,0.189474,0.111658,"Transformer consistently outperforms GRU across precision, recall, and F1-score."
+1,GOOD AFTERNOON (1),0.743802,0.909091,0.818182,0.294872,0.232323,0.259887,0.44893,0.676768,0.558295,"Transformer consistently outperforms GRU across precision, recall, and F1-score."
+2,GOOD EVENING (2),0.716667,0.895833,0.796296,0.438202,0.40625,0.421622,0.278465,0.489583,0.374674,"Transformer consistently outperforms GRU across precision, recall, and F1-score."
+3,HELLO (3),0.754237,0.864078,0.80543,0.568807,0.601942,0.584906,0.18543,0.262136,0.220524,"Transformer consistently outperforms GRU across precision, recall, and F1-score."
+4,HOW ARE YOU (4),0.772727,0.858586,0.813397,0.804598,0.707071,0.752688,-0.031871,0.151515,0.060709,Transformer outperforms GRU in recall and F1-score.
+5,IM FINE (5),0.816327,0.833333,0.824742,0.804598,0.729167,0.765027,0.011729,0.104166,0.059715,"Transformer consistently outperforms GRU across precision, recall, and F1-score."
+6,NICE TO MEET YOU (6),0.730435,0.884211,0.8,0.77,0.810526,0.789744,-0.039565,0.073685,0.010256,Transformer outperforms GRU in recall and F1-score.
+7,THANK YOU (7),0.773913,0.917526,0.839623,0.802326,0.71134,0.754098,-0.028413,0.206186,0.085525,Transformer outperforms GRU in recall and F1-score.
+8,YOURE WELCOME (8),0.831776,0.872549,0.851675,0.706667,0.519608,0.59887,0.125109,0.352941,0.252805,"Transformer consistently outperforms GRU across precision, recall, and F1-score."
+9,SEE YOU TOMORROW (9),0.713115,0.90625,0.798165,0.577236,0.739583,0.648402,0.135879,0.166667,0.149763,"Transformer consistently outperforms GRU across precision, recall, and F1-score."
+10,UNDERSTAND (10),0.785714,0.888889,0.834123,0.716216,0.535354,0.612717,0.069498,0.353535,0.221406,"Transformer consistently outperforms GRU across precision, recall, and F1-score."
+11,DON’T UNDERSTAND (11),0.722689,0.877551,0.792627,0.636364,0.428571,0.512195,0.086325,0.44898,0.280432,"Transformer consistently outperforms GRU across precision, recall, and F1-score."
+12,KNOW (12),0.626866,0.875,0.730435,0.677966,0.416667,0.516129,-0.0511,0.458333,0.214306,Transformer outperforms GRU in recall and F1-score.
+13,DON’T KNOW (13),0.831858,0.949495,0.886792,0.682692,0.717172,0.699507,0.149166,0.232323,0.187285,"Transformer consistently outperforms GRU across precision, recall, and F1-score."
+14,NO (14),0.429319,0.845361,0.569444,0.587302,0.762887,0.663677,-0.157983,0.082474,-0.094233,Transformer only outperforms GRU in recall.
+15,YES (15),0.669231,0.887755,0.763158,0.637363,0.591837,0.613757,0.031868,0.295918,0.149401,"Transformer consistently outperforms GRU across precision, recall, and F1-score."
+16,WRONG (16),0.767241,0.872549,0.816514,0.711864,0.823529,0.763636,0.055377,0.04902,0.052878,"Transformer consistently outperforms GRU across precision, recall, and F1-score."
+17,CORRECT (17),0.746032,0.862385,0.8,0.818182,0.743119,0.778846,-0.07215,0.119266,0.021154,Transformer outperforms GRU in recall and F1-score.
+18,SLOW (18),0.736364,0.84375,0.786408,0.879121,0.833333,0.855615,-0.142757,0.010417,-0.069207,Transformer only outperforms GRU in recall.
+19,FAST (19),0.654135,0.878788,0.75,0.691358,0.565657,0.622222,-0.037223,0.313131,0.127778,Transformer outperforms GRU in recall and F1-score.
+20,ONE (20),0.574627,0.836957,0.681416,0.538462,0.380435,0.44586,0.036165,0.456522,0.235556,"Transformer consistently outperforms GRU across precision, recall, and F1-score."
+21,TWO (21),0.747664,0.898876,0.816327,0.477064,0.58427,0.525253,0.2706,0.314606,0.291074,"Transformer consistently outperforms GRU across precision, recall, and F1-score."
+22,THREE (22),0.655462,0.8125,0.725581,0.6,0.4375,0.506024,0.055462,0.375,0.219557,"Transformer consistently outperforms GRU across precision, recall, and F1-score."
+23,FOUR (23),0.868687,0.924731,0.895833,0.225,0.193548,0.208092,0.643687,0.731183,0.687741,"Transformer consistently outperforms GRU across precision, recall, and F1-score."
+24,FIVE (24),0.89,0.956989,0.92228,0.47619,0.322581,0.384615,0.41381,0.634408,0.537665,"Transformer consistently outperforms GRU across precision, recall, and F1-score."
+25,SIX (25),0.688525,0.875,0.770642,0.397059,0.28125,0.329268,0.291466,0.59375,0.441374,"Transformer consistently outperforms GRU across precision, recall, and F1-score."
+26,SEVEN (26),0.813084,0.90625,0.857143,0.137931,0.083333,0.103896,0.675153,0.822917,0.753247,"Transformer consistently outperforms GRU across precision, recall, and F1-score."
+27,EIGHT (27),0.472222,0.944444,0.62963,0.032258,0.011111,0.016529,0.439964,0.933333,0.613101,"Transformer consistently outperforms GRU across precision, recall, and F1-score."
+28,NINE (28),0.794118,0.861702,0.826531,0.333333,0.297872,0.314607,0.460785,0.56383,0.511924,"Transformer consistently outperforms GRU across precision, recall, and F1-score."
+29,TEN (29),0.528302,0.893617,0.664032,0.4625,0.393617,0.425287,0.065802,0.5,0.238745,"Transformer consistently outperforms GRU across precision, recall, and F1-score."
+30,JANUARY (30),0.389831,0.896104,0.543307,0.290323,0.233766,0.258993,0.099508,0.662338,0.284314,"Transformer consistently outperforms GRU across precision, recall, and F1-score."
+31,FEBRUARY (31),0.708738,0.858824,0.776596,0.483516,0.517647,0.5,0.225222,0.341177,0.276596,"Transformer consistently outperforms GRU across precision, recall, and F1-score."
+32,MARCH (32),0.596639,0.825581,0.692683,0.484536,0.546512,0.513661,0.112103,0.279069,0.179022,"Transformer consistently outperforms GRU across precision, recall, and F1-score."
+33,APRIL (33),0.611111,0.827957,0.703196,0.514286,0.387097,0.441718,0.096825,0.44086,0.261478,"Transformer consistently outperforms GRU across precision, recall, and F1-score."
+34,MAY (34),0.754545,0.922222,0.83,0.263158,0.166667,0.204082,0.491387,0.755555,0.625918,"Transformer consistently outperforms GRU across precision, recall, and F1-score."
+35,JUNE (35),0.78125,0.9375,0.852273,0,0,0,0.78125,0.9375,0.852273,"Transformer consistently outperforms GRU across precision, recall, and F1-score."
+36,JULY (36),0.692982,0.929412,0.79397,0.034483,0.023529,0.027972,0.658499,0.905883,0.765998,"Transformer consistently outperforms GRU across precision, recall, and F1-score."
+37,AUGUST (37),0.663043,0.871429,0.753086,0.294737,0.4,0.339394,0.368306,0.471429,0.413692,"Transformer consistently outperforms GRU across precision, recall, and F1-score."
+38,SEPTEMBER (38),0.712871,0.827586,0.765957,0.395683,0.632184,0.486726,0.317188,0.195402,0.279231,"Transformer consistently outperforms GRU across precision, recall, and F1-score."
+39,OCTOBER (39),0.663551,0.825581,0.735751,0.284211,0.313953,0.298343,0.37934,0.511628,0.437408,"Transformer consistently outperforms GRU across precision, recall, and F1-score."
+40,NOVEMBER (40),0.784946,0.879518,0.829545,0.506329,0.481928,0.493827,0.278617,0.39759,0.335718,"Transformer consistently outperforms GRU across precision, recall, and F1-score."
+41,DECEMBER (41),0.737374,0.879518,0.802198,0.543689,0.674699,0.602151,0.193685,0.204819,0.200047,"Transformer consistently outperforms GRU across precision, recall, and F1-score."
+42,MONDAY (42),0.677419,0.913043,0.777778,0.471698,0.271739,0.344828,0.205721,0.641304,0.43295,"Transformer consistently outperforms GRU across precision, recall, and F1-score."
+43,TUESDAY (43),0.770642,0.893617,0.827586,0.482759,0.446809,0.464088,0.287883,0.446808,0.363498,"Transformer consistently outperforms GRU across precision, recall, and F1-score."
+44,WEDNESDAY (44),0.878788,0.925532,0.901554,0.442529,0.819149,0.574627,0.436259,0.106383,0.326927,"Transformer consistently outperforms GRU across precision, recall, and F1-score."
+45,THURSDAY (45),0.90566,0.979592,0.941176,0.65873,0.846939,0.741071,0.24693,0.132653,0.200105,"Transformer consistently outperforms GRU across precision, recall, and F1-score."
+46,FRIDAY (46),0.913978,0.913978,0.913978,0.636364,0.376344,0.472973,0.277614,0.537634,0.441005,"Transformer consistently outperforms GRU across precision, recall, and F1-score."
+47,SATURDAY (47),0.842105,0.860215,0.851064,0.784946,0.784946,0.784946,0.057159,0.075269,0.066118,"Transformer consistently outperforms GRU across precision, recall, and F1-score."
+48,SUNDAY (48),0.747664,0.860215,0.8,0.73,0.784946,0.756477,0.017664,0.075269,0.043523,"Transformer consistently outperforms GRU across precision, recall, and F1-score."
+49,TODAY (49),0.792079,0.879121,0.833333,0.703297,0.703297,0.703297,0.088782,0.175824,0.130036,"Transformer consistently outperforms GRU across precision, recall, and F1-score."
+50,TOMORROW (50),0.6,0.8125,0.690265,0.533333,0.583333,0.557214,0.066667,0.229167,0.133051,"Transformer consistently outperforms GRU across precision, recall, and F1-score."
+51,YESTERDAY (51),0.752294,0.88172,0.811881,0.257143,0.096774,0.140625,0.495151,0.784946,0.671256,"Transformer consistently outperforms GRU across precision, recall, and F1-score."
+52,FATHER (52),0.735849,0.829787,0.78,0.68254,0.457447,0.547771,0.053309,0.37234,0.232229,"Transformer consistently outperforms GRU across precision, recall, and F1-score."
+53,MOTHER (53),0.437126,0.760417,0.555133,0.404762,0.177083,0.246377,0.032364,0.583334,0.308756,"Transformer consistently outperforms GRU across precision, recall, and F1-score."
+54,SON (54),0.777778,0.875,0.823529,0.659574,0.322917,0.433566,0.118204,0.552083,0.389963,"Transformer consistently outperforms GRU across precision, recall, and F1-score."
+55,DAUGHTER (55),0.657534,0.90566,0.761905,0.815217,0.707547,0.757576,-0.157683,0.198113,0.004329,Transformer outperforms GRU in recall and F1-score.
+56,GRANDFATHER (56),0.794393,0.858586,0.825243,0.83908,0.737374,0.784946,-0.044687,0.121212,0.040297,Transformer outperforms GRU in recall and F1-score.
+57,GRANDMOTHER (57),0.731092,0.90625,0.809302,0.550725,0.791667,0.649573,0.180367,0.114583,0.159729,"Transformer consistently outperforms GRU across precision, recall, and F1-score."
+58,UNCLE (58),0.82,0.845361,0.832487,0.72449,0.731959,0.728205,0.09551,0.113402,0.104282,"Transformer consistently outperforms GRU across precision, recall, and F1-score."
+59,AUNTIE (59),0.564935,0.896907,0.693227,0.641975,0.536082,0.58427,-0.07704,0.360825,0.108957,Transformer outperforms GRU in recall and F1-score.
+60,COUSIN (60),0.711712,0.831579,0.76699,0.619469,0.736842,0.673077,0.092243,0.094737,0.093913,"Transformer consistently outperforms GRU across precision, recall, and F1-score."
+61,PARENTS (61),0.678261,0.829787,0.746411,0.845238,0.755319,0.797753,-0.166977,0.074468,-0.051342,Transformer only outperforms GRU in recall.
+62,BOY (62),0.787879,0.847826,0.816754,0.791667,0.413043,0.542857,-0.003788,0.434783,0.273897,Transformer outperforms GRU in recall and F1-score.
+63,GIRL (63),0.713178,0.901961,0.796537,0.431655,0.588235,0.497925,0.281523,0.313726,0.298612,"Transformer consistently outperforms GRU across precision, recall, and F1-score."
+64,MAN (64),0.782178,0.877778,0.827225,0.538462,0.311111,0.394366,0.243716,0.566667,0.432859,"Transformer consistently outperforms GRU across precision, recall, and F1-score."
+65,WOMAN (65),0.75,0.875,0.807692,0.72449,0.739583,0.731959,0.02551,0.135417,0.075733,"Transformer consistently outperforms GRU across precision, recall, and F1-score."
+66,DEAF (66),0.44382,0.831579,0.578755,0.493056,0.747368,0.594142,-0.049236,0.084211,-0.015387,Transformer only outperforms GRU in recall.
+67,HARD OF HEARING (67),0.589552,0.858696,0.699115,0.780488,0.695652,0.735632,-0.190936,0.163044,-0.036517,Transformer only outperforms GRU in recall.
+68,WEELCHAIR PERSON (68),0.747899,0.89899,0.816514,0.777778,0.282828,0.414815,-0.029879,0.616162,0.401699,Transformer outperforms GRU in recall and F1-score.
+69,BLIND (69),0.646154,0.913043,0.756757,0.740741,0.652174,0.693642,-0.094587,0.260869,0.063115,Transformer outperforms GRU in recall and F1-score.
+70,DEAF BLIND (70),0.661017,0.847826,0.742857,0.525,0.684783,0.59434,0.136017,0.163043,0.148517,"Transformer consistently outperforms GRU across precision, recall, and F1-score."
+71,MARRIED (71),0.699187,0.924731,0.796296,0.707965,0.860215,0.776699,-0.008778,0.064516,0.019597,Transformer outperforms GRU in recall and F1-score.
+72,BLUE (72),0.802469,0.902778,0.849673,0.746667,0.777778,0.761905,0.055802,0.125,0.087768,"Transformer consistently outperforms GRU across precision, recall, and F1-score."
+73,GREEN (73),0.735632,0.853333,0.790123,0.635417,0.813333,0.71345,0.100215,0.04,0.076673,"Transformer consistently outperforms GRU across precision, recall, and F1-score."
+74,RED (74),0.462687,0.837838,0.596154,0.658537,0.364865,0.469565,-0.19585,0.472973,0.126589,Transformer outperforms GRU in recall and F1-score.
+75,BROWN (75),0.77381,0.855263,0.8125,0.797297,0.776316,0.786667,-0.023487,0.078947,0.025833,Transformer outperforms GRU in recall and F1-score.
+76,BLACK (76),0.795181,0.88,0.835443,0.816901,0.773333,0.794521,-0.02172,0.106667,0.040922,Transformer outperforms GRU in recall and F1-score.
+77,WHITE (77),0.510345,0.891566,0.649123,0.521739,0.289157,0.372093,-0.011394,0.602409,0.27703,Transformer outperforms GRU in recall and F1-score.
+78,YELLOW (78),0.76087,0.897436,0.823529,0.625,0.448718,0.522388,0.13587,0.448718,0.301141,"Transformer consistently outperforms GRU across precision, recall, and F1-score."
+79,ORANGE (79),0.594828,0.896104,0.715026,0.758621,0.571429,0.651852,-0.163793,0.324675,0.063174,Transformer outperforms GRU in recall and F1-score.
+80,GRAY (80),0.817073,0.881579,0.848101,0.855263,0.855263,0.855263,-0.03819,0.026316,-0.007162,Transformer only outperforms GRU in recall.
+81,PINK (81),0.581197,0.894737,0.704663,0.6,0.631579,0.615385,-0.018803,0.263158,0.089278,Transformer outperforms GRU in recall and F1-score.
+82,VIOLET (82),0.864865,0.876712,0.870748,0.826667,0.849315,0.837838,0.038198,0.027397,0.03291,"Transformer consistently outperforms GRU across precision, recall, and F1-score."
+83,LIGHT (83),0.680851,0.876712,0.766467,0.759036,0.863014,0.807692,-0.078185,0.013698,-0.041225,Transformer only outperforms GRU in recall.
+84,DARK (84),0.780488,0.864865,0.820513,0.82716,0.905405,0.864516,-0.046672,-0.04054,-0.044003,"Transformer did not outperform GRU across precision, recall, and F1-score."
+85,BREAD (85),0.692913,0.967033,0.807339,0.735849,0.857143,0.791878,-0.042936,0.10989,0.015461,Transformer outperforms GRU in recall and F1-score.
+86,EGG (86),0.782178,0.88764,0.831579,0.780488,0.719101,0.748538,0.00169,0.168539,0.083041,"Transformer consistently outperforms GRU across precision, recall, and F1-score."
+87,FISH (87),0.757009,0.880435,0.81407,0.820225,0.793478,0.80663,-0.063216,0.086957,0.00744,Transformer outperforms GRU in recall and F1-score.
+88,MEAT (88),0.82,0.891304,0.854167,0.791209,0.782609,0.786885,0.028791,0.108695,0.067282,"Transformer consistently outperforms GRU across precision, recall, and F1-score."
+89,CHICKEN (89),0.831579,0.858696,0.84492,0.772727,0.73913,0.755556,0.058852,0.119566,0.089364,"Transformer consistently outperforms GRU across precision, recall, and F1-score."
+90,SPAGHETTI (90),0.685484,0.923913,0.787037,0.72043,0.728261,0.724324,-0.034946,0.195652,0.062713,Transformer outperforms GRU in recall and F1-score.
+91,RICE (91),0.805825,0.943182,0.86911,0.67,0.761364,0.712766,0.135825,0.181818,0.156344,"Transformer consistently outperforms GRU across precision, recall, and F1-score."
+92,LONGANISA (92),0.785714,0.865169,0.823529,0.553398,0.640449,0.59375,0.232316,0.22472,0.229779,"Transformer consistently outperforms GRU across precision, recall, and F1-score."
+93,SHRIMP (93),0.738318,0.88764,0.806122,0.703297,0.719101,0.711111,0.035021,0.168539,0.095011,"Transformer consistently outperforms GRU across precision, recall, and F1-score."
+94,CRAB (94),0.87,0.915789,0.892308,0.782178,0.831579,0.806122,0.087822,0.08421,0.086186,"Transformer consistently outperforms GRU across precision, recall, and F1-score."
+95,HOT (95),0.555556,0.894737,0.685484,0.714286,0.631579,0.670391,-0.15873,0.263158,0.015093,Transformer outperforms GRU in recall and F1-score.
+96,COLD (96),0.851852,0.92,0.884615,0.891304,0.82,0.854167,-0.039452,0.1,0.030448,Transformer outperforms GRU in recall and F1-score.
+97,JUICE (97),0.65873,0.846939,0.741071,0.722772,0.744898,0.733668,-0.064042,0.102041,0.007403,Transformer outperforms GRU in recall and F1-score.
+98,MILK (98),0.532164,0.919192,0.674074,0.576577,0.646465,0.609524,-0.044413,0.272727,0.06455,Transformer outperforms GRU in recall and F1-score.
+99,COFFEE (99),0.758929,0.885417,0.817308,0.8,0.75,0.774194,-0.041071,0.135417,0.043114,Transformer outperforms GRU in recall and F1-score.
+100,TEA (100),0.820755,0.878788,0.84878,0.756757,0.848485,0.8,0.063998,0.030303,0.04878,"Transformer consistently outperforms GRU across precision, recall, and F1-score."
+101,BEER (101),0.788991,0.895833,0.839024,0.836957,0.802083,0.819149,-0.047966,0.09375,0.019875,Transformer outperforms GRU in recall and F1-score.
+102,WINE (102),0.763636,0.884211,0.819512,0.658537,0.568421,0.610169,0.105099,0.31579,0.209343,"Transformer consistently outperforms GRU across precision, recall, and F1-score."
+103,SUGAR (103),0.647482,0.918367,0.759494,0.5,0.326531,0.395062,0.147482,0.591836,0.364432,"Transformer consistently outperforms GRU across precision, recall, and F1-score."
+104,NO SUGAR (104),0.663934,0.84375,0.743119,0.776316,0.614583,0.686047,-0.112382,0.229167,0.057072,Transformer outperforms GRU in recall and F1-score.

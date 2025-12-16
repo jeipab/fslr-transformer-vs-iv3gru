@@ -1,0 +1,5 @@
+Model,Occlusion,Total Ground Truth,Total TP,Total FP,Total FN,Precision,Recall,F1-score
+Transformer,Occluded,4614,3957,1862,657,0.668949,0.858834,0.749667
+,Non-Occluded,5008,4308,1995,700,0.633055,0.836834,0.700568
+IV3-GRU,Occluded,4614,1920,2474,2694,0.446078,0.417127,0.417803
+,Non-Occluded,5008,1926,2635,3082,0.415334,0.351356,0.36158

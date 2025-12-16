@@ -1,0 +1,12 @@
+,,Transformer,,,GRU,,,Difference (Transformer - GRU),,,
+Category ID,Category Label,Precision,Recall,F1-Score,Precision,Recall,F1-Score,Precision,Recall,F1-Score,Interpretation Notes
+0,GREETING (0),0.758494,0.844581,0.799226,0.423729,0.587935,0.492505,0.334765,0.256646,0.306721,"Transformer consistently outperforms GRU across precision, recall, and F1-score."
+1,SURVIVAL (1),0.645161,0.866062,0.739467,0.616734,0.460222,0.527105,0.028427,0.40584,0.212362,"Transformer benefits from higher recall, yielding improved overall performance."
+2,NUMBER (2),0.660976,0.871383,0.751734,0.345185,0.249732,0.289801,0.315791,0.621651,0.461933,"Transformer benefits from higher recall, yielding improved overall performance."
+3,CALENDAR (3),0.652568,0.859701,0.741949,0.316364,0.346269,0.330641,0.336204,0.513432,0.411308,"Transformer benefits from higher recall, yielding improved overall performance."
+4,DAYS (4),0.780252,0.860192,0.818274,0.428367,0.319104,0.365749,0.351885,0.541088,0.452525,"Transformer consistently outperforms GRU across precision, recall, and F1-score."
+5,FAMILY (5),0.650322,0.834021,0.730804,0.434372,0.474227,0.453425,0.21595,0.359794,0.277379,"Transformer consistently outperforms GRU across precision, recall, and F1-score."
+6,RELATIONSHIPS (6),0.631128,0.860021,0.728007,0.462099,0.336161,0.389196,0.169029,0.52386,0.338811,"Transformer consistently outperforms GRU across precision, recall, and F1-score."
+7,COLOR (7),0.673077,0.855397,0.753363,0.466572,0.334012,0.389318,0.206505,0.521385,0.364045,"Transformer consistently outperforms GRU across precision, recall, and F1-score."
+8,FOOD (8),0.750471,0.876788,0.808727,0.37287,0.625963,0.467351,0.377601,0.250825,0.341376,"Transformer achieves better overall F1-score driven by higher precision, despite lower recall."
+9,DRINK (9),0.658556,0.863169,0.747106,0.634146,0.26749,0.376266,0.02441,0.595679,0.37084,"Transformer benefits from higher recall, yielding improved overall performance."
