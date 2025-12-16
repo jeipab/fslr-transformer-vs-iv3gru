@@ -29,6 +29,7 @@ venv311/
 
 # Ignore everything in data/ by default
 data/**
+metrics/temporal alignment/visualizations/
 
 # Allow core scripts or initialization files
 !data/__init__.py
