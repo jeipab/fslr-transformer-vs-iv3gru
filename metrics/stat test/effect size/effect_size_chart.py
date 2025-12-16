@@ -1,9 +1,6 @@
 """
 Usage:
-    python "metrics\stat test\effect_size_chart.py"
-    
-    Or from the project root:
-    python "metrics\stat test\effect_size_chart.py"
+    python "metrics\stat test\effect size\effect_size_chart.py"
 
 Requirements:
     - matplotlib

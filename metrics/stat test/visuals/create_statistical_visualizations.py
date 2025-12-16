@@ -2,10 +2,7 @@
 Statistical Analysis Visualization Generator
 
 Usage:
-    python "metrics\stat test\create_statistical_visualizations.py"
-    
-    Or from the project root:
-    python "metrics\stat test\create_statistical_visualizations.py"
+    python "metrics\stat test\visuals\create_statistical_visualizations.py"
 
 Requirements:
     - matplotlib
