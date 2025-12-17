@@ -1178,7 +1178,7 @@ def main():
     """Main function to process all files."""
     # Paths
     base_dir = Path(__file__).parent.parent.parent
-    npz_dir = base_dir / "data" / "processed" / "sample"
+    npz_dir = base_dir / "data" / "processed" / "diff_cat_npz-seq-400"
     json_files = [
         base_dir / "metrics" / "extract" / "shared_inputs" / "ctc_validation_results_iv3gru.json",
         base_dir / "metrics" / "extract" / "shared_inputs" / "ctc_validation_results_transformer.json",
