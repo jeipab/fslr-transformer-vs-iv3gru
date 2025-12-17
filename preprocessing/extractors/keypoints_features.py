@@ -58,10 +58,17 @@ FACE_MINIMAL_22 = [
 # MediaPipe Solution References
 # ----------------------------
 # Store references to MediaPipe solutions for keypoint detection
-mp_hands = mp.solutions.hands          # Hand landmark detection (21 points per hand)
-mp_face_mesh = mp.solutions.face_mesh  # Face mesh detection (468 points, we use 22)
-mp_drawing = mp.solutions.drawing_utils # Visualization utilities (unused in processing)
-mp_pose = mp.solutions.pose            # Body pose detection (33 points, we use upper 25)
+try:
+    mp_hands = mp.solutions.hands          # Hand landmark detection (21 points per hand)
+    mp_face_mesh = mp.solutions.face_mesh  # Face mesh detection (468 points, we use 22)
+    mp_drawing = mp.solutions.drawing_utils # Visualization utilities (unused in processing)
+    mp_pose = mp.solutions.pose            # Body pose detection (33 points, we use upper 25)
+except AttributeError as e:
+    raise ImportError(
+        f"MediaPipe solutions not available. This may indicate an installation issue. "
+        f"Please ensure MediaPipe is properly installed: pip install mediapipe>=0.10.13,<0.11.0. "
+        f"Original error: {e}"
+    ) from e
 
 
 # ----------------------------
