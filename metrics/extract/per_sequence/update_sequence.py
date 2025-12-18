@@ -2,16 +2,22 @@
 Script to update CSV files with actual sequence data from JSON validation results.
 
 Usage:
-    python metrics/extract/update_sequence.py
+    python metrics/extract/per_sequence/update_sequence.py
+    
+    Or from the project root:
+    python "metrics/extract/per_sequence/update_sequence.py"
 
-This script updates the following CSV files:
-- raw data/Per Sequence/TABLE E2 — Per-Sequence Recognition Performance - I.csv
-- raw data/Per Sequence/TABLE E2 — Per-Sequence Recognition Performance - T.csv
-- raw data/Per Sequence/TABLE E4 — Per-Sequence Classification Performance - I.csv
-- raw data/Per Sequence/TABLE E4 — Per-Sequence Classification Performance - T.csv
+This script updates the following CSV files (in the same directory):
+- per_sequence_recognition_transformer.csv
+- per_sequence_recognition_iv3gru.csv
+- per_sequence_classification_transformer.csv
+- per_sequence_classification_iv3gru.csv
 
-For Recognition (E2): Uses predicted_sequence/ground_truth_sequence (gloss IDs)
-For Classification (E4): Uses predicted_categories/ground_truth_categories (category IDs)
+For Recognition: Uses predicted_sequence/ground_truth_sequence (gloss IDs)
+For Classification: Uses predicted_categories/ground_truth_categories (category IDs)
+
+Updates the "Ground Truth Sequence" and "Predicted Sequence" columns with formatted sequences
+(e.g., "42 -> 14 -> 7") while preserving all other columns (TP, FP, FN, Precision, Recall, F1-score).
 """
 
 import json
@@ -47,8 +53,7 @@ def format_sequence(sequence):
 
 def update_csv(csv_path, json_mapping, use_categories=False):
     """Update CSV file with sequence data from JSON mapping."""
-    # Read CSV
-    title_row = None
+    # Read CSV (no title row in new format)
     header_row = None
     data_rows = []
     
@@ -56,9 +61,6 @@ def update_csv(csv_path, json_mapping, use_categories=False):
         reader = csv.reader(f)
         for i, row in enumerate(reader):
             if i == 0:
-                # Title row (e.g., "IV3 - GRU" or "Transformer")
-                title_row = row
-            elif i == 1:
                 # Header row
                 header_row = row
             else:
@@ -99,6 +101,7 @@ def update_csv(csv_path, json_mapping, use_categories=False):
             while len(row) <= max(gt_seq_idx, pred_seq_idx):
                 row.append('')
             
+            # Update sequence columns with formatted sequences
             row[gt_seq_idx] = format_sequence(gt_sequence)
             row[pred_seq_idx] = format_sequence(pred_sequence)
             updated_count += 1
@@ -109,9 +112,6 @@ def update_csv(csv_path, json_mapping, use_categories=False):
     # Write updated CSV
     with open(csv_path, 'w', encoding='utf-8', newline='') as f:
         writer = csv.writer(f)
-        # Write title row if it exists
-        if title_row:
-            writer.writerow(title_row)
         # Write header row
         writer.writerow(header_row)
         # Write data rows
@@ -123,18 +123,22 @@ def update_csv(csv_path, json_mapping, use_categories=False):
 
 def main():
     """Main function to update all CSV files."""
-    # Get script directory and project root
-    script_dir = Path(__file__).parent
-    project_root = script_dir.parent.parent
+    # Get script directory (CSV files are in the same directory)
+    script_dir = Path(__file__).parent  # metrics/extract/per_sequence
+    extract_dir = script_dir.parent  # metrics/extract
     
-    # Paths
-    json_iv3gru_path = project_root / 'metrics' / 'extract' / 'shared_inputs' / 'ctc_validation_results_iv3gru.json'
-    json_transformer_path = project_root / 'metrics' / 'extract' / 'shared_inputs' / 'ctc_validation_results_transformer.json'
+    # Paths to JSON files
+    json_iv3gru_path = extract_dir / 'shared_inputs' / 'ctc_validation_results_iv3gru.json'
+    json_transformer_path = extract_dir / 'shared_inputs' / 'ctc_validation_results_transformer.json'
     
-    csv_e2_i_path = project_root / 'raw data' / 'Per Sequence' / 'TABLE E2 — Per-Sequence Recognition Performance - I.csv'
-    csv_e2_t_path = project_root / 'raw data' / 'Per Sequence' / 'TABLE E2 — Per-Sequence Recognition Performance - T.csv'
-    csv_e4_i_path = project_root / 'raw data' / 'Per Sequence' / 'TABLE E4 — Per-Sequence Classification Performance - I.csv'
-    csv_e4_t_path = project_root / 'raw data' / 'Per Sequence' / 'TABLE E4 — Per-Sequence Classification Performance - T.csv'
+    # CSV files are in the same directory as this script
+    per_sequence_dir = script_dir
+    
+    # CSV file paths
+    csv_recognition_transformer = per_sequence_dir / 'per_sequence_recognition_transformer.csv'
+    csv_recognition_iv3gru = per_sequence_dir / 'per_sequence_recognition_iv3gru.csv'
+    csv_classification_transformer = per_sequence_dir / 'per_sequence_classification_transformer.csv'
+    csv_classification_iv3gru = per_sequence_dir / 'per_sequence_classification_iv3gru.csv'
     
     # Load JSON data
     print("Loading JSON data...")
@@ -147,12 +151,12 @@ def main():
     print("\nUpdating CSV files...")
     
     # Recognition files (use gloss sequences)
-    update_csv(csv_e2_i_path, json_iv3gru, use_categories=False)
-    update_csv(csv_e2_t_path, json_transformer, use_categories=False)
+    update_csv(csv_recognition_transformer, json_transformer, use_categories=False)
+    update_csv(csv_recognition_iv3gru, json_iv3gru, use_categories=False)
     
     # Classification files (use category sequences)
-    update_csv(csv_e4_i_path, json_iv3gru, use_categories=True)
-    update_csv(csv_e4_t_path, json_transformer, use_categories=True)
+    update_csv(csv_classification_transformer, json_transformer, use_categories=True)
+    update_csv(csv_classification_iv3gru, json_iv3gru, use_categories=True)
     
     print("\nAll CSV files updated successfully!")
 

@@ -11,11 +11,11 @@ Requirements:
     - numpy
     - seaborn (for KDE plots)
     
-Input Files (must be in same directory):
-    - Compiled Data Summary - TABLE E2 — Per-Sequence Recognition Performance - T.csv
-    - Compiled Data Summary - TABLE E2 — Per-Sequence Recognition Performance - I.csv
-    - Compiled Data Summary - TABLE E4 — Per-Sequence Classification Performance - T.csv
-    - Compiled Data Summary - TABLE E4 — Per-Sequence Classification Performance - I.csv
+Input Files:
+    - metrics/extract/per_sequence/per_sequence_recognition_transformer.csv
+    - metrics/extract/per_sequence/per_sequence_recognition_iv3gru.csv
+    - metrics/extract/per_sequence/per_sequence_classification_transformer.csv
+    - metrics/extract/per_sequence/per_sequence_classification_iv3gru.csv
     
 Output:
     Generates 6 PNG distribution plots in the same directory:
@@ -72,22 +72,15 @@ output_dir = os.path.dirname(os.path.abspath(__file__))
 
 def load_sequence_data(transformer_file, iv3_file):
     """Load per-sequence data from both model files."""
-    # Read CSV files, skipping first row (model name)
-    df_t = pd.read_csv(transformer_file, skiprows=1, header=0)
-    df_i = pd.read_csv(iv3_file, skiprows=1, header=0)
+    # Read CSV files (no title row to skip)
+    df_t = pd.read_csv(transformer_file)
+    df_i = pd.read_csv(iv3_file)
     
     # Clean column names
     df_t.columns = df_t.columns.str.strip()
     df_i.columns = df_i.columns.str.strip()
     
-    # Convert percentage metrics to decimal (0-1)
-    metric_cols = ['Precision', 'Recall', 'F1-score']
-    for col in metric_cols:
-        if col in df_t.columns:
-            # Remove % and convert to decimal
-            df_t[col] = df_t[col].astype(str).str.rstrip('%').astype(float) / 100.0
-        if col in df_i.columns:
-            df_i[col] = df_i[col].astype(str).str.rstrip('%').astype(float) / 100.0
+    # Metrics are already in decimal format (0-1), no conversion needed
     
     return df_t, df_i
 
@@ -145,11 +138,16 @@ def create_distribution_plot(df_t, df_i, metric, title_prefix, filename_prefix):
 
 def main():
     try:
+        # Get project root and construct paths to per_sequence CSV files
+        script_dir = Path(__file__).parent
+        project_root = script_dir.parent.parent
+        per_sequence_dir = project_root / 'metrics' / 'extract' / 'per_sequence'
+        
         # File paths
-        rec_t_file = os.path.join(output_dir, 'Compiled Data Summary - TABLE E2 — Per-Sequence Recognition Performance - T.csv')
-        rec_i_file = os.path.join(output_dir, 'Compiled Data Summary - TABLE E2 — Per-Sequence Recognition Performance - I.csv')
-        cls_t_file = os.path.join(output_dir, 'Compiled Data Summary - TABLE E4 — Per-Sequence Classification Performance - T.csv')
-        cls_i_file = os.path.join(output_dir, 'Compiled Data Summary - TABLE E4 — Per-Sequence Classification Performance - I.csv')
+        rec_t_file = per_sequence_dir / 'per_sequence_recognition_transformer.csv'
+        rec_i_file = per_sequence_dir / 'per_sequence_recognition_iv3gru.csv'
+        cls_t_file = per_sequence_dir / 'per_sequence_classification_transformer.csv'
+        cls_i_file = per_sequence_dir / 'per_sequence_classification_iv3gru.csv'
         
         print("=" * 60)
         print("Creating Performance Distribution Plots")
