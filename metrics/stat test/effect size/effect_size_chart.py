@@ -58,7 +58,7 @@ plt.rcParams.update({
 
 # Directory for output
 output_dir = os.path.dirname(os.path.abspath(__file__))
-effect_size_dir = os.path.join(output_dir, 'effect size')
+effect_size_dir = output_dir
 os.makedirs(effect_size_dir, exist_ok=True)
 
 
@@ -289,8 +289,10 @@ def main():
         sys.stdout.flush()
         
         # Load data
-        recognition_file = os.path.join(output_dir, 'recognition', 'Recognition-StatsResults.csv')
-        classification_file = os.path.join(output_dir, 'classification', 'Classification-StatsResults.csv')
+        # CSV files are in parent directory (stat test), not in effect size subdirectory
+        stat_test_dir = os.path.dirname(output_dir)
+        recognition_file = os.path.join(stat_test_dir, 'recognition', 'Recognition-StatsResults.csv')
+        classification_file = os.path.join(stat_test_dir, 'classification', 'Classification-StatsResults.csv')
         
         if not os.path.exists(recognition_file):
             raise FileNotFoundError(f"Recognition file not found: {recognition_file}")
