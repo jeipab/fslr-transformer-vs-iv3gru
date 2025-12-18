@@ -63,8 +63,8 @@ data/splitting/**/*.pyc
 !data/labels_reference.csv
 !data/processed/
 !data/processed/labels.csv
-!data/processed/FSL105_train.csv
-!data/processed/FSL105_val.csv
+!data/processed/CMB105_test.csv
+!data/processed/CMB105_train.csv
 !data/processed/training/
 !data/processed/training/train.csv
 !data/processed/training/val.csv
