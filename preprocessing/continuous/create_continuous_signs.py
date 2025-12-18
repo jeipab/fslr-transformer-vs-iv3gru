@@ -658,12 +658,16 @@ def generate_sequence_plans(
                         break
                 
                 if samples is None:
-                    # If we can't create a sequence, use remaining files as a final sequence
+                    # If we can't create a sequence, use remaining files but respect max_glosses
                     available_df = signer_df[~signer_df['file'].isin(used_files)]
                     if len(available_df) > 0:
-                        # Use all remaining files
+                        # Limit to max_glosses to respect the constraint
+                        # If remaining <= max_glosses, use all; otherwise, sample up to max_glosses
+                        num_to_use = min(max_glosses, len(available_df))
+                        sampled_df = available_df.sample(n=num_to_use, replace=False)
+                        
                         samples = []
-                        for _, row in available_df.iterrows():
+                        for _, row in sampled_df.iterrows():
                             samples.append({
                                 'file': row['file'],
                                 'gloss': int(row['gloss']),
