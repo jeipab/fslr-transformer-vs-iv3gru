@@ -140,6 +140,9 @@ gdown 1mas_eCy9wyp3aSqrEB-eCUjXFkXM4zkY
 
 # Same Category - NPZ
 gdown 1cM2JyRrlr45OncZLFMBEHO1rj1Lq82a_
+
+# 30% Split - Continuous
+gdown 1YfT5qAiADhHgZaRQxqH6nyks9cmAlHHx
 ```
 
 **Unzip zip file:**
@@ -158,6 +161,10 @@ rm -f *.zip
 
 ```bash
 mv diff_cat_npz-seq-400 continuous_sequences
+
+OR
+
+mv continuous_testing continuous_sequences
 ```
 
 ---
