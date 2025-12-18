@@ -6,7 +6,9 @@ with proper stratified sampling and file management.
 
 Features:
 - Stratified splitting by gloss and category
-- Signer-aware splitting (mixed or independent modes)
+- Signer-aware splitting (mixed, independent, or stratified modes)
+- 70/30 split per gloss and per signer (stratified mode) - ensures each gloss
+  and each signer are split 70/30 by stratifying on (gloss, signer) pairs
 - Automatic category ID encoding
 - File collision handling
 - Support for filtering by specific categories/glosses
@@ -21,6 +23,17 @@ Usage:
         --out-root data/processed \
         --copy \
         --train-ratio 0.8
+
+- 70/30 split per gloss and per signer (stratified mode):
+    python data/splitting/data_split.py \
+        --processed-root data/processed/CMB105 \
+        --labels data/processed/CMB105/labels.csv \
+        --out-root data/processed \
+        --copy \
+        --train-ratio 0.7 \
+        --signer-split-mode stratified \
+        --train-dir CMB105_train \
+        --val-dir CMB105_test
 
 - Filtered split:
     python data/splitting/data_split.py \
@@ -183,9 +196,10 @@ def main():
     ap.add_argument("--val-dir", type=str, default="keypoints_val", help="Name for val directory (default: keypoints_val)")
     ap.add_argument("--train-csv", type=str, default="train_labels.csv", help="Name for train CSV (default: train_labels.csv)")
     ap.add_argument("--val-csv", type=str, default="val_labels.csv", help="Name for val CSV (default: val_labels.csv)")
-    ap.add_argument("--signer-split-mode", type=str, default="mixed", choices=["mixed", "independent"],
-                   help="Signer splitting mode: 'mixed' (default, signers in both train/val) or "
-                        "'independent' (each signer in train OR val only for generalization testing)")
+    ap.add_argument("--signer-split-mode", type=str, default="mixed", choices=["mixed", "independent", "stratified"],
+                   help="Signer splitting mode: 'mixed' (default, signers in both train/val), "
+                        "'independent' (each signer in train OR val only), or "
+                        "'stratified' (70/30 split per gloss and per signer)")
     ap.add_argument("--signers", nargs="+", default=None,
                     help="Restrict to specific signer IDs (e.g., S0 S1 S2 S3). Applied before splitting.")
     ap.add_argument("--signer-range", type=str, default=None,
@@ -378,6 +392,21 @@ def main():
             val_signers = sorted([s for s, split in signer_splits.items() if split == 'val'])
             print(f"  Train signers: {', '.join(train_signers)} ({len(train_signers)} signers)")
             print(f"  Val signers: {', '.join(val_signers)} ({len(val_signers)} signers)")
+            
+        elif args.signer_split_mode == 'stratified':
+            # Stratified split: 70/30 per gloss and per signer (stratified by (gloss, signer) pairs)
+            print(f"\nUsing stratified split (70/30 per gloss and per signer)")
+            
+            # Create combined label for stratification: (gloss, signer) pairs
+            df['_stratify_label'] = df.apply(lambda row: f"{row['gloss']}_{row['signer']}", axis=1)
+            
+            # Use StratifiedShuffleSplit to maintain distribution
+            sss = StratifiedShuffleSplit(n_splits=1, test_size=1-args.train_ratio, random_state=42)
+            train_idx, val_idx = next(sss.split(df, df['_stratify_label']))
+            
+            df.loc[train_idx, 'split'] = 'train'
+            df.loc[val_idx, 'split'] = 'val'
+            df = df.drop(columns=['_stratify_label'])
             
         else:
             # Mixed mode: hash on filename (each signer appears in both splits)
