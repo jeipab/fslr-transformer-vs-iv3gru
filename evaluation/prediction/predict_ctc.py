@@ -498,15 +498,7 @@ class CTCPredictor:
         self.model, self.input_dim = self._load_model()
         self._load_checkpoint()
         self.gloss_mapping, self.category_mapping = load_label_mappings()
-        
-        # Set lower overlap threshold for transformer models
-        # This allows any overlap (even minimal) to count as TP if gloss/category matches
-        if self.model_type == 'transformer_continuous':
-            self.metrics_config = ContinuousEvaluationConfig(
-                lenient_overlap_ratio=0.001  # Accept any overlap for transformer (very small threshold)
-            )
-        else:
-            self.metrics_config = ContinuousEvaluationConfig()
+        self.metrics_config = ContinuousEvaluationConfig()
     
     def _load_model(self) -> Tuple[torch.nn.Module, int]:
         if self.model_type == 'transformer_continuous':
@@ -956,7 +948,7 @@ class CTCPredictor:
             if i < len(category_confidences):
                 ts['category_confidence'] = float(category_confidences[i])
         
-        # Apply low-confidence filtering for Transformer and IV3-GRU models
+        # Apply low-confidence filtering for Transformer models only
         if self.model_type == 'transformer_continuous':
             predicted_sequence, predicted_labels, predicted_timestamps, confidence_scores, \
             predicted_categories, category_confidences = filter_low_confidence_segments(
@@ -966,18 +958,7 @@ class CTCPredictor:
                 confidence_scores=confidence_scores,
                 predicted_categories=predicted_categories if predicted_categories else None,
                 category_confidences=category_confidences if category_confidences else None,
-                confidence_threshold=0.70  # Transformer threshold
-            )
-        elif self.model_type == 'iv3_gru_continuous':
-            predicted_sequence, predicted_labels, predicted_timestamps, confidence_scores, \
-            predicted_categories, category_confidences = filter_low_confidence_segments(
-                predicted_sequence=predicted_sequence,
-                predicted_labels=predicted_labels,
-                predicted_timestamps=predicted_timestamps,
-                confidence_scores=confidence_scores,
-                predicted_categories=predicted_categories if predicted_categories else None,
-                category_confidences=category_confidences if category_confidences else None,
-                confidence_threshold=0.30  # IV3-GRU threshold
+                confidence_threshold=0.55
             )
         
         result = {
@@ -1248,7 +1229,7 @@ class CTCPredictor:
             if i < len(final_category_confidences):
                 ts['category_confidence'] = float(final_category_confidences[i])
         
-        # Apply low-confidence filtering for Transformer and IV3-GRU models
+        # Apply low-confidence filtering for Transformer models only
         if self.model_type == 'transformer_continuous':
             final_sequence, predicted_labels, predicted_timestamps, final_confidences, \
             final_categories, final_category_confidences = filter_low_confidence_segments(
@@ -1258,18 +1239,7 @@ class CTCPredictor:
                 confidence_scores=final_confidences,
                 predicted_categories=final_categories if final_categories else None,
                 category_confidences=final_category_confidences if final_category_confidences else None,
-                confidence_threshold=0.70  # Transformer threshold
-            )
-        elif self.model_type == 'iv3_gru_continuous':
-            final_sequence, predicted_labels, predicted_timestamps, final_confidences, \
-            final_categories, final_category_confidences = filter_low_confidence_segments(
-                predicted_sequence=final_sequence,
-                predicted_labels=predicted_labels,
-                predicted_timestamps=predicted_timestamps,
-                confidence_scores=final_confidences,
-                predicted_categories=final_categories if final_categories else None,
-                category_confidences=final_category_confidences if final_category_confidences else None,
-                confidence_threshold=0.30  # IV3-GRU threshold
+                confidence_threshold=0.55
             )
         
         result = {
