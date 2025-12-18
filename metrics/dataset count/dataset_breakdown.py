@@ -12,7 +12,7 @@ Usage:
     # Or on Windows PowerShell:
     python "metrics\dataset count\dataset_breakdown.py"
     
-Outputs 10 CSV files:
+Outputs 12 CSV files:
     - FSL-gloss_count.csv
     - SMP-gloss_count.csv
     - CMB-gloss_count.csv
@@ -23,10 +23,13 @@ Outputs 10 CSV files:
     - training-category_count.csv
     - testing-gloss_count.csv
     - testing-category_count.csv
+    - continuous-gloss_count.csv
+    - continuous-category_count.csv
 
 The script reads from:
     - data/processed/CMB105_test.csv
     - data/processed/CMB105_train.csv
+    - data/processed/continuous_testing/*.json (for continuous sequences)
 
 Dataset definitions:
     - FSL-105: Signers S0-S3
@@ -35,6 +38,7 @@ Dataset definitions:
 """
 
 import pandas as pd
+import json
 import sys
 from pathlib import Path
 
@@ -170,6 +174,94 @@ def count_categories_all(df):
     return pd.DataFrame(results)
 
 
+def load_continuous_json_data(json_dir: Path):
+    """Load all JSON files from continuous_testing directory and extract segment data.
+    
+    Args:
+        json_dir: Directory containing JSON files
+        
+    Returns:
+        DataFrame with columns: gloss, cat, occluded
+    """
+    if not json_dir.exists():
+        print(f"Error: JSON directory not found at {json_dir}", file=sys.stderr)
+        return None
+    
+    json_files = list(json_dir.glob("*.json"))
+    if not json_files:
+        print(f"Error: No JSON files found in {json_dir}", file=sys.stderr)
+        return None
+    
+    print(f"Loading {len(json_files)} JSON files from {json_dir}...", file=sys.stderr)
+    
+    segments = []
+    for json_file in json_files:
+        try:
+            with open(json_file, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+                
+            # Extract segments
+            if 'segments' in data:
+                for segment in data['segments']:
+                    segments.append({
+                        'gloss': int(segment['gloss']),
+                        'cat': int(segment['category']),
+                        'occluded': int(segment.get('occluded', 0))
+                    })
+        except Exception as e:
+            print(f"Warning: Could not read {json_file}: {e}", file=sys.stderr)
+            continue
+    
+    if not segments:
+        print(f"Error: No segments found in JSON files", file=sys.stderr)
+        return None
+    
+    df = pd.DataFrame(segments)
+    print(f"Loaded {len(df)} segments from {len(json_files)} JSON files", file=sys.stderr)
+    
+    return df
+
+
+def count_glosses_from_json(df_json):
+    """Count occluded and non-occluded occurrences of each gloss from JSON data."""
+    results = []
+    # Include all gloss IDs from 0 to 104
+    for gloss_id in range(105):
+        gloss_df = df_json[df_json['gloss'] == gloss_id]
+        occluded = len(gloss_df[gloss_df['occluded'] == 1])
+        non_occluded = len(gloss_df[gloss_df['occluded'] == 0])
+        total = len(gloss_df)
+        
+        results.append({
+            'gloss_id': gloss_id,
+            'occluded': occluded,
+            'non_occluded': non_occluded,
+            'total': total
+        })
+    
+    return pd.DataFrame(results)
+
+
+def count_categories_from_json(df_json):
+    """Count occluded and non-occluded occurrences of each category from JSON data."""
+    results = []
+    # Include all category IDs from 0 to 9
+    for cat_id in range(10):
+        cat_df = df_json[df_json['cat'] == cat_id]
+        occluded = len(cat_df[cat_df['occluded'] == 1])
+        non_occluded = len(cat_df[cat_df['occluded'] == 0])
+        total = len(cat_df)
+        
+        results.append({
+            'category_id': cat_id,
+            'occluded': occluded,
+            'non_occluded': non_occluded,
+            'total': total
+        })
+    
+    return pd.DataFrame(results)
+
+
 def write_gloss_csv(df_counts, gloss_mapping, filename):
     """Write gloss count data to CSV file with labels."""
     output_dir = Path("metrics/dataset count")
@@ -237,6 +329,16 @@ def main():
     
     testing_cat_counts = count_categories_all(df_test)
     write_category_csv(testing_cat_counts, category_mapping, "testing-category_count.csv")
+    
+    # Generate continuous sequence count files from JSON
+    json_dir = Path("data/processed/continuous_testing")
+    df_continuous = load_continuous_json_data(json_dir)
+    if df_continuous is not None:
+        continuous_gloss_counts = count_glosses_from_json(df_continuous)
+        write_gloss_csv(continuous_gloss_counts, gloss_mapping, "continuous-gloss_count.csv")
+        
+        continuous_cat_counts = count_categories_from_json(df_continuous)
+        write_category_csv(continuous_cat_counts, category_mapping, "continuous-category_count.csv")
     
     print("All CSV files generated successfully.", file=sys.stderr)
     return 0

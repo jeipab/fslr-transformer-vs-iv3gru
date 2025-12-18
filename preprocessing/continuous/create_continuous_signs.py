@@ -47,6 +47,13 @@ Usage:
         --val-dir data/processed/fsl_val \
         --output-dir data/processed/continuous_sequences \
         --strategy 1 --signer S1 --sequences-per-signer 5 --min-glosses 3 --max-glosses 6
+
+    # Use all files from CMB105_test (exhaustive mode, 6-7 signs per sequence, different categories)
+    python preprocessing/continuous/create_continuous_signs.py \
+        --val-csv data/processed/CMB105_test.csv \
+        --val-dir data/processed/CMB105_test \
+        --output-dir data/processed/continuous_testing \
+        --strategy 2 --min-glosses 6 --max-glosses 7 --use-all-files
 """
 
 import argparse
@@ -436,13 +443,14 @@ def validate_data_completeness(df: pd.DataFrame, strategy: int, min_glosses: int
 # SEQUENCE PLANNING
 # ============================================================================
 
-def plan_sequence_strategy1(signer_df: pd.DataFrame, num_glosses: int, used_files: set) -> Optional[List[Dict]]:
+def plan_sequence_strategy1(signer_df: pd.DataFrame, num_glosses: int, used_files: set, allow_fewer: bool = False) -> Optional[List[Dict]]:
     """Plan a sequence with same category (Strategy 1).
     
     Args:
         signer_df: DataFrame with signer's videos
         num_glosses: Number of glosses for this sequence
         used_files: Set of already used file names
+        allow_fewer: If True, allow sequences with fewer than num_glosses if needed
         
     Returns:
         List of sample dictionaries, or None if not possible
@@ -450,24 +458,46 @@ def plan_sequence_strategy1(signer_df: pd.DataFrame, num_glosses: int, used_file
     # Get categories with enough available glosses
     available_df = signer_df[~signer_df['file'].isin(used_files)]
     
-    category_counts = available_df.groupby('cat').size()
-    valid_categories = category_counts[category_counts >= num_glosses].index.tolist()
-    
-    if not valid_categories:
+    if len(available_df) == 0:
         return None
     
-    # Pick a random category
-    category = random.choice(valid_categories)
-    
-    # Get available videos in this category
-    category_df = available_df[available_df['cat'] == category]
-    
-    # Sample num_glosses unique videos (different glosses preferred, but allow same gloss if needed)
-    if len(category_df) < num_glosses:
-        return None
+    if allow_fewer:
+        # Use all remaining files if fewer than num_glosses
+        actual_num_glosses = min(num_glosses, len(available_df))
+        category_counts = available_df.groupby('cat').size()
+        valid_categories = category_counts[category_counts >= actual_num_glosses].index.tolist()
+        
+        if not valid_categories:
+            # If no category has enough, use the category with the most files
+            if len(category_counts) > 0:
+                category = category_counts.idxmax()
+                category_df = available_df[available_df['cat'] == category]
+                actual_num_glosses = min(num_glosses, len(category_df))
+            else:
+                return None
+        else:
+            # Pick a random category
+            category = random.choice(valid_categories)
+            category_df = available_df[available_df['cat'] == category]
+            actual_num_glosses = min(num_glosses, len(category_df))
+    else:
+        category_counts = available_df.groupby('cat').size()
+        valid_categories = category_counts[category_counts >= num_glosses].index.tolist()
+        
+        if not valid_categories:
+            return None
+        
+        # Pick a random category
+        category = random.choice(valid_categories)
+        category_df = available_df[available_df['cat'] == category]
+        
+        if len(category_df) < num_glosses:
+            return None
+        
+        actual_num_glosses = num_glosses
     
     # Sample randomly
-    sampled = category_df.sample(n=num_glosses, replace=False)
+    sampled = category_df.sample(n=actual_num_glosses, replace=False)
     
     # Convert to list of dicts
     samples = []
@@ -487,13 +517,14 @@ def plan_sequence_strategy1(signer_df: pd.DataFrame, num_glosses: int, used_file
     return samples
 
 
-def plan_sequence_strategy2(signer_df: pd.DataFrame, num_glosses: int, used_files: set) -> Optional[List[Dict]]:
+def plan_sequence_strategy2(signer_df: pd.DataFrame, num_glosses: int, used_files: set, allow_fewer: bool = False) -> Optional[List[Dict]]:
     """Plan a sequence with different categories (Strategy 2).
     
     Args:
         signer_df: DataFrame with signer's videos
         num_glosses: Number of glosses for this sequence
         used_files: Set of already used file names
+        allow_fewer: If True, allow sequences with fewer than num_glosses if needed
         
     Returns:
         List of sample dictionaries, or None if not possible
@@ -501,14 +532,21 @@ def plan_sequence_strategy2(signer_df: pd.DataFrame, num_glosses: int, used_file
     # Get available videos
     available_df = signer_df[~signer_df['file'].isin(used_files)]
     
+    if len(available_df) == 0:
+        return None
+    
     # Get categories with available videos
     available_categories = available_df['cat'].unique().tolist()
     
-    if len(available_categories) < num_glosses:
-        return None
+    if allow_fewer:
+        actual_num_glosses = min(num_glosses, len(available_categories), len(available_df))
+    else:
+        if len(available_categories) < num_glosses:
+            return None
+        actual_num_glosses = num_glosses
     
-    # Sample num_glosses different categories
-    selected_categories = random.sample(available_categories, num_glosses)
+    # Sample actual_num_glosses different categories
+    selected_categories = random.sample(available_categories, actual_num_glosses)
     
     # Pick one random video from each category
     samples = []
@@ -541,17 +579,19 @@ def generate_sequence_plans(
     sequences_per_signer: int,
     min_glosses: int,
     max_glosses: int,
-    seed: int = 42
+    seed: int = 42,
+    use_all_files: bool = False
 ) -> List[SequencePlan]:
     """Generate sequence plans for all signers.
     
     Args:
         grouped_data: Dictionary mapping signer to DataFrame
-        strategy: Strategy number (2 or 3)
-        sequences_per_signer: Number of sequences per signer
+        strategy: Strategy number (1 or 2)
+        sequences_per_signer: Number of sequences per signer (ignored if use_all_files=True)
         min_glosses: Minimum glosses per sequence
         max_glosses: Maximum glosses per sequence
         seed: Random seed
+        use_all_files: If True, continue generating sequences until all files are used
         
     Returns:
         List of SequencePlan objects
@@ -571,57 +611,143 @@ def generate_sequence_plans(
     
     print(f"\n🎯 Generating sequence plans...")
     print(f"   Strategy: {strategy} ({'Same category' if strategy == 1 else 'Different categories'})")
-    print(f"   Sequences per signer: {sequences_per_signer}")
+    if use_all_files:
+        print(f"   Mode: Exhaustive (using all files)")
+    else:
+        print(f"   Sequences per signer: {sequences_per_signer}")
     print(f"   Glosses per sequence: {min_glosses}-{max_glosses}\n")
     
     for signer in sorted(grouped_data.keys()):
         signer_df = grouped_data[signer]
         used_files = set()
         signer_plans = []
+        total_files = len(signer_df)
         
         print(f"   {signer}: ", end='', flush=True)
         
-        for i in range(sequences_per_signer):
-            # Random number of glosses
-            num_glosses = random.randint(min_glosses, max_glosses)
+        if use_all_files:
+            # Continue until all files are used
+            max_iterations = total_files * 2  # Safety limit
+            iteration = 0
             
-            # Try to plan sequence
-            max_attempts = 100
-            samples = None
-            
-            for attempt in range(max_attempts):
-                samples = plan_func(signer_df, num_glosses, used_files)
-                if samples is not None:
+            while len(used_files) < total_files and iteration < max_iterations:
+                iteration += 1
+                
+                # Check remaining files
+                remaining = total_files - len(used_files)
+                if remaining == 0:
                     break
+                
+                # Determine number of glosses for this sequence
+                if remaining < min_glosses:
+                    # Use all remaining files
+                    num_glosses = remaining
+                    allow_fewer = True
+                else:
+                    # Random number of glosses within range
+                    num_glosses = random.randint(min_glosses, min(max_glosses, remaining))
+                    allow_fewer = False
+                
+                # Try to plan sequence
+                max_attempts = 100
+                samples = None
+                
+                for attempt in range(max_attempts):
+                    samples = plan_func(signer_df, num_glosses, used_files, allow_fewer=allow_fewer)
+                    if samples is not None:
+                        break
+                
+                if samples is None:
+                    # If we can't create a sequence, use remaining files as a final sequence
+                    available_df = signer_df[~signer_df['file'].isin(used_files)]
+                    if len(available_df) > 0:
+                        # Use all remaining files
+                        samples = []
+                        for _, row in available_df.iterrows():
+                            samples.append({
+                                'file': row['file'],
+                                'gloss': int(row['gloss']),
+                                'cat': int(row['cat']),
+                                'occluded': int(row['occluded']),
+                                'signer': row['signer'],
+                                'duration': float(row['duration']),
+                            })
+                        random.shuffle(samples)
+                    else:
+                        break
+                
+                # Mark files as used
+                for sample in samples:
+                    used_files.add(sample['file'])
+                
+                # Calculate total duration
+                total_duration = sum(s['duration'] for s in samples)
+                
+                # Create plan
+                plan = SequencePlan(
+                    sequence_id=sequence_id,
+                    signer=signer,
+                    strategy=strategy,
+                    samples=samples,
+                    total_duration=total_duration,
+                    num_glosses=len(samples)
+                )
+                
+                plans.append(plan)
+                signer_plans.append(plan)
+                sequence_id += 1
+                
+                print('█', end='', flush=True)
             
-            if samples is None:
-                print(f"\n[WARN] Could not generate sequence {i+1} for {signer} (not enough unused videos)")
-                continue
-            
-            # Mark files as used
-            for sample in samples:
-                used_files.add(sample['file'])
-            
-            # Calculate total duration
-            total_duration = sum(s['duration'] for s in samples)
-            
-            # Create plan
-            plan = SequencePlan(
-                sequence_id=sequence_id,
-                signer=signer,
-                strategy=strategy,
-                samples=samples,
-                total_duration=total_duration,
-                num_glosses=num_glosses
-            )
-            
-            plans.append(plan)
-            signer_plans.append(plan)
-            sequence_id += 1
-            
-            print('█', end='', flush=True)
+            unused = total_files - len(used_files)
+            if unused > 0:
+                print(f"\n[WARN] {unused} files remain unused for {signer}")
+        else:
+            # Original behavior: fixed number of sequences
+            for i in range(sequences_per_signer):
+                # Random number of glosses
+                num_glosses = random.randint(min_glosses, max_glosses)
+                
+                # Try to plan sequence
+                max_attempts = 100
+                samples = None
+                
+                for attempt in range(max_attempts):
+                    samples = plan_func(signer_df, num_glosses, used_files, allow_fewer=False)
+                    if samples is not None:
+                        break
+                
+                if samples is None:
+                    print(f"\n[WARN] Could not generate sequence {i+1} for {signer} (not enough unused videos)")
+                    continue
+                
+                # Mark files as used
+                for sample in samples:
+                    used_files.add(sample['file'])
+                
+                # Calculate total duration
+                total_duration = sum(s['duration'] for s in samples)
+                
+                # Create plan
+                plan = SequencePlan(
+                    sequence_id=sequence_id,
+                    signer=signer,
+                    strategy=strategy,
+                    samples=samples,
+                    total_duration=total_duration,
+                    num_glosses=num_glosses
+                )
+                
+                plans.append(plan)
+                signer_plans.append(plan)
+                sequence_id += 1
+                
+                print('█', end='', flush=True)
         
-        print(f" {len(signer_plans)}/{sequences_per_signer}")
+        if use_all_files:
+            print(f" {len(signer_plans)} sequences, {len(used_files)}/{total_files} files used")
+        else:
+            print(f" {len(signer_plans)}/{sequences_per_signer}")
     
     print(f"\n✅ Generated {len(plans)} sequence plans\n")
     
@@ -1031,6 +1157,8 @@ Examples:
                        help='Only process this signer (e.g., S1)')
     parser.add_argument('--dry-run', action='store_true',
                        help='Preview what would be generated without creating files')
+    parser.add_argument('--use-all-files', action='store_true',
+                       help='Continue generating sequences until all files are used (exhaustive mode)')
     
     args = parser.parse_args()
     
@@ -1102,7 +1230,8 @@ Examples:
         args.sequences_per_signer,
         args.min_glosses,
         args.max_glosses,
-        args.seed
+        args.seed,
+        use_all_files=getattr(args, 'use_all_files', False)
     )
     
     if not plans:
