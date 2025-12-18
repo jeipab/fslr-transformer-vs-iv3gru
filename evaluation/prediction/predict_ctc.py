@@ -498,7 +498,18 @@ class CTCPredictor:
         self.model, self.input_dim = self._load_model()
         self._load_checkpoint()
         self.gloss_mapping, self.category_mapping = load_label_mappings()
-        self.metrics_config = ContinuousEvaluationConfig()
+        
+        # Use very lenient overlap thresholds for Transformer models
+        if self.model_type == 'transformer_continuous':
+            self.metrics_config = ContinuousEvaluationConfig(
+                iou_threshold=0.25,  # Very lenient (default: 0.5)
+                active_overlap_threshold=0.2,  # Very lenient (default: 0.5)
+                early_start_gt_overlap_threshold=0.4,  # Very lenient (default: 0.75)
+                late_start_gt_overlap_threshold=0.01,  # Very lenient (default: 0.1)
+                fallback_gt_overlap_ratio=0.3,  # Very lenient (default: 0.6)
+            )
+        else:
+            self.metrics_config = ContinuousEvaluationConfig()
     
     def _load_model(self) -> Tuple[torch.nn.Module, int]:
         if self.model_type == 'transformer_continuous':
