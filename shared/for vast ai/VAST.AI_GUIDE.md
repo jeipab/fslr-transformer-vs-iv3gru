@@ -256,6 +256,7 @@ rm -rf data/processed/FSL-105
 
 ```bash
 pip install -r requirements.txt
+pip uninstall mediapipe -y && pip install "mediapipe==0.10.13"
 ```
 
 ---
