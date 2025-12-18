@@ -184,12 +184,15 @@ class CTCEvaluator:
                     meta = metas[j]
                     confidence_scores = confidence_scores_list[j]
                     
-                    # Apply low-confidence filtering for Transformer models only
-                    if self.model_type == 'transformer_continuous' and len(pred_seq) > 0 and len(confidence_scores) == len(pred_seq):
+                    # Apply low-confidence filtering for Transformer and IV3-GRU models
+                    if (self.model_type == 'transformer_continuous' or self.model_type == 'iv3_gru_continuous') and len(pred_seq) > 0 and len(confidence_scores) == len(pred_seq):
                         # Estimate timestamps for filtering
                         actual_length = input_lengths[j].item()
                         predicted_timestamps = estimate_timestamps(pred_seq, actual_length, fps=30)
                         predicted_labels = [f"GLOSS_{g}" for g in pred_seq]
+                        
+                        # Set threshold based on model type
+                        threshold = 0.75 if self.model_type == 'transformer_continuous' else 0.4
                         
                         # Apply filtering
                         filtered_seq, filtered_labels, filtered_timestamps, filtered_confidences, _, _ = \
@@ -198,7 +201,7 @@ class CTCEvaluator:
                                 predicted_labels=predicted_labels,
                                 predicted_timestamps=predicted_timestamps,
                                 confidence_scores=confidence_scores,
-                                confidence_threshold=0.75
+                                confidence_threshold=threshold
                             )
                         pred_seq = filtered_seq
                     

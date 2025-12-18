@@ -959,7 +959,7 @@ class CTCPredictor:
             if i < len(category_confidences):
                 ts['category_confidence'] = float(category_confidences[i])
         
-        # Apply low-confidence filtering for Transformer models only
+        # Apply low-confidence filtering for Transformer and IV3-GRU models
         if self.model_type == 'transformer_continuous':
             predicted_sequence, predicted_labels, predicted_timestamps, confidence_scores, \
             predicted_categories, category_confidences = filter_low_confidence_segments(
@@ -970,6 +970,17 @@ class CTCPredictor:
                 predicted_categories=predicted_categories if predicted_categories else None,
                 category_confidences=category_confidences if category_confidences else None,
                 confidence_threshold=0.75
+            )
+        elif self.model_type == 'iv3_gru_continuous' and len(predicted_sequence) > 0 and len(confidence_scores) == len(predicted_sequence):
+            predicted_sequence, predicted_labels, predicted_timestamps, confidence_scores, \
+            predicted_categories, category_confidences = filter_low_confidence_segments(
+                predicted_sequence=predicted_sequence,
+                predicted_labels=predicted_labels,
+                predicted_timestamps=predicted_timestamps,
+                confidence_scores=confidence_scores,
+                predicted_categories=predicted_categories if predicted_categories else None,
+                category_confidences=category_confidences if category_confidences else None,
+                confidence_threshold=0.4  # 40% threshold for IV3-GRU
             )
         
         result = {
@@ -1240,7 +1251,7 @@ class CTCPredictor:
             if i < len(final_category_confidences):
                 ts['category_confidence'] = float(final_category_confidences[i])
         
-        # Apply low-confidence filtering for Transformer models only
+        # Apply low-confidence filtering for Transformer and IV3-GRU models
         if self.model_type == 'transformer_continuous':
             final_sequence, predicted_labels, predicted_timestamps, final_confidences, \
             final_categories, final_category_confidences = filter_low_confidence_segments(
@@ -1251,6 +1262,17 @@ class CTCPredictor:
                 predicted_categories=final_categories if final_categories else None,
                 category_confidences=final_category_confidences if final_category_confidences else None,
                 confidence_threshold=0.75
+            )
+        elif self.model_type == 'iv3_gru_continuous' and len(final_sequence) > 0 and len(final_confidences) == len(final_sequence):
+            final_sequence, predicted_labels, predicted_timestamps, final_confidences, \
+            final_categories, final_category_confidences = filter_low_confidence_segments(
+                predicted_sequence=final_sequence,
+                predicted_labels=predicted_labels,
+                predicted_timestamps=predicted_timestamps,
+                confidence_scores=final_confidences,
+                predicted_categories=final_categories if final_categories else None,
+                category_confidences=final_category_confidences if final_category_confidences else None,
+                confidence_threshold=0.4  # 40% threshold for IV3-GRU
             )
         
         result = {
