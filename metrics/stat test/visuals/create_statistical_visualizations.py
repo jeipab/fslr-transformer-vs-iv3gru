@@ -37,7 +37,7 @@ import re
 from pathlib import Path
 
 # Add parent directory to path to import shared color palette
-sys.path.insert(0, str(Path(__file__).parent.parent))
+sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 from color_palette import (
     COLOR_TRANSFORMER, COLOR_IV3_GRU,
     COLOR_TRANSFORMER_OCC, COLOR_TRANSFORMER_NON,
@@ -165,8 +165,10 @@ def parse_normality(normality_str):
 
 def load_statistical_results():
     """Load and combine statistical results from both tasks."""
-    classification_file = os.path.join(output_dir, 'classification', 'Classification-StatsResults.csv')
-    recognition_file = os.path.join(output_dir, 'recognition', 'Recognition-StatsResults.csv')
+    # CSV files are in parent directory (stat test), not in visuals subdirectory
+    stat_test_dir = os.path.dirname(output_dir)
+    classification_file = os.path.join(stat_test_dir, 'classification', 'Classification-StatsResults.csv')
+    recognition_file = os.path.join(stat_test_dir, 'recognition', 'Recognition-StatsResults.csv')
     
     dfs = []
     for filepath, task in [(classification_file, 'Classification'), (recognition_file, 'Recognition')]:
@@ -263,7 +265,7 @@ def create_effect_size_plot(df):
     ax.set_yticks(y_pos)
     ax.set_yticklabels(plot_df['label'], fontsize=9)
     ax.set_xlabel('Effect Size', fontweight='bold')
-    ax.set_title('Effect Sizes Across Metrics\n(★ = significant, p < 0.05)', 
+    ax.set_title('Effect Sizes Across Metrics\n(* = significant, p < 0.05)', 
                  fontweight='bold', pad=20)
     ax.axvline(x=0, color='black', linestyle='--', linewidth=1, alpha=0.5)
     ax.grid(True, axis='x', linestyle='--', alpha=0.3, zorder=0)
@@ -340,7 +342,7 @@ def create_results_summary_plot(df):
     for i in range(n_rows):
         for j in range(n_cols):
             text_color = 'white' if p_array[i, j] > 8 else 'black'
-            sig_marker = '★' if sig_array[i, j] else '○'
+            sig_marker = '*' if sig_array[i, j] else 'o'
             ax.text(j, i, f'{sig_marker}\n{p_array[i, j]:.1f}', 
                    ha='center', va='center', color=text_color, fontsize=8, fontweight='bold')
     
@@ -352,7 +354,7 @@ def create_results_summary_plot(df):
     
     ax.set_xlabel('Metrics', fontweight='bold')
     ax.set_ylabel('Task - Occlusion', fontweight='bold')
-    ax.set_title('Statistical Test Results Summary\n(-log₁₀ p-value, ★ = significant, ○ = non-significant)', 
+    ax.set_title('Statistical Test Results Summary\n(-log₁₀ p-value, * = significant, o = non-significant)', 
                  fontweight='bold', pad=20)
     
     # Add colorbar
@@ -368,8 +370,10 @@ def create_results_summary_plot(df):
 
 def load_breakdown_data():
     """Load breakdown CSV files to get raw paired differences."""
-    classification_file = os.path.join(output_dir, 'classification', 'Classification-Breakdown.csv')
-    recognition_file = os.path.join(output_dir, 'recognition', 'Recognition-Breakdown.csv')
+    # Breakdown files are in parent directory (stat test), not in visuals subdirectory
+    stat_test_dir = os.path.dirname(output_dir)
+    classification_file = os.path.join(stat_test_dir, 'classification', 'Classification-Breakdown.csv')
+    recognition_file = os.path.join(stat_test_dir, 'recognition', 'Recognition-Breakdown.csv')
     
     data = {}
     
