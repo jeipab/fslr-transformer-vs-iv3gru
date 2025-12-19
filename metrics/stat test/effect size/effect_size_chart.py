@@ -7,9 +7,9 @@ Requirements:
     - pandas
     - numpy
 
-Input Files (expected in subdirectories):
-    - recognition/Recognition-StatsResults.csv
-    - classification/Classification-StatsResults.csv
+Input Files:
+    - metrics/stat test/Recognition-StatsResults.csv
+    - metrics/stat test/Classification-StatsResults.csv
 
 Output:
     Generates two PNG charts in the effect size subdirectory:
@@ -291,8 +291,8 @@ def main():
         # Load data
         # CSV files are in parent directory (stat test), not in effect size subdirectory
         stat_test_dir = os.path.dirname(output_dir)
-        recognition_file = os.path.join(stat_test_dir, 'recognition', 'Recognition-StatsResults.csv')
-        classification_file = os.path.join(stat_test_dir, 'classification', 'Classification-StatsResults.csv')
+        recognition_file = os.path.join(stat_test_dir, 'Recognition-StatsResults.csv')
+        classification_file = os.path.join(stat_test_dir, 'Classification-StatsResults.csv')
         
         if not os.path.exists(recognition_file):
             raise FileNotFoundError(f"Recognition file not found: {recognition_file}")

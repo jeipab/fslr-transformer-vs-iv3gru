@@ -1,0 +1,7 @@
+metric,n,transformer_mean,gru_mean,difference,normality,test_used,test_statistic,p_value,p_value_adjusted,effect_size,direction,decision
+Occluded Precision,10,0.755995,0.541169,0.214827,Normal (Shapiro–Wilk p = .4729),Paired Samples t-Test (two-tailed),t(df = 9) = 5.90,p = .0002,p = .0005,d = 1.87 (large),Transformer > IV3-GRU,Reject Null Hypothesis 2
+Occluded Recall,10,0.895197,0.424452,0.470746,Normal (Shapiro–Wilk p = .2042),Paired Samples t-Test (two-tailed),t(df = 9) = 10.74,p = 1.96×10⁻6,p = 7.85×10⁻6,d = 3.40 (large),Transformer > IV3-GRU,Reject Null Hypothesis 2
+Occluded F1-score,10,0.817282,0.461986,0.355296,Normal (Shapiro–Wilk p = .3770),Paired Samples t-Test (two-tailed),t(df = 9) = 18.08,p = 2.21×10⁻8,p = 1.32×10⁻7,d = 5.72 (large),Transformer > IV3-GRU,Reject Null Hypothesis 2
+Nonoccluded Precision,10,0.739,0.508775,0.230226,Normal (Shapiro–Wilk p = .3250),Paired Samples t-Test (two-tailed),t(df = 9) = 5.48,p = .0004,p = .0005,d = 1.73 (large),Transformer > IV3-GRU,Reject Null Hypothesis 2
+Nonoccluded Recall,10,0.891567,0.372434,0.519133,Normal (Shapiro–Wilk p = .4623),Paired Samples t-Test (two-tailed),t(df = 9) = 8.94,p = 9.04×10⁻6,p = 2.71×10⁻5,d = 2.83 (large),Transformer > IV3-GRU,Reject Null Hypothesis 2
+Nonoccluded F1-score,10,0.791543,0.401402,0.390141,Normal (Shapiro–Wilk p = .6767),Paired Samples t-Test (two-tailed),t(df = 9) = 11.99,p = 7.75×10⁻7,p = 3.88×10⁻6,d = 3.79 (large),Transformer > IV3-GRU,Reject Null Hypothesis 2

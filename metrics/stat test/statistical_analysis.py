@@ -13,13 +13,15 @@ REQUIREMENTS:
     - numpy
     - scipy
 
-INPUT FILES (expected in subdirectories):
-    - classification/Classification-Breakdown.csv
-    - recognition/Recognition-Breakdown.csv
+INPUT FILES:
+    - metrics/extract/recognition/recognition_metrics_transformer.csv
+    - metrics/extract/recognition/recognition_metrics_iv3gru.csv
+    - metrics/extract/classification/classification_metrics_transformer.csv
+    - metrics/extract/classification/classification_metrics_iv3gru.csv
 
-OUTPUT FILES (generated in subdirectories):
-    - classification/Classification-StatsResults.csv
-    - recognition/Recognition-StatsResults.csv
+OUTPUT FILES (generated in metrics/stat test):
+    - Classification-StatsResults.csv
+    - Recognition-StatsResults.csv
 
 STATISTICAL TESTS PERFORMED:
     1. Shapiro-Wilk normality test on paired differences
@@ -817,40 +819,52 @@ def analyze_metric(transformer, gru, metric_name, verbose=True):
     }
 
 
-def load_breakdown_csv(csv_path):
+def load_metrics_csvs(transformer_path, iv3gru_path):
     """
-    Load breakdown CSV file and handle multi-line headers.
+    Load transformer and IV3-GRU metrics CSV files and merge them.
     
     Parameters:
     -----------
-    csv_path : str or Path
-        Path to the breakdown CSV file
+    transformer_path : str or Path
+        Path to the transformer metrics CSV file
+    iv3gru_path : str or Path
+        Path to the IV3-GRU metrics CSV file
         
     Returns:
     --------
-    pd.DataFrame : Cleaned dataframe with proper column names
+    pd.DataFrame : Merged dataframe with proper column names
     """
-    # Read the CSV, handling potential multi-line headers
-    df = pd.read_csv(csv_path)
+    # Load both CSV files
+    df_transformer = pd.read_csv(transformer_path)
+    df_iv3gru = pd.read_csv(iv3gru_path)
     
-    # Clean column names (remove newlines and extra spaces)
-    df.columns = [col.replace('\n', ' ').strip() for col in df.columns]
+    # Determine ID and Label column names based on task type
+    if 'Gloss ID' in df_transformer.columns:
+        id_col = 'Gloss ID'
+        label_col = 'Gloss Label'
+    else:
+        id_col = 'Category ID'
+        label_col = 'Category Label'
     
-    # Standardize column names
-    column_mapping = {
-        'Category ID': 'ID',
-        'Gloss ID': 'ID',
-        'Category Label': 'Label',
-        'Gloss Label': 'Label',
-        'Transformer\nPrecision': 'Transformer Precision',
-        'Transformer\nRecall': 'Transformer Recall',
-        'Transformer\nF1-score': 'Transformer F1-score',
-        'IV3-GRU\nPrecision': 'IV3-GRU Precision',
-        'IV3-GRU\nRecall': 'IV3-GRU Recall',
-        'IV3-GRU\nF1-score': 'IV3-GRU F1-score',
-    }
+    # Rename metric columns with model prefixes
+    metric_cols = ['Precision', 'Recall', 'F1-score']
+    rename_transformer = {col: f'Transformer {col}' for col in metric_cols}
+    rename_iv3gru = {col: f'IV3-GRU {col}' for col in metric_cols}
     
-    df = df.rename(columns=column_mapping)
+    df_transformer = df_transformer.rename(columns=rename_transformer)
+    df_iv3gru = df_iv3gru.rename(columns=rename_iv3gru)
+    
+    # Merge on ID, Label, and Occlusion
+    merge_cols = [id_col, label_col, 'Occlusion']
+    df = pd.merge(
+        df_transformer[merge_cols + [f'Transformer {col}' for col in metric_cols]],
+        df_iv3gru[merge_cols + [f'IV3-GRU {col}' for col in metric_cols]],
+        on=merge_cols,
+        how='outer'
+    )
+    
+    # Standardize column names for compatibility with existing code
+    df = df.rename(columns={id_col: 'ID', label_col: 'Label'})
     
     return df
 
@@ -889,7 +903,7 @@ def process_breakdown_data(df, occlusion_type, metric):
     return transformer_scores, gru_scores
 
 
-def process_task(task_name, breakdown_path, verbose=True):
+def process_task(task_name, transformer_path, iv3gru_path, verbose=True):
     """
     Process all metrics for a given task (classification or recognition).
     
@@ -897,8 +911,10 @@ def process_task(task_name, breakdown_path, verbose=True):
     -----------
     task_name : str
         'classification' or 'recognition'
-    breakdown_path : str or Path
-        Path to the breakdown CSV file
+    transformer_path : str or Path
+        Path to the transformer metrics CSV file
+    iv3gru_path : str or Path
+        Path to the IV3-GRU metrics CSV file
     verbose : bool
         Whether to print detailed output
         
@@ -911,8 +927,8 @@ def process_task(task_name, breakdown_path, verbose=True):
         print(f"PROCESSING: {task_name.upper()}")
         print("=" * 80)
     
-    # Load breakdown data
-    df = load_breakdown_csv(breakdown_path)
+    # Load and merge metrics data
+    df = load_metrics_csvs(transformer_path, iv3gru_path)
     
     # Determine hypothesis number based on task
     hypothesis_num = 2 if task_name.lower() == 'classification' else 1
@@ -1011,18 +1027,25 @@ def main():
     print("=" * 80)
     
     # Define paths
-    base_path = Path(__file__).parent
-    classification_breakdown = base_path / 'classification' / 'Classification-Breakdown.csv'
-    recognition_breakdown = base_path / 'recognition' / 'Recognition-Breakdown.csv'
+    base_path = Path(__file__).parent  # metrics/stat test
+    metrics_path = base_path.parent  # metrics
     
-    classification_output = base_path / 'classification' / 'Classification-StatsResults.csv'
-    recognition_output = base_path / 'recognition' / 'Recognition-StatsResults.csv'
+    # Input paths
+    classification_transformer = metrics_path / 'extract' / 'classification' / 'classification_metrics_transformer.csv'
+    classification_iv3gru = metrics_path / 'extract' / 'classification' / 'classification_metrics_iv3gru.csv'
+    recognition_transformer = metrics_path / 'extract' / 'recognition' / 'recognition_metrics_transformer.csv'
+    recognition_iv3gru = metrics_path / 'extract' / 'recognition' / 'recognition_metrics_iv3gru.csv'
+    
+    # Output paths (in metrics/stat test)
+    classification_output = base_path / 'Classification-StatsResults.csv'
+    recognition_output = base_path / 'Recognition-StatsResults.csv'
     
     # Process classification
-    if classification_breakdown.exists():
+    if classification_transformer.exists() and classification_iv3gru.exists():
         classification_results = process_task(
             'classification',
-            classification_breakdown,
+            classification_transformer,
+            classification_iv3gru,
             verbose=True
         )
         
@@ -1030,13 +1053,19 @@ def main():
         classification_results.to_csv(classification_output, index=False)
         print(f"\n[OK] Classification results saved to: {classification_output}")
     else:
-        print(f"\n[ERROR] Classification breakdown file not found: {classification_breakdown}")
+        missing = []
+        if not classification_transformer.exists():
+            missing.append(str(classification_transformer))
+        if not classification_iv3gru.exists():
+            missing.append(str(classification_iv3gru))
+        print(f"\n[ERROR] Classification input file(s) not found: {', '.join(missing)}")
     
     # Process recognition
-    if recognition_breakdown.exists():
+    if recognition_transformer.exists() and recognition_iv3gru.exists():
         recognition_results = process_task(
             'recognition',
-            recognition_breakdown,
+            recognition_transformer,
+            recognition_iv3gru,
             verbose=True
         )
         
@@ -1044,7 +1073,12 @@ def main():
         recognition_results.to_csv(recognition_output, index=False)
         print(f"\n[OK] Recognition results saved to: {recognition_output}")
     else:
-        print(f"\n[ERROR] Recognition breakdown file not found: {recognition_breakdown}")
+        missing = []
+        if not recognition_transformer.exists():
+            missing.append(str(recognition_transformer))
+        if not recognition_iv3gru.exists():
+            missing.append(str(recognition_iv3gru))
+        print(f"\n[ERROR] Recognition input file(s) not found: {', '.join(missing)}")
     
     print("\n" + "=" * 80)
     print("STATISTICAL ANALYSIS COMPLETE")

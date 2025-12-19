@@ -10,11 +10,13 @@ Requirements:
     - numpy
     - scipy
 
-Input Files (expected in subdirectories):
-    - classification/Classification-StatsResults.csv
-    - recognition/Recognition-StatsResults.csv
-    - classification/Classification-Breakdown.csv
-    - recognition/Recognition-Breakdown.csv
+Input Files:
+    - metrics/stat test/Classification-StatsResults.csv
+    - metrics/stat test/Recognition-StatsResults.csv
+    - metrics/extract/classification/classification_metrics_transformer.csv
+    - metrics/extract/classification/classification_metrics_iv3gru.csv
+    - metrics/extract/recognition/recognition_metrics_transformer.csv
+    - metrics/extract/recognition/recognition_metrics_iv3gru.csv
 
 Output:
     Generates four PNG visualizations in the same directory:
@@ -167,8 +169,8 @@ def load_statistical_results():
     """Load and combine statistical results from both tasks."""
     # CSV files are in parent directory (stat test), not in visuals subdirectory
     stat_test_dir = os.path.dirname(output_dir)
-    classification_file = os.path.join(stat_test_dir, 'classification', 'Classification-StatsResults.csv')
-    recognition_file = os.path.join(stat_test_dir, 'recognition', 'Recognition-StatsResults.csv')
+    classification_file = os.path.join(stat_test_dir, 'Classification-StatsResults.csv')
+    recognition_file = os.path.join(stat_test_dir, 'Recognition-StatsResults.csv')
     
     dfs = []
     for filepath, task in [(classification_file, 'Classification'), (recognition_file, 'Recognition')]:
@@ -369,45 +371,62 @@ def create_results_summary_plot(df):
 
 
 def load_breakdown_data():
-    """Load breakdown CSV files to get raw paired differences."""
-    # Breakdown files are in parent directory (stat test), not in visuals subdirectory
+    """Load metrics CSV files to get raw paired differences."""
+    # Get paths to extract directory
     stat_test_dir = os.path.dirname(output_dir)
-    classification_file = os.path.join(stat_test_dir, 'classification', 'Classification-Breakdown.csv')
-    recognition_file = os.path.join(stat_test_dir, 'recognition', 'Recognition-Breakdown.csv')
+    metrics_dir = os.path.dirname(stat_test_dir)
+    extract_dir = os.path.join(metrics_dir, 'extract')
     
     data = {}
     
-    for filepath, task in [(classification_file, 'Classification'), (recognition_file, 'Recognition')]:
-        if not os.path.exists(filepath):
+    # Define file pairs for each task
+    file_pairs = [
+        (os.path.join(extract_dir, 'classification', 'classification_metrics_transformer.csv'),
+         os.path.join(extract_dir, 'classification', 'classification_metrics_iv3gru.csv'),
+         'Classification'),
+        (os.path.join(extract_dir, 'recognition', 'recognition_metrics_transformer.csv'),
+         os.path.join(extract_dir, 'recognition', 'recognition_metrics_iv3gru.csv'),
+         'Recognition')
+    ]
+    
+    for transformer_file, iv3gru_file, task in file_pairs:
+        if not os.path.exists(transformer_file) or not os.path.exists(iv3gru_file):
             continue
         
-        # Load CSV
-        df = pd.read_csv(filepath)
+        # Load both CSV files
+        df_transformer = pd.read_csv(transformer_file)
+        df_iv3gru = pd.read_csv(iv3gru_file)
         
-        # Clean column names
-        df.columns = [col.replace('\n', ' ').strip() for col in df.columns]
+        # Determine ID and Label column names
+        if 'Gloss ID' in df_transformer.columns:
+            id_col = 'Gloss ID'
+            label_col = 'Gloss Label'
+        else:
+            id_col = 'Category ID'
+            label_col = 'Category Label'
         
-        # Standardize column names
-        column_mapping = {
-            'Category ID': 'ID',
-            'Gloss ID': 'ID',
-            'Category Label': 'Label',
-            'Gloss Label': 'Label',
-            'Transformer\nPrecision': 'Transformer Precision',
-            'Transformer\nRecall': 'Transformer Recall',
-            'Transformer\nF1-score': 'Transformer F1-score',
-            'IV3-GRU\nPrecision': 'IV3-GRU Precision',
-            'IV3-GRU\nRecall': 'IV3-GRU Recall',
-            'IV3-GRU\nF1-score': 'IV3-GRU F1-score',
-        }
-        df = df.rename(columns=column_mapping)
+        # Rename metric columns with model prefixes
+        metric_cols = ['Precision', 'Recall', 'F1-score']
+        rename_transformer = {col: f'Transformer {col}' for col in metric_cols}
+        rename_iv3gru = {col: f'IV3-GRU {col}' for col in metric_cols}
+        
+        df_transformer = df_transformer.rename(columns=rename_transformer)
+        df_iv3gru = df_iv3gru.rename(columns=rename_iv3gru)
+        
+        # Merge on ID, Label, and Occlusion
+        merge_cols = [id_col, label_col, 'Occlusion']
+        df = pd.merge(
+            df_transformer[merge_cols + [f'Transformer {col}' for col in metric_cols]],
+            df_iv3gru[merge_cols + [f'IV3-GRU {col}' for col in metric_cols]],
+            on=merge_cols,
+            how='outer'
+        )
         
         # Extract paired differences for each metric and occlusion
-        metrics = ['Precision', 'Recall', 'F1-score']
         occlusion_types = ['occluded', 'nonoccluded']
         
         for occ in occlusion_types:
-            for metric in metrics:
+            for metric in metric_cols:
                 mask = df['Occlusion'].str.lower() == occ.lower()
                 filtered_df = df[mask].copy()
                 
