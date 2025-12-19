@@ -980,7 +980,7 @@ class CTCPredictor:
                 confidence_scores=confidence_scores,
                 predicted_categories=predicted_categories if predicted_categories else None,
                 category_confidences=category_confidences if category_confidences else None,
-                confidence_threshold=0.4  # 40% threshold for IV3-GRU
+                confidence_threshold=0.45  # 45% threshold for IV3-GRU
             )
         
         result = {
@@ -1272,7 +1272,7 @@ class CTCPredictor:
                 confidence_scores=final_confidences,
                 predicted_categories=final_categories if final_categories else None,
                 category_confidences=final_category_confidences if final_category_confidences else None,
-                confidence_threshold=0.4  # 40% threshold for IV3-GRU
+                confidence_threshold=0.45  # 45% threshold for IV3-GRU
             )
         
         result = {

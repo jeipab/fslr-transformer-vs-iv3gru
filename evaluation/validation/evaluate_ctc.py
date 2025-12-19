@@ -192,7 +192,7 @@ class CTCEvaluator:
                         predicted_labels = [f"GLOSS_{g}" for g in pred_seq]
                         
                         # Set threshold based on model type
-                        threshold = 0.75 if self.model_type == 'transformer_continuous' else 0.4
+                        threshold = 0.75 if self.model_type == 'transformer_continuous' else 0.45
                         
                         # Apply filtering
                         filtered_seq, filtered_labels, filtered_timestamps, filtered_confidences, _, _ = \

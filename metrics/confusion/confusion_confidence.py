@@ -225,6 +225,42 @@ def plot_fn_statistics(transformer_data, iv3gru_data):
     print(f"Saved: {output_path}")
 
 
+def analyze_threshold_overlap(data, model_name):
+    """
+    Analyze the overlap between TP and FP confidence scores.
+    Finds the lowest TP confidence and counts how many FPs are below that threshold.
+    
+    Args:
+        data: Dictionary with 'tp_confidences' and 'fp_confidences'
+        model_name: Name of the model (for labeling)
+        
+    Returns:
+        Dictionary with threshold analysis results
+    """
+    tp_confidences = data['tp_confidences']
+    fp_confidences = data['fp_confidences']
+    
+    if not tp_confidences:
+        return {
+            'min_tp_confidence': None,
+            'fp_below_threshold': 0,
+            'total_fp': len(fp_confidences),
+            'fp_below_percentage': 0.0
+        }
+    
+    min_tp_confidence = min(tp_confidences)
+    fp_below_threshold = sum(1 for fp_conf in fp_confidences if fp_conf < min_tp_confidence)
+    total_fp = len(fp_confidences)
+    fp_below_percentage = (fp_below_threshold / total_fp * 100) if total_fp > 0 else 0.0
+    
+    return {
+        'min_tp_confidence': min_tp_confidence,
+        'fp_below_threshold': fp_below_threshold,
+        'total_fp': total_fp,
+        'fp_below_percentage': fp_below_percentage
+    }
+
+
 def main():
     """Main function to extract and visualize confidence distributions."""
     try:
@@ -256,6 +292,27 @@ def main():
         print(f"  TP mean confidence: {np.mean(iv3gru_data['tp_confidences']):.4f}")
     if iv3gru_data['fp_confidences']:
         print(f"  FP mean confidence: {np.mean(iv3gru_data['fp_confidences']):.4f}")
+    
+    print("\n" + "="*60)
+    print("Threshold Analysis (TP vs FP overlap):")
+    print("="*60)
+    
+    transformer_threshold = analyze_threshold_overlap(transformer_data, 'Transformer')
+    iv3gru_threshold = analyze_threshold_overlap(iv3gru_data, 'IV3GRU')
+    
+    print(f"\nTransformer:")
+    if transformer_threshold['min_tp_confidence'] is not None:
+        print(f"  Lowest TP confidence: {transformer_threshold['min_tp_confidence']:.4f}")
+        print(f"  FP below this threshold: {transformer_threshold['fp_below_threshold']}/{transformer_threshold['total_fp']} ({transformer_threshold['fp_below_percentage']:.2f}%)")
+    else:
+        print(f"  No TP predictions found")
+    
+    print(f"\nIV3GRU:")
+    if iv3gru_threshold['min_tp_confidence'] is not None:
+        print(f"  Lowest TP confidence: {iv3gru_threshold['min_tp_confidence']:.4f}")
+        print(f"  FP below this threshold: {iv3gru_threshold['fp_below_threshold']}/{iv3gru_threshold['total_fp']} ({iv3gru_threshold['fp_below_percentage']:.2f}%)")
+    else:
+        print(f"  No TP predictions found")
     
     print("\nGenerating visualizations...")
     plot_tp_confidence_distribution(transformer_data, iv3gru_data)
