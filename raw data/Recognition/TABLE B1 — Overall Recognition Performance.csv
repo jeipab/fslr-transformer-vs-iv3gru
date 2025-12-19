@@ -1,3 +1,0 @@
-Model,Total Ground Truth,Total TP,Total FP,Total FN,Precision,Recall,F1-score
-Transformer,9622,8477,3645,1145,0.71681,0.880953,0.785994
-IV3-GRU,9622,5574,3381,4048,0.612004,0.57876,0.585421
