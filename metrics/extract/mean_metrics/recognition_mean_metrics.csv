@@ -1,13 +1,13 @@
 Metric,Occlusion,Transformer,IV3-GRU
-Precision,nonoccluded,0.682768,0.573675
-Precision,occluded,0.722643,0.565579
-Recall,nonoccluded,0.821976,0.516964
-Recall,occluded,0.876558,0.514374
-F1-score,nonoccluded,0.728788,0.509976
-F1-score,occluded,0.775462,0.517409
-Total TP,nonoccluded,1819,1098
-Total TP,occluded,1690,1067
-Total FP,nonoccluded,420,485
-Total FP,occluded,438,433
-Total FN,nonoccluded,164,885
-Total FN,occluded,146,769
+Precision,nonoccluded,0.682768,0.619576
+Precision,occluded,0.722643,0.598937
+Recall,nonoccluded,0.821976,0.525954
+Recall,occluded,0.876558,0.516278
+F1-score,nonoccluded,0.728788,0.530196
+F1-score,occluded,0.775462,0.531402
+Total TP,nonoccluded,1819,1108
+Total TP,occluded,1690,1073
+Total FP,nonoccluded,420,384
+Total FP,occluded,438,349
+Total FN,nonoccluded,164,875
+Total FN,occluded,146,763
