@@ -46,10 +46,16 @@ def load_label_mappings():
 
 
 def extract_sequences(json_data):
-    """Extract ground truth and predicted sequences from JSON data."""
+    """
+    Extract ground truth and predicted sequences from JSON data.
+    
+    This matches the logic used in Streamlit validation_components.py render_ctc_validation_results.
+    Elements are paired element-wise within each sequence using zip() to ensure proper alignment.
+    """
     predictions = json_data.get('predictions', [])
     
     # Collect all gloss sequences (for recognition)
+    # Pair elements at the same position within each sequence
     gloss_gt_all = []
     gloss_pred_all = []
     
@@ -58,24 +64,35 @@ def extract_sequences(json_data):
     cat_pred_all = []
     
     for pred in predictions:
-        gt_gloss = pred.get('ground_truth_sequence', [])
-        pred_gloss = pred.get('predicted_sequence', [])
+        # For recognition: pair gloss sequences element-wise within each prediction
+        if 'ground_truth_sequence' in pred and 'predicted_sequence' in pred:
+            gt_seq = pred.get('ground_truth_sequence', [])
+            pr_seq = pred.get('predicted_sequence', [])
+            # Use zip to pair elements at the same index position
+            for gt_id, pr_id in zip(gt_seq, pr_seq):
+                gloss_gt_all.append(int(gt_id))
+                gloss_pred_all.append(int(pr_id))
         
-        # For recognition: use gloss sequences directly
-        gloss_gt_all.extend(gt_gloss)
-        gloss_pred_all.extend(pred_gloss)
+        # For classification: pair category sequences element-wise within each prediction
+        gt_cats = pred.get('ground_truth_categories', [])
+        pr_cats = pred.get('predicted_categories', [])
         
-        # For classification: convert gloss IDs to category IDs
-        # Ground truth categories: map from gloss IDs
-        gt_categories = [gloss_to_cat.get(gid, -1) for gid in gt_gloss]
-        cat_gt_all.extend(gt_categories)
-        
-        # Predicted categories: use predicted_categories if available, otherwise map from predicted_sequence
-        if 'predicted_categories' in pred and pred['predicted_categories']:
-            pred_categories = pred['predicted_categories']
+        if gt_cats and pr_cats:
+            # Use zip to pair elements at the same index position
+            for gc, pc in zip(gt_cats, pr_cats):
+                cat_gt_all.append(int(gc))
+                cat_pred_all.append(int(pc))
         else:
-            pred_categories = [gloss_to_cat.get(gid, -1) for gid in pred_gloss]
-        cat_pred_all.extend(pred_categories)
+            # Fallback: derive categories from gloss sequences if not available
+            if 'ground_truth_sequence' in pred and 'predicted_sequence' in pred:
+                gt_seq = pred.get('ground_truth_sequence', [])
+                pr_seq = pred.get('predicted_sequence', [])
+                for gt_gid, pr_gid in zip(gt_seq, pr_seq):
+                    gt_cat = gloss_to_cat.get(int(gt_gid), -1)
+                    pr_cat = gloss_to_cat.get(int(pr_gid), -1)
+                    if gt_cat >= 0 and pr_cat >= 0:
+                        cat_gt_all.append(gt_cat)
+                        cat_pred_all.append(pr_cat)
     
     return (gloss_gt_all, gloss_pred_all), (cat_gt_all, cat_pred_all)
 
@@ -155,19 +172,33 @@ def main():
         # Extract sequences
         try:
             (gloss_gt, gloss_pred), (cat_gt, cat_pred) = extract_sequences(json_data)
-            print(f"  Extracted {len(gloss_gt)} gloss pairs and {len(cat_gt)} category pairs")
+            print(f"  Extracted {len(gloss_gt)} gloss pairs (GT: {len(gloss_gt)}, Pred: {len(gloss_pred)})")
+            print(f"  Extracted {len(cat_gt)} category pairs (GT: {len(cat_gt)}, Pred: {len(cat_pred)})")
+            
+            # Validate sequence lengths match
+            if len(gloss_gt) != len(gloss_pred):
+                print(f"  Warning: Gloss sequence length mismatch (GT: {len(gloss_gt)}, Pred: {len(gloss_pred)})")
+            if len(cat_gt) != len(cat_pred):
+                print(f"  Warning: Category sequence length mismatch (GT: {len(cat_gt)}, Pred: {len(cat_pred)})")
         except Exception as e:
             print(f"Error extracting sequences: {e}")
+            import traceback
+            traceback.print_exc()
             continue
         
-        # Filter out invalid labels (-1)
-        gloss_gt_clean = [(gt, pred) for gt, pred in zip(gloss_gt, gloss_pred) 
-                         if gt >= 0 and pred >= 0 and gt in gloss_mapping and pred in gloss_mapping]
-        gloss_gt_filtered, gloss_pred_filtered = zip(*gloss_gt_clean) if gloss_gt_clean else ([], [])
+        # Filter out invalid labels (-1) and ensure labels are in mapping
+        # Note: sequences are already aligned element-wise from extract_sequences (paired via zip)
+        # Filter pairs together to maintain alignment
+        gloss_pairs = [(gt, pred) for gt, pred in zip(gloss_gt, gloss_pred)
+                      if gt >= 0 and pred >= 0 and gt in gloss_mapping and pred in gloss_mapping]
+        gloss_gt_filtered, gloss_pred_filtered = zip(*gloss_pairs) if gloss_pairs else ([], [])
         
-        cat_gt_clean = [(gt, pred) for gt, pred in zip(cat_gt, cat_pred) 
-                       if gt >= 0 and pred >= 0 and gt in category_mapping and pred in category_mapping]
-        cat_gt_filtered, cat_pred_filtered = zip(*cat_gt_clean) if cat_gt_clean else ([], [])
+        cat_pairs = [(gt, pred) for gt, pred in zip(cat_gt, cat_pred)
+                    if gt >= 0 and pred >= 0 and gt in category_mapping and pred in category_mapping]
+        cat_gt_filtered, cat_pred_filtered = zip(*cat_pairs) if cat_pairs else ([], [])
+        
+        print(f"  Valid gloss pairs: {len(gloss_pairs)}")
+        print(f"  Valid category pairs: {len(cat_pairs)}")
         
         # Create Recognition confusion matrix (gloss-level)
         recognition_output = output_dir / f"Recognition_{model_name} - Confusion Matrix.csv"
