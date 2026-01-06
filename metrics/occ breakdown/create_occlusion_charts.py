@@ -11,8 +11,8 @@ Requirements:
     - numpy
     
 Input:
-    - metrics\stat test\recognition\Recognition-Mean.csv
-    - metrics\stat test\classification\Classification-Mean.csv
+    - metrics\extract\mean_metrics\recognition_mean_metrics.csv
+    - metrics\extract\mean_metrics\classification_mean_metrics.csv
     
 Output:
     Generates two PNG charts in the same directory:
@@ -207,8 +207,8 @@ def main():
         project_root = Path(__file__).parent.parent.parent
         
         # Read CSV files from new location
-        recognition_file = project_root / 'metrics' / 'stat test' / 'recognition' / 'Recognition-Mean.csv'
-        classification_file = project_root / 'metrics' / 'stat test' / 'classification' / 'Classification-Mean.csv'
+        recognition_file = project_root / 'metrics' / 'extract' / 'mean_metrics' / 'recognition_mean_metrics.csv'
+        classification_file = project_root / 'metrics' / 'extract' / 'mean_metrics' / 'classification_mean_metrics.csv'
         
         print(f"Reading recognition file: {recognition_file}")
         sys.stdout.flush()
