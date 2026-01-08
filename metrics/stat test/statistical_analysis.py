@@ -846,10 +846,11 @@ def load_metrics_csvs(transformer_path, iv3gru_path):
         id_col = 'Category ID'
         label_col = 'Category Label'
     
-    # Rename metric columns with model prefixes
+    # Rename metric and count columns with model prefixes
     metric_cols = ['Precision', 'Recall', 'F1-score']
-    rename_transformer = {col: f'Transformer {col}' for col in metric_cols}
-    rename_iv3gru = {col: f'IV3-GRU {col}' for col in metric_cols}
+    count_cols = ['Total TP', 'Total FP', 'Total FN']
+    rename_transformer = {col: f'Transformer {col}' for col in metric_cols + count_cols}
+    rename_iv3gru = {col: f'IV3-GRU {col}' for col in metric_cols + count_cols}
     
     df_transformer = df_transformer.rename(columns=rename_transformer)
     df_iv3gru = df_iv3gru.rename(columns=rename_iv3gru)
@@ -857,8 +858,8 @@ def load_metrics_csvs(transformer_path, iv3gru_path):
     # Merge on ID, Label, and Occlusion
     merge_cols = [id_col, label_col, 'Occlusion']
     df = pd.merge(
-        df_transformer[merge_cols + [f'Transformer {col}' for col in metric_cols]],
-        df_iv3gru[merge_cols + [f'IV3-GRU {col}' for col in metric_cols]],
+        df_transformer[merge_cols + [f'Transformer {col}' for col in metric_cols + count_cols]],
+        df_iv3gru[merge_cols + [f'IV3-GRU {col}' for col in metric_cols + count_cols]],
         on=merge_cols,
         how='outer'
     )
@@ -872,6 +873,7 @@ def load_metrics_csvs(transformer_path, iv3gru_path):
 def process_breakdown_data(df, occlusion_type, metric):
     """
     Extract data for a specific occlusion type and metric from breakdown dataframe.
+    Filters out classes with no data (TP + FP + FN = 0) to match extract_mean_metrics.py behavior.
     
     Parameters:
     -----------
@@ -889,6 +891,24 @@ def process_breakdown_data(df, occlusion_type, metric):
     # Filter by occlusion type
     mask = df['Occlusion'].str.lower() == occlusion_type.lower()
     filtered_df = df[mask].copy()
+    
+    if len(filtered_df) == 0:
+        return np.array([]), np.array([])
+    
+    # Filter out classes with no data (TP + FP + FN = 0) for Transformer
+    # This matches the behavior in extract_mean_metrics.py which only includes
+    # classes with actual data (tp + fp + fn > 0)
+    tp_col = 'Transformer Total TP'
+    fp_col = 'Transformer Total FP'
+    fn_col = 'Transformer Total FN'
+    
+    if tp_col in filtered_df.columns and fp_col in filtered_df.columns and fn_col in filtered_df.columns:
+        # Fill NaN values with 0 for calculation
+        tp = filtered_df[tp_col].fillna(0)
+        fp = filtered_df[fp_col].fillna(0)
+        fn = filtered_df[fn_col].fillna(0)
+        has_data = (tp + fp + fn) > 0
+        filtered_df = filtered_df[has_data].copy()
     
     if len(filtered_df) == 0:
         return np.array([]), np.array([])
