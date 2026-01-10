@@ -13,20 +13,22 @@ Output:
 
 import json
 import csv
+import sys
 from pathlib import Path
 from collections import defaultdict
 
 # Import extraction functions from existing scripts
-import sys
-EXTRACT_DIR = Path(__file__).parent.parent
-sys.path.insert(0, str(EXTRACT_DIR / "recognition"))
-sys.path.insert(0, str(EXTRACT_DIR / "classification"))
+SCRIPT_DIR = Path(__file__).parent
+EXTRACT_DIR = SCRIPT_DIR.parent
 
-from extract_recognition import extract_gloss_metrics
-from extract_classification import extract_category_metrics
+# Add parent directories to path for imports
+if str(EXTRACT_DIR) not in sys.path:
+    sys.path.insert(0, str(EXTRACT_DIR))
+
+from recognition.extract_recognition import extract_gloss_metrics
+from classification.extract_classification import extract_category_metrics
 
 # Paths
-SCRIPT_DIR = Path(__file__).parent
 SHARED_INPUTS_DIR = EXTRACT_DIR / "shared_inputs"
 IV3GRU_JSON = SHARED_INPUTS_DIR / "ctc_validation_results_iv3gru.json"
 TRANSFORMER_JSON = SHARED_INPUTS_DIR / "ctc_validation_results_transformer.json"
@@ -35,7 +37,9 @@ TRANSFORMER_JSON = SHARED_INPUTS_DIR / "ctc_validation_results_transformer.json"
 def compute_mean_metrics(metrics_dict, num_classes):
     """
     Compute mean precision, recall, and f1-score from per-class metrics (macro-averaging).
-    Only includes classes with actual data (TP + FP + FN > 0).
+    Only includes classes with actual data (TP + FP + FN > 0), which excludes classes
+    with no predictions or ground truth instances.
+    Divides by the count of classes with data, not the total number of classes.
     
     Args:
         metrics_dict: Dictionary with 'precision', 'recall', 'f1', 'tp', 'fp', 'fn' keys
@@ -53,7 +57,8 @@ def compute_mean_metrics(metrics_dict, num_classes):
         fp = metrics_dict.get('fp', {}).get(i, 0)
         fn = metrics_dict.get('fn', {}).get(i, 0)
         
-        # Only include classes with actual data
+        # Only include classes with actual data (tp + fp + fn > 0)
+        # This includes classes with TP=0 but FP>0 or FN>0, representing model errors
         if tp + fp + fn > 0:
             precision = metrics_dict['precision'].get(i, 0.0)
             recall = metrics_dict['recall'].get(i, 0.0)
@@ -63,6 +68,7 @@ def compute_mean_metrics(metrics_dict, num_classes):
             recall_values.append(recall)
             f1_values.append(f1)
     
+    # Divide by count of classes with data (len of values list), not total num_classes
     mean_precision = sum(precision_values) / len(precision_values) if precision_values else 0.0
     mean_recall = sum(recall_values) / len(recall_values) if recall_values else 0.0
     mean_f1 = sum(f1_values) / len(f1_values) if f1_values else 0.0

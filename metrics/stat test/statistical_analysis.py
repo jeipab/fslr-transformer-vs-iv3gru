@@ -873,7 +873,8 @@ def load_metrics_csvs(transformer_path, iv3gru_path):
 def process_breakdown_data(df, occlusion_type, metric):
     """
     Extract data for a specific occlusion type and metric from breakdown dataframe.
-    Filters out classes with no data (TP + FP + FN = 0) to match extract_mean_metrics.py behavior.
+    Filters each model independently (TP + FP + FN > 0) to match extract_mean_metrics.py behavior,
+    then returns paired data for statistical testing (only classes with data in both models).
     
     Parameters:
     -----------
@@ -886,41 +887,72 @@ def process_breakdown_data(df, occlusion_type, metric):
         
     Returns:
     --------
-    tuple : (transformer_scores, gru_scores)
+    tuple : (transformer_scores, gru_scores, transformer_mean, gru_mean)
+        Scores are paired (only classes with data in both models for statistical test)
+        Means are calculated independently (each model filtered separately)
     """
     # Filter by occlusion type
     mask = df['Occlusion'].str.lower() == occlusion_type.lower()
     filtered_df = df[mask].copy()
     
     if len(filtered_df) == 0:
-        return np.array([]), np.array([])
+        return np.array([]), np.array([]), np.nan, np.nan
     
-    # Filter out classes with no data (TP + FP + FN = 0) for Transformer
-    # This matches the behavior in extract_mean_metrics.py which only includes
-    # classes with actual data (tp + fp + fn > 0)
-    tp_col = 'Transformer Total TP'
-    fp_col = 'Transformer Total FP'
-    fn_col = 'Transformer Total FN'
+    # Filter Transformer data independently (TP + FP + FN > 0)
+    tp_col_trans = 'Transformer Total TP'
+    fp_col_trans = 'Transformer Total FP'
+    fn_col_trans = 'Transformer Total FN'
     
-    if tp_col in filtered_df.columns and fp_col in filtered_df.columns and fn_col in filtered_df.columns:
-        # Fill NaN values with 0 for calculation
-        tp = filtered_df[tp_col].fillna(0)
-        fp = filtered_df[fp_col].fillna(0)
-        fn = filtered_df[fn_col].fillna(0)
-        has_data = (tp + fp + fn) > 0
-        filtered_df = filtered_df[has_data].copy()
+    transformer_has_data = None
+    if tp_col_trans in filtered_df.columns and fp_col_trans in filtered_df.columns and fn_col_trans in filtered_df.columns:
+        tp = filtered_df[tp_col_trans].fillna(0)
+        fp = filtered_df[fp_col_trans].fillna(0)
+        fn = filtered_df[fn_col_trans].fillna(0)
+        transformer_has_data = (tp + fp + fn) > 0
     
-    if len(filtered_df) == 0:
-        return np.array([]), np.array([])
+    # Filter IV3-GRU data independently (TP + FP + FN > 0)
+    tp_col_gru = 'IV3-GRU Total TP'
+    fp_col_gru = 'IV3-GRU Total FP'
+    fn_col_gru = 'IV3-GRU Total FN'
     
-    # Extract scores
+    gru_has_data = None
+    if tp_col_gru in filtered_df.columns and fp_col_gru in filtered_df.columns and fn_col_gru in filtered_df.columns:
+        tp = filtered_df[tp_col_gru].fillna(0)
+        fp = filtered_df[fp_col_gru].fillna(0)
+        fn = filtered_df[fn_col_gru].fillna(0)
+        gru_has_data = (tp + fp + fn) > 0
+    
+    # Calculate means independently (each model filtered separately, matching extract_mean_metrics.py)
     transformer_col = f'Transformer {metric}'
     gru_col = f'IV3-GRU {metric}'
     
-    transformer_scores = filtered_df[transformer_col].values
-    gru_scores = filtered_df[gru_col].values
+    transformer_mean = np.nan
+    gru_mean = np.nan
     
-    return transformer_scores, gru_scores
+    if transformer_has_data is not None and transformer_col in filtered_df.columns:
+        transformer_scores_indep = filtered_df.loc[transformer_has_data, transformer_col].values
+        transformer_mean = np.mean(transformer_scores_indep) if len(transformer_scores_indep) > 0 else np.nan
+    
+    if gru_has_data is not None and gru_col in filtered_df.columns:
+        gru_scores_indep = filtered_df.loc[gru_has_data, gru_col].values
+        gru_mean = np.mean(gru_scores_indep) if len(gru_scores_indep) > 0 else np.nan
+    
+    # For paired statistical test: only include classes with data in BOTH models
+    if transformer_has_data is not None and gru_has_data is not None:
+        both_have_data = transformer_has_data & gru_has_data
+        paired_df = filtered_df[both_have_data].copy()
+        
+        if len(paired_df) == 0:
+            return np.array([]), np.array([]), transformer_mean, gru_mean
+        
+        transformer_scores = paired_df[transformer_col].values
+        gru_scores = paired_df[gru_col].values
+    else:
+        # Fallback: if we can't determine data availability, use all rows
+        transformer_scores = filtered_df[transformer_col].values if transformer_col in filtered_df.columns else np.array([])
+        gru_scores = filtered_df[gru_col].values if gru_col in filtered_df.columns else np.array([])
+    
+    return transformer_scores, gru_scores, transformer_mean, gru_mean
 
 
 def process_task(task_name, transformer_path, iv3gru_path, verbose=True):
@@ -967,8 +999,8 @@ def process_task(task_name, transformer_path, iv3gru_path, verbose=True):
         for metric in metrics:
             metric_name = f"{occlusion_type.capitalize()} {metric}"
             
-            # Extract data
-            transformer_scores, gru_scores = process_breakdown_data(
+            # Extract data (returns paired scores for statistical test and independent means)
+            transformer_scores, gru_scores, transformer_mean_indep, gru_mean_indep = process_breakdown_data(
                 df, occlusion_type, metric
             )
             
@@ -977,13 +1009,21 @@ def process_task(task_name, transformer_path, iv3gru_path, verbose=True):
                     print(f"\nWARNING: No data found for {metric_name}")
                 continue
             
-            # Analyze (returns raw results)
+            # Analyze using paired scores for statistical test
             raw_result = analyze_metric(
                 transformer_scores, 
                 gru_scores, 
                 metric_name,
                 verbose=verbose
             )
+            
+            # Override means with independently calculated means (matching extract_mean_metrics.py)
+            # This ensures displayed means match recognition_mean_metrics.csv
+            raw_result['transformer_mean'] = transformer_mean_indep
+            raw_result['gru_mean'] = gru_mean_indep
+            # Recalculate difference with correct means
+            raw_result['difference'] = transformer_mean_indep - gru_mean_indep
+            
             raw_results.append(raw_result)
     
     # Apply Holm-Bonferroni correction to all p-values
