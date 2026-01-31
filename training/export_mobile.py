@@ -12,6 +12,7 @@ if str(_ROOT) not in _sys.path:
 
 from models.transformer import SignTransformerCtc
 from models.mediapipe_gru import MediaPipeGRUCtc
+from models.iv3_gru import InceptionV3GRUCtc
 from data.labels.label_mapping import load_label_mappings
 
 
@@ -65,6 +66,16 @@ def _build_model(
         if hidden2 is not None:
             kwargs['hidden2'] = hidden2
         return MediaPipeGRUCtc(**kwargs)
+    elif model_name == 'iv3_gru_continuous':
+        kwargs = {
+            'num_ctc_classes': num_ctc_classes,
+            'num_cat': num_cat,
+        }
+        if hidden1 is not None:
+            kwargs['hidden1'] = hidden1
+        if hidden2 is not None:
+            kwargs['hidden2'] = hidden2
+        return InceptionV3GRUCtc(**kwargs)
     else:
         raise ValueError(f"Unsupported model for mobile export: {model_name}")
 
@@ -140,6 +151,24 @@ def _infer_mediapipe_hidden_sizes(state_dict: dict) -> Tuple[Optional[int], Opti
     return h1, h2, proj
 
 
+def _infer_iv3_gru_hidden_sizes(state_dict: dict) -> Tuple[Optional[int], Optional[int]]:
+    """Infer hidden1, hidden2 from InceptionV3GRUCtc bidirectional GRU weights.
+
+    Returns (hidden1, hidden2)
+    Note: InceptionV3GRUCtc uses bidirectional GRUs, so weight_ih_l0 shape is (3*hidden_size, input_size)
+    """
+    h1 = None
+    h2 = None
+    w_ih1 = _find_param_by_suffix(state_dict, 'gru1.weight_ih_l0')
+    if w_ih1 is not None and w_ih1.dim() == 2:
+        # Bidirectional GRU: weight_ih_l0 shape = (3*hidden_size, input_size)
+        h1 = int(w_ih1.shape[0] // 3)
+    w_ih2 = _find_param_by_suffix(state_dict, 'gru2.weight_ih_l0')
+    if w_ih2 is not None and w_ih2.dim() == 2:
+        h2 = int(w_ih2.shape[0] // 3)
+    return h1, h2
+
+
 def _save_metadata_and_labels(
     output_dir: Path,
     model_filename_stem: str,
@@ -165,7 +194,11 @@ def _save_metadata_and_labels(
         'window_size_hint': window_hint,
         'stride_hint': stride_hint,
         'decode_default': 'greedy',
-        'model_type': 'sign_transformer_ctc' if 'Transformer' in model_filename_stem else 'mediapipe_gru_ctc',
+        'model_type': (
+            'sign_transformer_ctc' if 'Transformer' in model_filename_stem
+            else 'inceptionv3_gru_ctc' if 'InceptionV3' in model_filename_stem
+            else 'mediapipe_gru_ctc'
+        ),
         'labels_file': 'label_mapping.json',
         'version': '1.0.0',
         'labels_checksum': None,
@@ -213,6 +246,8 @@ def export_model_for_android(
     hidden1 = hidden2 = projection_dim = None
     if model_name == 'mediapipe_gru_continuous':
         hidden1, hidden2, projection_dim = _infer_mediapipe_hidden_sizes(state_dict)
+    elif model_name == 'iv3_gru_continuous':
+        hidden1, hidden2 = _infer_iv3_gru_hidden_sizes(state_dict)
 
     model = _build_model(
         model_name,
@@ -306,6 +341,7 @@ def _guess_best_checkpoint(output_dir: str, model_name: str) -> Optional[str]:
     name_map = {
         'transformer_continuous': 'SignTransformerCtc',
         'mediapipe_gru_continuous': 'MediaPipeGRUCtc',
+        'iv3_gru_continuous': 'InceptionV3GRUCtc',
     }
     stem = name_map.get(model_name)
     if not stem:
@@ -318,7 +354,7 @@ def main():
     import argparse
 
     parser = argparse.ArgumentParser(description='Export TorchScript .pt for Android (Full Runtime)')
-    parser.add_argument('--model', type=str, required=True, choices=['transformer_continuous', 'mediapipe_gru_continuous'])
+    parser.add_argument('--model', type=str, required=True, choices=['transformer_continuous', 'mediapipe_gru_continuous', 'iv3_gru_continuous'])
     parser.add_argument('--resume-path', type=str, default=None, help='Path to checkpoint to export')
     parser.add_argument('--output-dir', type=str, default='android_artifacts')
     parser.add_argument('--input-dim', type=int, default=178)
