@@ -1,12 +1,7 @@
 """
-CTC Utilities for Continuous Sign Language Recognition
+CTC utilities for continuous sign language recognition.
 
-This module provides utilities for Connectionist Temporal Classification (CTC)
-including decoding algorithms and label processing functions.
-
-Usage:
-    decoded = greedy_ctc_decoder(log_probs, blank_id=105)
-    decoded, score = beam_search_ctc_decoder(log_probs, blank_id=105, beam_width=10)
+Provides decoding algorithms and label processing functions for CTC models.
 """
 
 # Standard library imports
@@ -22,18 +17,7 @@ def remove_consecutive_duplicates(sequence: List[int]) -> List[int]:
     """
     Remove consecutive duplicate elements from a sequence.
     
-    This is the first step in CTC decoding - collapsing repeated tokens
-    that represent a single output symbol.
-    
-    Args:
-        sequence: List of token IDs (may contain consecutive duplicates)
-        
-    Returns:
-        List of token IDs with consecutive duplicates removed
-        
-    Example:
-        >>> remove_consecutive_duplicates([1, 1, 2, 2, 2, 3, 1, 1])
-        [1, 2, 3, 1]
+    First step in CTC decoding - collapsing repeated tokens.
     """
     if len(sequence) == 0:
         return []
@@ -50,19 +34,7 @@ def remove_blank_tokens(sequence: List[int], blank_id: int) -> List[int]:
     """
     Remove blank tokens from a sequence.
     
-    This is the second step in CTC decoding - removing the blank token
-    that was used for temporal alignment.
-    
-    Args:
-        sequence: List of token IDs (may contain blank tokens)
-        blank_id: ID of the blank token to remove
-        
-    Returns:
-        List of token IDs with blank tokens removed
-        
-    Example:
-        >>> remove_blank_tokens([1, 105, 2, 105, 105, 3], blank_id=105)
-        [1, 2, 3]
+    Second step in CTC decoding - removing blank tokens used for temporal alignment.
     """
     return [token for token in sequence if token != blank_id]
 
@@ -71,19 +43,7 @@ def collapse_ctc_output(sequence: List[int], blank_id: int) -> List[int]:
     """
     Apply full CTC collapsing: remove consecutive duplicates then remove blanks.
     
-    This is the standard CTC decoding operation that converts the raw CTC
-    output (with blanks and repeats) into the final predicted sequence.
-    
-    Args:
-        sequence: Raw CTC output sequence (list of token IDs)
-        blank_id: ID of the blank token
-        
-    Returns:
-        Decoded sequence without duplicates or blanks
-        
-    Example:
-        >>> collapse_ctc_output([1, 1, 105, 2, 2, 105, 3], blank_id=105)
-        [1, 2, 3]
+    Converts raw CTC output into final predicted sequence.
     """
     # Step 1: Remove consecutive duplicates
     collapsed = remove_consecutive_duplicates(sequence)
@@ -102,21 +62,7 @@ def greedy_ctc_decoder(
     """
     Greedy CTC decoder - selects most likely token at each timestep.
     
-    Process: Take argmax at each timestep, remove consecutive duplicates, remove blanks.
-    
-    Args:
-        log_probs: Log probabilities from model, shape [B, T, C] or [T, B, C]
-        blank_id: ID of the blank token (typically num_gloss_classes)
-        input_lengths: Optional tensor of actual sequence lengths [B]
-        
-    Returns:
-        List of decoded sequences (one per batch item)
-        
-    Example:
-        >>> log_probs = torch.randn(2, 50, 106)
-        >>> decoded = greedy_ctc_decoder(log_probs, blank_id=105)
-        >>> print(decoded[0])
-        [4, 17, 23, 56]
+    Takes argmax at each timestep, removes consecutive duplicates and blanks.
     """
     # Ensure log_probs is in [B, T, C] format
     if log_probs.dim() == 3:
@@ -164,36 +110,8 @@ def beam_search_ctc_decoder(
     """
     Beam search CTC decoder - explores multiple hypotheses for better accuracy.
     
-    This decoder maintains multiple candidate sequences (beams) and explores
-    the most promising paths through the output space. It's more accurate than
-    greedy decoding but computationally more expensive.
-    
-    Algorithm:
-    1. Initialize beam with empty sequence
-    2. For each timestep:
-       a. Expand each beam with all possible next tokens
-       b. Score each expanded sequence
-       c. Keep only top-k sequences (beam_width)
-    3. Return best sequence after CTC collapsing
-    
-    Args:
-        log_probs: Log probabilities from model, shape [B, T, C] or [T, B, C]
-        blank_id: ID of the blank token
-        beam_width: Number of beams to maintain (higher = more accurate but slower)
-        input_lengths: Optional tensor of actual sequence lengths [B]
-        
-    Returns:
-        List of tuples (decoded_sequence, log_probability) for each batch item
-        Each decoded_sequence is the best found sequence
-        
-    Note:
-        This is a simplified beam search. For production, consider using
-        specialized libraries like ctcdecode for better performance.
-        
-    Example:
-        >>> log_probs = torch.randn(1, 50, 106)
-        >>> decoded, score = beam_search_ctc_decoder(log_probs, blank_id=105, beam_width=10)
-        >>> print(f"Decoded: {decoded[0][0]}, Score: {decoded[0][1]:.4f}")
+    Maintains multiple candidate sequences and explores the most promising paths.
+    More accurate than greedy decoding but computationally more expensive.
     """
     # Ensure log_probs is in [B, T, C] format
     if log_probs.dim() == 3:
@@ -232,17 +150,7 @@ def _beam_search_single(
     """
     Beam search decoder for a single sequence.
     
-    This is a helper function that performs beam search on one sequence.
-    It maintains a priority queue of candidate sequences and explores
-    the most promising paths.
-    
-    Args:
-        log_probs: Log probabilities for single sequence [T, C]
-        blank_id: ID of the blank token
-        beam_width: Number of beams to maintain
-        
-    Returns:
-        Tuple of (best_decoded_sequence, log_probability)
+    Maintains a priority queue of candidate sequences and explores the most promising paths.
     """
     T, C = log_probs.shape
     
@@ -286,21 +194,8 @@ def encode_label_sequence(
     """
     Encode a sequence of gloss IDs for CTC training.
     
-    Note: Target sequences contain only gloss IDs (0 to num_classes-1).
+    Target sequences contain only gloss IDs (0 to num_classes-1).
     The blank token is handled internally by CTCLoss.
-    
-    Args:
-        gloss_ids: List of gloss IDs (e.g., [42] for isolated, [3, 17, 42] for continuous)
-        num_classes: Number of gloss classes (not including blank)
-        
-    Returns:
-        Tuple of (encoded_tensor, target_length)
-        
-    Example:
-        >>> encode_label_sequence([42], num_classes=105)
-        (tensor([42]), 1)
-        >>> encode_label_sequence([3, 17, 42], num_classes=105)
-        (tensor([3, 17, 42]), 3)
     """
     # Validate input
     for gloss_id in gloss_ids:
@@ -321,21 +216,6 @@ def decode_label_sequence(
     Decode a sequence of gloss IDs to human-readable labels.
     
     Converts predicted gloss IDs back to their text representations.
-    
-    Args:
-        gloss_ids: List of predicted gloss IDs
-        label_mapping: Optional dictionary mapping gloss_id -> gloss_name
-                      If None, returns string representation of IDs
-        
-    Returns:
-        List of gloss names (or string IDs if mapping not provided)
-        
-    Example:
-        >>> mapping = {42: "hello", 17: "world"}
-        >>> decode_label_sequence([42, 17], mapping)
-        ['hello', 'world']
-        >>> decode_label_sequence([42, 17])  # Without mapping
-        ['42', '17']
     """
     if label_mapping is None:
         # Return string representation of IDs
@@ -357,23 +237,7 @@ def calculate_wer(reference: List[int], hypothesis: List[int]) -> float:
     """
     Calculate Word Error Rate (WER) between reference and hypothesis sequences.
     
-    WER is calculated as the Levenshtein distance (edit distance) normalized
-    by the length of the reference sequence. It measures insertions, deletions,
-    and substitutions needed to transform hypothesis into reference.
-    
-    Formula: WER = (S + D + I) / N
-    where S = substitutions, D = deletions, I = insertions, N = reference length
-    
-    Args:
-        reference: Ground truth sequence of gloss IDs
-        hypothesis: Predicted sequence of gloss IDs
-        
-    Returns:
-        Word Error Rate as a float (0.0 = perfect match, >1.0 = very poor)
-        
-    Example:
-        >>> calculate_wer([1, 2, 3, 4], [1, 2, 4, 5])
-        0.5  # 2 errors / 4 words
+    WER = (S + D + I) / N where S=substitutions, D=deletions, I=insertions, N=reference length.
     """
     # Handle edge cases
     if len(reference) == 0:
@@ -417,15 +281,7 @@ def calculate_cer(reference: List[int], hypothesis: List[int]) -> float:
     """
     Calculate Character Error Rate (CER) - alias for WER at gloss level.
     
-    In sign language recognition, CER is equivalent to WER when operating
-    at the gloss (word) level rather than character level.
-    
-    Args:
-        reference: Ground truth sequence of gloss IDs
-        hypothesis: Predicted sequence of gloss IDs
-        
-    Returns:
-        Character Error Rate as a float
+    In sign language recognition, CER is equivalent to WER at the gloss level.
     """
     return calculate_wer(reference, hypothesis)
 
@@ -434,9 +290,8 @@ def calculate_wer_and_errors(reference: List[int], hypothesis: List[int]) -> Tup
     """
     Calculate WER with detailed error breakdown.
     
-    Returns:
-        Tuple of (wer, errors_dict) where errors_dict contains
-        'S' (substitutions), 'D' (deletions), 'I' (insertions)
+    Returns tuple of (wer, errors_dict) where errors_dict contains
+    'S' (substitutions), 'D' (deletions), 'I' (insertions).
     """
     if len(reference) == 0:
         wer = 0.0 if len(hypothesis) == 0 else float('inf')

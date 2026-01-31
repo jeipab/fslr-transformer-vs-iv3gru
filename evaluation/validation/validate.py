@@ -1,14 +1,8 @@
 """
 Sign Language Recognition Model Validation Script
 
-This script validates trained Sign Language Recognition models on validation data.
-Supports both Transformer and IV3-GRU models with comprehensive performance analysis.
-
-Usage:
-    python validate.py --model <model_type> --checkpoint <checkpoint_path> [options]
-
-Example:
-    python validate.py --model transformer --checkpoint transformer/model.pt --batch-size 32
+Validates trained Sign Language Recognition models on validation data.
+Supports both Transformer and IV3-GRU models.
 """
 
 # Standard library imports
@@ -40,32 +34,14 @@ warnings.filterwarnings('ignore', category=UserWarning)
 
 
 class ValidationDataset:
-    """
-    Dataset class for loading and managing validation data.
-    
-    This class handles loading NPZ files and labels CSV, filtering valid samples,
-    and providing data in the format expected by the models.
-    """
+    """Dataset class for loading and managing validation data."""
     
     def __init__(self, data_dir: str, labels_csv: str, model_type: str, model=None, 
                  signer_filter: List[str] = None, category_filter: List[int] = None):
         """
         Initialize validation dataset by loading labels and filtering valid NPZ files.
         
-        Steps:
-        1. Load labels CSV with multiple encoding fallbacks
-        2. Clean file names (remove .npz extension)
-        3. Apply signer and category filters if specified
-        4. Filter to only include files that actually exist
-        5. Store metadata for each valid sample
-        
-        Args:
-            data_dir: Directory containing NPZ files
-            labels_csv: Path to labels CSV file
-            model_type: 'transformer' or 'iv3_gru' (determines data format)
-            model: Model instance (needed to check expected input dimensions)
-            signer_filter: List of signer IDs to include (None for all)
-            category_filter: List of category IDs to include (None for all)
+        Loads labels CSV, applies filters, and stores metadata for valid samples.
         """
         self.data_dir = Path(data_dir)
         self.labels_csv = labels_csv
@@ -126,18 +102,7 @@ class ValidationDataset:
         """
         Load a single sample from the dataset.
         
-        Steps:
-        1. Get sample metadata from valid_files list
-        2. Load NPZ data from disk
-        3. Extract appropriate features based on model type
-        4. Handle sequence length limits
-        5. Return data tensor and labels
-        
-        Args:
-            idx: Index of sample to load
-            
-        Returns:
-            Tuple of (features_tensor, gloss_label, category_label, occlusion_flag, filename)
+        Returns tuple of (features_tensor, gloss_label, category_label, occlusion_flag, filename, signer, duration).
         """
         sample = self.valid_files[idx]
         
@@ -175,28 +140,13 @@ class ValidationDataset:
 
 
 class ModelValidator:
-    """
-    Main validation class for comprehensive model evaluation.
-    
-    This class handles model loading, checkpoint restoration, and provides
-    methods for batch prediction and comprehensive validation analysis.
-    """
+    """Main validation class for comprehensive model evaluation."""
     
     def __init__(self, model_type: str, checkpoint_path: str, device: str = 'auto'):
         """
         Initialize the validator by loading model architecture and checkpoint.
         
-        Steps:
-        1. Set device (GPU if available, otherwise CPU)
-        2. Load model architecture with auto-detected parameters
-        3. Load trained weights from checkpoint
-        4. Load label mappings for human-readable results
-        5. Set model to evaluation mode
-        
-        Args:
-            model_type: 'transformer' or 'iv3_gru'
-            checkpoint_path: Path to model checkpoint (.pt file)
-            device: Device to use ('cpu', 'cuda', or 'auto')
+        Sets device, loads model architecture, loads checkpoint weights, and sets model to evaluation mode.
         """
         self.model_type = model_type.lower()
         # Strip _isolated or _continuous suffix to get base model name
@@ -221,15 +171,7 @@ class ModelValidator:
         """
         Load the appropriate model architecture using Streamlit config parameters.
         
-        Steps:
-        1. Get model configuration from Streamlit config
-        2. Load checkpoint to inspect model parameters
-        3. Auto-detect architecture parameters from checkpoint weights
-        4. Create model instance with detected parameters
-        5. Move model to target device
-        
-        Returns:
-            Model instance ready for inference
+        Auto-detects architecture parameters from checkpoint weights and creates model instance.
         """
         # Step 1: Get model configuration from Streamlit config
         model_config = get_model_config(self.model_type)
@@ -314,15 +256,7 @@ class ModelValidator:
         """
         Load trained model weights from checkpoint file.
         
-        Steps:
-        1. Verify checkpoint file exists
-        2. Load checkpoint data to device
-        3. Handle different checkpoint formats (PyTorch Lightning, custom, etc.)
-        4. Load weights into model
-        5. Set model to evaluation mode
-        
-        Raises:
-            FileNotFoundError: If checkpoint file doesn't exist
+        Handles different checkpoint formats and sets model to evaluation mode.
         """
         # Step 1: Verify checkpoint file exists
         if not os.path.exists(self.checkpoint_path):
@@ -347,24 +281,13 @@ class ModelValidator:
         
         # Step 4: Set model to evaluation mode (disable dropout, batch norm updates)
         self.model.eval()
-        print(f"✓ Loaded checkpoint from {self.checkpoint_path}")
+        print(f"Loaded checkpoint from {self.checkpoint_path}")
     
     def predict_batch(self, batch_data: List[torch.Tensor]) -> Tuple[torch.Tensor, torch.Tensor]:
         """
         Make predictions on a batch of variable-length sequences.
         
-        Steps:
-        1. Handle variable-length sequences by padding to same length
-        2. Create attention masks (transformer) or length tensors (GRU)
-        3. Move data to device
-        4. Run inference with no gradient computation
-        5. Return prediction logits
-        
-        Args:
-            batch_data: List of tensors with shape [seq_len, features] (one per sample)
-            
-        Returns:
-            Tuple of (gloss_logits, category_logits) with shape [batch_size, num_classes]
+        Returns tuple of (gloss_logits, category_logits) with shape [batch_size, num_classes].
         """
         if self.base_model_type == 'transformer':
             # Step 1: Pad sequences to same length for transformer
@@ -447,23 +370,7 @@ class ModelValidator:
         """
         Perform comprehensive validation on the dataset.
         
-        Steps:
-        1. Initialize validation session and display progress
-        2. Process dataset in batches for memory efficiency
-        3. Load batch data and make predictions
-        4. Extract predictions, probabilities, and top-k results
-        5. Store detailed results for each sample
-        6. Convert to numpy arrays for analysis
-        7. Compute comprehensive metrics
-        
-        Args:
-            dataset: ValidationDataset instance
-            batch_size: Batch size for evaluation (affects memory usage)
-            save_predictions: Whether to save individual predictions to JSON files
-            output_dir: Output directory for results
-            
-        Returns:
-            Dictionary containing all validation results and metrics
+        Returns dictionary containing all validation results and metrics.
         """
         # Step 1: Initialize validation session
         print(f"\n{'='*60}")
@@ -961,7 +868,7 @@ class ModelValidator:
             with open(output_file, 'w', encoding='utf-8') as f:
                 json.dump(formatted_pred, f, indent=2)
         
-        print(f"✓ Saved {len(predictions)} individual predictions to {pred_dir}")
+        print(f"Saved {len(predictions)} individual predictions to {pred_dir}")
     
     def print_summary(self, results: Dict[str, Any]):
         """Print a comprehensive summary of validation results."""
@@ -1048,7 +955,7 @@ def save_results(results: Dict[str, Any], output_dir: str):
     with open(complete_filepath, 'w', encoding='utf-8') as f:
         json.dump(results, f, indent=2)
     
-    print(f"✓ Results saved to {output_path}")
+    print(f"Results saved to {output_path}")
 
 
 def main():

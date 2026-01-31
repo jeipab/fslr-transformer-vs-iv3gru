@@ -1,8 +1,8 @@
 """
 Utilities for continuous evaluation metrics.
 
-The module exposes helpers for computing per-sequence TP/FP/FN/TN breakdowns
-and aggregate statistics used across prediction and validation tooling.
+Provides helpers for computing per-sequence TP/FP/FN breakdowns
+and aggregate statistics.
 """
 
 from .continuous import (  # noqa: F401

@@ -1,11 +1,8 @@
 """
 Continuous sequence evaluation helpers.
 
-This module provides the building blocks for computing TP/FP/FN breakdowns
-and precision/recall/F1-style metrics for continuous sign-language recognition
-sequences.  The implementation follows the comprehensive overhaul plan and is
-structured to keep the public API clean, with well-documented helpers that can
-be composed by offline validation scripts and interactive tooling.
+Provides building blocks for computing TP/FP/FN breakdowns
+and precision/recall/F1 metrics for continuous sign-language recognition sequences.
 """
 
 from __future__ import annotations
@@ -17,9 +14,6 @@ from typing import Any, Dict, List, Mapping, Optional, Sequence, Tuple
 import numpy as np
 
 
-# --------------------------------------------------------------------------- #
-# Configuration & Data Structures
-# --------------------------------------------------------------------------- #
 
 
 @dataclass
@@ -102,9 +96,6 @@ class SequenceEvaluationResult:
     fn_indices: List[int] = field(default_factory=list)
 
 
-# --------------------------------------------------------------------------- #
-# Core Helpers
-# --------------------------------------------------------------------------- #
 
 
 def split_predictions_by_confidence(
@@ -548,9 +539,6 @@ def augment_matches_with_order(
     return augmented
 
 
-# --------------------------------------------------------------------------- #
-# Evaluation Pipeline
-# --------------------------------------------------------------------------- #
 
 
 def _compute_counts_to_metrics(
@@ -806,9 +794,6 @@ def compute_sequence_metrics(
     )
 
 
-# --------------------------------------------------------------------------- #
-# Aggregation Helpers
-# --------------------------------------------------------------------------- #
 
 
 def _extract_metric(source: Any, key: str, default: float = 0.0) -> float:

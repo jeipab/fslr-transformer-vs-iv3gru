@@ -2,7 +2,6 @@
 CTC Prediction for Continuous Sign Language Recognition
 
 Predicts gloss sequences from continuous sign language videos using CTC models.
-Uses the exact same TP/FP/FN assignment logic as validation via compute_sequence_metrics().
 """
 
 import argparse
@@ -77,8 +76,7 @@ def smooth_sequence(
     """
     Remove consecutive duplicate glosses from a sequence, keeping only the first occurrence.
     
-    This helps reduce repeated predictions that occur due to sliding window overlap.
-    For example: [good, morning, good, morning] -> [good, morning]
+    Reduces repeated predictions that occur due to sliding window overlap.
     """
     if not sequence:
         return [], [], [], []
@@ -138,19 +136,6 @@ def filter_low_confidence_segments(
     Filter out segments with gloss confidence below threshold and extend previous segments.
     
     When a segment is removed, the previous segment's end_ms is extended to fill the gap.
-    This helps reduce false positives by removing low-confidence predictions.
-    
-    Args:
-        predicted_sequence: List of predicted gloss IDs
-        predicted_labels: List of predicted gloss labels
-        predicted_timestamps: List of timestamp dicts with start_ms, end_ms, and other fields
-        confidence_scores: List of gloss confidence scores
-        predicted_categories: Optional list of category IDs
-        category_confidences: Optional list of category confidence scores
-        confidence_threshold: Minimum confidence threshold (default: 0.55)
-    
-    Returns:
-        Tuple of filtered (sequence, labels, timestamps, confidences, categories, category_confidences)
     """
     if not predicted_sequence or not confidence_scores:
         return predicted_sequence, predicted_labels, predicted_timestamps, confidence_scores, predicted_categories, category_confidences
@@ -622,7 +607,7 @@ class CTCPredictor:
         return model.to(self.device), input_dim
     
     def _load_checkpoint(self):
-        """Load model checkpoint with robust error handling."""
+        """Load model checkpoint."""
         if not os.path.exists(self.checkpoint_path):
             raise FileNotFoundError(f"Checkpoint not found: {self.checkpoint_path}")
         
@@ -662,10 +647,7 @@ class CTCPredictor:
         timestamps_ms: Optional[np.ndarray],
         iou_threshold: float = 0.5,
     ) -> Dict:
-        """
-        Compute metrics using compute_sequence_metrics() - EXACT SAME as validation.
-        This is the unified metrics computation used by both predict_sequence and predict_sequence_sliding_window.
-        """
+        """Compute metrics using compute_sequence_metrics()."""
         # Extract GT data
         if 'segments' in ground_truth:
             segments = ground_truth.get('segments', [])

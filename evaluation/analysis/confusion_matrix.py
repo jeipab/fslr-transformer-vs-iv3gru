@@ -1,32 +1,10 @@
 """
 Confusion Matrix Analysis Script for Sign Language Recognition Models
 
-This script generates a comprehensive analysis of model predictions, including
-a confusion matrix, classification metrics (Precision, Recall, F1-Score),
-and identification of the most confused class pairs.
+Generates analysis of model predictions including confusion matrix,
+classification metrics, and identification of most confused class pairs.
 
-It supports analysis for both isolated sign predictions and continuous (CTC)
-sequence predictions.
-
-Usage Examples:
-    # Analyze gloss-level predictions for all signers
-    python evaluation/analysis/confusion_matrix.py \\
-        --input results/isolated/predictions.json \\
-        --output-dir results/isolated/analysis \\
-        --level gloss
-
-    # Analyze category-level predictions for a specific signer (S2)
-    python evaluation/analysis/confusion_matrix.py \\
-        --input results/isolated/predictions.json \\
-        --output-dir results/isolated/analysis_S2 \\
-        --level category \\
-        --signer S2
-
-    # Analyze continuous signing results (WER evaluation)
-    python evaluation/analysis/confusion_matrix.py \\
-        --input results/continuous/detailed_results.csv \\
-        --output-dir results/continuous/analysis \\
-        --level gloss
+Supports both isolated sign predictions and continuous (CTC) sequence predictions.
 """
 
 import argparse
@@ -205,7 +183,7 @@ def plot_per_category_breakdown(metrics_df, labels_df, output_dir, level='gloss'
     
     # Save category metrics to CSV
     category_metrics.to_csv(output_dir / f"{level}_category_metrics.csv")
-    print(f"✅ Per-category breakdown saved to: {output_dir / f'{level}_per_category_breakdown.png'}")
+    print(f"Per-category breakdown saved to: {output_dir / f'{level}_per_category_breakdown.png'}")
 
 
 def plot_error_distribution(metrics_df, output_dir, level='gloss'):
@@ -247,7 +225,7 @@ def plot_error_distribution(metrics_df, output_dir, level='gloss'):
     plt.tight_layout()
     plt.savefig(output_dir / f"{level}_error_distribution.png", dpi=300, bbox_inches='tight')
     plt.close()
-    print(f"✅ Error distribution plots saved to: {output_dir / f'{level}_error_distribution.png'}")
+    print(f"Error distribution plots saved to: {output_dir / f'{level}_error_distribution.png'}")
 
 def plot_confusion_matrix(cm, labels, output_path, normalize=None):
     """Plots and saves the confusion matrix as a heatmap."""
@@ -276,7 +254,7 @@ def plot_confusion_matrix(cm, labels, output_path, normalize=None):
     plt.ylabel('True Label')
     plt.tight_layout()
     plt.savefig(output_path)
-    print(f"✅ Confusion matrix heatmap saved to: {output_path}")
+    print(f"Confusion matrix heatmap saved to: {output_path}")
 
 def main():
     parser = argparse.ArgumentParser(description="Confusion Matrix Analysis Script")
@@ -347,7 +325,7 @@ def main():
     cm_df = pd.DataFrame(cm, index=labels_map.values(), columns=labels_map.values())
     cm_csv_path = output_dir / f"{args.level}_confusion_matrix.csv"
     cm_df.to_csv(cm_csv_path)
-    print(f"✅ Confusion matrix data saved to: {cm_csv_path}")
+    print(f"Confusion matrix data saved to: {cm_csv_path}")
 
     # Plot and save heatmap
     heatmap_path = output_dir / f"{args.level}_confusion_matrix.png"
@@ -361,21 +339,21 @@ def main():
     
     # Generate advanced analysis (only for gloss level)
     if args.level == 'gloss':
-        print("🔍 Generating advanced confusion analysis...")
+        print("Generating advanced confusion analysis...")
         
         # Within-category confusion analysis
         within_category = analyze_within_category_confusion(cm, labels_df, args.level)
         if within_category:
             within_category_df = pd.DataFrame.from_dict(within_category, orient='index')
             within_category_df.to_csv(output_dir / f"{args.level}_within_category_confusion.csv")
-            print(f"✅ Within-category confusion analysis saved")
+            print(f"Within-category confusion analysis saved")
         
         # Cross-category confusion analysis
         cross_category = analyze_cross_category_confusion(cm, labels_df, args.level)
         if cross_category:
             cross_category_df = pd.DataFrame.from_dict(cross_category, orient='index')
             cross_category_df.to_csv(output_dir / f"{args.level}_cross_category_confusion.csv")
-            print(f"✅ Cross-category confusion analysis saved")
+            print(f"Cross-category confusion analysis saved")
         
         # Generate advanced visualizations
         plot_per_category_breakdown(metrics_df, labels_df, output_dir, args.level)
@@ -421,7 +399,7 @@ def main():
                 f.write(f"  Total Cross Confusion: {stats['total_cross_confusion']}\n")
                 f.write(f"  Total Predictions: {stats['total_predictions']}\n\n")
 
-    print(f"✅ Classification report saved to: {report_path}")
+    print(f"Classification report saved to: {report_path}")
 
 if __name__ == "__main__":
     main()

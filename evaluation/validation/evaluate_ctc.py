@@ -1,25 +1,8 @@
 """
 CTC Model Evaluation Script for Continuous Sign Language Recognition
 
-This script provides comprehensive evaluation metrics for CTC-based continuous
-sign language recognition models, including Word Error Rate (WER), 
-sequence-level accuracy, per-signer/strategy performance, and a confusion matrix.
-
-Usage:
-    python evaluate_ctc.py --model transformer_ctc \\
-        --checkpoint path/to/model.pt \\
-        --test-data path/to/continuous_npz_folder \\
-        --ground-truth-dir path/to/ground_truth_json_folder \\
-        --output-dir path/to/evaluation_report_folder
-        
-    # With beam search decoding
-    python evaluate_ctc.py --model transformer_ctc \\
-        --checkpoint path/to/model.pt \\
-        --test-data path/to/continuous_npz_folder \\
-        --ground-truth-dir path/to/ground_truth_json_folder \\
-        --output-dir path/to/evaluation_report_folder \\
-        --decode-method beam_search \\
-        --beam-width 10
+Provides evaluation metrics for CTC-based continuous sign language recognition models,
+including Word Error Rate (WER), sequence-level accuracy, and per-signer/strategy performance.
 """
 
 # Standard library imports
@@ -52,9 +35,7 @@ from evaluation.prediction.predict_ctc import filter_low_confidence_segments, es
 from streamlit_app.core.config import CTC_CONFIG
 
 class ContinuousSignDataset(Dataset):
-    """
-    Dataset for loading continuous sign language NPZ files and ground truth JSONs.
-    """
+    """Dataset for loading continuous sign language NPZ files and ground truth JSONs."""
     def __init__(self, npz_dir: Path, ground_truth_dir: Path, kp_key='X'):
         self.npz_dir = npz_dir
         self.kp_key = kp_key
@@ -106,9 +87,7 @@ def collate_continuous_for_ctc(batch: List[Dict]) -> Tuple:
 
 
 class CTCEvaluator:
-    """
-    Evaluator for CTC-based continuous sign language recognition models.
-    """
+    """Evaluator for CTC-based continuous sign language recognition models."""
     def __init__(self, model, blank_id, device, model_type=None):
         self.model = model
         self.blank_id = blank_id
@@ -118,9 +97,7 @@ class CTCEvaluator:
         self.model.eval()
 
     def evaluate(self, dataloader, decode_method='greedy', beam_width=10):
-        """
-        Evaluate the model on a dataset of continuous sign sequences.
-        """
+        """Evaluate the model on a dataset of continuous sign sequences."""
         all_results = []
         
         with torch.no_grad():
@@ -232,9 +209,7 @@ class CTCEvaluator:
         return sequences
 
 def analyze_results(results: List[Dict], output_dir: Path, num_classes: int):
-    """
-    Calculates and prints summary metrics and generates reports.
-    """
+    """Calculate and print summary metrics and generate reports."""
     df = pd.DataFrame(results)
     
     # Overall metrics
@@ -307,7 +282,7 @@ def analyze_results(results: List[Dict], output_dir: Path, num_classes: int):
     # Save detailed results
     df.to_csv(output_dir / "detailed_results.csv", index=False)
 
-    print(f"✅ Evaluation complete. Report saved to {output_dir}")
+    print(f"Evaluation complete. Report saved to {output_dir}")
 
 def load_model(model_type, checkpoint_path, device, num_classes):
     """Loads a CTC model from a checkpoint."""
@@ -359,7 +334,7 @@ def main():
     # Load model
     print("\nLoading model...")
     model = load_model(args.model, args.checkpoint, device, CTC_CONFIG['num_ctc_classes'])
-    print("✓ Model loaded successfully.")
+    print("Model loaded successfully.")
 
     # Create dataset and dataloader
     print("\nLoading dataset...")
@@ -370,7 +345,7 @@ def main():
         shuffle=False,
         collate_fn=collate_continuous_for_ctc
     )
-    print(f"✓ Dataset loaded with {len(dataset)} samples.")
+    print(f"Dataset loaded with {len(dataset)} samples.")
 
     # Evaluate
     print("\nStarting evaluation...")

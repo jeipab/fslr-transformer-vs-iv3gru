@@ -2,20 +2,8 @@
 """
 Generate Ground Truth JSON Files for Continuous Sign Language Sequences
 
-This script transforms metadata JSON files from continuous sequence generation
+Transforms metadata JSON files from continuous sequence generation
 into ground truth JSON files formatted for CTC model validation.
-
-Input: Metadata JSON files from preprocessing/continuous/create_continuous_signs.py
-Output: Ground truth JSON files for CTC evaluation
-
-Usage:
-    python evaluation/validation/generate_ground_truth.py \
-        --input-metadata data/processed/continuous_sequences \
-        --output-dir data/processed/continuous_sequences
-
-    python evaluation/validation/generate_ground_truth.py \
-        --input-metadata data/processed/continuous_sequences \
-        --output-dir data/processed/continuous_sequences/ground_truth
 """
 
 import argparse
@@ -27,15 +15,7 @@ from typing import Dict, List, Tuple
 
 
 def transform_metadata_to_ground_truth(metadata: Dict) -> Dict:
-    """
-    Transform continuous sequence metadata to ground truth format.
-    
-    Args:
-        metadata: Metadata dictionary from create_continuous_signs.py
-        
-    Returns:
-        Ground truth dictionary formatted for CTC validation
-    """
+    """Transform continuous sequence metadata to ground truth format."""
     segments = metadata['segments']
     
     # Extract ground truth sequence and labels
@@ -83,16 +63,7 @@ def transform_metadata_to_ground_truth(metadata: Dict) -> Dict:
 
 
 def validate_ground_truth(ground_truth: Dict, filename: str) -> None:
-    """
-    Validate ground truth consistency.
-    
-    Args:
-        ground_truth: Ground truth dictionary
-        filename: Source filename for error messages
-        
-    Raises:
-        ValueError: If validation fails
-    """
+    """Validate ground truth consistency."""
     # Check sequence length matches num_segments
     seq_len = len(ground_truth['ground_truth_sequence'])
     num_segments = ground_truth['num_segments']
@@ -167,20 +138,7 @@ def process_metadata_file(
     input_path: Path,
     output_dir: Path
 ) -> Tuple[Dict, str]:
-    """
-    Process a single metadata file.
-    
-    Args:
-        input_path: Path to input metadata JSON file
-        output_dir: Directory to save ground truth JSON
-        
-    Returns:
-        Tuple of (ground_truth_dict, output_filename)
-        
-    Raises:
-        ValueError: If validation fails
-        json.JSONDecodeError: If input file is invalid JSON
-    """
+    """Process a single metadata file."""
     # Load metadata
     with open(input_path, 'r', encoding='utf-8') as f:
         metadata = json.load(f)
@@ -203,15 +161,7 @@ def process_metadata_file(
 
 
 def generate_summary_statistics(ground_truths: List[Dict]) -> Dict:
-    """
-    Generate summary statistics from ground truth files.
-    
-    Args:
-        ground_truths: List of ground truth dictionaries
-        
-    Returns:
-        Summary statistics dictionary
-    """
+    """Generate summary statistics from ground truth files."""
     if not ground_truths:
         return {
             'total_sequences': 0,
@@ -256,7 +206,7 @@ def generate_summary_statistics(ground_truths: List[Dict]) -> Dict:
 
 
 def main():
-    """Main function for CLI."""
+    """Main function for command-line interface."""
     parser = argparse.ArgumentParser(
         description='Generate ground truth JSON files for continuous sign language sequences',
         formatter_class=argparse.RawDescriptionHelpFormatter,

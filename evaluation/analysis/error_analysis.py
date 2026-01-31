@@ -2,23 +2,8 @@
 """
 CTC Error Analysis Script for Continuous Sign Language Recognition
 
-This script performs a detailed error analysis for models using Connectionist Temporal Classification (CTC)
-on continuous signing datasets. It supports JSON files structured with "segments" containing
-"timestamp_start_ms", "timestamp_end_ms", and "gloss_label" fields.
-
-It evaluates:
-    - CTC prediction error breakdown (insertions, deletions, substitutions)
-    - Temporal boundary and duration accuracy
-    - Context-based error trends (start, middle, end of sequence)
-    - Signer-specific and strategy-specific error patterns
-    - Exports JSON and PDF reports
-    - Generates heatmaps for error distribution
-
-Usage Examples:
-    python evaluation/analysis/error_analysis.py \
-        --input results/continuous/predictions \
-        --ground-truth-dir data/ground_truth \
-        --output-dir results/continuous/error_report
+Performs detailed error analysis for CTC models on continuous signing datasets.
+Evaluates error breakdown, temporal accuracy, context-based trends, and signer/strategy patterns.
 """
 
 import os
@@ -313,7 +298,7 @@ def plot_temporal_timeline(error_log, output_dir):
     plt.tight_layout()
     plt.savefig(output_dir / "temporal_error_timeline.png", dpi=300, bbox_inches='tight')
     plt.close()
-    print(f"✅ Temporal error timeline saved to: {output_dir / 'temporal_error_timeline.png'}")
+    print(f"Temporal error timeline saved to: {output_dir / 'temporal_error_timeline.png'}")
 
 
 def plot_advanced_error_patterns(error_log, output_dir):
@@ -377,7 +362,7 @@ def plot_advanced_error_patterns(error_log, output_dir):
     plt.tight_layout()
     plt.savefig(output_dir / "advanced_error_patterns.png", dpi=300, bbox_inches='tight')
     plt.close()
-    print(f"✅ Advanced error patterns saved to: {output_dir / 'advanced_error_patterns.png'}")
+    print(f"Advanced error patterns saved to: {output_dir / 'advanced_error_patterns.png'}")
 
 
 def generate_error_report(error_summary, output_dir):
@@ -430,22 +415,22 @@ def main():
     print("=" * 80)
 
     # Load data
-    print("\n📊 Loading prediction and ground truth data...")
+    print("\nLoading prediction and ground truth data...")
     predictions = load_json_files(args.input)
     ground_truths = load_json_files(args.ground_truth_dir)
-    print(f"   ✓ Loaded {len(predictions)} prediction files")
-    print(f"   ✓ Loaded {len(ground_truths)} ground truth files")
+    print(f"   Loaded {len(predictions)} prediction files")
+    print(f"   Loaded {len(ground_truths)} ground truth files")
 
     # Load labels reference if available
     labels_df = None
     try:
         labels_df = pd.read_csv(args.labels_ref)
-        print(f"   ✓ Loaded labels reference: {len(labels_df)} entries")
+        print(f"   Loaded labels reference: {len(labels_df)} entries")
     except Exception as e:
-        print(f"   ⚠️  Could not load labels reference: {e}")
+        print(f"   Warning: Could not load labels reference: {e}")
 
     # Basic error analysis
-    print("\n🔍 Computing basic CTC error analysis...")
+    print("\nComputing basic CTC error analysis...")
     all_errors = []
     pred_sequences = []
     gt_sequences = []
@@ -480,7 +465,7 @@ def main():
     df = pd.DataFrame(all_errors)
     
     # Generate comprehensive summary
-    print("\n📈 Generating comprehensive error summary...")
+    print("\nGenerating comprehensive error summary...")
     summary = {
         "avg_insertions": df["insertions"].mean(),
         "avg_deletions": df["deletions"].mean(),
@@ -493,46 +478,46 @@ def main():
     }
 
     # Advanced analysis
-    print("\n🔬 Performing advanced error analysis...")
+    print("\nPerforming advanced error analysis...")
     
     # Position-based analysis
     position_analysis = analyze_errors_by_position(pred_sequences, gt_sequences)
     summary["position_analysis"] = position_analysis
-    print("   ✓ Position-based error analysis completed")
+    print("   Position-based error analysis completed")
     
     # Transition-based analysis
     transition_analysis = analyze_errors_after_transitions(pred_sequences, gt_sequences)
     summary["transition_analysis"] = dict(list(transition_analysis.items())[:20])  # Top 20 transitions
-    print("   ✓ Transition-based error analysis completed")
+    print("   Transition-based error analysis completed")
     
     # Strategy comparison
     strategy_analysis = analyze_strategy_errors(all_errors)
     if strategy_analysis:
         summary["strategy_analysis"] = strategy_analysis
-        print("   ✓ Strategy comparison analysis completed")
+        print("   Strategy comparison analysis completed")
     
     # Detailed breakdown
     detailed_breakdown = generate_detailed_breakdown(all_errors, labels_df)
     summary["detailed_breakdown"] = detailed_breakdown
-    print("   ✓ Detailed error breakdown completed")
+    print("   Detailed error breakdown completed")
 
     # Generate visualizations
-    print("\n📊 Generating visualizations...")
+    print("\nGenerating visualizations...")
     
     # Basic error patterns
     visualize_error_patterns(df, args.output_dir)
-    print("   ✓ Basic error patterns visualization completed")
+    print("   Basic error patterns visualization completed")
     
     # Advanced error patterns
     plot_advanced_error_patterns(all_errors, args.output_dir)
-    print("   ✓ Advanced error patterns visualization completed")
+    print("   Advanced error patterns visualization completed")
     
     # Temporal timeline
     plot_temporal_timeline(all_errors, args.output_dir)
-    print("   ✓ Temporal error timeline visualization completed")
+    print("   Temporal error timeline visualization completed")
 
     # Generate comprehensive report
-    print("\n📄 Generating comprehensive error report...")
+    print("\nGenerating comprehensive error report...")
     generate_error_report(summary, args.output_dir)
     
     # Save detailed analysis as JSON
@@ -547,29 +532,29 @@ def main():
             "raw_errors": all_errors
         }, f, indent=2, ensure_ascii=False)
     
-    print(f"   ✓ Detailed analysis saved to: {detailed_analysis_path}")
+    print(f"   Detailed analysis saved to: {detailed_analysis_path}")
 
     # Print summary statistics
     print("\n" + "=" * 80)
     print("ERROR ANALYSIS SUMMARY")
     print("=" * 80)
-    print(f"📊 Total Sequences Analyzed: {summary['total_sequences']}")
-    print(f"❌ Total Errors: {summary['total_errors']}")
-    print(f"📈 Average Errors per Sequence: {summary['total_errors'] / summary['total_sequences']:.2f}")
-    print(f"\n🔍 Error Type Breakdown:")
+    print(f"Total Sequences Analyzed: {summary['total_sequences']}")
+    print(f"Total Errors: {summary['total_errors']}")
+    print(f"Average Errors per Sequence: {summary['total_errors'] / summary['total_sequences']:.2f}")
+    print(f"\nError Type Breakdown:")
     print(f"   Insertions: {summary['avg_insertions']:.2f} avg per sequence")
     print(f"   Deletions: {summary['avg_deletions']:.2f} avg per sequence")
     print(f"   Substitutions: {summary['avg_substitutions']:.2f} avg per sequence")
-    print(f"\n⏱️  Temporal Errors:")
+    print(f"\nTemporal Errors:")
     print(f"   Boundary Error: {summary['avg_boundary_error']:.1f} ms avg")
     print(f"   Duration Error: {summary['avg_duration_error']:.1f} ms avg")
     
     if position_analysis:
-        print(f"\n📍 Position-Based Error Rates:")
+        print(f"\nPosition-Based Error Rates:")
         for position, stats in position_analysis.items():
             print(f"   {position.capitalize()}: {stats['error_rate']:.3f} ({stats['errors']}/{stats['total']})")
     
-    print(f"\n📁 All reports and visualizations saved to: {args.output_dir}")
+    print(f"\nAll reports and visualizations saved to: {args.output_dir}")
     print("=" * 80)
 
 

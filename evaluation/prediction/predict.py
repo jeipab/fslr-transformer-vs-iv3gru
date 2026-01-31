@@ -1,24 +1,7 @@
 """
 Sign Language Recognition Prediction Script (Batch Processing Version)
 
-This script provides a command-line interface for making predictions on a dataset
-of preprocessed NPZ files, with rich metadata and analysis features.
-
-Usage Examples:
-    # Run predictions on all samples in a CSV file and save the results
-    python predict.py --model transformer \\
-        --checkpoint path/to/model.pt \\
-        --input-csv path/to/labels.csv \\
-        --npz-dir path/to/npz_files/ \\
-        --output results.json
-
-    # Run predictions for specific signers
-    python predict.py --model transformer \\
-        --checkpoint path/to/model.pt \\
-        --input-csv path/to/labels.csv \\
-        --npz-dir path/to/npz_files/ \\
-        --output results_S0_S1.json \\
-        --signer-filter S0 S1
+Command-line interface for making predictions on preprocessed NPZ files.
 """
 
 # Standard library imports
@@ -40,9 +23,7 @@ sys.path.insert(0, str(project_root))
 from models import SignTransformer, InceptionV3GRU, MediaPipeGRU
 
 class ModelPredictor:
-    """
-    Unified predictor for Transformer, IV3-GRU, and MediaPipe-GRU models.
-    """
+    """Unified predictor for Transformer, IV3-GRU, and MediaPipe-GRU models."""
     def __init__(self, model_type, checkpoint_path, device=None):
         self.model_type = model_type.lower()
         # Strip _isolated or _continuous suffix to get base model name
@@ -156,9 +137,7 @@ class ModelPredictor:
         self.model.eval()
 
     def predict_from_npz(self, npz_path, metadata):
-        """
-        Make prediction from a single preprocessed NPZ file with metadata.
-        """
+        """Make prediction from a single preprocessed NPZ file with metadata."""
         data = np.load(npz_path)
         
         # Determine which key to use based on model type and input dimension
@@ -221,10 +200,7 @@ class ModelPredictor:
         }
 
     def predict_from_npz_simple(self, npz_path):
-        """
-        Make prediction from a single preprocessed NPZ file without metadata.
-        Returns a simplified result format suitable for Streamlit app.
-        """
+        """Make prediction from a single preprocessed NPZ file without metadata."""
         data = np.load(npz_path)
         
         # Determine which key to use based on model type and input dimension
@@ -287,9 +263,7 @@ class ModelPredictor:
         }
 
 def analyze_predictions(predictions, output_path):
-    """
-    Calculates per-signer stats and generates a confusion matrix.
-    """
+    """Calculate per-signer stats and generate a confusion matrix."""
     if not predictions:
         print("No predictions to analyze.")
         return
