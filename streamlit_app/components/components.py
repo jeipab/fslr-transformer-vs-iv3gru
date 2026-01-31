@@ -13,7 +13,6 @@ def set_page() -> None:
     # Consolidated CSS for styling and layout
     st.markdown("""
     <style>
-    /* ===== HEADER STYLES ===== */
     .main-header {
         font-size: 2.5rem;
         font-weight: bold;
@@ -39,7 +38,6 @@ def set_page() -> None:
         margin: 1.5rem 0 1rem 0;
     }
     
-    /* ===== METRIC CARDS ===== */
     .metric-card {
         background-color: rgba(255, 255, 255, 0.1);
         padding: 1rem;
@@ -55,7 +53,6 @@ def set_page() -> None:
         display: none !important;
     }
     
-    /* ===== FILE UPLOADER STYLING ===== */
     /* Hide Streamlit's default file listing under upload area */
     .stFileUploader > div > div > div > div:not([data-testid="stFileUploaderDropzone"]) {
         display: none !important;
@@ -79,7 +76,6 @@ def set_page() -> None:
         display: none !important;
     }
     
-    /* ===== FILE MANAGEMENT LAYOUT ===== */
     /* Compact file management rows */
     .stContainer > div {
         margin: 0 !important;
@@ -183,7 +179,6 @@ def set_page() -> None:
         border-top: 1px solid #333 !important;
     }
     
-    /* ===== TOOLTIP FIXES ===== */
     .stTooltip,
     div[data-testid="stTooltip"],
     [data-testid="stTooltip"] {
@@ -215,7 +210,6 @@ def set_page() -> None:
         z-index: 1 !important;
     }
     
-    /* ===== EMPTY CONTAINER HIDING ===== */
     .stMarkdownContainer:empty,
     div[data-testid="stMarkdownContainer"]:empty {
         display: none !important;
@@ -236,7 +230,6 @@ def set_page() -> None:
         display: none !important;
     }
     
-    /* ===== SIDEBAR STYLING ===== */
     /* Clean sidebar styling */
     .css-1d391kg {
         background-color: #ffffff !important;
@@ -452,7 +445,6 @@ def set_page() -> None:
         margin-bottom: 0.5rem !important;
     }
     
-    /* ===== CUSTOM RESPONSIVE LAYOUT ===== */
     /* Force side-by-side layout for visualization columns at 50%+ screen width */
     @media (min-width: 50vw) {
         .viz-side-by-side .stColumns > div {
@@ -490,7 +482,6 @@ def set_page() -> None:
         }
     }
     
-    /* ===== VIDEO PREVIEW STYLING ===== */
     .video-preview-container {
         background-color: rgba(255, 255, 255, 0.05);
         border-radius: 8px;
@@ -675,7 +666,6 @@ def set_page() -> None:
         border-color: rgba(52, 152, 219, 0.3) !important;
     }
     
-    /* ===== CUSTOM BUTTON COLORS ===== */
     /* Reset button - Warning/Orange color */
     .stButton > button[kind="primary"]:has-text("Reset") {
         background-color: #f39c12 !important;
@@ -717,7 +707,6 @@ def set_page() -> None:
         }
     }
     
-    /* ===== SIDEBAR SPACING FIXES ===== */
     section[data-testid="stSidebar"] .element-container {
         margin-bottom: 0 !important;
         padding-bottom: 0 !important;
@@ -743,8 +732,6 @@ def set_page() -> None:
         margin: 0 !important;
         padding: 0 !important;
     }
-
-    /* ===== MANUAL GAPS ABOVE VALIDATE & ANDROID BUTTONS ===== */
 
     /* Add gap before Validate Models button */
     section[data-testid="stSidebar"] .stButton:nth-last-of-type(2) {

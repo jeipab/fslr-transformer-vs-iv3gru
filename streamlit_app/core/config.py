@@ -239,7 +239,7 @@ def get_model_input_dim(model_name: str) -> int:
     return MODEL_CONFIG.get(model_name, {}).get('input_dim', None)
 
 def get_model_supports_keypoints(model_name: str) -> bool:
-    """Check if a model supports 156-D keypoint inputs."""
+    """Check if a model supports 178-D keypoint inputs."""
     return MODEL_CONFIG.get(model_name, {}).get('supports_keypoints', False)
 
 def get_model_supports_features(model_name: str) -> bool:

@@ -41,7 +41,7 @@ def process_videos_unified(uploaded_files, target_fps: int = 30, out_size: int =
         uploaded_files: Single Streamlit uploaded file object or list of files
         target_fps: Target FPS for processing
         out_size: Target frame size for processing
-        write_keypoints: Whether to extract 156-D keypoint features
+        write_keypoints: Whether to extract 178-D keypoint features
         write_iv3_features: Whether to extract 2048-D InceptionV3 features
         occ_detailed: Whether to include detailed occlusion results
         

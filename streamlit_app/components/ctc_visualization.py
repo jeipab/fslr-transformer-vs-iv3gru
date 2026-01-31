@@ -652,7 +652,6 @@ def render_temporal_alignment(
             opacity=1.0
         ))
 
-    # --- Gloss Comparison chart ---
     gloss_row_labels = ['Predicted Gloss', 'Ground Truth Gloss']
     gloss_axis_labels = list(reversed(gloss_row_labels))
     y_center_gloss = {label: idx for idx, label in enumerate(gloss_axis_labels)}
@@ -869,7 +868,6 @@ def render_temporal_alignment(
         margin=dict(l=45, r=45, t=50, b=40)
     )
 
-    # --- Category Comparison chart ---
     category_row_labels = ['Predicted Category', 'Ground Truth Category']
     category_axis_labels = list(reversed(category_row_labels))
     y_center_category = {label: idx for idx, label in enumerate(category_axis_labels)}

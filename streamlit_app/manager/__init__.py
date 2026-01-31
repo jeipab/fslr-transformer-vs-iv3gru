@@ -1,10 +1,7 @@
 """
 Manager module for workflow stage management.
 
-This module contains managers for different stages of the application workflow:
-- Upload manager: Handles file uploads and routing
-- Preprocessing manager: Manages video preprocessing workflow
-- Prediction manager: Handles model predictions and visualization
+Managers for upload, preprocessing, prediction, and validation stages.
 """
 
 from .upload_manager import (

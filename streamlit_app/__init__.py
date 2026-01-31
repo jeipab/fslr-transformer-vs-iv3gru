@@ -1,25 +1,8 @@
 """
 Streamlit App for Filipino Sign Language Recognition.
 
-This module provides a web interface for sign language recognition,
-including video upload, preprocessing, and model prediction capabilities.
-
-Key Components:
-- Interactive web interface for video upload and processing
-- Real-time preprocessing of video files to keypoints and features
-- Model prediction with visualization of results
-- Batch processing capabilities for multiple files
-
-Available Modules:
-- Core: Main application entry point and configuration
-- Managers: Workflow stage managers (upload, preprocessing, prediction)
-- Components: UI components, utilities, and visualization tools
-
-Usage:
-    streamlit run streamlit_app/core/main.py
-    
-    # Or from command line
-    python -m streamlit_app.core.main
+Web interface for sign language recognition with video upload, preprocessing,
+and model prediction capabilities.
 """
 
 # Core application

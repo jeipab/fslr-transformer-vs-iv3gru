@@ -1,14 +1,7 @@
 """
 Components module for UI components and utilities.
 
-Contains reusable UI components, data processing utilities,
-and visualization tools for the Streamlit application.
-
-Key Components:
-- UI Components: Page setup, sidebar, headers, and form elements
-- Data Processing: Video/NPZ file processing utilities
-- Utilities: General helper functions for file handling and data manipulation
-- Visualization: Charts, keypoint visualization, and prediction displays
+Reusable UI components, data processing utilities, and visualization tools.
 """
 
 from .components import (
