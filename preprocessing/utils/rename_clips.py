@@ -238,12 +238,12 @@ def renumber_hierarchical_structure(clips_dir: Path, video_extensions=None, digi
 
 def validate_structure(clips_dir: Path, labels_map: Dict[int, Tuple[str, int]]):
     """Validates the hierarchical folder structure."""
-    print("🔍 Validating folder structure...")
+    print("Validating folder structure...")
     expected_cats = set(range(10))
     found_cats = {int(p.name[1:]) for p in clips_dir.iterdir() if p.is_dir() and re.match(r'^C\d+$', p.name)}
     missing_cats = expected_cats - found_cats
     if missing_cats:
-        print(f"❌ Missing category folders: {[f'C{c}' for c in missing_cats]}")
+        print(f"[ERROR] Missing category folders: {[f'C{c}' for c in missing_cats]}")
 
     glosses_per_cat = {i: [] for i in range(10)}
     for gloss_id, (_, cat_id) in labels_map.items():
@@ -259,7 +259,7 @@ def validate_structure(clips_dir: Path, labels_map: Dict[int, Tuple[str, int]]):
         found_glosses = {int(p.name[1:]) for p in cat_dir.iterdir() if p.is_dir() and re.match(r'^G\d+$', p.name)}
         missing_glosses = expected_glosses - found_glosses
         if missing_glosses:
-            print(f"❌ In C{cat_id}, missing gloss folders: {[f'G{g}' for g in missing_glosses]}")
+            print(f"[ERROR] In C{cat_id}, missing gloss folders: {[f'G{g}' for g in missing_glosses]}")
 
         for gloss_id in sorted(found_glosses):
             gloss_dir = cat_dir / f"G{gloss_id}"
@@ -267,12 +267,12 @@ def validate_structure(clips_dir: Path, labels_map: Dict[int, Tuple[str, int]]):
             found_signers = {p.name for p in gloss_dir.iterdir() if p.is_dir() and re.match(r'^S\d+$', p.name)}
             missing_signers = expected_signers - found_signers
             if missing_signers:
-                print(f"❌ In C{cat_id}/G{gloss_id}, missing signer folders: {sorted(list(missing_signers))}")
-    print("✅ Validation complete.")
+                print(f"[ERROR] In C{cat_id}/G{gloss_id}, missing signer folders: {sorted(list(missing_signers))}")
+    print("Validation complete.")
 
 def generate_summary(clips: List[Dict], labels_map: Dict[int, Tuple[str, int]]):
     """Generates and prints a summary of the dataset."""
-    print("📊 Generating summary...")
+    print("Generating summary...")
     total_videos = len(clips)
     print(f"Total videos found: {total_videos}")
 
@@ -321,7 +321,7 @@ def generate_summary(clips: List[Dict], labels_map: Dict[int, Tuple[str, int]]):
     
     if missing_count == 0:
         print("  None missing.")
-    print("✅ Summary generation complete.")
+    print("Summary generation complete.")
 
 def main():
     ap = argparse.ArgumentParser(description="Rename and flatten video clips based on a hierarchical structure.")
@@ -354,10 +354,10 @@ def main():
     # Default output directory to Renamed if not specified
     out_dir = args.out.resolve() if args.out is not None else (root / "Renamed").resolve()
     
-    print(f"📂 Root directory: {root}")
-    print(f"📂 clips_dir: {clips_dir}")
-    print(f"📂 labels_csv: {labels_csv}")
-    print(f"📂 out_dir: {out_dir}")
+    print(f"Root directory: {root}")
+    print(f"clips_dir: {clips_dir}")
+    print(f"labels_csv: {labels_csv}")
+    print(f"out_dir: {out_dir}")
     out_dir.mkdir(parents=True, exist_ok=True)
 
     # Handle hierarchical renumbering mode (for C/G/S structure with numbered files)
@@ -373,20 +373,20 @@ def main():
             )
             
             if not operations:
-                print("✅ All files already numbered correctly")
+                print("All files already numbered correctly")
                 return
             
             print(f"Found {len(operations)} files to renumber")
             
             if args.dry_run:
-                print("\n📝 Files that would be renamed:")
+                print("\nFiles that would be renamed:")
                 for src, dest in operations[:20]:
                     rel_src = src.relative_to(clips_dir)
                     rel_dest = dest.relative_to(clips_dir)
                     print(f"  {rel_src} -> {rel_dest}")
                 if len(operations) > 20:
                     print(f"  ... and {len(operations) - 20} more")
-                print("\n💡 Run without --dry-run to apply changes")
+                print("\nRun without --dry-run to apply changes")
             else:
                 # Use temporary names to avoid conflicts
                 temp_renames = []
@@ -398,7 +398,7 @@ def main():
                 for temp, dest in temp_renames:
                     temp.rename(dest)
                 
-                print(f"✅ Renumbered {len(operations)} files")
+                print(f"Renumbered {len(operations)} files")
         except Exception as e:
             print(f"[ERROR] ❗ Error during renumbering: {e}", file=sys.stderr)
             return
@@ -515,7 +515,7 @@ def main():
 
     items = collect_clips_hierarchical(clips_dir)
     if not items:
-        print("[INFO] ❌ No video files found under", clips_dir)
+        print("[INFO] No video files found under", clips_dir)
         return
         
     if args.summary:
@@ -608,9 +608,9 @@ def main():
 
     action_verb = "Renamed" if args.keep_structure else "Moved"
     location = "in original structure" if args.keep_structure else str(out_dir)
-    print(f"[DONE] ✅🎉 {'Planned' if args.dry_run else action_verb} {len(operations)} files {location}")
+    print(f"[DONE] {'Planned' if args.dry_run else action_verb} {len(operations)} files {location}")
     if args.dry_run:
-        print("💡 Run again without --dry-run to apply changes.")
+        print("Run again without --dry-run to apply changes.")
 
 if __name__ == "__main__":
     main()

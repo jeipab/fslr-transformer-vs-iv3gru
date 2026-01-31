@@ -88,9 +88,7 @@ VIDEO_EXTENSIONS = {'.mov', '.mp4', '.avi', '.mkv'}
 TEMP_PREPROCESS_DIR = None
 
 
-# ============================================================================
 # DATA STRUCTURES
-# ============================================================================
 
 @dataclass
 class SequencePlan:
@@ -115,9 +113,7 @@ class SequencePlan:
         }
 
 
-# ============================================================================
 # VIDEO PROCESSING
-# ============================================================================
 
 def parse_video_filename(filename: str) -> Optional[Dict[str, any]]:
     """Parse video filename to extract gloss, signer, and other metadata.
@@ -295,9 +291,7 @@ def preprocess_video_to_npz(video_path: Path, temp_dir: Path) -> Path:
         raise
 
 
-# ============================================================================
 # DATA LOADING & VALIDATION
-# ============================================================================
 
 def load_validation_data(csv_path: Optional[Path], npz_dir: Path) -> pd.DataFrame:
     """Load validation data from CSV or video directory.
@@ -439,9 +433,7 @@ def validate_data_completeness(df: pd.DataFrame, strategy: int, min_glosses: int
     return True
 
 
-# ============================================================================
 # SEQUENCE PLANNING
-# ============================================================================
 
 def plan_sequence_strategy1(signer_df: pd.DataFrame, num_glosses: int, used_files: set, allow_fewer: bool = False) -> Optional[List[Dict]]:
     """Plan a sequence with same category (Strategy 1).
@@ -609,7 +601,7 @@ def generate_sequence_plans(
     else:
         raise ValueError(f"Invalid strategy: {strategy}. Must be 1 or 2.")
     
-    print(f"\n🎯 Generating sequence plans...")
+    print(f"\nGenerating sequence plans...")
     print(f"   Strategy: {strategy} ({'Same category' if strategy == 1 else 'Different categories'})")
     if use_all_files:
         print(f"   Mode: Exhaustive (using all files)")
@@ -753,14 +745,12 @@ def generate_sequence_plans(
         else:
             print(f" {len(signer_plans)}/{sequences_per_signer}")
     
-    print(f"\n✅ Generated {len(plans)} sequence plans\n")
+    print(f"\nGenerated {len(plans)} sequence plans\n")
     
     return plans
 
 
-# ============================================================================
 # CONCATENATION (Supports NPZ and Video)
-# ============================================================================
 
 def load_npz_data(npz_path: Path) -> Dict:
     """Load data from NPZ file."""
@@ -948,9 +938,7 @@ def process_sequence_plan(
         return None
 
 
-# ============================================================================
 # JSON GENERATION
-# ============================================================================
 
 def create_sequence_metadata(plan: SequencePlan, segment_info: List[Dict], total_duration_ms: float) -> Dict:
     """Create JSON metadata for a continuous sequence.
@@ -992,9 +980,7 @@ def save_sequence_json(output_path: Path, metadata: Dict):
         json.dump(metadata, f, indent=2, ensure_ascii=False)
 
 
-# ============================================================================
 # MAIN PROCESSING
-# ============================================================================
 
 def process_sequence_plan(
     plan: SequencePlan,
@@ -1104,9 +1090,7 @@ def generate_summary_statistics(plans: List[SequencePlan], metadatas: List[Dict]
     return summary
 
 
-# ============================================================================
 # CLI
-# ============================================================================
 
 def main():
     parser = argparse.ArgumentParser(
@@ -1269,10 +1253,10 @@ Examples:
     print("\n" + "=" * 80)
     print("GENERATION SUMMARY")
     print("=" * 80)
-    print(f"✅ Generated: {summary['total_sequences']} continuous sequences")
+    print(f"Generated: {summary['total_sequences']} continuous sequences")
     print(f"📊 Total duration: {summary['total_duration_sec']:.1f}s ({summary['total_duration_min']:.1f} min)")
-    print(f"⏱️  Average duration: {summary['avg_duration_sec']:.1f}s per sequence")
-    print(f"📝 Average glosses: {summary['avg_glosses_per_sequence']:.1f} per sequence")
+    print(f"Average duration: {summary['avg_duration_sec']:.1f}s per sequence")
+    print(f"Average glosses: {summary['avg_glosses_per_sequence']:.1f} per sequence")
     print(f"📏 Gloss range: {summary['min_glosses']}-{summary['max_glosses']} per sequence")
     print(f"\n👥 Sequences per signer:")
     for signer in sorted(summary['sequences_per_signer'].keys()):
@@ -1285,7 +1269,7 @@ Examples:
         print(f"   - {len(metadatas)} JSON files")
         print(f"   - 1 summary JSON file")
     else:
-        print(f"\n💡 Run without --dry-run to generate files")
+        print(f"\nRun without --dry-run to generate files")
     
     print("\n" + "=" * 80)
     

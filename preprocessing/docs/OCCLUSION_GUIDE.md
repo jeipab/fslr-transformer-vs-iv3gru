@@ -412,8 +412,8 @@ result = compute_occlusion_detection(
 
 # From preprocessed keypoints (recommended)
 result = compute_occlusion_detection(
-    X=keypoints_array,          # [T, 156] normalized coordinates
-    mask_bool_array=mask,       # [T, 78] visibility mask
+    X=keypoints_array,          # [T, 178] normalized coordinates
+    mask_bool_array=mask,       # [T, 89] visibility mask
     output_format="detailed",
     consecutive_window_size=5,  # Optional overrides
     max_consecutive_skips=2,
@@ -424,8 +424,8 @@ result = compute_occlusion_detection(
 **Parameters**:
 
 - `video_path` (str, optional): Path to video file
-- `X` (np.ndarray, optional): Keypoint coordinates [T, 156]
-- `mask_bool_array` (np.ndarray, optional): Visibility mask [T, 78]
+- `X` (np.ndarray, optional): Keypoint coordinates [T, 178]
+- `mask_bool_array` (np.ndarray, optional): Visibility mask [T, 89]
 - `output_format` (str): `'compatible'` (binary) or `'detailed'` (full results)
 - `**kwargs`: Configuration overrides (see Configuration section)
 
@@ -464,8 +464,8 @@ result = compute_occlusion_detection(
 
 ```python
 result = compute_occlusion_detection_from_keypoints(
-    X=keypoints,          # [T, 156]
-    mask=visibility_mask,  # [T, 78]
+    X=keypoints,          # [T, 178]
+    mask=visibility_mask,  # [T, 89]
     output_format='compatible',
     **kwargs
 )
@@ -537,8 +537,8 @@ process_video(
 )
 
 # The NPZ file will contain:
-# - 'X': keypoints [T, 156]
-# - 'mask': visibility [T, 78]
+# - 'X': keypoints [T, 178]
+# - 'mask': visibility [T, 89]
 # - 'meta': {'occluded_flag': 0 or 1, ...}
 ```
 

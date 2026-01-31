@@ -1,88 +1,52 @@
 """
 Unified video preprocessing pipeline for Filipino sign language recognition.
 
-This module processes raw video files to extract:
-- MediaPipe keypoints (pose, hands, face) → 178-dimensional vectors
-- InceptionV3 CNN features → 2048-dimensional vectors  
-- Occlusion detection flags
-- Frame timestamps and metadata
-
-Supports both sequential and parallel processing with automatic GPU optimization.
-
-Usage:
-- Single video (sequential):
-    python preprocessing/preprocess.py video.mp4 output_dir --write-keypoints --write-iv3-features --id 12
-- Directory of videos (parallel):
-    python preprocessing/preprocess.py input_dir output_dir --write-keypoints --write-iv3-features --id 12 --workers 8
-- Batch processing with GPU optimization:
-    python preprocessing/preprocess.py input_dir output_dir --write-keypoints --write-iv3-features --workers 8 --batch-size 32
+Processes raw video files to extract MediaPipe keypoints, InceptionV3 features,
+occlusion detection flags, and metadata.
 """
 
-# Standard library imports
-import os, sys, json, math, argparse, time  # File operations, system utilities, JSON handling, timing
-from multiprocessing import Pool, cpu_count, set_start_method  # Parallel processing support
+import os, sys, json, math, argparse, time
+from multiprocessing import Pool, cpu_count, set_start_method
 
-# Computer vision and numerical computing
-import cv2  # OpenCV for video processing and image operations
-import numpy as np  # Numerical arrays and mathematical operations
-import pandas as pd  # Data manipulation and CSV handling
+import cv2
+import numpy as np
+import pandas as pd
 
-# Machine learning frameworks
-import torch  # PyTorch for deep learning (InceptionV3 features)
-import mediapipe as mp  # Google's MediaPipe for keypoint detection (pose, hands, face)
-from tqdm import tqdm  # Progress bars for multiprocessing tracking
+import torch
+import mediapipe as mp
+from tqdm import tqdm
 
-# MULTIPROCESSING SETUP: Set start method to 'spawn' for CUDA compatibility
-# This prevents CUDA context issues when using multiple GPU workers
 try:
     set_start_method('spawn', force=True)
 except RuntimeError:
-    pass  # Already set by previous import or system default
+    pass
 
-# Path setup: Allow running both as a module (-m) and as a script (python preprocessing/preprocess.py)
-# This ensures imports work correctly regardless of how the script is executed
 if __package__ in (None, ""):
     sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 
-# Project-specific imports
-from ..extractors.iv3_features import extract_iv3_features, BatchedInceptionV3Processor  # InceptionV3 CNN feature extraction
-from ..core.occlusion_detection import compute_occlusion_detection  # Detect when keypoints are blocked/occluded
+from ..extractors.iv3_features import extract_iv3_features, BatchedInceptionV3Processor
+from ..core.occlusion_detection import compute_occlusion_detection
 from ..extractors.keypoints_features import (
-    POSE_UPPER_25,        # Upper body pose keypoint indices (25 points)
-    N_HAND,               # Number of hand keypoints per hand (21 points each)
-    FACE_MINIMAL_22,      # Face mesh keypoint indices (22 key facial points)
-    extract_keypoints_from_frame,  # Main keypoint extraction function
-    interpolate_gaps,     # Fill missing keypoints using linear interpolation (Android-compatible)
-    xy_from_landmark,     # Convert MediaPipe landmarks to normalized coordinates
-    create_models,        # Initialize MediaPipe models
-    close_models,         # Clean up MediaPipe models
-    MPModels,             # MediaPipe models container class
+    POSE_UPPER_25,
+    N_HAND,
+    FACE_MINIMAL_22,
+    extract_keypoints_from_frame,
+    interpolate_gaps,
+    xy_from_landmark,
+    create_models,
+    close_models,
+    MPModels,
 )
 
-# ----------------------------
-# Utility Functions
-# ----------------------------
-
 def ensure_dir(p):
-    """Create directory if it doesn't exist.
-    
-    Args:
-        p (str): Directory path to create
-    """
+    """Create directory if it doesn't exist."""
     os.makedirs(p, exist_ok=True)
 
 
 def validate_signer_id(signer_id):
-    """Validate signer ID format (S0-S7).
-    
-    Args:
-        signer_id (str): Signer ID to validate
-        
-    Returns:
-        bool: True if valid format, False otherwise
-    """
+    """Validate signer ID format (S0-S7)."""
     if signer_id is None:
-        return True  # Optional parameter
+        return True
     
     import re
     pattern = r'^S[0-7]$'
@@ -90,33 +54,14 @@ def validate_signer_id(signer_id):
 
 
 def to_npz(out_path, X, mask, timestamps_ms, meta, also_parquet=True):
-    """Save processed keypoint data to compressed .npz file with optional parquet export.
-    
-    This function saves the core output of video processing: keypoint coordinates,
-    visibility masks, timestamps, and metadata. The .npz format is used for efficient
-    storage and fast loading during training.
-    
-    Args:
-        out_path: Base path for output files (without extension)
-        X: Keypoint coordinates [T, 178] as float32 - flattened x,y coords for 89 keypoints
-        mask: Keypoint visibility mask [T, 89] as bool - True if keypoint is visible/confident
-        timestamps_ms: Frame timestamps [T] as int64 - milliseconds from video start
-        meta: Metadata dictionary (converted to JSON string) - processing parameters
-        also_parquet: If True, also create .parquet file for inspection in spreadsheet tools
-    """
-    # Save primary .npz file with all data compressed
+    """Save processed keypoint data to compressed .npz file with optional parquet export."""
     np.savez_compressed(out_path + ".npz", X=X, mask=mask, timestamps_ms=timestamps_ms, meta=json.dumps(meta))
     
-    # Optionally create human-readable parquet file for data inspection
     if also_parquet:
         try:
-            # Convert keypoint coordinates to DataFrame (each column = one coordinate)
             df = pd.DataFrame(X)
-            # Ensure string column names to avoid parquet mixed-type warnings
             df.columns = df.columns.astype(str)
-            # Add timestamp column for temporal reference
             df["t_ms"] = timestamps_ms
-            # Convert visibility mask to compact binary string for easy inspection
             df["mask_bits"] = ["".join("1" if b else "0" for b in row) for row in mask]
             df.to_parquet(out_path + ".parquet")
         except Exception as e:
@@ -124,15 +69,11 @@ def to_npz(out_path, X, mask, timestamps_ms, meta, also_parquet=True):
             print("[INFO] Install pyarrow or fastparquet for parquet support: pip install pyarrow")
 
 
-# ----------------------------
-# MediaPipe Solution References
-# ----------------------------
-# Store references to MediaPipe solutions for keypoint detection
 try:
-    mp_hands = mp.solutions.hands          # Hand landmark detection (21 points per hand)
-    mp_face_mesh = mp.solutions.face_mesh  # Face mesh detection (468 points, we use 22)
-    mp_drawing = mp.solutions.drawing_utils # Visualization utilities (unused in processing)
-    mp_pose = mp.solutions.pose            # Body pose detection (33 points, we use upper 25)
+    mp_hands = mp.solutions.hands
+    mp_face_mesh = mp.solutions.face_mesh
+    mp_drawing = mp.solutions.drawing_utils
+    mp_pose = mp.solutions.pose
 except AttributeError as e:
     raise ImportError(
         f"MediaPipe solutions not available. This may indicate an installation issue. "
@@ -818,13 +759,9 @@ def process_videos_multiprocess(video_files, out_dir, target_fps=30, out_size=25
     print(f"Videos per hour: {len(video_files) * 3600 / total_time:.1f}")
 
 
-# ----------------------------
-# Command-line Interface
-# ----------------------------
 if __name__ == "__main__":
     import argparse
     
-    # COMMAND-LINE INTERFACE: Setup argument parser for batch video processing
     parser = argparse.ArgumentParser(description="Preprocess video files to extract keypoints and IV3 features, detect occlusion, and write labels CSV")
     # Required arguments
     parser.add_argument('video_directory', help='Path to a video file or a directory containing videos')

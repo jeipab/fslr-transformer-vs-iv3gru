@@ -1,47 +1,21 @@
 """
 MediaPipe keypoint extraction utilities for Filipino sign language recognition.
 
-This module provides:
-- MediaPipe Holistic model management
-- Keypoint extraction from RGB frames (pose, hands, face)
-- Gap interpolation for missing keypoints
-- Normalized coordinate output in [0,1] range
+Provides MediaPipe Holistic model management, keypoint extraction from RGB frames,
+gap interpolation, and normalized coordinate output in [0,1] range.
 
-Keypoint structure (178 dimensions):
-- Pose landmarks: 25 points × 2 coordinates = 50 dims
-- Left hand: 21 points × 2 coordinates = 42 dims  
-- Right hand: 21 points × 2 coordinates = 42 dims
-- Face mesh: 22 points × 2 coordinates = 44 dims
-Total: 178 dimensions
-
-Input: RGB frame (H, W, 3)
-Output: vec178 [178] float32, mask89 [89] bool
+Keypoint structure: 178 dimensions (25 pose + 21 left hand + 21 right hand + 22 face) × 2 coordinates
 """
 
-# Standard library imports
-from dataclasses import dataclass  # Data structure definitions
+from dataclasses import dataclass
 
-# Numerical computing
-import numpy as np  # Numerical arrays and mathematical operations
+import numpy as np
+import mediapipe as mp
 
-# Computer vision framework
-import mediapipe as mp  # Google's MediaPipe for keypoint detection (pose, hands, face)
-
-# ----------------------------
 # Keypoint Configuration Constants
-# ----------------------------
-# These constants define which specific keypoints are extracted from MediaPipe's full set
-
-# Upper body pose keypoints (25 points from MediaPipe's 33-point pose model)
-# Includes: face landmarks (0-10), shoulders/arms (11-16), torso (17-22), hips (23-24)
 POSE_UPPER_25 = list(range(0, 11)) + list(range(11, 17)) + list(range(17, 23)) + [23, 24]
 
-# Hand keypoints (21 points per hand from MediaPipe's hand model)
-# Includes: wrist (0), thumb (1-4), index (5-8), middle (9-12), ring (13-16), pinky (17-20)
 N_HAND = 21
-
-# Key facial landmarks (22 points from MediaPipe's 468-point face mesh)
-# Minimal but expressive face landmark set with improved lip arcs and clean mouth corners
 FACE_MINIMAL_22 = [
     # Lips (8 points)
     81, 13, 311, 61, 178, 14, 402, 291,
@@ -54,15 +28,13 @@ FACE_MINIMAL_22 = [
 ]
 
 
-# ----------------------------
 # MediaPipe Solution References
-# ----------------------------
 # Store references to MediaPipe solutions for keypoint detection
 try:
-    mp_hands = mp.solutions.hands          # Hand landmark detection (21 points per hand)
-    mp_face_mesh = mp.solutions.face_mesh  # Face mesh detection (468 points, we use 22)
-    mp_drawing = mp.solutions.drawing_utils # Visualization utilities (unused in processing)
-    mp_pose = mp.solutions.pose            # Body pose detection (33 points, we use upper 25)
+    mp_hands = mp.solutions.hands
+    mp_face_mesh = mp.solutions.face_mesh
+    mp_drawing = mp.solutions.drawing_utils
+    mp_pose = mp.solutions.pose
 except AttributeError as e:
     raise ImportError(
         f"MediaPipe solutions not available. This may indicate an installation issue. "
@@ -71,29 +43,16 @@ except AttributeError as e:
     ) from e
 
 
-# ----------------------------
 # MediaPipe Model Container
-# ----------------------------
 
 @dataclass
 class MPModels:
-    """Container for initialized MediaPipe models.
-    
-    This dataclass holds references to the MediaPipe models needed for processing:
-    - seg: Selfie segmentation model for background removal
-    - hol: Holistic model for combined pose, hand, and face detection
-    
-    Attributes:
-        seg: Selfie segmentation model instance
-        hol: Holistic model instance
-    """
-    seg: any  # Selfie segmentation model for person/background separation
-    hol: any  # Holistic model for unified pose, hands, and face detection
+    """Container for initialized MediaPipe models."""
+    seg: any
+    hol: any
 
 
-# ----------------------------
 # Model Initialization and Cleanup
-# ----------------------------
 
 def create_models(seg_model=1, detection_conf=0.35, tracking_conf=0.25):
     """Initialize MediaPipe models for comprehensive keypoint extraction.
@@ -135,9 +94,7 @@ def close_models(models: MPModels):
     models.hol.close()  # Close holistic model
 
 
-# ----------------------------
 # Coordinate Conversion Utilities
-# ----------------------------
 
 def xy_from_landmark(lm, w, h):
     """Convert MediaPipe landmark to normalized coordinates.
@@ -173,9 +130,7 @@ def _lerp(a, b, t):
     return a + (b - a) * t
 
 
-# ----------------------------
 # Temporal Smoothing and Validation
-# ----------------------------
 
 def smooth_keypoints_ema(X, mask, alpha=0.3):
     """Apply Exponential Moving Average (EMA) smoothing to keypoint sequences.
@@ -277,9 +232,7 @@ def validate_and_clean_keypoints(X, mask, max_jump=0.3):
     return mask_cleaned
 
 
-# ----------------------------
 # Gap Interpolation for Temporal Consistency
-# ----------------------------
 
 def interpolate_gaps(X, mask, max_gap=5):
     """Interpolate missing keypoints using linear interpolation (Android-compatible).
@@ -342,9 +295,7 @@ def interpolate_gaps(X, mask, max_gap=5):
     return X_out, mask_out
 
 
-# ----------------------------
 # Main Keypoint Extraction Function
-# ----------------------------
 
 def extract_keypoints_from_frame(img_rgb, models: MPModels, conf_thresh=0.5):
     """Extract comprehensive keypoints from a single RGB frame.

@@ -1,98 +1,55 @@
 """
 InceptionV3 feature extraction for Filipino sign language recognition.
 
-This module provides:
-- Single-frame InceptionV3 feature extraction (2048D vectors)
-- Batched InceptionV3 processing for GPU-optimized parallel processing
-- Video processing with both keypoints and CNN features
-- ImageNet pretrained weights for robust feature extraction
-
-Classes:
-- BatchedInceptionV3Processor: GPU-optimized batch processing
-
-Functions:
-- extract_iv3_features: Single-frame feature extraction
-
-Input: OpenCV BGR image(s)
-Output: 2048-dimensional feature vector(s) (float32)
-
-The InceptionV3 model uses ImageNet pretrained weights and global average pooling
-to produce consistent feature representations suitable for temporal modeling.
+Provides single-frame and batched InceptionV3 feature extraction (2048D vectors)
+using ImageNet pretrained weights.
 """
-# Standard library imports
-import argparse  # Command-line interface
-import os  # File system operations
-import json  # JSON serialization for metadata
 
-# Computer vision and numerical computing
-import cv2  # OpenCV for video processing and image operations
-import numpy as np  # Numerical arrays and mathematical operations
-import pandas as pd  # Data manipulation and CSV handling
+import argparse
+import os
+import json
 
-# Deep learning framework
-import torch  # PyTorch for deep learning
-import torch.nn as nn  # Neural network modules
-from torchvision.models import inception_v3, Inception_V3_Weights  # Pre-trained InceptionV3 model
+import cv2
+import numpy as np
+import pandas as pd
 
-# Project-specific imports
+import torch
+import torch.nn as nn
+from torchvision.models import inception_v3, Inception_V3_Weights
+
 from ..extractors.keypoints_features import (
-    extract_keypoints_from_frame,  # Main keypoint extraction function
-    interpolate_gaps,     # Fill missing keypoints using interpolation
-    smooth_keypoints_ema, # Apply EMA smoothing for temporal consistency (v2.0)
-    validate_and_clean_keypoints,  # Remove outlier keypoints (v2.0)
-    POSE_UPPER_25,        # Upper body pose keypoint indices (25 points)
-    FACE_MINIMAL_22,      # Face mesh keypoint indices (22 key facial points)
-    create_models,        # Initialize MediaPipe models
-    close_models,         # Clean up MediaPipe models
+    extract_keypoints_from_frame,
+    interpolate_gaps,
+    smooth_keypoints_ema,
+    validate_and_clean_keypoints,
+    POSE_UPPER_25,
+    FACE_MINIMAL_22,
+    create_models,
+    close_models,
 )
 
-# ----------------------------
-# Model Configuration
-# ----------------------------
-# Define model weights to use (weights are cached by PyTorch after first download)
-# Each worker creates its own model instance for proper GPU isolation
 _iv3_weights = Inception_V3_Weights.IMAGENET1K_V1
 
-# ImageNet normalization constants (RGB channel means and standard deviations)
 _IMAGENET_MEAN = torch.tensor([0.485, 0.456, 0.406]).view(3, 1, 1)
 _IMAGENET_STD = torch.tensor([0.229, 0.224, 0.225]).view(3, 1, 1)
 
-# ----------------------------
-# Shared Preprocessing Utilities
-# ----------------------------
 
 def _preprocess_frame_to_tensor(frame_bgr, image_size=(299, 299), device=None):
-    """Preprocess a BGR frame to InceptionV3 input tensor.
-    
-    Args:
-        frame_bgr: OpenCV BGR image (H, W, 3) in [0, 255] pixel range
-        image_size: Target image size for InceptionV3 (default: 299x299)
-        device: PyTorch device for computation (default: CPU)
-        
-    Returns:
-        Preprocessed tensor [1, 3, 299, 299] ready for InceptionV3
-    """
+    """Preprocess a BGR frame to InceptionV3 input tensor."""
     if device is None:
         device = torch.device("cpu")
     
-    # STEP 1: Convert BGR to RGB and resize
     frame_rgb = cv2.cvtColor(frame_bgr, cv2.COLOR_BGR2RGB)
     img_resized = cv2.resize(frame_rgb, image_size)
     
-    # STEP 2: Convert to PyTorch tensor and normalize pixel values to [0, 1]
     tensor = torch.from_numpy(img_resized).permute(2, 0, 1).float() / 255.0
-    tensor = tensor.unsqueeze(0).to(device)  # Add batch dimension: [1, 3, 299, 299]
+    tensor = tensor.unsqueeze(0).to(device)
     
-    # STEP 3: Apply ImageNet normalization
     mean = _IMAGENET_MEAN.to(device)
     std = _IMAGENET_STD.to(device)
     tensor = (tensor - mean) / std
     
     return tensor
-
-# ----------------------------
-# Batched InceptionV3 Processing for GPU Efficiency
-# ----------------------------
 
 class BatchedInceptionV3Processor:
     """Batched InceptionV3 feature extraction for efficient GPU processing.
@@ -216,9 +173,7 @@ def extract_iv3_features(frame_bgr, image_size=(299, 299), device=None):
     # STEP 5: Return as numpy array on CPU
     return feats.squeeze(0).cpu().numpy()
 
-# ----------------------------
 # Utility Functions
-# ----------------------------
 
 def ensure_dir(p):
     """Create directory if it doesn't exist.
@@ -320,9 +275,7 @@ def to_npz(out_path, X, X2048, mask, timestamps_ms, meta, also_parquet=True):
             print(f"[WARN] Could not save parquet file: {e}")
             print("[INFO] Install pyarrow or fastparquet for parquet support: pip install pyarrow")
 
-# ----------------------------
 # Labels CSV Management
-# ----------------------------
 
 def read_or_create_labels_csv(label_file):
     """Read existing labels CSV or create new file with headers.
@@ -361,9 +314,7 @@ def update_labels_csv(label_file, video_file, gloss, cat):
     df = pd.concat([df, new_row], ignore_index=True)
     df.to_csv(label_file, index=False)
 
-# ----------------------------
 # Main Video Processing Function
-# ----------------------------
 
 def process_video(video_path, out_dir, label_file=None, target_fps=30, out_size=256, conf_thresh=0.5, max_gap=5, write_keypoints=True, write_iv3_features=True, feature_key='X2048', gloss=None, cat=None, flip_horizontal=False):
     """Process a single video file and extract multi-modal features.
@@ -533,9 +484,7 @@ def process_video(video_path, out_dir, label_file=None, target_fps=30, out_size=
     # Report successful processing
     print(f"[OK] {basename}: frames={len(X_frames)} saved: {npz_out_path}.npz (+ .parquet)")
 
-# ----------------------------
 # Command-line Interface
-# ----------------------------
 
 if __name__ == "__main__":
     # COMMAND-LINE INTERFACE: Setup argument parser for single video processing

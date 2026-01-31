@@ -203,7 +203,7 @@ def validate_labels(files: List[Tuple[Path, Dict]], labels_map: Dict[int, Tuple[
             operations.append((current_path, new_path, f"Label correction: '{label}' -> '{expected_label}'"))
     
     if errors:
-        print("\n⚠️  Validation errors found:", file=sys.stderr)
+        print("\n[WARNING] Validation errors found:", file=sys.stderr)
         for error in errors:
             print(f"  {error}", file=sys.stderr)
     
@@ -304,9 +304,9 @@ def generate_summary(files: List[Tuple[Path, Dict]], labels_map: Dict[int, Tuple
         print(f"  Expected files: {expected_count}")
         print(f"  Actual files: {actual_count}")
         if gaps > 0:
-            print(f"  ⚠️  Gaps detected: {gaps} missing numbers")
+            print(f"  [WARNING] Gaps detected: {gaps} missing numbers")
         else:
-            print(f"  ✅ No gaps detected")
+            print(f"  No gaps detected")
     
     # Validate against labels_reference.csv if provided
     if labels_map:
@@ -317,13 +317,13 @@ def generate_summary(files: List[Tuple[Path, Dict]], labels_map: Dict[int, Tuple
                 unknown_labels.add(parsed['label'])
         
         if unknown_labels:
-            print(f"\n⚠️  Unknown labels (not in labels_reference.csv):")
+            print(f"\n[WARNING] Unknown labels (not in labels_reference.csv):")
             for label in sorted(unknown_labels):
                 print(f"  {label}")
         else:
-            print(f"\n✅ All labels match labels_reference.csv")
+            print(f"\nAll labels match labels_reference.csv")
     
-    print("✅ Summary complete.")
+    print("Summary complete.")
 
 
 def main():
@@ -352,7 +352,7 @@ def main():
     files = collect_npz_files(input_dir, recursive=args.recursive, hierarchical=args.hierarchical)
     
     if not files:
-        print("[ERROR] ❌ No valid .npz files found", file=sys.stderr)
+        print("[ERROR] No valid .npz files found", file=sys.stderr)
         return
     
     print(f"📦 Found {len(files)} .npz files")
@@ -363,7 +363,7 @@ def main():
         explicit_labels_path = args.labels.resolve() if args.labels is not None else None
         labels_csv = find_labels_file(root, explicit_labels_path)
         labels_map = read_labels(labels_csv)
-        print(f"✅ Loaded {len(labels_map)} labels from reference")
+        print(f"Loaded {len(labels_map)} labels from reference")
     
     # Summary mode
     if args.summary:
@@ -374,10 +374,10 @@ def main():
     if args.validate_labels:
         operations = validate_labels(files, labels_map)
         if not operations:
-            print("✅ All labels are correct, no changes needed")
+            print("All labels are correct, no changes needed")
             return
         
-        print(f"\n📝 Found {len(operations)} files to rename:")
+        print(f"\nFound {len(operations)} files to rename:")
         if args.dry_run:
             for src, dest, reason in operations[:10]:
                 print(f"  {src.name} -> {dest.name} ({reason})")
@@ -388,20 +388,20 @@ def main():
             for src, dest, reason in operations:
                 try:
                     src.rename(dest)
-                    print(f"✅ {src.name} -> {dest.name}")
+                    print(f"{src.name} -> {dest.name}")
                 except Exception as e:
                     print(f"[ERROR] ❗ Could not rename {src}: {e}", file=sys.stderr)
-            print(f"\n✅ Renamed {len(operations)} files")
+            print(f"\nRenamed {len(operations)} files")
         return
     
     # Renumber mode
     if args.renumber:
         operations = renumber_files(files, args.start_index, args.digits)
         if not operations:
-            print("✅ All files already numbered correctly")
+            print("All files already numbered correctly")
             return
         
-        print(f"\n📝 Will renumber {len(operations)} files:")
+        print(f"\nWill renumber {len(operations)} files:")
         if args.dry_run:
             for src, dest in operations[:10]:
                 print(f"  {src.name} -> {dest.name}")
@@ -425,7 +425,7 @@ def main():
     # Reorganize mode
     if args.reorganize:
         if not labels_map:
-            print("[ERROR] ❌ --reorganize requires labels_reference.csv", file=sys.stderr)
+            print("[ERROR] --reorganize requires labels_reference.csv", file=sys.stderr)
             return
         
         output_dir = args.output.resolve() if args.output else (input_dir.parent / "Renamed").resolve()
@@ -433,7 +433,7 @@ def main():
         
         operations = reorganize_into_hierarchical(files, labels_map, output_dir, args.start_index, args.digits)
         
-        print(f"\n📝 Will reorganize {len(operations)} files into hierarchical structure:")
+        print(f"\nWill reorganize {len(operations)} files into hierarchical structure:")
         if args.dry_run:
             for src, dest in operations[:10]:
                 rel_src = src.relative_to(input_dir)
@@ -450,11 +450,11 @@ def main():
                     src.rename(dest)
                 except Exception as e:
                     print(f"[ERROR] ❗ Could not move {src} to {dest}: {e}", file=sys.stderr)
-            print(f"✅ Reorganized {len(operations)} files")
+            print(f"Reorganized {len(operations)} files")
         return
     
     # No action specified
-    print("[ERROR] ❌ Please specify one of: --renumber, --reorganize, --validate-labels, or --summary", file=sys.stderr)
+    print("[ERROR] Please specify one of: --renumber, --reorganize, --validate-labels, or --summary", file=sys.stderr)
 
 
 if __name__ == "__main__":

@@ -66,12 +66,12 @@ def debug_video_codecs():
             # Test creating a video writer
             out = cv2.VideoWriter('test_codec.mp4', fourcc, 30.0, (640, 360))
             if out.isOpened():
-                logger.info(f"✅ {codec_name} codec: SUPPORTED")
+                logger.info(f"{codec_name} codec: SUPPORTED")
                 out.release()
             else:
-                logger.info(f"❌ {codec_name} codec: NOT SUPPORTED")
+                logger.info(f"{codec_name} codec: NOT SUPPORTED")
         except Exception as e:
-            logger.info(f"❌ {codec_name} codec: ERROR - {e}")
+            logger.info(f"{codec_name} codec: ERROR - {e}")
 
 def debug_color_correction():
     """Debug color correction on a test image"""
@@ -87,7 +87,7 @@ def debug_color_correction():
     
     # Save original
     cv2.imwrite('debug_original.jpg', test_image)
-    logger.info("✅ Saved debug_original.jpg")
+    logger.info("Saved debug_original.jpg")
     
     # Test LAB color space correction
     try:
@@ -112,10 +112,10 @@ def debug_color_correction():
         
         # Save corrected
         cv2.imwrite('debug_corrected.jpg', bgr_corrected)
-        logger.info("✅ Saved debug_corrected.jpg")
+        logger.info("Saved debug_corrected.jpg")
         
     except Exception as e:
-        logger.error(f"❌ LAB color correction failed: {e}")
+        logger.error(f"LAB color correction failed: {e}")
 
 def debug_video_processing():
     """Debug video processing with a simple test video"""
@@ -128,7 +128,7 @@ def debug_video_processing():
     out = cv2.VideoWriter('test_input.mp4', fourcc, 30.0, (640, 360))
     
     if not out.isOpened():
-        logger.error("❌ Cannot create test video writer")
+        logger.error("Cannot create test video writer")
         return
     
     # Create 30 frames of yellowish video
@@ -138,12 +138,12 @@ def debug_video_processing():
         out.write(frame)
     
     out.release()
-    logger.info("✅ Created test_input.mp4")
+    logger.info("Created test_input.mp4")
     
     # Now try to read and process it
     cap = cv2.VideoCapture('test_input.mp4')
     if not cap.isOpened():
-        logger.error("❌ Cannot open test video")
+        logger.error("Cannot open test video")
         return
     
     # Get video properties
@@ -178,11 +178,11 @@ def debug_video_processing():
         if out_corrected.isOpened():
             out_corrected.write(corrected_frame)
             out_corrected.release()
-            logger.info("✅ Created test_output.mp4")
+            logger.info("Created test_output.mp4")
         else:
-            logger.error("❌ Cannot create corrected video writer")
+            logger.error("Cannot create corrected video writer")
     else:
-        logger.error("❌ Cannot read first frame")
+        logger.error("Cannot read first frame")
     
     cap.release()
 

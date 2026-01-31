@@ -6,8 +6,8 @@ This guide explains all parameters that control occlusion detection strictness a
 
 ### 1. **Confidence Threshold** (Most Important)
 
-**Current value:** `0.4` (line 790, 1377)
-**Location:** `compute_occlusion_detection_from_keypoints()`
+**Current value:** `0.4`
+**Location:** `DEFAULT_OCCLUSION_CONFIG` in `preprocessing/core/occlusion_detection.py`
 
 Controls the minimum confidence score required for a frame to be considered occluded.
 
@@ -19,13 +19,14 @@ Controls the minimum confidence score required for a frame to be considered occl
 **Code location:**
 
 ```python
-if confidence > 0.4:  # Line 790 - change this value
+# In DEFAULT_OCCLUSION_CONFIG
+'confidence_threshold': 0.4,  # Change this value
 ```
 
 ### 2. **Minimum Fingertips Inside Face Region**
 
-**Current value:** `1` (line 705, 1374)
-**Location:** `compute_occlusion_detection_from_keypoints()`
+**Current value:** `1`
+**Location:** `DEFAULT_OCCLUSION_CONFIG` in `preprocessing/core/occlusion_detection.py`
 
 Minimum number of fingertips that must be inside a face region to trigger occlusion.
 
@@ -37,13 +38,14 @@ Minimum number of fingertips that must be inside a face region to trigger occlus
 **Code location:**
 
 ```python
-min_fingertips_inside = 1  # Line 705 - change this value
+# In DEFAULT_OCCLUSION_CONFIG
+'min_fingertips_inside': 1,  # Change this value
 ```
 
 ### 3. **Proximity Multiplier**
 
-**Current value:** `1.5` (line 706, 1375)
-**Location:** `_detect_occlusions_multi_method()`
+**Current value:** `1.5`
+**Location:** `DEFAULT_OCCLUSION_CONFIG` in `preprocessing/core/occlusion_detection.py`
 
 Multiplier for proximity detection radius. Larger values detect hands further from face.
 
@@ -55,14 +57,14 @@ Multiplier for proximity detection radius. Larger values detect hands further fr
 **Code location:**
 
 ```python
-proximity_multiplier = 1.5  # Line 706 - decrease this value
-proximity_radius = region_radius * proximity_multiplier  # Line 1000
+# In DEFAULT_OCCLUSION_CONFIG
+'proximity_multiplier': 1.5,  # Decrease this value
 ```
 
 ### 4. **Face Region Radii**
 
-**Current values:** Varies by region (lines 881, 892, 899, 910, 920)
-**Location:** `_create_enhanced_face_regions()`
+**Current values:** Varies by region
+**Location:** `_create_enhanced_face_regions()` in `preprocessing/core/occlusion_detection.py`
 
 Size of detection regions for each face area.
 
@@ -78,15 +80,16 @@ Size of detection regions for each face area.
 **Code location:**
 
 ```python
-'radius': 0.12 * face_scale,  # Lines 881, 910 - decrease multipliers
-'radius': 0.15 * face_scale,  # Lines 892, 920 - decrease multipliers
-'radius': 0.10 * face_scale,  # Line 899 - decrease multiplier
+# In _create_enhanced_face_regions()
+'radius': 0.12 * face_scale,  # Forehead, mouth - decrease multipliers
+'radius': 0.15 * face_scale,  # Cheeks, neck - decrease multipliers
+'radius': 0.10 * face_scale,  # Nose - decrease multiplier
 ```
 
 ### 5. **Trajectory Analysis Multiplier**
 
-**Current value:** `1.5` (line 1018)
-**Location:** `_detect_occlusions_multi_method()`
+**Current value:** `1.5`
+**Location:** `_detect_occlusions_multi_method()` in `preprocessing/core/occlusion_detection.py`
 
 Multiplier for trajectory-based detection (hand approaching face).
 
@@ -98,13 +101,14 @@ Multiplier for trajectory-based detection (hand approaching face).
 **Code location:**
 
 ```python
-if decreasing_count >= 2 and distances[-1] <= region_radius * 1.5:  # Line 1018 - decrease multiplier
+# In _detect_occlusions_multi_method()
+if decreasing_count >= 2 and distances[-1] <= region_radius * 1.5:  # Decrease multiplier
 ```
 
 ### 6. **Orientation Detection Multiplier**
 
-**Current value:** `1.8` (lines 1030, 1031)
-**Location:** `_detect_occlusions_multi_method()`
+**Current value:** `1.8`
+**Location:** `_detect_occlusions_multi_method()` in `preprocessing/core/occlusion_detection.py`
 
 Multiplier for orientation-based detection (hand pointing toward face).
 
@@ -116,17 +120,20 @@ Multiplier for orientation-based detection (hand pointing toward face).
 **Code location:**
 
 ```python
-if min_distance <= region_radius * 1.8:  # Line 1030 - decrease multiplier
-orientation_score = max(0, 1 - min_distance / (region_radius * 1.8))  # Line 1031
+# In _detect_occlusions_multi_method()
+if min_distance <= region_radius * 1.8:  # Decrease multiplier
+orientation_score = max(0, 1 - min_distance / (region_radius * 1.8))
 ```
 
 ### 7. **Consecutive Frame Parameters**
 
 **Current values:**
 
-- `consecutive_window_size`: `5` (line 1381)
-- `max_consecutive_skips`: `2` (line 1382)
-- `min_consecutive_confidence`: `0.2` (line 1383)
+- `consecutive_window_size`: `5`
+- `max_consecutive_skips`: `2`
+- `min_consecutive_confidence`: `0.2`
+
+**Location:** `DEFAULT_OCCLUSION_CONFIG` in `preprocessing/core/occlusion_detection.py`
 
 Controls temporal filtering - requires multiple consecutive frames to confirm occlusion.
 
@@ -139,19 +146,22 @@ Controls temporal filtering - requires multiple consecutive frames to confirm oc
 **Code location:**
 
 ```python
-'consecutive_window_size': 5,       # Line 1381
-'max_consecutive_skips': 2,         # Line 1382
-'min_consecutive_confidence': 0.2   # Line 1383
+# In DEFAULT_OCCLUSION_CONFIG
+'consecutive_window_size': 5,
+'max_consecutive_skips': 2,
+'min_consecutive_confidence': 0.2
 ```
 
 ### 8. **Method Weights** (Advanced)
 
 **Current values:**
 
-- Direct intersection: `0.5` (line 994)
-- Proximity: `0.3` (line 1003)
-- Trajectory: `0.15` (line 1020)
-- Orientation: `0.05` (line 1032)
+- Direct intersection: `0.5`
+- Proximity: `0.3`
+- Trajectory: `0.15`
+- Orientation: `0.05`
+
+**Location:** `_detect_occlusions_multi_method()` in `preprocessing/core/occlusion_detection.py`
 
 Controls how much each detection method contributes to final confidence.
 
@@ -163,17 +173,18 @@ Controls how much each detection method contributes to final confidence.
 **Code location:**
 
 ```python
-confidence += 0.5   # Line 994 - increase this
-confidence += proximity_score * 0.3   # Line 1003 - decrease this
-confidence += approach_score * 0.15   # Line 1020 - decrease this
-confidence += orientation_score * 0.05   # Line 1032 - decrease or remove
+# In _detect_occlusions_multi_method()
+confidence += 0.5   # Direct intersection - increase this
+confidence += proximity_score * 0.3   # Proximity - decrease this
+confidence += approach_score * 0.15   # Trajectory - decrease this
+confidence += orientation_score * 0.05   # Orientation - decrease or remove
 ```
 
 ## How to Apply Changes
 
 ### Option 1: Modify Default Values in Code
 
-Edit `preprocessing/core/occlusion_detection.py` directly at the locations listed above.
+Edit `DEFAULT_OCCLUSION_CONFIG` in `preprocessing/core/occlusion_detection.py` or modify the hardcoded values in the detection functions.
 
 ### Option 2: Pass Parameters via kwargs
 

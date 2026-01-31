@@ -273,7 +273,7 @@ def generate_summary(items: List[Dict], labels_map: Dict[int, Tuple[str, int]] =
                 total_gaps += gaps
     
     if total_gaps == 0:
-        print("  ✅ No gaps detected")
+        print("  No gaps detected")
     else:
         print(f"\n  Total gaps across all directories: {total_gaps}")
     
@@ -291,7 +291,7 @@ def generate_summary(items: List[Dict], labels_map: Dict[int, Tuple[str, int]] =
             label, _ = labels_map.get(gloss_id, ("unknown", -1))
             print(f"  G{gloss_id} ({label}): {count} files")
     
-    print("✅ Summary complete.")
+    print("Summary complete.")
 
 
 def main():
@@ -317,11 +317,11 @@ def main():
     try:
         items = collect_hierarchical_clips(input_dir)
     except FileNotFoundError as e:
-        print(f"[ERROR] ❌ {e}", file=sys.stderr)
+        print(f"[ERROR] {e}", file=sys.stderr)
         return
     
     if not items:
-        print("[ERROR] ❌ No video files found", file=sys.stderr)
+        print("[ERROR] No video files found", file=sys.stderr)
         return
     
     print(f"📦 Found {len(items)} video files")
@@ -332,7 +332,7 @@ def main():
         explicit_labels_path = args.labels.resolve() if args.labels is not None else None
         labels_csv = find_labels_file(root, explicit_labels_path)
         labels_map = read_labels(labels_csv)
-        print(f"✅ Loaded {len(labels_map)} labels from reference")
+        print(f"Loaded {len(labels_map)} labels from reference")
     
     # Summary mode
     if args.summary:
@@ -344,10 +344,10 @@ def main():
         operations = renumber_hierarchical_clips(items, args.start_index, args.digits)
         
         if not operations:
-            print("✅ All files already numbered correctly")
+            print("All files already numbered correctly")
             return
         
-        print(f"\n📝 Found {len(operations)} files to renumber:")
+        print(f"\nFound {len(operations)} files to renumber:")
         if args.dry_run:
             for src, dest in operations[:20]:
                 rel_src = src.relative_to(input_dir)
@@ -367,22 +367,22 @@ def main():
             for temp, dest in temp_renames:
                 temp.rename(dest)
             
-            print(f"✅ Renumbered {len(operations)} files")
+            print(f"Renumbered {len(operations)} files")
         return
     
     # Rename to clip format mode
     if args.rename_to_clip_format:
         if not labels_map:
-            print("[ERROR] ❌ --rename-to-clip-format requires labels_reference.csv", file=sys.stderr)
+            print("[ERROR] --rename-to-clip-format requires labels_reference.csv", file=sys.stderr)
             return
         
         operations = rename_to_clip_format(items, labels_map, args.start_index, args.digits, args.keep_structure)
         
         if not operations:
-            print("✅ All files already in correct format")
+            print("All files already in correct format")
             return
         
-        print(f"\n📝 Found {len(operations)} files to rename:")
+        print(f"\nFound {len(operations)} files to rename:")
         if args.dry_run:
             for src, dest in operations[:20]:
                 rel_src = src.relative_to(input_dir)
@@ -402,11 +402,11 @@ def main():
             for temp, dest in temp_renames:
                 temp.rename(dest)
             
-            print(f"✅ Renamed {len(operations)} files")
+            print(f"Renamed {len(operations)} files")
         return
     
     # No action specified
-    print("[ERROR] ❌ Please specify one of: --renumber, --rename-to-clip-format, or --summary", file=sys.stderr)
+    print("[ERROR] Please specify one of: --renumber, --rename-to-clip-format, or --summary", file=sys.stderr)
 
 
 if __name__ == "__main__":

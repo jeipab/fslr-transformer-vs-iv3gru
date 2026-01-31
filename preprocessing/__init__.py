@@ -1,32 +1,8 @@
 """
 Preprocessing module for Filipino Sign Language Recognition.
 
-This module provides preprocessing functionality for converting raw sign language
-videos into training-ready features and keypoints for both Transformer and InceptionV3+GRU models.
-
-Key Components:
-- Video preprocessing with MediaPipe keypoint extraction
-- InceptionV3 feature extraction for CNN-based models
-- Multi-process parallelization for faster processing
-- Occlusion detection and validation utilities
-- File management and dataset validation tools
-
-Available Processors:
-- Single video preprocessing with configurable outputs
-- Multi-process batch processing with 30-50x speedup
-- Feature extraction utilities for both keypoints and CNN features
-
-Usage:
-    from preprocessing import process_video, process_videos_multiprocess
-    
-    # Process single video (sequential)
-    python -m preprocessing.core.preprocess input.mp4 output_dir --write-keypoints --write-iv3-features
-    
-    # Batch processing (parallel)
-    python -m preprocessing.core.preprocess input_dir output_dir --write-keypoints --write-iv3-features --workers 8
-    
-    # Validate processed dataset
-    python -m preprocessing.utils.validate_npz processed_dir
+Provides preprocessing functionality for converting raw sign language videos
+into training-ready features and keypoints.
 """
 
 # Core preprocessing functionality

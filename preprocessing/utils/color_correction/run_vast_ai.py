@@ -31,7 +31,7 @@ def main():
     print("Step 1: Running environment debug...")
     try:
         result = subprocess.run([sys.executable, "vast_ai_debug.py"], check=True)
-        print("✅ Debug completed successfully!")
+        print("Debug completed successfully!")
     except subprocess.CalledProcessError as e:
         print(f"⚠ Debug script had issues: {e}")
         print("Continuing anyway...")
@@ -55,7 +55,7 @@ def main():
     try:
         result = subprocess.run(cmd, check=True)
         print("=" * 60)
-        print("✅ Color correction completed successfully!")
+        print("Color correction completed successfully!")
         print(f"Check the '{output_folder}' folder for corrected videos")
         
         # List output files
@@ -71,7 +71,7 @@ def main():
             print("Check the debug output above for clues.")
         
     except subprocess.CalledProcessError as e:
-        print(f"❌ Error running color correction: {e}")
+        print(f"[ERROR] Error running color correction: {e}")
         print("\nTroubleshooting steps:")
         print("1. Check the debug output above")
         print("2. Try reducing batch size: --batch-size 1")

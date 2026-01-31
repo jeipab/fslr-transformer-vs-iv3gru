@@ -1,103 +1,60 @@
 """
 Hand-head occlusion detection for Filipino sign language recognition.
 
-This module provides comprehensive occlusion detection capabilities using multiple approaches:
-- Computer vision-based detection using MediaPipe keypoints
-- Multi-method detection algorithms (ellipse, proximity, trajectory analysis)
-- Temporal filtering for robust detection across video sequences
-- 5-region head partitioning (forehead, cheeks, nose, mouth, neck)
-- Adaptive thresholds and consecutive frame analysis
-
-The module supports both keypoint-based and raw video processing, with configurable
-parameters for different detection scenarios and quality requirements.
+Provides occlusion detection using MediaPipe keypoints with multiple detection
+algorithms and temporal filtering.
 """
 
-# Standard library imports
-import warnings  # Warning system for error handling
-from collections import deque  # Efficient queue for temporal filtering
-from dataclasses import dataclass  # Data structure definitions
-from typing import List, Tuple, Dict, Optional, Set, Union  # Type hints for better code clarity
+import warnings
+from collections import deque
+from dataclasses import dataclass
+from typing import List, Tuple, Dict, Optional, Set, Union
 
-# Numerical computing
-import numpy as np  # Numerical arrays and mathematical operations
+import numpy as np
 
-
-# ----------------------------
-# Hand Feature Extraction
-# ----------------------------
 
 def _hand_centers_and_tips(frame_xy: np.ndarray, frame_mask: np.ndarray, hand_start: int, hand_len: int) -> tuple[tuple[float, float] | None, list[tuple[float, float]]]:
-    """Extract palm center and fingertip coordinates for one hand from keypoint data.
-    
-    This function processes MediaPipe hand keypoints to extract key anatomical features:
-    - Palm center: Computed from MCP (metacarpophalangeal) joint positions
-    - Fingertips: All five fingertip positions with validation
-    
-    Args:
-        frame_xy: Keypoint coordinates array [178] - flattened x,y coordinates
-        frame_mask: Visibility mask array [89] - boolean visibility flags
-        hand_start: Starting index for hand keypoints (25 for left, 46 for right)
-        hand_len: Number of hand keypoints (21)
-        
-    Returns:
-        Tuple of (palm_center, fingertip_list) where:
-        - palm_center: (x, y) coordinates or None if insufficient data
-        - fingertip_list: List of (x, y) coordinates for visible fingertips
-    """
-    # MediaPipe hand landmark indices (relative to hand start)
-    mcp_rel = [5, 9, 13, 17]  # MCP joints (base of fingers, excluding thumb)
-    fingertip_rel = [4, 8, 12, 16, 20]  # All fingertips (thumb, index, middle, ring, pinky)
+    """Extract palm center and fingertip coordinates for one hand from keypoint data."""
+    mcp_rel = [5, 9, 13, 17]
+    fingertip_rel = [4, 8, 12, 16, 20]
     mcp_coords: list[tuple[float, float]] = []
     
-    # STEP 1: Extract MCP joint coordinates for palm center calculation
     for r in mcp_rel:
-        if hand_len <= r:  # Skip if hand model doesn't have this keypoint
+        if hand_len <= r:
             continue
-        if bool(frame_mask[hand_start + r]):  # Check if keypoint is visible
-            idx = 2 * (hand_start + r)  # Calculate flattened array index
-            coord = (float(frame_xy[idx]), float(frame_xy[idx + 1]))  # Extract (x, y)
-            # Validate coordinate is within normalized bounds [0, 1]
+        if bool(frame_mask[hand_start + r]):
+            idx = 2 * (hand_start + r)
+            coord = (float(frame_xy[idx]), float(frame_xy[idx + 1]))
             if 0 <= coord[0] <= 1 and 0 <= coord[1] <= 1:
                 mcp_coords.append(coord)
     
-    # STEP 2: Calculate palm center from MCP joints or fallback to wrist
     palm_center: tuple[float, float] | None
-    if len(mcp_coords) >= 2:  # Need at least 2 MCP joints for reliable center
-        # Calculate centroid of visible MCP joints
+    if len(mcp_coords) >= 2:
         mx = sum(p[0] for p in mcp_coords) / float(len(mcp_coords))
         my = sum(p[1] for p in mcp_coords) / float(len(mcp_coords))
         palm_center = (mx, my)
     else:
-        # Fallback: use wrist position if MCP joints are not available
-        if bool(frame_mask[hand_start + 0]):  # Check wrist visibility
-            idx0 = 2 * (hand_start + 0)  # Wrist is always at index 0
+        if bool(frame_mask[hand_start + 0]):
+            idx0 = 2 * (hand_start + 0)
             wrist_coord = (float(frame_xy[idx0]), float(frame_xy[idx0 + 1]))
-            # Validate wrist coordinates
             if 0 <= wrist_coord[0] <= 1 and 0 <= wrist_coord[1] <= 1:
                 palm_center = wrist_coord
             else:
                 palm_center = None
         else:
-            palm_center = None  # No reliable palm center available
+            palm_center = None
     
-    # STEP 3: Extract fingertip coordinates with validation
     tips: list[tuple[float, float]] = []
     for r in fingertip_rel:
-        if hand_len <= r:  # Skip if hand model doesn't have this keypoint
+        if hand_len <= r:
             continue
-        if bool(frame_mask[hand_start + r]):  # Check if fingertip is visible
-            idx = 2 * (hand_start + r)  # Calculate flattened array index
-            tip_coord = (float(frame_xy[idx]), float(frame_xy[idx + 1]))  # Extract (x, y)
-            # Validate fingertip coordinates are within normalized bounds
+        if bool(frame_mask[hand_start + r]):
+            idx = 2 * (hand_start + r)
+            tip_coord = (float(frame_xy[idx]), float(frame_xy[idx + 1]))
             if 0 <= tip_coord[0] <= 1 and 0 <= tip_coord[1] <= 1:
                 tips.append(tip_coord)
     
     return palm_center, tips
-
-
-# ----------------------------
-# Face Landmark Validation
-# ----------------------------
 
 def _validate_face_landmarks(face_coords: List[Tuple[float, float]], 
                            face_indices: List[int]) -> Tuple[List[Tuple[float, float]], List[int]]:
@@ -166,9 +123,7 @@ def _is_valid_landmark_position(coord: Tuple[float, float], landmark_idx: int) -
     return 0.1 <= x <= 0.9 and 0.1 <= y <= 0.9
 
 
-# ----------------------------
 # Dependency Management
-# ----------------------------
 
 def _check_dependencies() -> bool:
     """Check if required optional dependencies are available for advanced occlusion detection.
@@ -195,9 +150,7 @@ def _check_dependencies() -> bool:
         return False  # Dependencies not available, use fallback methods
 
 
-# ----------------------------
 # Data Structures for Geometric Processing
-# ----------------------------
 
 @dataclass
 class Point2D:
@@ -289,9 +242,7 @@ class HeadRegion:
     NAMES = ['forehead', 'cheeks', 'nose', 'mouth', 'neck']
 
 
-# ----------------------------
 # Main Occlusion Detection Class
-# ----------------------------
 
 class HandHeadOcclusionDetector:
     """Comprehensive hand-head occlusion detector using advanced computer vision techniques.
@@ -657,9 +608,7 @@ class HandHeadOcclusionDetector:
         return results
 
 
-# ----------------------------
 # Main Keypoint-Based Detection Function
-# ----------------------------
 
 def compute_occlusion_detection_from_keypoints(
     X: np.ndarray,
@@ -1354,9 +1303,7 @@ def _compute_occlusion_from_video(
         return 0
 
 
-# ----------------------------
 # Configuration Management
-# ----------------------------
 
 # Default configuration for comprehensive occlusion detection
 DEFAULT_OCCLUSION_CONFIG = {
@@ -1409,9 +1356,7 @@ def validate_occlusion_config(config: Dict) -> bool:
     return all(key in config for key in required_keys)
 
 
-# ----------------------------
 # Public API Exports
-# ----------------------------
 
 # Export all public functions and classes for external use
 __all__ = [
