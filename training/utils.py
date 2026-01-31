@@ -1,20 +1,7 @@
 """
-utils.py
+Training utilities for sign language recognition models.
 
-This module provides essential utilities for training sign language recognition models:
-
-Key Components:
-- FSLDataset: PyTorch Dataset class for sign language sequences
-- evaluate: Model evaluation with multi-task metrics (gloss + category)
-
-Features:
-- Multi-task dataset handling (gloss and category labels)
-- Comprehensive model evaluation with accuracy metrics
-- Dataset statistics and analysis tools
-- Error handling and validation
-
-Usage:
-    from training import FSLDataset, evaluate
+Provides FSLDataset for sign language sequences and evaluation functions.
 """
 
 import torch

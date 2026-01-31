@@ -28,7 +28,6 @@ try:
     from .train import (
         FSLFeatureFileDataset,
         train_model
-        # Note: train.py doesn't have a main function, it's designed to be run as a script
     )
     TRAINING_TRAIN_AVAILABLE = True
 except ImportError:

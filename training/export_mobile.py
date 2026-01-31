@@ -5,17 +5,13 @@ from typing import Tuple, Optional
 
 import torch
 
-# Ensure project root is on sys.path when running as a script
 import sys as _sys
 _ROOT = Path(__file__).resolve().parents[1]
 if str(_ROOT) not in _sys.path:
     _sys.path.insert(0, str(_ROOT))
 
-# Models
 from models.transformer import SignTransformerCtc
 from models.mediapipe_gru import MediaPipeGRUCtc
-
-# Labels / metadata
 from data.labels.label_mapping import load_label_mappings
 
 
@@ -36,7 +32,7 @@ class MobileWrapper(torch.nn.Module):
         out = self.base(x)
         if isinstance(out, tuple) and len(out) == 2:
             return out[0], out[1]
-        # Fallback: if base returns only CTC log probs, synthesize zero category logits
+        # Fallback: synthesize zero category logits if base returns only CTC log probs
         ctc_log_probs = out
         B, T, _ = ctc_log_probs.shape
         num_cat = getattr(self.base, 'num_cat', None)
@@ -82,7 +78,6 @@ def _load_state_dict(model: torch.nn.Module, checkpoint_path: str) -> None:
         if 'model_state_dict' in ckpt and isinstance(ckpt['model_state_dict'], dict):
             model.load_state_dict(ckpt['model_state_dict'], strict=False)
             return
-        # Heuristic: if keys look like state_dict
         if all(isinstance(k, str) for k in ckpt.keys()):
             try:
                 model.load_state_dict(ckpt, strict=False)
@@ -93,7 +88,6 @@ def _load_state_dict(model: torch.nn.Module, checkpoint_path: str) -> None:
 
 
 def _find_param_by_suffix(state_dict: dict, suffix: str):
-    # Try exact key
     if suffix in state_dict:
         return state_dict[suffix]
     # Try with common prefixes (e.g., DataParallel 'module.')
@@ -207,13 +201,13 @@ def export_model_for_android(
 
     Returns path to the saved .ptl file.
     """
-    # Infer class counts (and mediapipe hparams) from checkpoint to avoid mismatches
+    # Infer class counts from checkpoint
     state_dict = _extract_state_dict_from_checkpoint(checkpoint_path)
     inferred_num_ctc, inferred_num_cat = _infer_ctc_and_cat_dims(state_dict)
     if inferred_num_ctc is None:
         raise ValueError("Could not infer num_ctc_classes from checkpoint (missing ctc_head).")
     num_ctc_classes = inferred_num_ctc
-    # Prefer explicit num_cat from args; fallback to checkpoint inference if provided
+    # Prefer explicit num_cat from args, fallback to checkpoint inference
     effective_num_cat = int(num_cat if num_cat is not None else (inferred_num_cat or 1))
 
     hidden1 = hidden2 = projection_dim = None
@@ -229,13 +223,11 @@ def export_model_for_android(
         hidden2=hidden2,
         projection_dim=projection_dim,
     )
-    # Load weights (strict=False handled inside)
     _load_state_dict(model, checkpoint_path)
     model.eval()
 
     wrapped = MobileWrapper(model)
 
-    # Prefer scripting for dynamic T
     try:
         scripted = torch.jit.script(wrapped)
     except Exception as e:
@@ -244,26 +236,20 @@ def export_model_for_android(
         example = torch.randn(1, int(example_T), int(input_dim), dtype=torch.float32)
         scripted = torch.jit.trace(wrapped, example)
 
-    # Validation run
     with torch.no_grad():
         T = example_T if example_T is not None else 120
         test_in = torch.randn(1, int(T), int(input_dim), dtype=torch.float32)
         ctc_lp, cat = scripted(test_in)
         print(f"ctc_log_probs shape: {tuple(ctc_lp.shape)}  category_logits shape: {tuple(cat.shape)}")
 
-    # Import mobile optimizer
     from torch.utils.mobile_optimizer import optimize_for_mobile
-    
-    # Optimize for mobile
     print("Optimizing model for mobile...")
     optimized_model = optimize_for_mobile(scripted)
     
-    # Validate optimized model
     with torch.no_grad():
         ctc_lp_opt, cat_opt = optimized_model(test_in)
         print(f"Optimized model outputs - ctc: {tuple(ctc_lp_opt.shape)}, cat: {tuple(cat_opt.shape)}")
 
-    # Save for Mobile
     model_class_name = model.__class__.__name__
     filename_stem = f"{model_class_name}_best"
     out_dir = Path(output_dir)
@@ -273,7 +259,6 @@ def export_model_for_android(
     optimized_model._save_for_lite_interpreter(str(model_ptl_path))
     print(f"Saved optimized mobile model: {model_ptl_path}")
 
-    # Write metadata and labels
     # Derive num_gloss/blank_id from inferred num_ctc (assumes blank_id = num_gloss)
     num_gloss = int(num_ctc_classes - 1)
     blank_id = num_gloss
@@ -318,7 +303,6 @@ def export_model_for_android(
 
 
 def _guess_best_checkpoint(output_dir: str, model_name: str) -> Optional[str]:
-    # Map CLI model name to Python class name used in checkpoint files
     name_map = {
         'transformer_continuous': 'SignTransformerCtc',
         'mediapipe_gru_continuous': 'MediaPipeGRUCtc',

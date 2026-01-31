@@ -1,49 +1,11 @@
-"""
-Training entrypoint for sign language recognition models.
+"""Training entrypoint for sign language recognition models.
 
-This comprehensive training module supports:
-
-1. MULTI-TASK TRAINING:
-   - Joint gloss and category classification with configurable loss weights
-   - Advanced loss weighting strategies (static, grid-search, uncertainty, gradnorm)
-   - Curriculum learning with different strategies (gloss-first, category-first, dynamic)
-
-2. MODEL SUPPORT:
-   - SignTransformer: Multi-head attention transformer for keypoint sequences
-   - InceptionV3GRU: Hybrid CNN-RNN model for visual features
-   - Automatic model compilation and parallel processing optimization
-
-3. DATA HANDLING:
-   - File-based datasets from preprocessed .npz files
-   - Support for keypoints [T, 178], features [T, 2048], or combined [T, 2226]
-   - Combined mode: concatenates keypoints + features for richer representations
-   - Temporal data augmentation (noise, masking)
-   - Variable-length sequence padding and batching
-
-4. TRAINING FEATURES:
-   - Automatic Mixed Precision (AMP) for faster training
-   - Learning rate scheduling (plateau, cosine, warmup-cosine)
-   - Early stopping and checkpointing
-   - Resume training from checkpoints
-   - Automatic logging: CSV metrics + console logs saved with timestamps
-   - Exponential Moving Average (EMA) for model stability
-
-5. ADVANCED LOSS FUNCTIONS:
-   - Standard CrossEntropy
-   - Focal Loss for class imbalance
-   - Label Smoothing for better generalization
+Supports multi-task training, multiple model architectures, and various training
+features including curriculum learning, loss weighting strategies, and data augmentation.
 
 Usage:
-    # Basic training (automatic logging with timestamps)
     python training/train.py --model transformer --epochs 50 \\
         --output-dir trained_models/transformer/run1
-    
-    # Advanced training with curriculum learning
-    python training/train.py --model iv3_gru --curriculum gloss-first --epochs 100 \\
-        --output-dir trained_models/iv3_gru/run1
-    
-    # Smoke test
-    python training/train.py --smoke-test
 """
 
 # Standard library imports
@@ -64,29 +26,10 @@ from torch.utils.data import DataLoader, Dataset
 from models import InceptionV3GRU, SignTransformer, MediaPipeGRU, SignTransformerCtc, MediaPipeGRUCtc, InceptionV3GRUCtc
 from streamlit_app.core.config import CTC_CONFIG
 
-# ============================================================================
-# LOGGING UTILITIES
-# ============================================================================
-
 class TeeLogger:
-    """
-    Utility class to duplicate stdout to both console and a log file.
-    
-    This allows capturing all printed output during training to a file while
-    still displaying it on the console in real-time.
-    
-    Usage:
-        sys.stdout = TeeLogger('training.log')
-        print("This goes to both console and file")
-        sys.stdout.close()  # Close the file when done
-    """
+    """Duplicates stdout to both console and a log file."""
     def __init__(self, log_path):
-        """
-        Initialize the TeeLogger.
-        
-        Args:
-            log_path (str): Path to the log file to write to
-        """
+        """Initialize the TeeLogger."""
         self.terminal = sys.stdout
         self.log_file = open(log_path, 'a', encoding='utf-8')
         
@@ -94,7 +37,7 @@ class TeeLogger:
         """Write message to both terminal and log file."""
         self.terminal.write(message)
         self.log_file.write(message)
-        self.log_file.flush()  # Ensure immediate write to file
+        self.log_file.flush()
         
     def flush(self):
         """Flush both terminal and log file."""
@@ -106,124 +49,50 @@ class TeeLogger:
         if hasattr(self, 'log_file') and self.log_file:
             self.log_file.close()
 
-# ============================================================================
-# DATASET CLASSES
-# ============================================================================
-
 class FSLFeatureFileDataset(Dataset):
-    """
-    PyTorch Dataset for precomputed visual features from InceptionV3 backbone.
+    """PyTorch Dataset for precomputed visual features from InceptionV3 backbone.
     
-    This dataset loads pre-extracted features with shape [T, 2048] from .npz files,
-    where T is the temporal dimension (variable length sequences) and 2048 is the
-    feature dimension from InceptionV3's final layer.
-    
-    The dataset expects:
-    - A directory of .npz files containing feature arrays
-    - A CSV file mapping filenames to gloss, category, occlusion, signer, and duration labels
-    - Optional temporal augmentation for training data
-    
-    Data Flow:
-    1. Load CSV to build filename -> (gloss, category, occluded, signer, duration) mapping
-    2. For each sample, load corresponding .npz file
-    3. Extract feature array using specified key (default: 'X2048')
-    4. Apply temporal augmentation if enabled and in training mode
-    5. Return data based on mode (classification or CTC)
-
-    Args:
-        features_dir (str): Directory containing .npz feature files
-        labels_csv (str): CSV file with columns: file, gloss, cat, occluded, signer, duration
-        feature_key (str): Key in .npz files containing [T, 2048] features
-        augment (bool): Enable temporal data augmentation
-        augment_params (dict): Augmentation parameters (noise_std, mask_prob, etc.)
-        mode (str): Dataset mode - 'classification' or 'ctc'
-        signer_filter (str, optional): Filter dataset to only include samples from this signer
-        return_metadata (bool): Whether to return signer and duration in __getitem__
-
-    Returns:
-        Classification mode: (features[T,2048] float32, gloss long, cat long, length long)
-        CTC mode: (features[T,2048] float32, gloss_seq[1] long, input_length long, target_length long, cat long)
-        
-    Raises:
-        ValueError: If CSV format is invalid or required columns missing
-        FileNotFoundError: If feature file doesn't exist
-        KeyError: If expected feature key not found in .npz file
+    Loads pre-extracted features with shape [T, 2048] from .npz files.
     """
     def __init__(self, features_dir, labels_csv, feature_key='X2048', augment=False, augment_params=None, mode='classification', signer_filter=None, return_metadata=False):
-        """
-        Initialize the feature dataset.
+        self.features_dir = features_dir
+        self.feature_key = feature_key
+        self.index = []
+        self.augment = augment
+        self.training = True
+        self.mode = mode
+        self.signer_filter = signer_filter
+        self.return_metadata = return_metadata
         
-        This method sets up the dataset by:
-        1. Storing configuration parameters
-        2. Setting up augmentation if enabled
-        3. Loading and parsing the labels CSV file
-        4. Building an index of (filename_stem, gloss_id, category_id, occluded, signer, duration) tuples
-        5. Optionally filtering by signer
-        
-        Args:
-            features_dir (str): Directory containing .npz feature files
-            labels_csv (str): CSV file with columns: file, gloss, cat, occluded, signer, duration
-            feature_key (str): Key to extract features from .npz files
-            augment (bool): Whether to apply temporal augmentation
-            augment_params (dict): Augmentation parameters
-            mode (str): Dataset mode - 'classification' or 'ctc'
-            signer_filter (str, optional): Filter dataset to only include samples from this signer
-            return_metadata (bool): Whether to return signer and duration in __getitem__
-        """
-        # Store dataset configuration
-        self.features_dir = features_dir  # Directory containing .npz feature files
-        self.feature_key = feature_key    # Key to extract features from .npz files
-        self.index = []                   # List of (stem, gloss, cat, occluded, signer, duration) tuples for indexing
-        self.augment = augment            # Whether to apply temporal augmentation
-        self.training = True              # Training mode flag (set by DataLoader)
-        self.mode = mode                  # Dataset mode: 'classification' or 'ctc'
-        self.signer_filter = signer_filter  # Optional signer filter
-        self.return_metadata = return_metadata  # Whether to return metadata in __getitem__
-        
-        # Validate mode parameter
         if mode not in ['classification', 'ctc']:
             raise ValueError(f"mode must be 'classification' or 'ctc', got '{mode}'")
         
-        # Initialize temporal augmentation if enabled
         if augment and augment_params:
-            # Use custom augmentation parameters
             self.augmentation = TemporalAugmentation(**augment_params)
         elif augment:
-            # Use default augmentation parameters
             self.augmentation = TemporalAugmentation()
 
-        # Validate that labels CSV is provided
         if labels_csv is None:
             raise ValueError("labels_csv must be provided for feature dataset")
 
-        # Load and parse the labels CSV file
         with open(labels_csv, newline='') as f:
             reader = csv.DictReader(f)
-            
-            # Validate CSV structure - must have required columns
             required = {'file', 'gloss', 'cat', 'occluded', 'signer', 'duration'}
             if not required.issubset(set(reader.fieldnames or [])):
                 raise ValueError(f"labels_csv must have columns: {required}")
             
-            # Parse each row and build the dataset index
             for row in reader:
                 try:
-                    # Extract filename stem (without extension) for flexibility
-                    # This allows CSV to have filenames with or without .npz extension
                     stem = os.path.splitext(row['file'])[0]
+                    gloss = int(row['gloss'])
+                    cat = int(row['cat'])
+                    occluded = int(row['occluded'])
+                    signer = row['signer']
+                    duration = float(row['duration'])
                     
-                    # Convert labels to appropriate types
-                    gloss = int(row['gloss'])  # Gloss class ID
-                    cat = int(row['cat'])       # Category class ID
-                    occluded = int(row['occluded'])  # Occlusion flag
-                    signer = row['signer']      # Signer identifier
-                    duration = float(row['duration'])  # Duration in seconds
-                    
-                    # Apply signer filter if specified
                     if signer_filter is not None and signer != signer_filter:
                         continue
                     
-                    # Add to index for later retrieval
                     self.index.append((stem, gloss, cat, occluded, signer, duration))
                 except (ValueError, KeyError) as e:
                     raise ValueError(f"Invalid data in row {row}: {e}")
@@ -232,163 +101,77 @@ class FSLFeatureFileDataset(Dataset):
         return len(self.index)
 
     def __getitem__(self, idx):
-        """
-        Retrieve a single sample from the dataset.
-        
-        This method:
-        1. Gets the filename and labels from the index
-        2. Constructs the full path to the .npz file
-        3. Loads and validates the feature data
-        4. Applies temporal augmentation if enabled
-        5. Returns tensors in the expected format based on mode
-        
-        Args:
-            idx (int): Index of the sample to retrieve
-            
-        Returns:
-            Classification mode: (features[T,2048] float32, gloss_label long, cat_label long, length long) or with metadata
-            CTC mode: (features[T,2048] float32, gloss_seq[1] long, input_length long, target_length long, cat long) or with metadata
-        """
-        # Get filename stem and labels from the pre-built index
         stem, gloss, cat, occluded, signer, duration = self.index[idx]
-        
-        # Construct full path to the .npz feature file
         path = os.path.join(self.features_dir, stem + '.npz')
         if not os.path.exists(path):
             raise FileNotFoundError(f"Feature file not found: {path}")
         
-        # Load feature data from .npz file and convert to PyTorch tensor
-        data = torch.from_numpy(self._load_npz_features(path))  # Shape: [T, 2048]
-        input_length = data.shape[0]  # Temporal dimension (sequence length)
+        data = torch.from_numpy(self._load_npz_features(path))
+        input_length = data.shape[0]
         
-        # Apply temporal augmentation if enabled and in training mode
-        # Augmentation helps improve model generalization by adding noise/variations
         if self.augment and self.training and hasattr(self, 'augmentation'):
             data = self.augmentation(data)
         
-        # Return tensors based on mode
         if self.mode == 'ctc':
             gloss_label_seq = torch.tensor([gloss], dtype=torch.long)
             cat_label_seq = torch.tensor([cat], dtype=torch.long)
             target_length = torch.tensor([1], dtype=torch.long)
             
             base_return = (
-                data.float(),                                    # Features as float32 [T, 2048]
-                gloss_label_seq,                                 # Gloss sequence [1]
-                torch.tensor(input_length, dtype=torch.long),    # Input sequence length
-                target_length,                                   # Target sequence length [1]
-                cat_label_seq                                    # Category sequence [1]
+                data.float(),
+                gloss_label_seq,
+                torch.tensor(input_length, dtype=torch.long),
+                target_length,
+                cat_label_seq
             )
             
-            # Add metadata if requested
             if self.return_metadata:
                 return base_return + (signer, duration)
             else:
                 return base_return
         else:
-            # Classification mode: original format
             base_return = (
-                data.float(),                                    # Features as float32
-                torch.tensor(gloss, dtype=torch.long),          # Gloss label as int64
-                torch.tensor(cat, dtype=torch.long),            # Category label as int64
-                torch.tensor(input_length, dtype=torch.long)    # Sequence length as int64
+                data.float(),
+                torch.tensor(gloss, dtype=torch.long),
+                torch.tensor(cat, dtype=torch.long),
+                torch.tensor(input_length, dtype=torch.long)
             )
             
-            # Add metadata if requested
             if self.return_metadata:
                 return base_return + (signer, duration)
             else:
                 return base_return
 
     def _load_npz_features(self, path):
-        """
-        Load feature array from .npz file with validation.
-        
-        This method:
-        1. Opens the .npz file safely
-        2. Tries to load features using the specified key
-        3. Falls back to 'X' key if primary key not found
-        4. Validates the array shape and dimensions
-        5. Returns the validated feature array
-        
-        Args:
-            path (str): Path to the .npz file
-            
-        Returns:
-            np.ndarray: Feature array with shape [T, 2048]
-            
-        Raises:
-            KeyError: If neither the specified key nor 'X' key is found
-            ValueError: If array doesn't have expected shape [T, 2048]
-        """
-        # Load .npz file with allow_pickle=True for compatibility
+        """Load feature array from .npz file."""
         with np.load(path, allow_pickle=True) as npz:
-            # Try to load features using the specified key first
             if self.feature_key in npz:
                 X = np.array(npz[self.feature_key])
-            # Fall back to 'X' key if primary key not found
             elif 'X' in npz:
                 X = np.array(npz['X'])
             else:
                 raise KeyError(f"Neither '{self.feature_key}' nor 'X' found in {path}")
         
-        # Validate array dimensions - must be 2D with 2048 features
         if X.ndim != 2 or X.shape[-1] != 2048:
             raise ValueError(f"Expected [T,2048] features in {path}, got shape {X.shape}")
         
         return X
 
 class FSLKeypointFileDataset(Dataset):
-    """
-    PyTorch Dataset for precomputed keypoint sequences from pose estimation.
+    """PyTorch Dataset for precomputed keypoint sequences from pose estimation.
     
-    This dataset loads keypoint sequences with shape [T, 178] from .npz files,
-    where T is the temporal dimension (variable length sequences) and 178 represents
-    the flattened keypoint coordinates (89 keypoints × 2 coordinates = 178).
-    
-    The dataset supports both raw keypoints and processed features:
-    - Raw keypoints [T, 178]: Direct pose estimation output (89 keypoints: 25 pose + 21 left hand + 21 right hand + 22 face)
-    - Processed features [T, 2048]: Keypoints processed through feature extraction
-    
-    Data Flow:
-    1. Load CSV to build filename -> (gloss, category, occluded, signer, duration) mapping
-    2. For each sample, load corresponding .npz file
-    3. Extract keypoint array using specified key (default: 'X')
-    4. Validate array dimensions based on key type
-    5. Apply temporal augmentation if enabled and in training mode
-    6. Return data based on mode (classification or CTC)
-
-    Args:
-        keypoints_dir (str): Directory containing .npz keypoint files
-        labels_csv (str): CSV file with columns: file, gloss, cat, occluded, signer, duration
-        kp_key (str): Key in .npz files containing keypoint data
-        augment (bool): Enable temporal data augmentation
-        augment_params (dict): Augmentation parameters (noise_std, mask_prob, etc.)
-        mode (str): Dataset mode - 'classification' or 'ctc'
-        signer_filter (str, optional): Filter dataset to only include samples from this signer
-        return_metadata (bool): Whether to return signer and duration in __getitem__
-
-    Returns:
-        Classification mode: (keypoints[T,D] float32, gloss long, cat long, length long)
-        CTC mode: (keypoints[T,D] float32, gloss_seq[1] long, input_length long, target_length long, cat long)
-        where D is 178 for raw keypoints or 2048 for processed features
-        
-    Raises:
-        ValueError: If CSV format is invalid or array dimensions don't match key type
-        FileNotFoundError: If keypoint file doesn't exist
-        KeyError: If expected keypoint key not found in .npz file
+    Loads keypoint sequences with shape [T, 178] or [T, 2048] from .npz files.
     """
     def __init__(self, keypoints_dir, labels_csv, kp_key='X', augment=False, augment_params=None, mode='classification', signer_filter=None, return_metadata=False):
         self.keypoints_dir = keypoints_dir
         self.kp_key = kp_key
-        self.index = []  # list of (stem, gloss, cat, occluded, signer, duration)
+        self.index = []
         self.augment = augment
-        self.training = True  # Will be set by DataLoader
+        self.training = True
         self.mode = mode
-        self.signer_filter = signer_filter  # Optional signer filter
-        self.return_metadata = return_metadata  # Whether to return metadata in __getitem__
+        self.signer_filter = signer_filter
+        self.return_metadata = return_metadata
         
-        # Validate mode parameter
         if mode not in ['classification', 'ctc']:
             raise ValueError(f"mode must be 'classification' or 'ctc', got '{mode}'")
         
@@ -430,14 +213,12 @@ class FSLKeypointFileDataset(Dataset):
         path = os.path.join(self.keypoints_dir, stem + '.npz')
         if not os.path.exists(path):
             raise FileNotFoundError(f"Keypoint file not found: {path}")
-        data = torch.from_numpy(self._load_npz_keypoints(path))  # [T, 178] or [T, 2048]
+        data = torch.from_numpy(self._load_npz_keypoints(path))
         input_length = data.shape[0]
         
-        # Apply augmentation if enabled and in training mode
         if self.augment and self.training and hasattr(self, 'augmentation'):
             data = self.augmentation(data)
         
-        # Return tensors based on mode
         if self.mode == 'ctc':
             gloss_label_seq = torch.tensor([gloss], dtype=torch.long)
             cat_label_seq = torch.tensor([cat], dtype=torch.long)
@@ -465,7 +246,6 @@ class FSLKeypointFileDataset(Dataset):
                 torch.tensor(input_length, dtype=torch.long)
             )
             
-            # Add metadata if requested
             if self.return_metadata:
                 return base_return + (signer, duration)
             else:
@@ -480,7 +260,6 @@ class FSLKeypointFileDataset(Dataset):
         if X.ndim != 2:
             raise ValueError(f"Expected 2D data in {path}, got shape {X.shape}")
         
-        # Validate dimension based on the key being used
         if self.kp_key == "X2048" and X.shape[-1] != 2048:
             raise ValueError(f"Expected [T,2048] features in {path}, got shape {X.shape}")
         elif self.kp_key == "X" and X.shape[-1] != 178:
@@ -488,60 +267,24 @@ class FSLKeypointFileDataset(Dataset):
         return X
 
 class FSLCombinedFileDataset(Dataset):
-    """
-    PyTorch Dataset that combines keypoints and features into single input.
+    """PyTorch Dataset that combines keypoints and features into single input.
     
-    This dataset loads both keypoints [T, 178] and features [T, 2048] from the same
-    .npz files and concatenates them to create combined input [T, 2226].
-    
-    The combined approach leverages both:
-    - Raw keypoint information (178-dim): Direct pose landmarks for interpretability (89 keypoints × 2)
-    - Learned visual features (2048-dim): Rich InceptionV3 representations
-    
-    Data Flow:
-    1. Load CSV to build filename -> (gloss, category, occluded, signer, duration) mapping
-    2. For each sample, load corresponding .npz file
-    3. Extract both keypoint array (X) and feature array (X2048)
-    4. Concatenate along feature dimension: [T, 178] + [T, 2048] = [T, 2226]
-    5. Apply temporal augmentation if enabled and in training mode
-    6. Return data based on mode (classification or CTC)
-    
-    Args:
-        data_dir (str): Directory containing .npz files with both X and X2048 keys
-        labels_csv (str): CSV file with columns: file, gloss, cat, occluded, signer, duration
-        kp_key (str): Key for keypoints in .npz files (default: 'X')
-        feature_key (str): Key for features in .npz files (default: 'X2048')
-        augment (bool): Enable temporal data augmentation
-        augment_params (dict): Augmentation parameters (noise_std, mask_prob, etc.)
-        mode (str): Dataset mode - 'classification' or 'ctc'
-        signer_filter (str, optional): Filter dataset to only include samples from this signer
-        return_metadata (bool): Whether to return signer and duration in __getitem__
-    
-    Returns:
-        Classification mode: (combined[T,2226] float32, gloss long, cat long, length long)
-        CTC mode: (combined[T,2226] float32, gloss_seq[1] long, input_length long, target_length long, cat long)
-        
-    Raises:
-        ValueError: If CSV format is invalid or array dimensions don't match
-        FileNotFoundError: If data file doesn't exist
-        KeyError: If expected keys not found in .npz file
+    Loads both keypoints [T, 178] and features [T, 2048] and concatenates to [T, 2226].
     """
     def __init__(self, data_dir, labels_csv, kp_key='X', feature_key='X2048', augment=False, augment_params=None, mode='classification', signer_filter=None, return_metadata=False):
         self.data_dir = data_dir
         self.kp_key = kp_key
         self.feature_key = feature_key
-        self.index = []  # list of (stem, gloss, cat, occluded, signer, duration)
+        self.index = []
         self.augment = augment
-        self.training = True  # Will be set by DataLoader
+        self.training = True
         self.mode = mode
-        self.signer_filter = signer_filter  # Optional signer filter
-        self.return_metadata = return_metadata  # Whether to return metadata in __getitem__
+        self.signer_filter = signer_filter
+        self.return_metadata = return_metadata
         
-        # Validate mode parameter
         if mode not in ['classification', 'ctc']:
             raise ValueError(f"mode must be 'classification' or 'ctc', got '{mode}'")
         
-        # Initialize temporal augmentation if enabled
         if augment and augment_params:
             self.augmentation = TemporalAugmentation(**augment_params)
         elif augment:
@@ -550,7 +293,6 @@ class FSLCombinedFileDataset(Dataset):
         if labels_csv is None:
             raise ValueError("labels_csv must be provided for combined dataset")
         
-        # Load and parse the labels CSV file
         with open(labels_csv, newline='') as f:
             reader = csv.DictReader(f)
             required = {'file', 'gloss', 'cat', 'occluded', 'signer', 'duration'}
@@ -582,20 +324,14 @@ class FSLCombinedFileDataset(Dataset):
         if not os.path.exists(path):
             raise FileNotFoundError(f"Data file not found: {path}")
         
-        # Load both keypoints and features
         keypoints, features = self._load_combined_data(path)
-        
-        # Concatenate along feature dimension: [T, 178] + [T, 2048] = [T, 2226]
         combined = torch.cat([keypoints, features], dim=1)
         input_length = combined.shape[0]
         
-        # Apply augmentation if enabled and in training mode
         if self.augment and self.training and hasattr(self, 'augmentation'):
             combined = self.augmentation(combined)
         
-        # Return tensors based on mode
         if self.mode == 'ctc':
-            # CTC mode: return sequence format for CTCLoss
             gloss_label_seq = torch.tensor([gloss], dtype=torch.long)
             cat_label_seq = torch.tensor([cat], dtype=torch.long)
             target_length = torch.tensor([1], dtype=torch.long)
@@ -622,7 +358,6 @@ class FSLCombinedFileDataset(Dataset):
                 torch.tensor(input_length, dtype=torch.long)
             )
             
-            # Add metadata if requested
             if self.return_metadata:
                 return base_return + (signer, duration)
             else:
@@ -631,88 +366,48 @@ class FSLCombinedFileDataset(Dataset):
     def _load_combined_data(self, path):
         """Load and validate both keypoints and features from .npz file."""
         with np.load(path, allow_pickle=True) as npz:
-            # Load keypoints
             if self.kp_key not in npz:
                 raise KeyError(f"Keypoint key '{self.kp_key}' not found in {path}")
             keypoints = np.array(npz[self.kp_key])
             
-            # Load features
             if self.feature_key not in npz:
                 raise KeyError(f"Feature key '{self.feature_key}' not found in {path}")
             features = np.array(npz[self.feature_key])
         
-        # Validate shapes
         if keypoints.ndim != 2 or keypoints.shape[-1] != 178:
             raise ValueError(f"Expected [T,178] keypoints in {path}, got shape {keypoints.shape}")
         if features.ndim != 2 or features.shape[-1] != 2048:
             raise ValueError(f"Expected [T,2048] features in {path}, got shape {features.shape}")
         
-        # Ensure temporal dimensions match
         if keypoints.shape[0] != features.shape[0]:
             raise ValueError(f"Temporal dimension mismatch in {path}: keypoints {keypoints.shape[0]} != features {features.shape[0]}")
         
         return torch.from_numpy(keypoints), torch.from_numpy(features)
 
 def collate_features_with_padding(batch):
-    """
-    Collate function to batch variable-length feature sequences with padding.
-    
-    This function is used by PyTorch DataLoader to combine multiple samples into batches.
-    Since sequences have different lengths, we need to pad shorter sequences to match
-    the longest sequence in the batch.
-    
-    Process:
-    1. Separate sequences, labels, and lengths from batch items
-    2. Find the maximum sequence length in the batch
-    3. Create a padded tensor with shape [batch_size, max_length, feature_dim]
-    4. Copy each sequence into the padded tensor
-    5. Stack labels and lengths into tensors
-
-    Args:
-        batch: List of tuples, each containing (features[T,2048], gloss_label, cat_label, length)
-
-    Returns:
-        tuple: (padded_features[B,Tmax,2048], gloss_labels[B], cat_labels[B], lengths[B])
-            - padded_features: Batch of padded feature sequences
-            - gloss_labels: Batch of gloss class labels
-            - cat_labels: Batch of category class labels  
-            - lengths: Original sequence lengths (needed for attention masking)
-    """
-    # Unzip the batch to separate sequences, labels, and lengths
+    """Collate function to batch variable-length feature sequences with padding."""
     sequences, gloss, cat, lengths = zip(*batch)
     
-    # Convert lengths to tensor and find maximum sequence length in batch
-    lengths = torch.stack(lengths, dim=0)  # Shape: [batch_size]
-    B = len(sequences)                     # Batch size
-    Tmax = int(max(l.item() for l in lengths))  # Maximum sequence length
-    D = sequences[0].shape[-1]             # Feature dimension (2048 for features)
+    lengths = torch.stack(lengths, dim=0)
+    B = len(sequences)
+    Tmax = int(max(l.item() for l in lengths))
+    D = sequences[0].shape[-1]
     
-    # Create padded tensor with zeros - shape [batch_size, max_length, feature_dim]
     X_pad = torch.zeros((B, Tmax, D), dtype=sequences[0].dtype)
     
-    # Copy each sequence into the padded tensor
     for i, seq in enumerate(sequences):
-        t = seq.shape[0]  # Actual length of this sequence
-        X_pad[i, :t] = seq  # Copy sequence data, leaving remainder as zeros
+        t = seq.shape[0]
+        X_pad[i, :t] = seq
     
-    # Stack labels into tensors and return
     return (
-        X_pad,                           # Padded features [B, Tmax, D]
-        torch.stack(gloss, dim=0),       # Gloss labels [B]
-        torch.stack(cat, dim=0),         # Category labels [B]
-        lengths                          # Original lengths [B]
+        X_pad,
+        torch.stack(gloss, dim=0),
+        torch.stack(cat, dim=0),
+        lengths
     )
 
 def collate_keypoints_with_padding(batch):
-    """
-    Pad variable-length keypoint sequences [T, 178] to the max length in batch.
-
-    Args:
-        batch: Iterable of (X[T,178], gloss, cat, length) items.
-
-    Returns:
-        tuple: (X_pad [B,Tmax,178], gloss [B], cat [B], lengths [B])
-    """
+    """Pad variable-length keypoint sequences to the max length in batch."""
     sequences, gloss, cat, lengths = zip(*batch)
     lengths = torch.stack(lengths, dim=0)
     B = len(sequences)
@@ -725,238 +420,124 @@ def collate_keypoints_with_padding(batch):
     return X_pad, torch.stack(gloss, dim=0), torch.stack(cat, dim=0), lengths
 
 def collate_features_with_metadata(batch):
-    """
-    Collate function for feature sequences with optional metadata.
-    
-    This function handles both standard format and metadata-enhanced format:
-    - Standard: (features[T,2048], gloss, cat, length)
-    - With metadata: (features[T,2048], gloss, cat, length, signer, duration)
-    
-    Args:
-        batch: List of tuples from dataset with optional metadata
-        
-    Returns:
-        tuple: Standard format + optional metadata lists
-    """
-    # Check if metadata is present by looking at tuple length
-    if len(batch[0]) == 6:  # With metadata
+    """Collate function for feature sequences with optional metadata."""
+    if len(batch[0]) == 6:
         sequences, gloss, cat, lengths, signers, durations = zip(*batch)
         
-        # Convert lengths to tensor and find maximum sequence length in batch
         lengths = torch.stack(lengths, dim=0)
         B = len(sequences)
         Tmax = int(max(l.item() for l in lengths))
         D = sequences[0].shape[-1]
         
-        # Create padded tensor
         X_pad = torch.zeros((B, Tmax, D), dtype=sequences[0].dtype)
         for i, seq in enumerate(sequences):
             t = seq.shape[0]
             X_pad[i, :t] = seq
         
         return (
-            X_pad,                           # Padded features [B, Tmax, D]
-            torch.stack(gloss, dim=0),       # Gloss labels [B]
-            torch.stack(cat, dim=0),         # Category labels [B]
-            lengths,                         # Original lengths [B]
-            list(signers),                   # Signer identifiers [B]
-            list(durations)                  # Duration values [B]
+            X_pad,
+            torch.stack(gloss, dim=0),
+            torch.stack(cat, dim=0),
+            lengths,
+            list(signers),
+            list(durations)
         )
-    else:  # Standard format without metadata
+    else:
         return collate_features_with_padding(batch)
 
 def collate_keypoints_with_metadata(batch):
-    """
-    Collate function for keypoint sequences with optional metadata.
-    
-    This function handles both standard format and metadata-enhanced format:
-    - Standard: (keypoints[T,D], gloss, cat, length)
-    - With metadata: (keypoints[T,D], gloss, cat, length, signer, duration)
-    
-    Args:
-        batch: List of tuples from dataset with optional metadata
-        
-    Returns:
-        tuple: Standard format + optional metadata lists
-    """
-    # Check if metadata is present by looking at tuple length
-    if len(batch[0]) == 6:  # With metadata
+    """Collate function for keypoint sequences with optional metadata."""
+    if len(batch[0]) == 6:
         sequences, gloss, cat, lengths, signers, durations = zip(*batch)
         
-        # Convert lengths to tensor and find maximum sequence length in batch
         lengths = torch.stack(lengths, dim=0)
         B = len(sequences)
         Tmax = int(max(l.item() for l in lengths))
         D = sequences[0].shape[-1]
         
-        # Create padded tensor
         X_pad = torch.zeros((B, Tmax, D), dtype=sequences[0].dtype)
         for i, seq in enumerate(sequences):
             t = seq.shape[0]
             X_pad[i, :t] = seq
         
         return (
-            X_pad,                           # Padded keypoints [B, Tmax, D]
-            torch.stack(gloss, dim=0),       # Gloss labels [B]
-            torch.stack(cat, dim=0),         # Category labels [B]
-            lengths,                         # Original lengths [B]
-            list(signers),                   # Signer identifiers [B]
-            list(durations)                  # Duration values [B]
+            X_pad,
+            torch.stack(gloss, dim=0),
+            torch.stack(cat, dim=0),
+            lengths,
+            list(signers),
+            list(durations)
         )
-    else:  # Standard format without metadata
+    else:
         return collate_keypoints_with_padding(batch)
 
 def collate_for_ctc(batch):
-    """
-    Collate function for CTC training with variable-length sequences.
-    
-    This function batches sequences for CTC loss computation by:
-    1. Padding input sequences to the maximum length in the batch
-    2. Concatenating label sequences (targets) for CTCLoss
-    3. Stacking input and target lengths
-    
-    CTC Loss requires:
-    - log_probs: [T, B, C] - model outputs (will be permuted from [B, T, C])
-    - targets: [sum(target_lengths)] - concatenated target sequences
-    - input_lengths: [B] - actual lengths of each input sequence
-    - target_lengths: [B] - actual lengths of each target sequence
-    
-    Args:
-        batch: List of tuples from CTC-mode dataset, each containing:
-               (data[T,D], gloss_seq[N], input_length, target_length[N], cat_seq[N]) or with metadata
-               
-    Returns:
-        tuple: (X_pad, targets, input_lengths, target_lengths, cat_targets) where:
-            - X_pad: [B, Tmax, D] - padded input sequences
-            - targets: [sum(target_lengths)] - concatenated gloss sequences
-            - input_lengths: [B] - input sequence lengths
-            - target_lengths: [B] - target sequence lengths
-            - cat_targets: [sum(target_lengths)] - concatenated category sequences
-    
-    Example:
-        For a batch of 2 samples with sequences:
-        - Sample 1: input_len=50, target=[3]
-        - Sample 2: input_len=75, target=[17]
-        
-        Output:
-        - X_pad: [2, 75, D] (padded to max length 75)
-        - targets: [3, 17] (concatenated targets)
-        - input_lengths: [50, 75]
-        - target_lengths: [1, 1]
-    """
-    # Unzip the batch to separate components
+    """Collate function for CTC training with variable-length sequences."""
     sequences, gloss_label_seqs, input_lengths, target_lengths, cat_label_seqs = zip(*batch)
     
-    # Get batch dimensions
-    B = len(sequences)                                      # Batch size
-    Tmax = max(seq.shape[0] for seq in sequences)         # Maximum input sequence length
-    D = sequences[0].shape[-1]                              # Feature dimension
+    B = len(sequences)
+    Tmax = max(seq.shape[0] for seq in sequences)
+    D = sequences[0].shape[-1]
     
-    # Create padded tensor for input sequences
     X_pad = torch.zeros((B, Tmax, D), dtype=sequences[0].dtype)
     
-    # Copy each sequence into the padded tensor
     for i, seq in enumerate(sequences):
-        t = seq.shape[0]  # Actual length of this sequence
-        X_pad[i, :t] = seq  # Copy sequence data, pad remainder with zeros
+        t = seq.shape[0]
+        X_pad[i, :t] = seq
     
-    # Concatenate all target label sequences for CTCLoss
-    targets = torch.cat(gloss_label_seqs, dim=0)  # Shape: [sum(target_lengths)]
-    
-    # Stack input and target lengths into tensors
-    input_lengths = torch.stack(input_lengths, dim=0)       # Shape: [B]
-    target_lengths = torch.cat(target_lengths, dim=0)       # Shape: [B]
-    
-    # Concatenate all category label sequences (parallel to gloss targets)
-    cat_targets = torch.cat(cat_label_seqs, dim=0)  # Shape: [sum(target_lengths)]
+    targets = torch.cat(gloss_label_seqs, dim=0)
+    input_lengths = torch.stack(input_lengths, dim=0)
+    target_lengths = torch.cat(target_lengths, dim=0)
+    cat_targets = torch.cat(cat_label_seqs, dim=0)
     
     return X_pad, targets, input_lengths, target_lengths, cat_targets
 
 def _make_dataloader(dataset, batch_size, shuffle, args, collate_fn=None):
-    """
-    Build an optimized DataLoader with performance enhancements.
-    
-    This function creates a DataLoader with optimized settings for better training
-    performance, including automatic worker detection, memory pinning, and prefetching.
-    
-    Args:
-        dataset: PyTorch Dataset to load from
-        batch_size (int): Number of samples per batch
-        shuffle (bool): Whether to shuffle data each epoch
-        args: Training arguments containing DataLoader configuration
-        collate_fn (callable, optional): Function to collate batches
-        
-    Returns:
-        DataLoader: Optimized PyTorch DataLoader
-    """
-    # ============================================================================
-    # WORKER CONFIGURATION
-    # ============================================================================
+    """Build an optimized DataLoader with performance enhancements."""
     # Auto-detect optimal number of workers for data loading
-    # More workers = faster data loading, but also more memory usage
     num_workers = args.num_workers
     if args.auto_workers:
-        # Calculate optimal worker count based on CPU cores
-        cpu_count = psutil.cpu_count(logical=False)  # Physical cores only
-        # Use 1/2 of CPU cores, but cap between 2 and 8 for stability
+        cpu_count = psutil.cpu_count(logical=False)
         num_workers = min(8, max(2, cpu_count // 2))
         print(f"Auto-detected {num_workers} DataLoader workers (from {cpu_count} CPU cores)")
     else:
-        # Respect the user's num_workers setting (default: 0 for single-process loading)
         if num_workers > 0:
             print(f"Using {num_workers} DataLoader workers (user-specified)")
     
-    # ============================================================================
-    # MEMORY PINNING CONFIGURATION
-    # ============================================================================
-    # pin_memory=True enables faster CPU-GPU data transfer by keeping data in pinned memory
     pin_memory = args.pin_memory
     if not hasattr(args, 'pin_memory') or args.pin_memory is None:
-        # Auto-enable pin_memory only if CUDA is available
         pin_memory = torch.cuda.is_available()
     
-    # ============================================================================
-    # DATALOADER CONFIGURATION
-    # ============================================================================
-    
-    # Build DataLoader configuration dictionary
     kwargs = {
         'batch_size': batch_size,
         'shuffle': shuffle,
         'num_workers': num_workers,
         'pin_memory': pin_memory,
-        'persistent_workers': num_workers > 0,  # Keep workers alive between epochs for efficiency
+        'persistent_workers': num_workers > 0,
     }
     
-    # Add collate function if provided (needed for variable-length sequences)
     if collate_fn is not None:
         kwargs['collate_fn'] = collate_fn
     
-    # Configure prefetching for better data loading performance
-    # prefetch_factor determines how many batches each worker prefetches
     if num_workers > 0:
         prefetch_factor = getattr(args, 'prefetch_factor', None)
         if prefetch_factor is None:
-            # Auto-set prefetch factor based on device type and available memory
             if torch.cuda.is_available():
-                kwargs['prefetch_factor'] = 2  # Conservative for GPU (memory limited)
+                kwargs['prefetch_factor'] = 2
             else:
-                kwargs['prefetch_factor'] = 4  # More aggressive for CPU (memory abundant)
+                kwargs['prefetch_factor'] = 4
         elif isinstance(prefetch_factor, int) and prefetch_factor > 0:
             kwargs['prefetch_factor'] = prefetch_factor
     
-    # Create DataLoader with error handling for resource constraints
     try:
         return DataLoader(dataset, **kwargs)
     except (BlockingIOError, OSError, RuntimeError) as e:
-        # Handle resource exhaustion errors (common in containerized environments)
         if num_workers > 0:
             print(f"\n⚠️  WARNING: Failed to create DataLoader with {num_workers} workers")
             print(f"   Error: {type(e).__name__}: {e}")
             print(f"   Falling back to single-process loading (num_workers=0)")
             print(f"   This is common in resource-constrained environments (containers, cloud VMs)")
             
-            # Retry with 0 workers
             kwargs['num_workers'] = 0
             kwargs['persistent_workers'] = False
             if 'prefetch_factor' in kwargs:
@@ -964,7 +545,6 @@ def _make_dataloader(dataset, batch_size, shuffle, args, collate_fn=None):
             
             return DataLoader(dataset, **kwargs)
         else:
-            # If already using 0 workers, re-raise the error
             raise
 
 def save_checkpoint(state: dict, is_best: bool, output_dir: str, model_name: str) -> None:
@@ -1894,19 +1474,7 @@ def train_model(
         and `{ModelName}_best.pt` (best validation metric). Appends metrics to
         `log_csv_path` if provided.
     """
-    # ============================================================================
-    # INITIAL SETUP AND CONFIGURATION
-    # ============================================================================
-    
-    # Clear GPU memory cache to ensure clean start and prevent memory issues
     clear_gpu_memory()
-    
-    # ============================================================================
-    # CURRICULUM LEARNING SETUP
-    # ============================================================================
-    # Curriculum learning gradually introduces tasks to improve training stability
-    # and performance. This is especially useful for multi-task learning where
-    # balancing gloss and category classification can be challenging.
     
     curriculum_scheduler = None
     if curriculum_strategy is not None:
@@ -1924,13 +1492,6 @@ def train_model(
             print(f"  - Warmup epochs: {curriculum_warmup}")
         print(f"  - Min weight: {curriculum_min_weight}")
         print(f"  - Schedule: {curriculum_schedule}")
-    
-    # ============================================================================
-    # LOSS WEIGHTING STRATEGY SETUP
-    # ============================================================================
-    # Advanced loss weighting strategies help balance multiple tasks during training.
-    # This is crucial for multi-task learning where gloss and category classification
-    # may have different difficulty levels and learning dynamics.
     
     loss_weighting = None
     if loss_weighting_strategy == "grid-search":
@@ -1962,12 +1523,7 @@ def train_model(
             print(f"  - Alpha: {gradnorm_alpha}")
             print(f"  - Update frequency: {gradnorm_update_freq}")
     
-    # ============================================================================
-    # MODEL OPTIMIZATION AND LOSS FUNCTION SETUP
-    # ============================================================================
-    
-    # Model compilation (PyTorch 2.0+) for significant performance improvements
-    # This optimizes the model graph for faster execution, especially on modern GPUs
+    # Model compilation for performance (PyTorch 2.0+)
     if compile_model and hasattr(torch, 'compile'):
         try:
             model = torch.compile(model)
@@ -1975,11 +1531,7 @@ def train_model(
         except Exception as e:
             print(f"⚠ Model compilation failed: {e}")
     
-    # Initialize loss function based on specified type
-    # Different loss functions are suited for different scenarios:
-    # - CrossEntropy: Standard choice for most classification tasks
-    # - Focal Loss: Better for imbalanced datasets, focuses on hard examples
-    # - Label Smoothing: Improves generalization by preventing overconfidence
+    # Initialize loss function
     if loss_type == "focal":
         criterion = FocalLoss(alpha=focal_alpha, gamma=focal_gamma)
         print(f"✓ Using Focal Loss (alpha={focal_alpha}, gamma={focal_gamma})")
@@ -1990,12 +1542,7 @@ def train_model(
         criterion = nn.CrossEntropyLoss()
         print("✓ Using standard CrossEntropy Loss")
     
-    # ============================================================================
-    # OPTIMIZER AND AUTOMATIC MIXED PRECISION SETUP
-    # ============================================================================
-    
-    # Set up optimizer with model parameters
-    # For uncertainty weighting, we also need to optimize the uncertainty parameters
+    # Set up optimizer
     if loss_weighting_strategy == "uncertainty" and isinstance(loss_weighting, UncertaintyWeighting):
         # Include uncertainty parameters (log variance) in optimization
         optimizer = optim.Adam(
@@ -2006,11 +1553,9 @@ def train_model(
         # Standard optimizer with only model parameters
         optimizer = optim.Adam(model.parameters(), lr=lr, weight_decay=weight_decay)
     
-    # Automatic Mixed Precision (AMP) for faster training and lower memory usage
-    # AMP uses float16 for forward pass and float32 for backward pass
-    # Only enable on CUDA devices to avoid CPU-only compatibility issues
+    # Automatic Mixed Precision (AMP)
     amp_enabled = bool(use_amp and getattr(device, "type", "cpu") == "cuda")
-    scaler = torch.amp.GradScaler(enabled=amp_enabled)  # Handles gradient scaling for AMP
+    scaler = torch.amp.GradScaler(enabled=amp_enabled)
     
     # Print training configuration
     print(f"Training Configuration:")
@@ -2019,12 +1564,6 @@ def train_model(
     print(f"  - Model compiled: {compile_model}")
     if device.type == 'cuda':
         print(f"  - CUDA memory before training: {torch.cuda.memory_allocated(0) / 1e9:.2f} GB")
-
-    # ============================================================================
-    # LEARNING RATE SCHEDULER SETUP
-    # ============================================================================
-    # Learning rate scheduling helps improve training stability and final performance
-    # Different schedulers are suited for different training scenarios
 
     if scheduler_type == "plateau":
         # Reduce LR when validation metric plateaus - good for stable training
@@ -2042,25 +1581,12 @@ def train_model(
         scheduler = None
         print("✓ No learning rate scheduler")
 
-    # ============================================================================
-    # EXPONENTIAL MOVING AVERAGE (EMA) SETUP
-    # ============================================================================
-    # EMA maintains a running average of model parameters, which often leads to
-    # better generalization and more stable training. The EMA model is used for
-    # validation and final evaluation.
-    
     ema = None
     if use_ema:
         ema = EMA(model, decay=ema_decay)  # Higher decay = slower parameter updates
         ema.register()  # Initialize EMA with current model parameters
         print(f"✓ EMA enabled (decay={ema_decay})")
 
-    # ============================================================================
-    # RESUME TRAINING SETUP
-    # ============================================================================
-    # Support for resuming training from a checkpoint. This loads the model state,
-    # optimizer state, scheduler state, and training progress.
-    
     start_epoch = 0
     best_metric = -float('inf')
     if resume_path is not None and os.path.isfile(resume_path):
@@ -2086,12 +1612,6 @@ def train_model(
         best_metric = ckpt.get('best_metric', best_metric)
         print(f"Resumed from {resume_path} at epoch {start_epoch} (best_metric={best_metric:.4f})")
 
-    # ============================================================================
-    # CSV LOGGING SETUP
-    # ============================================================================
-    # Set up CSV logging for tracking training metrics over time
-    # This allows for easy analysis and visualization of training progress
-    
     csv_fh = None
     if log_csv_path is not None:
         # Create directory if it doesn't exist
@@ -2119,10 +1639,6 @@ def train_model(
             else:
                 csv_writer.writerow(["epoch", "train_loss", "val_loss", "val_gloss_acc", "val_cat_acc", "lr", "epoch_time", "gpu_memory_allocated", "gpu_memory_reserved"]) 
 
-    # ============================================================================
-    # TRAINING LOOP START
-    # ============================================================================
-
     print(f"Training for {epochs} epochs...")
     if curriculum_scheduler is not None:
         print(f"Curriculum training: {curriculum_scheduler.get_phase_info(0)}")
@@ -2135,10 +1651,6 @@ def train_model(
 
     # Main training loop - iterate through epochs
     for epoch in range(start_epoch, start_epoch + epochs_to_run):
-        # ========================================================================
-        # EPOCH INITIALIZATION
-        # ========================================================================
-        
         # Get current loss weights based on curriculum or static strategy
         if curriculum_scheduler is not None:
             # Dynamic weights from curriculum learning
@@ -2157,86 +1669,54 @@ def train_model(
         num_batches = 0       # Counter for number of batches processed
         epoch_start_time = time.time()  # Track epoch duration
 
-        # ========================================================================
-        # TRAINING PHASE - GRADIENT ACCUMULATION
-        # ========================================================================
-        # Gradient accumulation allows us to use larger effective batch sizes
-        # by accumulating gradients over multiple mini-batches before updating parameters
-        
-        optimizer.zero_grad(set_to_none=True)  # Clear gradients from previous epoch
+        optimizer.zero_grad(set_to_none=True)
         
         # Iterate through training batches
         for batch_idx, batch in enumerate(train_loader):
-            # Parse batch data - handle both 3-tuple and 4-tuple formats
             if len(batch) == 4:
                 X, gloss, cat, lengths = batch
-                lengths = lengths.to(device, non_blocking=True)  # Sequence lengths for attention masking
+                lengths = lengths.to(device, non_blocking=True)
             else:
                 X, gloss, cat = batch
-                lengths = None  # No length information available
+                lengths = None
             
-            # Move tensors to device with non_blocking=True for better performance
-            # non_blocking=True allows CPU-GPU transfer to overlap with computation
-            X = X.to(device, non_blocking=True)      # Input features/keypoints
-            gloss = gloss.to(device, non_blocking=True)  # Gloss class labels
-            cat = cat.to(device, non_blocking=True)      # Category class labels
+            X = X.to(device, non_blocking=True)
+            gloss = gloss.to(device, non_blocking=True)
+            cat = cat.to(device, non_blocking=True)
 
-            # Forward pass with automatic mixed precision if enabled
             with torch.amp.autocast(device_type=getattr(device, "type", "cpu"), enabled=amp_enabled):
-                # Model forward pass - get predictions for both tasks
                 gloss_pred, cat_pred = forward_fn(model, X, lengths)
+                loss_gloss = criterion(gloss_pred, gloss)
+                loss_cat = criterion(cat_pred, cat)
                 
-                # Calculate individual task losses
-                loss_gloss = criterion(gloss_pred, gloss)  # Gloss classification loss
-                loss_cat = criterion(cat_pred, cat)        # Category classification loss
-                
-                # Get dynamic weights from loss weighting strategy if available
                 if loss_weighting is not None:
                     dynamic_alpha, dynamic_beta = loss_weighting.get_weights(
                         epoch, batch_idx, loss_gloss.item(), loss_cat.item(), model, optimizer
                     )
-                    # Priority: curriculum > loss weighting > static
                     if curriculum_scheduler is not None:
-                        # Curriculum learning takes precedence over loss weighting
                         loss = current_alpha * loss_gloss + current_beta * loss_cat
                     else:
-                        # Use loss weighting strategy
                         if loss_weighting_strategy == "uncertainty":
-                            # Uncertainty weighting includes uncertainty penalty
                             loss = loss_weighting.get_uncertainty_loss(loss_gloss, loss_cat)
                         else:
-                            # Static or adaptive weighting
                             loss = dynamic_alpha * loss_gloss + dynamic_beta * loss_cat
                 else:
-                    # Use curriculum weights or static weights
                     loss = current_alpha * loss_gloss + current_beta * loss_cat
                 
-                # Scale loss by gradient accumulation steps to maintain correct gradient magnitude
-                # This ensures that the effective learning rate remains consistent
                 loss = loss / gradient_accumulation_steps
 
-            # Backward pass with gradient scaling for AMP
             scaler.scale(loss).backward()
             
-            # Gradient accumulation: only update parameters after accumulating N steps
             if (batch_idx + 1) % gradient_accumulation_steps == 0:
-                # Gradient clipping to prevent exploding gradients
                 if grad_clip is not None and grad_clip > 0:
-                    scaler.unscale_(optimizer)  # Unscale gradients before clipping
+                    scaler.unscale_(optimizer)
                     torch.nn.utils.clip_grad_norm_(model.parameters(), grad_clip)
                 
-                # Update model parameters
-                scaler.step(optimizer)  # Apply gradients
-                scaler.update()         # Update AMP scaler
-                optimizer.zero_grad(set_to_none=True)  # Clear gradients for next accumulation
-        
-        # ========================================================================
-        # END-OF-EPOCH PROCESSING
-        # ========================================================================
+                scaler.step(optimizer)
+                scaler.update()
+                optimizer.zero_grad(set_to_none=True)
         
         # Handle remaining gradients if last batch doesn't align with accumulation steps
-        # This ensures all gradients are processed even if the total number of batches
-        # is not divisible by gradient_accumulation_steps
         if len(train_loader) % gradient_accumulation_steps != 0:
             if grad_clip is not None and grad_clip > 0:
                 scaler.unscale_(optimizer)
@@ -2245,17 +1725,12 @@ def train_model(
             scaler.update()
             optimizer.zero_grad(set_to_none=True)
             
-        # Update loss tracking (scale back up to get true loss magnitude)
         total_loss += loss.item() * gradient_accumulation_steps
         num_batches += 1
         
-        # Update Exponential Moving Average if enabled
-        # EMA maintains a smoothed version of model parameters for better generalization
         if ema is not None:
             ema.update()
         
-        # Clear intermediate variables to save GPU memory
-        # This helps prevent memory accumulation over long training runs
         del X, gloss, cat, gloss_pred, cat_pred, loss, loss_gloss, loss_cat
         if lengths is not None:
             del lengths
@@ -2267,10 +1742,8 @@ def train_model(
                 csv_fh.close()
             return
 
-        # Calculate average training loss across all batches
         avg_train_loss = total_loss / num_batches
         
-        # Update loss weighting strategy if it has adaptive components
         if loss_weighting is not None and hasattr(loss_weighting, 'update_weights'):
             loss_weighting.update_weights(
                 epoch, 
@@ -2279,37 +1752,25 @@ def train_model(
                 optimizer
             )
         
-        # ========================================================================
-        # VALIDATION PHASE
-        # ========================================================================
-        
-        # Clear GPU memory cache before validation to ensure accurate memory reporting
         clear_gpu_memory()
         
-        # Apply EMA parameters for validation if EMA is enabled
-        # EMA parameters often give better validation performance
         if ema is not None:
             ema.apply_shadow()
         
-        # Run validation evaluation
         val_start_time = time.time()
         val_loss, val_gloss_acc, val_cat_acc = evaluate_with_forward(
             model, val_loader, criterion, device, forward_fn, 
             alpha=current_alpha, beta=current_beta
         )
         
-        # Restore original model parameters after validation
         if ema is not None:
             ema.restore()
         val_time = time.time() - val_start_time
         
         epoch_time = time.time() - epoch_start_time
         
-        # Get current weights for logging
         if loss_weighting is not None and curriculum_scheduler is None:
             current_alpha, current_beta = loss_weighting.get_weights(epoch, 0, 0.0, 0.0, model, optimizer)
-        
-        # Print epoch results with performance metrics and weighting info
         if curriculum_scheduler is not None:
             print(f"Epoch {epoch+1:2d}/{epochs} | "
                   f"Train Loss: {avg_train_loss:.4f} | "
@@ -2334,13 +1795,12 @@ def train_model(
                   f"Val Cat Acc: {val_cat_acc:.3f} | "
                   f"Time: {epoch_time:.1f}s")
         
-        # Print GPU memory usage if available
         if device.type == 'cuda':
             memory_allocated = torch.cuda.memory_allocated(0) / 1e9
             memory_reserved = torch.cuda.memory_reserved(0) / 1e9
             print(f"  GPU Memory: {memory_allocated:.2f}GB allocated, {memory_reserved:.2f}GB reserved")
 
-        # Scheduler step (and then read the effective LR)
+        # Scheduler step
         if scheduler is not None:
             if isinstance(scheduler, optim.lr_scheduler.ReduceLROnPlateau):
                 scheduler.step(val_gloss_acc)
@@ -2350,7 +1810,6 @@ def train_model(
                 scheduler.step()
         current_lr = optimizer.param_groups[0]['lr']
 
-        # CSV log with performance metrics
         if csv_fh is not None:
             gpu_mem_alloc = torch.cuda.memory_allocated(0) / 1e9 if device.type == 'cuda' else 0.0
             gpu_mem_reserved = torch.cuda.memory_reserved(0) / 1e9 if device.type == 'cuda' else 0.0
@@ -2362,7 +1821,6 @@ def train_model(
                 csv_writer.writerow([epoch + 1, avg_train_loss, val_loss, val_gloss_acc, val_cat_acc, current_lr, epoch_time, gpu_mem_alloc, gpu_mem_reserved])
             csv_fh.flush()
 
-        # Checkpointing on best metric (gloss accuracy)
         metric = val_gloss_acc
         is_best = metric > best_metric
         if is_best:
@@ -2502,11 +1960,6 @@ def train_ctc(
     Returns:
         None (saves checkpoints to output_dir)
     """
-    # ============================================================================
-    # INITIAL SETUP
-    # ============================================================================
-    
-    # Clear GPU memory for clean start
     clear_gpu_memory()
     
     print("\n" + "="*80)
@@ -2522,10 +1975,6 @@ def train_ctc(
     print(f"AMP Enabled: {use_amp and device.type == 'cuda'}")
     print("="*80 + "\n")
     
-    # ============================================================================
-    # MODEL OPTIMIZATION
-    # ============================================================================
-    
     # Model compilation for performance (PyTorch 2.0+)
     if compile_model and hasattr(torch, 'compile'):
         try:
@@ -2534,26 +1983,15 @@ def train_ctc(
         except Exception as e:
             print(f"⚠ Model compilation failed: {e}")
     
-    # ============================================================================
-    # CTC LOSS AND OPTIMIZER SETUP
-    # ============================================================================
-    
     criterion = nn.CTCLoss(blank=blank_id, zero_infinity=True)
     print(f"✓ Using CTCLoss (blank={blank_id}, zero_infinity=True)")
     
-    # Optimizer
     optimizer = optim.Adam(model.parameters(), lr=lr, weight_decay=weight_decay)
-    
-    # Automatic Mixed Precision (AMP)
     amp_enabled = bool(use_amp and device.type == "cuda")
     scaler = torch.amp.GradScaler(enabled=amp_enabled)
     
     print(f"✓ Optimizer: Adam (lr={lr}, weight_decay={weight_decay})")
     print(f"✓ AMP enabled: {amp_enabled}")
-    
-    # ============================================================================
-    # LEARNING RATE SCHEDULER
-    # ============================================================================
     
     if scheduler_type == "plateau":
         scheduler = optim.lr_scheduler.ReduceLROnPlateau(
@@ -2570,19 +2008,11 @@ def train_ctc(
         scheduler = None
         print("✓ No learning rate scheduler")
     
-    # ============================================================================
-    # EXPONENTIAL MOVING AVERAGE (EMA)
-    # ============================================================================
-    
     ema = None
     if use_ema:
         ema = EMA(model, decay=ema_decay)
         ema.register()
         print(f"✓ EMA enabled (decay={ema_decay})")
-    
-    # ============================================================================
-    # RESUME TRAINING
-    # ============================================================================
     
     start_epoch = 0
     best_metric = float('inf')  # For CTC, lower loss is better
@@ -2602,10 +2032,6 @@ def train_ctc(
         best_metric = ckpt.get('best_metric', best_metric)
         print(f"✓ Resumed from epoch {start_epoch} (best_loss={best_metric:.4f})")
     
-    # ============================================================================
-    # CSV LOGGING
-    # ============================================================================
-    
     csv_fh = None
     if log_csv_path is not None:
         os.makedirs(os.path.dirname(log_csv_path) or '.', exist_ok=True)
@@ -2621,10 +2047,6 @@ def train_ctc(
             ])
         print(f"✓ Logging metrics to: {log_csv_path}")
     
-    # ============================================================================
-    # TRAINING LOOP
-    # ============================================================================
-    
     print(f"\n{'='*80}")
     print(f"STARTING CTC TRAINING - {epochs} epochs")
     print(f"{'='*80}\n")
@@ -2632,10 +2054,6 @@ def train_ctc(
     patience_counter = 0
     
     for epoch in range(start_epoch, start_epoch + epochs):
-        # ========================================================================
-        # TRAINING PHASE
-        # ========================================================================
-        
         model.train()
         total_loss = 0.0
         num_batches = 0
@@ -2644,50 +2062,39 @@ def train_ctc(
         optimizer.zero_grad(set_to_none=True)
         
         for batch_idx, batch in enumerate(train_loader):
-            # Unpack CTC batch: (X, targets, input_lengths, target_lengths, cat_targets)
             X, targets, input_lengths, target_lengths, cat_targets = batch
             
-            # Move to device
             X = X.to(device, non_blocking=True)
             targets = targets.to(device, non_blocking=True)
             input_lengths = input_lengths.to(device, non_blocking=True)
             target_lengths = target_lengths.to(device, non_blocking=True)
             cat_targets = cat_targets.to(device, non_blocking=True)
             
-            # Forward pass with AMP
             with torch.amp.autocast(device_type=device.type, enabled=amp_enabled):
-                # Model returns log_probs [B,T,C] or (log_probs, cat_logits) for dual-task
-                # Handle iv3_gru_continuous model which needs features_already=True
                 if hasattr(model, '__class__') and 'InceptionV3GRUCtc' in model.__class__.__name__:
                     output = model(X, features_already=True)
                 else:
                     output = model(X)
                 
                 if isinstance(output, tuple):
-                    # Dual-task mode: CTC + Category
-                    log_probs, cat_logits = output  # [B,T,num_ctc], [B,T,num_cat]
-                    log_probs = log_probs.permute(1, 0, 2)  # [T, B, C] for CTC loss
+                    log_probs, cat_logits = output
+                    log_probs = log_probs.permute(1, 0, 2)
                     loss_ctc = criterion(log_probs, targets, input_lengths, target_lengths)
                     
-                    # Per-frame category loss: flatten and align with cat_targets
                     B, T, num_cat = cat_logits.shape
-                    cat_logits_flat = cat_logits.reshape(B * T, num_cat)  # [B*T, num_cat]
-                    cat_targets_expanded = cat_targets.unsqueeze(1).expand(B, T).reshape(B * T)  # [B*T]
+                    cat_logits_flat = cat_logits.reshape(B * T, num_cat)
+                    cat_targets_expanded = cat_targets.unsqueeze(1).expand(B, T).reshape(B * T)
                     loss_cat = nn.functional.cross_entropy(cat_logits_flat, cat_targets_expanded, reduction='mean')
                     
                     loss = alpha * loss_ctc + beta * loss_cat
                 else:
-                    # CTC-only mode
-                    log_probs = output.permute(1, 0, 2)  # [T, B, C]
+                    log_probs = output.permute(1, 0, 2)
                     loss = criterion(log_probs, targets, input_lengths, target_lengths)
                 
-                # Scale loss for gradient accumulation
                 loss = loss / gradient_accumulation_steps
             
-            # Backward pass
             scaler.scale(loss).backward()
             
-            # Gradient accumulation: update every N steps
             if (batch_idx + 1) % gradient_accumulation_steps == 0:
                 if grad_clip is not None and grad_clip > 0:
                     scaler.unscale_(optimizer)
@@ -2700,7 +2107,6 @@ def train_ctc(
             total_loss += loss.item() * gradient_accumulation_steps
             num_batches += 1
         
-        # Handle remaining gradients
         if len(train_loader) % gradient_accumulation_steps != 0:
             if grad_clip is not None and grad_clip > 0:
                 scaler.unscale_(optimizer)
@@ -2709,20 +2115,13 @@ def train_ctc(
             scaler.update()
             optimizer.zero_grad(set_to_none=True)
         
-        # Update EMA
         if ema is not None:
             ema.update()
         
-        # Average training loss
         avg_train_loss = total_loss / num_batches if num_batches > 0 else 0.0
-        
-        # ========================================================================
-        # VALIDATION PHASE
-        # ========================================================================
         
         clear_gpu_memory()
         
-        # Apply EMA for validation
         if ema is not None:
             ema.apply_shadow()
         
@@ -2730,17 +2129,11 @@ def train_ctc(
             model, val_loader, criterion, device, blank_id, alpha, beta
         )
         
-        # Restore original parameters
         if ema is not None:
             ema.restore()
         
         epoch_time = time.time() - epoch_start_time
         
-        # ========================================================================
-        # LOGGING AND CHECKPOINTING
-        # ========================================================================
-        
-        # Print epoch results
         avg_train_loss = total_loss / num_batches if num_batches > 0 else 0.0
         gloss_str = f" | Val Gloss Acc: {val_gloss_acc:.3f}"
         cat_str = f" | Val Cat Acc: {val_cat_acc:.3f}" if beta > 0 else ""
@@ -2749,24 +2142,21 @@ def train_ctc(
               f"Val Loss: {val_loss:.4f}{gloss_str}{cat_str} | "
               f"Time: {epoch_time:.1f}s")
         
-        # Print GPU memory if available
         if device.type == 'cuda':
             mem_alloc = torch.cuda.memory_allocated(0) / 1e9
             mem_reserved = torch.cuda.memory_reserved(0) / 1e9
             print(f"  GPU Memory: {mem_alloc:.2f}GB allocated, {mem_reserved:.2f}GB reserved")
         
-        # Scheduler step
         if scheduler is not None:
             if isinstance(scheduler, optim.lr_scheduler.ReduceLROnPlateau):
                 scheduler.step(val_loss)
             elif isinstance(scheduler, WarmupCosineScheduler):
                 scheduler.step(epoch)
-            else:
-                scheduler.step()
+        else:
+            scheduler.step()
         
         current_lr = optimizer.param_groups[0]['lr']
         
-        # CSV logging
         if csv_fh is not None:
             gpu_mem_alloc = torch.cuda.memory_allocated(0) / 1e9 if device.type == 'cuda' else 0.0
             gpu_mem_reserved = torch.cuda.memory_reserved(0) / 1e9 if device.type == 'cuda' else 0.0
@@ -2776,7 +2166,6 @@ def train_ctc(
             ])
             csv_fh.flush()
         
-        # Checkpointing (lower loss is better for CTC)
         is_best = val_loss < best_metric
         if is_best:
             best_metric = val_loss
@@ -2785,7 +2174,6 @@ def train_ctc(
         else:
             patience_counter += 1
         
-        # Save checkpoint
         save_state = {
             'epoch': epoch + 1,
             'model': model.state_dict(),
@@ -2797,15 +2185,10 @@ def train_ctc(
         }
         save_checkpoint(save_state, is_best, output_dir, model.__class__.__name__)
         
-        # Early stopping
         if early_stop_patience is not None and patience_counter >= early_stop_patience:
             print(f"\nEarly stopping triggered after {epoch + 1} epochs.")
             print(f"Best validation loss: {best_metric:.4f}")
             break
-    
-    # ============================================================================
-    # TRAINING COMPLETE
-    # ============================================================================
     
     print(f"\n{'='*80}")
     print("CTC TRAINING COMPLETED!")
