@@ -4,14 +4,36 @@
 
 **Filipino Sign Language Recognition System**
 
-Multi-Head Attention Transformer vs InceptionV3-GRU for Filipino Sign Language Recognition.
+PANSINAYAN is a comprehensive deep learning system for Filipino Sign Language (FSL) recognition, comparing Multi-Head Attention Transformer and InceptionV3-GRU architectures. The system supports both isolated sign classification and continuous sign sequence recognition using CTC decoding.
+
+**Key Features:**
+- Dual architecture comparison (Transformer vs InceptionV3-GRU)
+- Isolated sign classification (105 gloss classes, 10 categories)
+- Continuous sign recognition with CTC decoding
+- Interactive web interface (PANSINAYAN Streamlit app)
+- Comprehensive preprocessing pipeline with occlusion detection
+- Model training, validation, and evaluation tools
+
+## Overview
+
+PANSINAYAN provides a complete pipeline for Filipino Sign Language Recognition:
+
+1. **Preprocessing**: Extract MediaPipe keypoints (178-D) and InceptionV3 features (2048-D) from raw videos
+2. **Training**: Train Transformer or InceptionV3-GRU models for isolated or continuous sign recognition
+3. **Evaluation**: Validate models and analyze performance metrics
+4. **Inference**: Predict signs from videos or preprocessed NPZ files
+5. **Visualization**: Interactive web interface for model comparison and analysis
+
+The system supports both **isolated sign recognition** (classification) and **continuous sign recognition** (CTC-based sequence-to-sequence).
 
 ## Dataset
 
-- **Glosses**: 105 Filipino sign words
-- **Categories**: 10 semantic categories (Greeting, Survival, Number, Calendar, Days, Family, Relationships, Color, Food, Drink)
+- **Glosses**: 105 Filipino sign words (IDs: 0-104)
+- **Categories**: 10 semantic categories (IDs: 0-9): Greeting, Survival, Number, Calendar, Days, Family, Relationships, Color, Food, Drink
 - **Training Data**: FSL-105 dataset
-- **Models**: Pre-trained Transformer and IV3-GRU models available
+- **Models**: Pre-trained Transformer and IV3-GRU models available (see [Trained Models Guide](trained_models/TRAINED_MODEL_GUIDE.md))
+
+**Model Setup**: Model checkpoints must be placed in `trained_models/transformer/` and `trained_models/iv3_gru/` directories following the structure defined in the README.txt files in those directories. See [Trained Models Guide](trained_models/TRAINED_MODEL_GUIDE.md) for details.
 
 ## Quick Start
 
@@ -44,9 +66,6 @@ pip install pyarrow  # optional, for parquet inspection
 ### Interactive Demo with PANSINAYAN
 
 ```powershell
-# Check network connection info (local IP and access URLs)
-python show_network_info.py
-
 # Run the PANSINAYAN application
 streamlit run run_app.py
 ```
@@ -100,31 +119,62 @@ fslr-transformer-vs-iv3gru/
 ├── data/                       # Data management and label mapping
 │   ├── demo/                   # Demo NPZ files for testing
 │   ├── labels/                 # Label mappings (105 glosses, 10 categories)
+│   │   └── LABEL_MAPPING_TABLE.md
 │   ├── processed/              # Preprocessed NPZ files
 │   │   ├── FSL105_train/      # Training set (80%)
 │   │   ├── FSL105_val/        # Validation set (20%)
 │   │   ├── FSL105_train.csv   # Training labels
 │   │   └── FSL105_val.csv     # Validation labels
 │   ├── raw/                    # Raw video files
-│   └── splitting/              # Data splitting utilities
+│   ├── splitting/              # Data splitting utilities
+│   └── DATA_GUIDE.md          # Data format documentation
 ├── evaluation/                 # Model validation and prediction
 │   ├── prediction/             # Inference scripts
+│   │   ├── predict.py         # Classification prediction
+│   │   ├── predict_ctc.py      # CTC prediction
+│   │   └── PREDICTION_GUIDE.md
 │   └── validation/             # Model evaluation
+│       ├── validate.py         # Classification validation
+│       ├── evaluate_ctc.py     # CTC evaluation
+│       └── VALIDATION_GUIDE.md
 ├── models/                     # Neural network architectures
 │   ├── transformer.py         # SignTransformer (keypoints)
-│   └── iv3_gru.py             # InceptionV3GRU (features)
+│   ├── iv3_gru.py             # InceptionV3GRU (features)
+│   └── MODEL_GUIDE.md         # Architecture documentation
 ├── preprocessing/              # Video preprocessing and feature extraction
 │   ├── core/                   # Core preprocessing modules
-│   └── extractors/            # Feature extractors
-├── shared/                     # Shared resources and documentation
-│   └── for vast ai/           # Vast.ai deployment resources
+│   │   ├── preprocess.py       # Main preprocessing pipeline
+│   │   └── occlusion_detection.py
+│   ├── extractors/            # Feature extractors
+│   │   ├── keypoints_features.py
+│   │   └── iv3_features.py
+│   ├── continuous/            # Continuous sequence generation
+│   ├── docs/                  # Preprocessing documentation
+│   │   ├── PREPROCESS_GUIDE.MD
+│   │   ├── OCCLUSION_GUIDE.md
+│   │   └── OCCLUSION_PARAMETERS_GUIDE.md
+│   └── utils/                 # Preprocessing utilities
 ├── streamlit_app/             # Interactive web application
+│   ├── core/                  # Application core
+│   ├── components/            # UI components
+│   ├── manager/               # Workflow managers
+│   └── TOOL_GUIDE.md         # Application documentation
 ├── trained_models/            # Model checkpoints and weights
-│   ├── transformer\FSL105_classification\  # Transformer classification models
-│   ├── transformer\FSL105_ctc\             # Transformer CTC models
-│   ├── iv3_gru\FSL105_classification\       # IV3-GRU classification models
-│   └── iv3_gru\FSL105_ctc\                 # IV3-GRU CTC models
-└── training/                   # Model training and evaluation
+│   ├── transformer/          # Transformer model checkpoints
+│   │   ├── FSL105_classification/  # Classification models
+│   │   ├── FSL105_ctc/             # CTC models
+│   │   └── README.txt              # Setup instructions
+│   ├── iv3_gru/               # InceptionV3-GRU model checkpoints
+│   │   ├── FSL105_classification/  # Classification models
+│   │   ├── FSL105_ctc/             # CTC models
+│   │   └── README.txt              # Setup instructions
+│   └── TRAINED_MODEL_GUIDE.md     # Model usage guide
+├── training/                   # Model training and evaluation
+│   ├── train.py               # Training script
+│   ├── utils.py               # Training utilities
+│   └── TRAINING_GUIDE.md      # Training documentation
+├── run_app.py                 # Streamlit app launcher
+└── README.md                  # This file
 ```
 
 ## Workflow
@@ -364,7 +414,8 @@ For architecture details, see [Model Guide](models/MODEL_GUIDE.md).
 - **[Data Guide](data/DATA_GUIDE.md)** - File formats and data structures
 - **[Preprocessing Guide](preprocessing/docs/PREPROCESS_GUIDE.MD)** - Video preprocessing
 - **[Occlusion Guide](preprocessing/docs/OCCLUSION_GUIDE.md)** - Hand occlusion detection and handling
-- **[Sharing Guide](shared/SHARING_GUIDE.md)** - Vast.ai deployment and collaboration
+- **[Occlusion Parameters Guide](preprocessing/docs/OCCLUSION_PARAMETERS_GUIDE.md)** - Adjusting occlusion detection sensitivity
+- **[Continuous Signs Guide](preprocessing/docs/CONTINUOUS_SIGNS_GUIDE.md)** - Generating continuous sequences for CTC evaluation
 
 ## Troubleshooting
 
@@ -417,7 +468,6 @@ For architecture details, see [Model Guide](models/MODEL_GUIDE.md).
 
 1. Restart the Streamlit app
 2. Test on actual mobile devices (iOS Safari, Android Chrome)
-3. See `.streamlit/CONFIG_NOTES.md` for detailed configuration explanation
 
 **For deployment platforms:**
 
@@ -455,17 +505,11 @@ streamlit run run_app.py
 
 ### Vast.ai Deployment
 
-For remote deployment on Vast.ai instances:
-
-1. Follow [Vast.ai Guide](shared/for vast ai/VAST.AI_GUIDE.md)
-2. Replace components with Vast.ai versions
-3. Use cloudflared tunnel for external access
-
-See [Sharing Guide](shared/SHARING_GUIDE.md) for detailed deployment instructions.
+For remote deployment on Vast.ai instances, see [Vast.ai Guide](shared/for vast ai/VAST.AI_GUIDE.md).
 
 ## Contributing
 
-PANSINAYAN supports Filipino Sign Language Recognition research and accessibility initiatives. For collaboration guidelines, see the [Sharing Guide](shared/SHARING_GUIDE.md).
+PANSINAYAN supports Filipino Sign Language Recognition research and accessibility initiatives.
 
 ## License
 
