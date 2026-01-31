@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Launcher script for the FSLR Streamlit app."""
+"""Launcher script for the Pansinayan Web app."""
 
 from streamlit_app import main
 
