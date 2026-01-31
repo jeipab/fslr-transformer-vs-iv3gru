@@ -1,17 +1,5 @@
 #!/usr/bin/env python3
-"""
-Network connection information display for PANSINAYAN.
-
-PANSINAYAN - Filipino Sign Language Recognition System
-"Where Every Sign Gets Attention"
-
-This utility displays connection information for accessing the PANSINAYAN
-Streamlit application from different devices on your network.
-
-Usage:
-    python show_network_info.py          # Use default port (8501)
-    python show_network_info.py 8080     # Specify custom port
-"""
+"""Network connection information display for PANSINAYAN Streamlit app."""
 
 import socket
 import sys
@@ -20,7 +8,6 @@ import platform
 def get_local_ip():
     """Get the local IP address of this machine."""
     try:
-        # Connect to external DNS to determine local network IP
         s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         s.connect(("8.8.8.8", 80))
         local_ip = s.getsockname()[0]
@@ -36,40 +23,38 @@ def print_network_info(port=8501):
     os_name = platform.system()
     
     print("\n" + "="*70)
-    print("  🤟 PANSINAYAN - Filipino Sign Language Recognition")
+    print("  PANSINAYAN - Filipino Sign Language Recognition")
     print("  " + "-"*66)
-    print("  Where Every Sign Gets Attention")
     print("="*70)
     
-    print("\n📡 CONNECTION INFORMATION:")
-    print(f"   • Hostname: {hostname}")
-    print(f"   • Operating System: {os_name}")
+    print("\nCONNECTION INFORMATION:")
+    print(f"   Hostname: {hostname}")
+    print(f"   Operating System: {os_name}")
     if local_ip:
-        print(f"   • Local IP: {local_ip}")
+        print(f"   Local IP: {local_ip}")
     
-    print("\n🌐 ACCESS URLs:")
-    print(f"   📍 LOCAL:   http://localhost:{port}")
+    print("\nACCESS URLs:")
+    print(f"   LOCAL:   http://localhost:{port}")
     if local_ip:
-        print(f"   📱 NETWORK: http://{local_ip}:{port}")
+        print(f"   NETWORK: http://{local_ip}:{port}")
         print(f"      (Use this URL to access from other devices on your network)")
     else:
-        print(f"   📱 NETWORK: Check Streamlit's 'Network URL' in the terminal output")
+        print(f"   NETWORK: Check Streamlit's 'Network URL' in the terminal output")
     
-    print("\n🔧 ADVANCED OPTIONS:")
-    print(f"   • Cloudflare Tunnel: cloudflared tunnel --url http://localhost:{port}")
-    print(f"   • Custom Port: streamlit run run_app.py --server.port <PORT>")
+    print("\nADVANCED OPTIONS:")
+    print(f"   Cloudflare Tunnel: cloudflared tunnel --url http://localhost:{port}")
+    print(f"   Custom Port: streamlit run run_app.py --server.port <PORT>")
     
-    print("\n💡 USAGE:")
+    print("\nUSAGE:")
     print(f"   Start the app with: streamlit run run_app.py")
     print(f"   Then access using any of the URLs above")
     
-    print("\n📚 MODELS:")
-    print("   • SignTransformer (Multi-Head Attention)")
-    print("   • InceptionV3+GRU (CNN-RNN Hybrid)")
+    print("\nMODELS:")
+    print("   SignTransformer (Multi-Head Attention)")
+    print("   InceptionV3+GRU (CNN-RNN Hybrid)")
     
     print("="*70 + "\n")
 
 if __name__ == "__main__":
-    # Get port from command line argument if provided (default: 8501 - Streamlit default)
     port = int(sys.argv[1]) if len(sys.argv) > 1 else 8501
     print_network_info(port)

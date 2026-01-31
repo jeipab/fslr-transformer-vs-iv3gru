@@ -6,14 +6,14 @@
 
 Multi-Head Attention Transformer vs InceptionV3-GRU for Filipino Sign Language Recognition.
 
-## 📊 Dataset
+## Dataset
 
 - **Glosses**: 105 Filipino sign words
 - **Categories**: 10 semantic categories (Greeting, Survival, Number, Calendar, Days, Family, Relationships, Color, Food, Drink)
 - **Training Data**: FSL-105 dataset
 - **Models**: Pre-trained Transformer and IV3-GRU models available
 
-## 🚀 Quick Start
+## Quick Start
 
 ### Setup
 
@@ -93,11 +93,11 @@ Gloss: NICE TO MEET YOU (6) (confidence: 0.882)
 Category: GREETING (0) (confidence: 0.774)
 ```
 
-## 📁 Project Structure
+## Project Structure
 
 ```
 fslr-transformer-vs-iv3gru/
-├── 📊 data/                    # Data management and label mapping
+├── data/                       # Data management and label mapping
 │   ├── demo/                   # Demo NPZ files for testing
 │   ├── labels/                 # Label mappings (105 glosses, 10 categories)
 │   ├── processed/              # Preprocessed NPZ files
@@ -107,28 +107,27 @@ fslr-transformer-vs-iv3gru/
 │   │   └── FSL105_val.csv     # Validation labels
 │   ├── raw/                    # Raw video files
 │   └── splitting/              # Data splitting utilities
-├── 📈 evaluation/              # Model validation and prediction
-│   ├── prediction/            # Inference scripts
-│   └── validation/            # Model evaluation
-├── 🧠 models/                  # Neural network architectures
+├── evaluation/                 # Model validation and prediction
+│   ├── prediction/             # Inference scripts
+│   └── validation/             # Model evaluation
+├── models/                     # Neural network architectures
 │   ├── transformer.py         # SignTransformer (keypoints)
-│   └── iv3_gru.py            # InceptionV3GRU (features)
-├── 📓 notebooks/               # Jupyter notebooks for experiments
-├── 🔧 preprocessing/           # Video preprocessing and feature extraction
-│   ├── core/                  # Core preprocessing modules
+│   └── iv3_gru.py             # InceptionV3GRU (features)
+├── preprocessing/              # Video preprocessing and feature extraction
+│   ├── core/                   # Core preprocessing modules
 │   └── extractors/            # Feature extractors
-├── 📚 shared/                  # Shared resources and documentation
+├── shared/                     # Shared resources and documentation
 │   └── for vast ai/           # Vast.ai deployment resources
-├── 🖥️ streamlit_app/          # Interactive web application
-├── 💾 trained_models/          # Model checkpoints and weights
+├── streamlit_app/             # Interactive web application
+├── trained_models/            # Model checkpoints and weights
 │   ├── transformer\FSL105_classification\  # Transformer classification models
 │   ├── transformer\FSL105_ctc\             # Transformer CTC models
-│   ├── iv3_gru\FSL105_classification\      # IV3-GRU classification models
-│   └── iv3_gru\FSL105_ctc\                  # IV3-GRU CTC models
-└── 🏋️ training/               # Model training and evaluation
+│   ├── iv3_gru\FSL105_classification\       # IV3-GRU classification models
+│   └── iv3_gru\FSL105_ctc\                 # IV3-GRU CTC models
+└── training/                   # Model training and evaluation
 ```
 
-## 🔄 Workflow
+## Workflow
 
 ### 1. Preprocessing
 
@@ -231,7 +230,7 @@ python -m training.train ^
 
 For detailed training instructions, see [Training Guide](training/TRAINING_GUIDE.md).
 
-### 3.1 CTC Training (Continuous Recognition) 🆕
+### 3.1 CTC Training (Continuous Recognition)
 
 Train models for continuous sign recognition using CTC (no frame-level alignment needed).
 
@@ -282,7 +281,7 @@ python -m training.train --model iv3_gru_isolated --smoke-test --num-gloss 105 -
 
 For detailed validation instructions, see [Validation Guide](evaluation/validation/VALIDATION_GUIDE.md).
 
-### 5. CTC Prediction & Evaluation 🆕
+### 5. CTC Prediction & Evaluation
 
 **Predict**:
 
@@ -298,7 +297,7 @@ python evaluation\validation\evaluate_ctc.py --model transformer_continuous --ch
 
 See [Prediction Guide](evaluation/prediction/PREDICTION_GUIDE.md#ctc-prediction-continuous-recognition) and [Validation Guide](evaluation/validation/VALIDATION_GUIDE.md#ctc-evaluation-continuous-recognition).
 
-## 🧠 Models
+## Models
 
 ### Classification Models (Isolated Sign Recognition)
 
@@ -341,16 +340,16 @@ Classification models predict:
 
 **CTC Features:**
 
-- ✅ Sequence-to-sequence learning
-- ✅ Variable-length output
-- ✅ No alignment required
-- ✅ Supports continuous sign sentences
+- Sequence-to-sequence learning
+- Variable-length output
+- No alignment required
+- Supports continuous sign sentences
 
 For architecture details, see [Model Guide](models/MODEL_GUIDE.md).
 
-## 📖 Documentation
+## Documentation
 
-### 🎯 Prediction & Usage
+### Prediction & Usage
 
 - **[Prediction Guide](evaluation/prediction/PREDICTION_GUIDE.md)** - Using trained models (classification & CTC)
 - **[Validation Guide](evaluation/validation/VALIDATION_GUIDE.md)** - Model validation and evaluation (classification & CTC)
@@ -358,7 +357,7 @@ For architecture details, see [Model Guide](models/MODEL_GUIDE.md).
 - **[Trained Models Guide](trained_models/TRAINED_MODEL_GUIDE.md)** - Model checkpoints and usage
 - **[Tool Guide](streamlit_app/TOOL_GUIDE.md)** - Interactive visualization app
 
-### 🔧 Development & Training
+### Development & Training
 
 - **[Model Guide](models/MODEL_GUIDE.md)** - Architecture details (classification & CTC models)
 - **[Training Guide](training/TRAINING_GUIDE.md)** - Model training (classification & CTC)
@@ -367,7 +366,7 @@ For architecture details, see [Model Guide](models/MODEL_GUIDE.md).
 - **[Occlusion Guide](preprocessing/docs/OCCLUSION_GUIDE.md)** - Hand occlusion detection and handling
 - **[Sharing Guide](shared/SHARING_GUIDE.md)** - Vast.ai deployment and collaboration
 
-## 🛠️ Troubleshooting
+## Troubleshooting
 
 ### Common Issues
 
@@ -446,7 +445,7 @@ For architecture details, see [Model Guide](models/MODEL_GUIDE.md).
 - Enable `--enable-parallel` for automatic DataParallel
 - Increase `--batch-size` to utilize multiple GPUs
 
-## 🚀 Deployment
+## Deployment
 
 ### Local Development
 
@@ -464,15 +463,15 @@ For remote deployment on Vast.ai instances:
 
 See [Sharing Guide](shared/SHARING_GUIDE.md) for detailed deployment instructions.
 
-## 🤝 Contributing
+## Contributing
 
 PANSINAYAN supports Filipino Sign Language Recognition research and accessibility initiatives. For collaboration guidelines, see the [Sharing Guide](shared/SHARING_GUIDE.md).
 
-## 📄 License
+## License
 
 This project is part of academic research in Filipino Sign Language Recognition.
 
-## 📚 Citation
+## Citation
 
 If you use PANSINAYAN in your research, please cite:
 
@@ -485,7 +484,7 @@ If you use PANSINAYAN in your research, please cite:
 }
 ```
 
-## 🔗 Links
+## Links
 
 - **Repository**: [https://github.com/jeipab/fslr-transformer-vs-iv3gru](https://github.com/jeipab/fslr-transformer-vs-iv3gru)
 - **Documentation**: See individual guide files listed above

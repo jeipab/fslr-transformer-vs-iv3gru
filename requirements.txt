@@ -1,6 +1,3 @@
-## Requirements for Filipino Sign Language Recognition (FSLR)
-## Project: Transformer vs IV3-GRU comparison for sign language recognition
-
 # ===== CORE DEEP LEARNING (Required for training and inference) =====
 torch
 torchvision
