@@ -1,111 +1,93 @@
 # PANSINAYAN
 
-### _Where Every Sign Gets Attention_
+### *Where Every Sign Gets Attention*
 
-**Filipino Sign Language Recognition System**
+**Filipino Sign Language Recognition** — a research codebase that compares a Multi-Head Attention Transformer with an InceptionV3-GRU baseline on isolated signs and continuous sequences.
 
-PANSINAYAN is a comprehensive deep learning system for Filipino Sign Language (FSL) recognition, comparing Multi-Head Attention Transformer and InceptionV3-GRU architectures. The system supports both isolated sign classification and continuous sign sequence recognition using CTC decoding.
+PANSINAYAN covers the full pipeline: video preprocessing, model training, evaluation, and an interactive Streamlit app. Isolated models classify **105 glosses** across **10 categories**. Continuous models use CTC decoding to recognize unsegmented sign sequences.
 
-**Key Features:**
-- Dual architecture comparison (Transformer vs InceptionV3-GRU)
-- Isolated sign classification (105 gloss classes, 10 categories)
-- Continuous sign recognition with CTC decoding
-- Interactive web interface (PANSINAYAN Streamlit app)
-- Comprehensive preprocessing pipeline with occlusion detection
-- Model training, validation, and evaluation tools
+## Highlights
 
-## Overview
-
-PANSINAYAN provides a complete pipeline for Filipino Sign Language Recognition:
-
-1. **Preprocessing**: Extract MediaPipe keypoints (178-D) and InceptionV3 features (2048-D) from raw videos
-2. **Training**: Train Transformer or InceptionV3-GRU models for isolated or continuous sign recognition
-3. **Evaluation**: Validate models and analyze performance metrics
-4. **Inference**: Predict signs from videos or preprocessed NPZ files
-5. **Visualization**: Interactive web interface for model comparison and analysis
-
-The system supports both **isolated sign recognition** (classification) and **continuous sign recognition** (CTC-based sequence-to-sequence).
+- **Fair architecture comparison** — Transformer (MediaPipe keypoints) vs InceptionV3-GRU (visual features), trained under matching conditions
+- **Isolated + continuous** — classification heads for single signs; CTC heads for variable-length gloss sequences
+- **Occlusion-aware preprocessing** — 178-D keypoints, 2048-D InceptionV3 features, and visibility masks
+- **PANSINAYAN app** — upload video or NPZ, compare models, inspect attention and CTC alignments
+- **Analysis toolkit** — confusion matrices, occlusion breakdowns, and paired statistical tests
 
 ## Dataset
 
-- **Glosses**: 105 Filipino sign words (IDs: 0-104)
-- **Categories**: 10 semantic categories (IDs: 0-9): Greeting, Survival, Number, Calendar, Days, Family, Relationships, Color, Food, Drink
-- **Training Data**: FSL-105 dataset
-- **Models**: Pre-trained Transformer and IV3-GRU models available (see [Trained Models Guide](trained_models/TRAINED_MODEL_GUIDE.md))
+| | |
+| --- | --- |
+| **Glosses** | 105 Filipino sign words (IDs 0–104) |
+| **Categories** | 10: Greeting, Survival, Number, Calendar, Days, Family, Relationships, Color, Food, Drink |
+| **Training set** | FSL-105 (80/20 train/val) |
+| **Labels** | [Label Mapping Table](data/labels/LABEL_MAPPING_TABLE.md) |
 
-**Model Setup**: Model checkpoints must be placed in `trained_models/transformer/` and `trained_models/iv3_gru/` directories following the structure defined in the README.txt files in those directories. See [Trained Models Guide](trained_models/TRAINED_MODEL_GUIDE.md) for details.
+Raw videos and full processed splits are not stored in git. Checkpoints are stored with [Git LFS](https://git-lfs.github.com/). After cloning:
+
+```bash
+git lfs install
+git lfs pull --include="trained_models/**/*.pt"
+```
+
+Place checkpoints as described in [Trained Models Guide](trained_models/TRAINED_MODEL_GUIDE.md).
+
+## Models
+
+### Isolated (classification)
+
+| Model | Input | Role |
+| --- | --- | --- |
+| **SignTransformer** | Keypoints `[T, 178]` | Attention encoder; lighter and interpretable |
+| **InceptionV3-GRU** | Features `[T, 2048]` | CNN + GRU baseline with ImageNet transfer |
+
+Each model predicts a **gloss** (105 classes) and a **category** (10 classes).
+
+### Continuous (CTC)
+
+| Model | Input | Output |
+| --- | --- | --- |
+| **SignTransformerCtc** | Keypoints `[T, 178]` | Variable-length gloss sequence |
+| **InceptionV3GRUCtc** | Features `[T, 2048]` | Variable-length gloss sequence |
+
+CTC training does not require frame-level alignment. See [Model Guide](models/MODEL_GUIDE.md) for architectures.
+
+A lightweight **MediaPipe-GRU** variant exists for prototyping and mobile export (`training/export_mobile.py`). It is not part of the main comparison and is hidden in the Streamlit app.
 
 ## Quick Start
 
-### Setup
+**Requirements:** Python 3.9–3.11
 
-**Requirements**: Python 3.9-3.11
-
-```powershell
-# Clone the repository
+```bash
 git clone https://github.com/jeipab/fslr-transformer-vs-iv3gru.git
 cd fslr-transformer-vs-iv3gru
 
-# Create and activate virtual environment
 python -m venv .venv
+# Windows: .venv\Scripts\Activate.ps1
+# macOS/Linux: source .venv/bin/activate
 
-# Windows PowerShell
-.venv\Scripts\Activate.ps1
-
-# Windows Command Prompt
-.venv\Scripts\activate.bat
-
-# Linux/Mac
-source .venv/bin/activate
-
-# Install dependencies
 pip install -r requirements.txt
-pip install pyarrow  # optional, for parquet inspection
+git lfs pull --include="trained_models/**/*.pt"
 ```
 
-### Interactive Demo with PANSINAYAN
+### PANSINAYAN app
 
-```powershell
-# Run the PANSINAYAN application
+```bash
 streamlit run run_app.py
 ```
 
-**PANSINAYAN Features**:
+Opens at [http://localhost:8501](http://localhost:8501). For access from other devices on the same network, run `python show_network_info.py`.
 
-- Animated keypoint visualization with attention mechanism
-- Real-time predictions for 105 Filipino sign words
-- Support for both preprocessed `.npz` files and raw videos
-- Dual model comparison (Transformer vs IV3-GRU)
-- Occlusion-aware analysis and validation
+The app supports NPZ files and raw video (MP4, MOV, AVI), dual-model comparison, keypoint animation, and occlusion-aware validation. See [Tool Guide](streamlit_app/TOOL_GUIDE.md).
 
-### Quick Prediction
+### Predict from the CLI
 
-**Predict from Demo Files:**
-
-```powershell
-# Transformer model
-python -m evaluation.prediction.predict ^
-  --model transformer_isolated ^
-  --checkpoint trained_models\transformer\FSL105_classification\SignTransformer_best.pt ^
-  --input data\demo\clip_0138_nice to meet you.npz
-
-# IV3-GRU model
-python -m evaluation.prediction.predict ^
-  --model iv3_gru_isolated ^
-  --checkpoint trained_models\iv3_gru\FSL105_classification\InceptionV3GRU_best.pt ^
-  --input data\demo\clip_1146_grandfather.npz
+```bash
+python -m evaluation.prediction.predict \
+  --model transformer_isolated \
+  --checkpoint trained_models/transformer/FSL105_classification/SignTransformer_best.pt \
+  --input path/to/clip.npz   # or a .mp4
 ```
-
-**Predict from Video:**
-
-```powershell
-python -m evaluation.prediction.predict ^
-  --model transformer_isolated ^
-  --checkpoint trained_models\transformer\FSL105_classification\SignTransformer_best.pt ^
-  --input video.mp4
-```
-
-**Output Example:**
 
 ```
 Gloss: NICE TO MEET YOU (6) (confidence: 0.882)
@@ -116,408 +98,132 @@ Category: GREETING (0) (confidence: 0.774)
 
 ```
 fslr-transformer-vs-iv3gru/
-├── data/                       # Data management and label mapping
-│   ├── demo/                   # Demo NPZ files for testing
-│   ├── labels/                 # Label mappings (105 glosses, 10 categories)
-│   │   └── LABEL_MAPPING_TABLE.md
-│   ├── processed/              # Preprocessed NPZ files
-│   │   ├── FSL105_train/      # Training set (80%)
-│   │   ├── FSL105_val/        # Validation set (20%)
-│   │   ├── FSL105_train.csv   # Training labels
-│   │   └── FSL105_val.csv     # Validation labels
-│   ├── raw/                    # Raw video files
-│   ├── splitting/              # Data splitting utilities
-│   └── DATA_GUIDE.md          # Data format documentation
-├── evaluation/                 # Model validation and prediction
-│   ├── prediction/             # Inference scripts
-│   │   ├── predict.py         # Classification prediction
-│   │   ├── predict_ctc.py      # CTC prediction
-│   │   └── PREDICTION_GUIDE.md
-│   └── validation/             # Model evaluation
-│       ├── validate.py         # Classification validation
-│       ├── evaluate_ctc.py     # CTC evaluation
-│       └── VALIDATION_GUIDE.md
-├── models/                     # Neural network architectures
-│   ├── transformer.py         # SignTransformer (keypoints)
-│   ├── iv3_gru.py             # InceptionV3GRU (features)
-│   └── MODEL_GUIDE.md         # Architecture documentation
-├── preprocessing/              # Video preprocessing and feature extraction
-│   ├── core/                   # Core preprocessing modules
-│   │   ├── preprocess.py       # Main preprocessing pipeline
-│   │   └── occlusion_detection.py
-│   ├── extractors/            # Feature extractors
-│   │   ├── keypoints_features.py
-│   │   └── iv3_features.py
-│   ├── continuous/            # Continuous sequence generation
-│   ├── docs/                  # Preprocessing documentation
-│   │   ├── PREPROCESS_GUIDE.MD
-│   │   ├── OCCLUSION_GUIDE.md
-│   │   └── OCCLUSION_PARAMETERS_GUIDE.md
-│   └── utils/                 # Preprocessing utilities
-├── streamlit_app/             # Interactive web application
-│   ├── core/                  # Application core
-│   ├── components/            # UI components
-│   ├── manager/               # Workflow managers
-│   └── TOOL_GUIDE.md         # Application documentation
-├── trained_models/            # Model checkpoints and weights
-│   ├── transformer/          # Transformer model checkpoints
-│   │   ├── FSL105_classification/  # Classification models
-│   │   ├── FSL105_ctc/             # CTC models
-│   │   └── README.txt              # Setup instructions
-│   ├── iv3_gru/               # InceptionV3-GRU model checkpoints
-│   │   ├── FSL105_classification/  # Classification models
-│   │   ├── FSL105_ctc/             # CTC models
-│   │   └── README.txt              # Setup instructions
-│   └── TRAINED_MODEL_GUIDE.md     # Model usage guide
-├── training/                   # Model training and evaluation
-│   ├── train.py               # Training script
-│   ├── utils.py               # Training utilities
-│   └── TRAINING_GUIDE.md      # Training documentation
-├── run_app.py                 # Streamlit app launcher
-└── README.md                  # This file
+├── data/                 Labels, splitting, demo/sample clips
+├── preprocessing/        Keypoints, InceptionV3 features, occlusion, CTC sequences
+├── models/               SignTransformer, InceptionV3-GRU, MediaPipe-GRU
+├── training/             Isolated + CTC training; mobile export
+├── evaluation/           Prediction, validation, CTC metrics
+├── metrics/              Confusion matrices, occlusion splits, statistical tests
+├── streamlit_app/        PANSINAYAN web UI
+├── trained_models/       Checkpoints (Git LFS)
+├── run_app.py            App launcher
+└── requirements.txt
 ```
 
-## Workflow
+## Pipeline
 
-### 1. Preprocessing
+### 1. Preprocess videos
 
-**Multi-Process (Recommended - 30-50x faster):**
-
-```powershell
-python -m preprocessing.core.preprocess ^
-  data\raw\videos ^
-  data\processed\output ^
-  --write-keypoints ^
-  --write-iv3-features ^
-  --workers 8 ^
-  --batch-size 32 ^
-  --target-fps 30 ^
-  --disable-parquet
+```bash
+python -m preprocessing.core.preprocess data/raw/videos data/processed/output \
+  --write-keypoints --write-iv3-features \
+  --workers 8 --batch-size 32 --target-fps 30 --disable-parquet
 ```
 
-**Sequential (For small datasets):**
+Each `.npz` contains `X [T,178]`, `X2048 [T,2048]`, `mask [T,89]`, `timestamps_ms [T]`, and occlusion metadata. Details: [Preprocessing Guide](preprocessing/docs/PREPROCESS_GUIDE.MD).
 
-```powershell
-python -m preprocessing.core.preprocess ^
-  data\raw\videos ^
-  data\processed\output ^
-  --write-keypoints ^
-  --write-iv3-features ^
-  --target-fps 30
+### 2. Split data
+
+```bash
+python data/splitting/assign.py
+python data/splitting/data_split.py \
+  --processed-root data/processed/FSL-105 \
+  --labels data/processed/FSL-105/labels.csv \
+  --out-root data/processed --copy --train-ratio 0.8 \
+  --train-dir FSL105_train --val-dir FSL105_val \
+  --train-csv FSL105_train.csv --val-csv FSL105_val.csv
 ```
 
-**Output**: `.npz` files with:
+Details: [Data Guide](data/DATA_GUIDE.md).
 
-- Keypoints `X [T,178]` - 89 MediaPipe keypoints (pose, hands, face)
-- Features `X2048 [T,2048]` - InceptionV3 features
-- Visibility mask `mask [T,89]`
-- Timestamps `timestamps_ms [T]`
-- Metadata with occlusion detection
+### 3. Train
 
-For detailed preprocessing instructions, see [Preprocessing Guide](preprocessing/docs/PREPROCESS_GUIDE.MD).
+Isolated Transformer:
 
-### 2. Data Splitting
-
-After preprocessing, create labels and split data:
-
-```powershell
-# Assign gloss and category IDs
-python data\splitting\assign.py
-
-# Split into train/val sets
-python data\splitting\data_split.py ^
-  --processed-root data\processed\FSL-105 ^
-  --labels data\processed\FSL-105\labels.csv ^
-  --out-root data\processed ^
-  --copy ^
-  --train-ratio 0.8 ^
-  --train-dir FSL105_train ^
-  --val-dir FSL105_val ^
-  --train-csv FSL105_train.csv ^
-  --val-csv FSL105_val.csv
+```bash
+python -m training.train \
+  --model transformer_isolated \
+  --keypoints-train data/processed/FSL105_train \
+  --keypoints-val data/processed/FSL105_val \
+  --labels-train-csv data/processed/FSL105_train.csv \
+  --labels-val-csv data/processed/FSL105_val.csv \
+  --num-gloss 105 --num-cat 10 --epochs 100 --batch-size 32 \
+  --amp --auto-workers --auto-batch-size
 ```
 
-For detailed data splitting instructions, see [Data Guide](data/DATA_GUIDE.md).
+Isolated InceptionV3-GRU: use `--model iv3_gru_isolated`, `--features-train` / `--features-val`, and `--feature-key X2048`.
 
-### 3. Training
+Continuous (CTC): `--model transformer_continuous` or `iv3_gru_continuous`, plus `--grad-clip 1.0`.
 
-**Transformer Model (Keypoints):**
+Details: [Training Guide](training/TRAINING_GUIDE.md).
 
-```powershell
-python -m training.train ^
-  --model transformer_isolated ^
-  --keypoints-train data\processed\FSL105_train ^
-  --keypoints-val data\processed\FSL105_val ^
-  --labels-train-csv data\processed\FSL105_train.csv ^
-  --labels-val-csv data\processed\FSL105_val.csv ^
-  --num-gloss 105 ^
-  --num-cat 10 ^
-  --epochs 100 ^
-  --batch-size 32 ^
-  --amp ^
-  --auto-workers ^
-  --auto-batch-size
+### 4. Validate
+
+```bash
+python -m preprocessing.utils.validate_npz data/processed/FSL105_val --require-x2048
+
+python -m evaluation.validation.validate \
+  --model transformer_isolated \
+  --checkpoint trained_models/transformer/FSL105_classification/SignTransformer_best.pt \
+  --data-dir data/processed/FSL105_val \
+  --labels-csv data/processed/FSL105_val.csv
 ```
 
-**IV3-GRU Model (InceptionV3 Features):**
+Smoke tests:
 
-```powershell
-python -m training.train ^
-  --model iv3_gru_isolated ^
-  --features-train data\processed\FSL105_train ^
-  --features-val data\processed\FSL105_val ^
-  --labels-train-csv data\processed\FSL105_train.csv ^
-  --labels-val-csv data\processed\FSL105_val.csv ^
-  --feature-key X2048 ^
-  --num-gloss 105 ^
-  --num-cat 10 ^
-  --epochs 100 ^
-  --batch-size 32 ^
-  --amp ^
-  --auto-workers ^
-  --auto-batch-size
-```
-
-For detailed training instructions, see [Training Guide](training/TRAINING_GUIDE.md).
-
-### 3.1 CTC Training (Continuous Recognition)
-
-Train models for continuous sign recognition using CTC (no frame-level alignment needed).
-
-```powershell
-# SignTransformerCtc
-python training/train.py --model transformer_continuous --keypoints-train data\processed\FSL105_train --keypoints-val data\processed\FSL105_val --labels-train-csv data\processed\FSL105_train.csv --labels-val-csv data\processed\FSL105_val.csv --epochs 100 --grad-clip 1.0 --amp
-
-# InceptionV3GRUCtc
-python training/train.py --model iv3_gru_continuous --features-train data\processed\FSL105_train --features-val data\processed\FSL105_val --labels-train-csv data\processed\FSL105_train.csv --labels-val-csv data\processed\FSL105_val.csv --feature-key X2048 --epochs 100 --grad-clip 1.0 --amp
-```
-
-For detailed CTC training options, see [Training Guide](training/TRAINING_GUIDE.md#ctc-training-continuous-recognition).
-
-### 4. Validation
-
-**Data Validation:**
-
-```powershell
-# Validate NPZ files
-python -m preprocessing.utils.validate_npz data\processed\FSL105_train
-python -m preprocessing.utils.validate_npz data\processed\FSL105_val --require-x2048
-```
-
-**Model Validation:**
-
-```powershell
-# Transformer model
-python -m evaluation.validation.validate ^
-  --model transformer_isolated ^
-  --checkpoint trained_models\transformer\FSL105_classification\SignTransformer_best.pt ^
-  --data-dir data\processed\FSL105_val ^
-  --labels-csv data\processed\FSL105_val.csv
-
-# IV3-GRU model
-python -m evaluation.validation.validate ^
-  --model iv3_gru_isolated ^
-  --checkpoint trained_models\iv3_gru\FSL105_classification\InceptionV3GRU_best.pt ^
-  --data-dir data\processed\FSL105_val ^
-  --labels-csv data\processed\FSL105_val.csv
-```
-
-**Smoke Tests:**
-
-```powershell
+```bash
 python -m training.train --model transformer_isolated --smoke-test --num-gloss 105 --num-cat 10
 python -m training.train --model iv3_gru_isolated --smoke-test --num-gloss 105 --num-cat 10
 ```
 
-For detailed validation instructions, see [Validation Guide](evaluation/validation/VALIDATION_GUIDE.md).
+### 5. Continuous prediction and evaluation
 
-### 5. CTC Prediction & Evaluation
+```bash
+python -m evaluation.prediction.predict_ctc \
+  --model transformer_continuous --checkpoint model.pt --input clip.npz
 
-**Predict**:
-
-```powershell
-python evaluation\prediction\predict_ctc.py --model transformer_continuous --checkpoint model.pt --input clip.npz
+python -m evaluation.validation.evaluate_ctc \
+  --model transformer_continuous --checkpoint model.pt \
+  --test-data data/processed/FSL105_val --test-labels FSL105_val.csv
 ```
 
-**Evaluate** (computes WER, sequence accuracy):
-
-```powershell
-python evaluation\validation\evaluate_ctc.py --model transformer_continuous --checkpoint model.pt --test-data data\processed\FSL105_val --test-labels FSL105_val.csv
-```
-
-See [Prediction Guide](evaluation/prediction/PREDICTION_GUIDE.md#ctc-prediction-continuous-recognition) and [Validation Guide](evaluation/validation/VALIDATION_GUIDE.md#ctc-evaluation-continuous-recognition).
-
-## Models
-
-### Classification Models (Isolated Sign Recognition)
-
-#### Transformer (SignTransformer)
-
-- **Input**: MediaPipe keypoints [T, 178]
-- **Architecture**: Multi-head attention with positional encoding
-- **Advantages**: Lighter, interpretable attention weights
-- **Best for**: Keypoint-based sign recognition
-
-#### InceptionV3-GRU
-
-- **Input**: InceptionV3 features [T, 2048]
-- **Architecture**: CNN + GRU with pretrained backbone
-- **Advantages**: Transfer learning from ImageNet
-- **Best for**: Visual feature-based recognition
-
-Classification models predict:
-
-- **Gloss**: Specific sign word (105 classes)
-- **Category**: Semantic category (10 classes)
-
-### CTC Models (Continuous Sign Language Recognition) 🆕
-
-#### SignTransformerCtc
-
-- **Input**: MediaPipe keypoints [T, 178]
-- **Output**: Gloss sequences (variable length)
-- **Architecture**: Transformer encoder + CTC head
-- **Advantages**: No frame-level alignment required, attention-based
-- **Best for**: Continuous sign recognition
-
-#### InceptionV3GRUCtc
-
-- **Input**: InceptionV3 features [T, 2048]
-- **Output**: Gloss sequences (variable length)
-- **Architecture**: CNN + GRU + CTC head
-- **Advantages**: Transfer learning benefits, visual features
-- **Best for**: Continuous recognition with visual features
-
-**CTC Features:**
-
-- Sequence-to-sequence learning
-- Variable-length output
-- No alignment required
-- Supports continuous sign sentences
-
-For architecture details, see [Model Guide](models/MODEL_GUIDE.md).
+CTC evaluation reports WER and sequence accuracy. See [Prediction Guide](evaluation/prediction/PREDICTION_GUIDE.md) and [Validation Guide](evaluation/validation/VALIDATION_GUIDE.md).
 
 ## Documentation
 
-### Prediction & Usage
+| Guide | Topic |
+| --- | --- |
+| [Tool Guide](streamlit_app/TOOL_GUIDE.md) | PANSINAYAN app |
+| [Prediction Guide](evaluation/prediction/PREDICTION_GUIDE.md) | Isolated and CTC inference |
+| [Validation Guide](evaluation/validation/VALIDATION_GUIDE.md) | Metrics and evaluation |
+| [Training Guide](training/TRAINING_GUIDE.md) | Isolated and CTC training |
+| [Model Guide](models/MODEL_GUIDE.md) | Architectures |
+| [Trained Models Guide](trained_models/TRAINED_MODEL_GUIDE.md) | Checkpoints |
+| [Data Guide](data/DATA_GUIDE.md) | NPZ format and splits |
+| [Label Mapping Table](data/labels/LABEL_MAPPING_TABLE.md) | Gloss and category IDs |
+| [Preprocessing Guide](preprocessing/docs/PREPROCESS_GUIDE.MD) | Video → NPZ |
+| [Occlusion Guide](preprocessing/docs/OCCLUSION_GUIDE.md) | Hand occlusion detection |
+| [Continuous Signs Guide](preprocessing/docs/CONTINUOUS_SIGNS_GUIDE.md) | CTC sequence construction |
+| [Statistical Analysis Guide](metrics/stat%20test/STATISTICAL_ANALYSIS_GUIDE.md) | Paired tests and effect sizes |
 
-- **[Prediction Guide](evaluation/prediction/PREDICTION_GUIDE.md)** - Using trained models (classification & CTC)
-- **[Validation Guide](evaluation/validation/VALIDATION_GUIDE.md)** - Model validation and evaluation (classification & CTC)
-- **[Label Mapping Table](data/labels/LABEL_MAPPING_TABLE.md)** - Complete list of signs and categories
-- **[Trained Models Guide](trained_models/TRAINED_MODEL_GUIDE.md)** - Model checkpoints and usage
-- **[Tool Guide](streamlit_app/TOOL_GUIDE.md)** - Interactive visualization app
-
-### Development & Training
-
-- **[Model Guide](models/MODEL_GUIDE.md)** - Architecture details (classification & CTC models)
-- **[Training Guide](training/TRAINING_GUIDE.md)** - Model training (classification & CTC)
-- **[Data Guide](data/DATA_GUIDE.md)** - File formats and data structures
-- **[Preprocessing Guide](preprocessing/docs/PREPROCESS_GUIDE.MD)** - Video preprocessing
-- **[Occlusion Guide](preprocessing/docs/OCCLUSION_GUIDE.md)** - Hand occlusion detection and handling
-- **[Occlusion Parameters Guide](preprocessing/docs/OCCLUSION_PARAMETERS_GUIDE.md)** - Adjusting occlusion detection sensitivity
-- **[Continuous Signs Guide](preprocessing/docs/CONTINUOUS_SIGNS_GUIDE.md)** - Generating continuous sequences for CTC evaluation
+Remote GPU notes: [Vast.ai Guide](shared/for%20vast%20ai/VAST.AI_GUIDE.md).
 
 ## Troubleshooting
 
-### Common Issues
+| Issue | What to check |
+| --- | --- |
+| File not found | CSV `file` values must match NPZ basenames (no extension) |
+| Wrong shapes | Transformer needs `X [T,178]`; IV3-GRU needs `X2048 [T,2048]` |
+| Label ranges | `gloss` in `[0, 104]`; `cat` in `[0, 9]` |
+| Tiny `.pt` files | Git LFS pointers — run `git lfs pull` |
+| Port in use | `streamlit run run_app.py --server.port 8502` |
+| CUDA / OOM | `--device cpu`, smaller `--batch-size`, or `--amp` |
 
-**File not found:**
-
-- CSV `file` values must match `.npz` basenames exactly (without extension)
-- Example: CSV has `clip_0315_yes`, NPZ file is `clip_0315_yes.npz`
-
-**Wrong shapes:**
-
-- Transformer needs `X [T,178]` keypoints
-- IV3-GRU needs `X2048 [T,2048]` InceptionV3 features
-
-**Label ranges:**
-
-- `gloss` must be in `[0, 104]` (105 classes, 0-based)
-- `cat` must be in `[0, 9]` (10 categories, 0-based)
-
-**Port conflicts:**
-
-- Use `streamlit run run_app.py --server.port 8502` for alternative port
-
-**CUDA issues:**
-
-- Auto-detects CUDA, falls back to CPU if unavailable
-- Use `--device cpu` to force CPU mode
-
-**Out of Memory (OOM):**
-
-- Reduce `--batch-size` (try 16 or 8)
-- Enable `--amp` for mixed precision
-- Use `--gradient-accumulation-steps` for effective larger batches
-
-### Mobile Upload Issues
-
-**Problem**: Video uploads from mobile camera fail (6-10MB+), but gallery uploads work.
-
-**Root Cause**: Default Streamlit upload size limit and mobile-specific WebSocket constraints.
-
-**Solution**: Configuration has been updated in `.streamlit/config.toml`:
-
-- `maxUploadSize = 500` MB (increased from 200MB default)
-- `maxMessageSize = 500` MB (matches upload size)
-- `enableCORS = true` (mobile browser compatibility)
-- `enableWebsocketCompression = true` (better mobile network performance)
-
-**After deploying these changes:**
-
-1. Restart the Streamlit app
-2. Test on actual mobile devices (iOS Safari, Android Chrome)
-
-**For deployment platforms:**
-
-- **Streamlit Cloud**: Automatically reads config from repository
-- **Heroku/Railway**: May need additional platform configuration
-- **Self-hosted**: Check nginx/Apache upload limits
-
-### Performance Tips
-
-**For Training:**
-
-- Use `--amp` for automatic mixed precision training
-- Add `--auto-workers` for optimal data loading
-- Use `--auto-batch-size` for memory-efficient batch sizing
-- Enable `--compile-model` for PyTorch 2.0+ optimization
-
-**For Preprocessing:**
-
-- Use `--workers 8` for parallel processing
-- Enable `--disable-parquet` for faster I/O
-- Lower `--target-fps` (15-20) for faster processing
-
-**For Multi-GPU:**
-
-- Enable `--enable-parallel` for automatic DataParallel
-- Increase `--batch-size` to utilize multiple GPUs
-
-## Deployment
-
-### Local Development
-
-```powershell
-streamlit run run_app.py
-```
-
-### Vast.ai Deployment
-
-For remote deployment on Vast.ai instances, see [Vast.ai Guide](shared/for vast ai/VAST.AI_GUIDE.md).
-
-## Contributing
-
-PANSINAYAN supports Filipino Sign Language Recognition research and accessibility initiatives.
-
-## License
-
-This project is part of academic research in Filipino Sign Language Recognition.
+Training tips: `--amp`, `--auto-workers`, `--auto-batch-size`, `--compile-model` (PyTorch 2+). Preprocessing tips: `--workers 8`, `--disable-parquet`, lower `--target-fps` if needed.
 
 ## Citation
 
-If you use PANSINAYAN in your research, please cite:
+Undergraduate thesis, Polytechnic University of the Philippines (2025).
 
 ```bibtex
 @thesis{pansinayan2025,
@@ -528,8 +234,8 @@ If you use PANSINAYAN in your research, please cite:
 }
 ```
 
-## Links
+## License
 
-- **Repository**: [https://github.com/jeipab/fslr-transformer-vs-iv3gru](https://github.com/jeipab/fslr-transformer-vs-iv3gru)
-- **Documentation**: See individual guide files listed above
-- **Demo Data**: Available in `data/demo/` directory
+Academic research code. No license file is included; contact the authors if you need to reuse it beyond personal or scholarly use.
+
+**Repository:** [github.com/jeipab/fslr-transformer-vs-iv3gru](https://github.com/jeipab/fslr-transformer-vs-iv3gru)
